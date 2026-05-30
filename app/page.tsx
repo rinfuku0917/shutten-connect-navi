@@ -121,7 +121,7 @@ export default function HomePage() {
           <h2 style={{fontSize:'18px',fontWeight:'900',color:'#1a1a1a'}}>出店者を探す</h2>
           <Link href='/sellers' style={{fontSize:'13px',color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>もっと見る →</Link>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'12px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px'}}>
           {[{img:'🐙',name:'たこ焼き大阪屋',genre:'たこ焼き',rating:'4.8'},{img:'🥞',name:'La France',genre:'クレープ',rating:'4.9'},{img:'🍢',name:'炭火屋',genre:'焼き鳥',rating:'4.7'},{img:'🍛',name:'スパイス',genre:'カレー',rating:'4.6'},{img:'☕',name:'BREW',genre:'コーヒー',rating:'4.9'},{img:'🌮',name:'ソウルキッチン',genre:'韓国料理',rating:'4.5'}].map(s=>(
             <Link key={s.name} href='/sellers' style={{textDecoration:'none',color:'inherit'}}>
               <div style={{background:'#fff',borderRadius:'8px',border:'1px solid #e0e0e0',padding:'16px 12px',textAlign:'center',boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
