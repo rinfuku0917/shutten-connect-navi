@@ -29,14 +29,7 @@ export default function LoginPage() {
 
   return (
     <div style={{minHeight:'100vh',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif',display:'flex',flexDirection:'column'}}>
-      <header style={{background:'#fff',borderBottom:'1px solid #e0e0e0',boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
-        <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 16px',height:'56px',display:'flex',alignItems:'center'}}>
-          <Link href='/' style={{display:'flex',alignItems:'center',gap:'6px',textDecoration:'none'}}>
-            <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
-            <span style={{fontWeight:'900',fontSize:'16px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
-          </Link>
-        </div>
-      </header>
+      
       <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px'}}>
         <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #e0e0e0',boxShadow:'0 4px 16px rgba(0,0,0,0.08)',width:'100%',maxWidth:'420px',overflow:'hidden'}}>
           <div style={{display:'flex',borderBottom:'1px solid #e0e0e0'}}>
