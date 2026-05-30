@@ -24,8 +24,8 @@ export default function VendorPage() {
         <h1 style={{fontSize:'40px',fontWeight:'900',color:'#1a1a1a',marginBottom:'12px'}}>出店したい方へ</h1>
         <p style={{fontSize:'16px',color:'#555',marginBottom:'28px',lineHeight:1.8}}>全国のイベント・商業施設・大学・オフィスなど<br/>あなたにぴったりの出店場所が見つかります</p>
         <div style={{display:'flex',gap:'16px',justifyContent:'center'}}>
-          <Link href='/places' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>出店場所を探す</Link>
-          <Link href='/register' style={{background:'#fff',color:'#1D4ED8',fontWeight:'900',fontSize:'16px',border:'3px solid #3A9BD5',padding:'14px 36px',borderRadius:'999px',textDecoration:'none'}}>無料会員登録</Link>
+          <Link href='/places' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>出店場所を探す</Link>
+          <Link href='/register' style={{background:'#fff',color:'#1D4ED8',fontWeight:'900',fontSize:'16px',border:'3px solid #3A9BD5',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none'}}>無料会員登録</Link>
         </div>
       </div>
       <div style={{background:'#fff',padding:'48px 24px'}}>

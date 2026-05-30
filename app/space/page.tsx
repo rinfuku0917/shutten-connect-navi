@@ -29,8 +29,8 @@ export default function SpacePage() {
         <h1 style={{fontSize:'40px',fontWeight:'900',color:'#1a1a1a',marginBottom:'12px'}}>お店を呼びたい方へ</h1>
         <p style={{fontSize:'16px',color:'#555',marginBottom:'28px',lineHeight:1.8}}>イベント・商業施設・大学・オフィスなど<br/>あなたのスペースに最適な出店者を無料で募集できます</p>
         <div style={{display:'flex',gap:'16px',justifyContent:'center'}}>
-          <Link href='/register?role=host' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>無料で募集を始める</Link>
-          <Link href='/sellers' style={{background:'#fff',color:'#1D4ED8',fontWeight:'900',fontSize:'16px',border:'3px solid #3A9BD5',padding:'14px 36px',borderRadius:'999px',textDecoration:'none'}}>出店者を探す</Link>
+          <Link href='/register?role=host' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>無料で募集を始める</Link>
+          <Link href='/sellers' style={{background:'#fff',color:'#1D4ED8',fontWeight:'900',fontSize:'16px',border:'3px solid #3A9BD5',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none'}}>出店者を探す</Link>
         </div>
       </div>
       <div style={{background:'#fff',padding:'48px 24px'}}>
