@@ -69,8 +69,8 @@ export default function HomePage() {
             <h1 style={{fontSize:'32px',fontWeight:'900',color:'#1a1a1a',marginBottom:'8px',lineHeight:1.3}}>最高の出店場所が<br/>見つかる</h1>
             <p style={{fontSize:'14px',color:'#666',marginBottom:'20px',lineHeight:1.7}}>全国の出店場所・出店者をつなぐマッチングサービス</p>
             <div style={{display:'flex',gap:'12px'}}>
-              <Link href='/places' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'12px 28px',borderRadius:'8px',textDecoration:'none'}}>出店場所を探す</Link>
-              <Link href='/register' style={{background:'#fff',color:'#F5A623',fontWeight:'900',fontSize:'14px',border:'2px solid #F5A623',padding:'12px 28px',borderRadius:'8px',textDecoration:'none'}}>無料で登録</Link>
+              <Link href='/places' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'12px 20px',borderRadius:'8px',textDecoration:'none',whiteSpace:'nowrap'}}>出店場所を探す</Link>
+              <Link href='/register' style={{background:'#fff',color:'#F5A623',fontWeight:'900',fontSize:'14px',border:'2px solid #F5A623',padding:'12px 20px',borderRadius:'8px',textDecoration:'none',whiteSpace:'nowrap'}}>無料で登録</Link>
             </div>
           </div>
           <img src="/kitchen-car.png" style={{height:"160px",objectFit:"contain",mixBlendMode:"multiply"}} />
@@ -102,7 +102,7 @@ export default function HomePage() {
                   {place.isNew && <div style={{position:'absolute',top:'8px',left:'8px',background:'#FF4B4B',color:'#fff',fontSize:'10px',fontWeight:'700',padding:'2px 8px',borderRadius:'3px'}}>NEW</div>}
                   <div style={{position:'absolute',top:'8px',right:'8px',background:'rgba(0,0,0,0.6)',color:'#fff',fontSize:'10px',padding:'2px 8px',borderRadius:'3px'}}>{place.area}</div>
                 </div>
-                <div style={{padding:'10px 12px'}}>
+                <div style={{padding:'10px 12px',flex:1,display:'flex',flexDirection:'column'}}>
                   <div style={{fontSize:'12px',fontWeight:'700',color:'#1a1a1a',marginBottom:'4px',lineHeight:1.4,height:'34px',overflow:'hidden'}}>{place.title}</div>
                   <div style={{fontSize:'13px',fontWeight:'900',color:'#F5A623',marginBottom:'6px'}}>{place.fee}</div>
                   <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
