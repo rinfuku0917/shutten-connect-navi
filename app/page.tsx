@@ -114,7 +114,7 @@ export default function HomePage() {
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:'12px'}}>
           {places.map(place=>(
             <Link key={place.id} href={'/places/'+place.id} style={{textDecoration:'none',color:'inherit'}}>
-              <div style={{background:'#fff',borderRadius:'8px',overflow:'hidden',border:'1px solid #e0e0e0',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',display:'flex',flexDirection:'column',height:'100%'}}>
+              <div style={{background:'#fff',borderRadius:'8px',overflow:'hidden',border:'1px solid #e0e0e0',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',display:'flex',flexDirection:'column',height:'100%',alignItems:'stretch'}}>
                 <div style={{height:'120px',background:'linear-gradient(135deg,#f5f5f5,#e8e8e8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'40px',position:'relative',flexShrink:0}}>
                   {place.img}
                   {place.isNew && <div style={{position:'absolute',top:'6px',left:'6px',background:'#FF4B4B',color:'#fff',fontSize:'9px',fontWeight:'700',padding:'2px 6px',borderRadius:'3px'}}>NEW</div>}
@@ -158,7 +158,7 @@ export default function HomePage() {
           <Link href='/vendor' style={{textDecoration:'none'}}>
             <div style={{background:'linear-gradient(135deg,#FFF8E1,#FFE082)',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'8px',border:'1px solid #FFD54F'}}>
               <img src='/kitchen-car.png' style={{height:'40px',objectFit:'contain',mixBlendMode:'multiply'}}/>
-              <div style={{fontWeight:'900',fontSize:'14px',color:'#1a1a1a'}}>出店したい方へ</div>
+              <div style={{fontWeight:'900',fontSize:'13px',color:'#1a1a1a',wordBreak:'keep-all'}}>出店したい方へ</div>
               <div style={{fontSize:'11px',color:'#666',lineHeight:1.5}}>全国の出店場所を無料で探せます</div>
               <div style={{fontSize:'12px',color:'#F5A623',fontWeight:'700'}}>詳しく見る →</div>
             </div>
@@ -166,7 +166,7 @@ export default function HomePage() {
           <Link href='/space' style={{textDecoration:'none'}}>
             <div style={{background:'linear-gradient(135deg,#E3F2FD,#BBDEFB)',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'8px',border:'1px solid #90CAF9'}}>
               <span style={{fontSize:'36px'}}>📣</span>
-              <div style={{fontWeight:'900',fontSize:'14px',color:'#1a1a1a'}}>お店を呼びたい方へ</div>
+              <div style={{fontWeight:'900',fontSize:'13px',color:'#1a1a1a',wordBreak:'keep-all'}}>お店を呼びたい方へ</div>
               <div style={{fontSize:'11px',color:'#666',lineHeight:1.5}}>全国の出店者を無料で募集できます</div>
               <div style={{fontSize:'12px',color:'#3A9BD5',fontWeight:'700'}}>詳しく見る →</div>
             </div>
