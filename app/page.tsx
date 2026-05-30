@@ -86,7 +86,7 @@ export default function HomePage() {
             <div style={{display:'inline-block',background:'#F5A623',color:'#fff',fontSize:'11px',fontWeight:'700',padding:'3px 12px',borderRadius:'999px',marginBottom:'10px'}}>出店場所 × 出店者 マッチング</div>
             <h1 style={{fontSize:'28px',fontWeight:'900',color:'#1a1a1a',marginBottom:'8px',lineHeight:1.3}}>最高の出店場所が<br/>見つかる</h1>
             <p style={{fontSize:'13px',color:'#666',marginBottom:'16px',lineHeight:1.6}}>全国の出店場所・出店者をつなぐマッチングサービス</p>
-            <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+            <div style={{display:'flex',gap:'10px',flexWrap:'nowrap'}}>
               <Link href='/places' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'12px 20px',borderRadius:'8px',textDecoration:'none',whiteSpace:'nowrap'}}>出店場所を探す</Link>
               <Link href='/register' style={{background:'#fff',color:'#F5A623',fontWeight:'900',fontSize:'14px',border:'2px solid #F5A623',padding:'10px 20px',borderRadius:'8px',textDecoration:'none',whiteSpace:'nowrap'}}>無料で登録</Link>
             </div>
