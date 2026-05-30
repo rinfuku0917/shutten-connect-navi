@@ -45,7 +45,7 @@ export default function VendorPage() {
       </div>
       <div style={{background:'#fff',padding:'48px 24px'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
-          <h2 style={{fontSize:'26px',fontWeight:'900',textAlign:'center',marginBottom:'36px',borderLeft:'5px solid #F5A623',paddingLeft:'12px',textAlign:'left'}}>ご利用の流れ</h2>
+          <h2 style={{fontSize:'26px',fontWeight:'900',textAlign:'center',marginBottom:'36px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>ご利用の流れ</h2>
           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'20px'}}>
             {steps.map((s,i)=>(
               <div key={s.num} style={{textAlign:'center',position:'relative'}}>
