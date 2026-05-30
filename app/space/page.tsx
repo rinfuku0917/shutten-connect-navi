@@ -51,7 +51,7 @@ export default function SpacePage() {
       <div style={{background:'#fff',padding:'48px 24px'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
           <h2 style={{fontSize:'26px',fontWeight:'900',marginBottom:'36px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>ご利用の流れ</h2>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'20px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px'}}>
             {steps.map((s,i)=>(
               <div key={s.num} style={{textAlign:'center',position:'relative'}}>
                 {i<steps.length-1 && <div style={{position:'absolute',top:'24px',right:'-10px',width:'20px',height:'2px',background:'#F5A623'}}></div>}
@@ -66,7 +66,7 @@ export default function SpacePage() {
       <div style={{background:'#FFF9E6',padding:'48px 24px'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
           <h2 style={{fontSize:'26px',fontWeight:'900',marginBottom:'32px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>出店コネクトナビのメリット</h2>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'20px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px'}}>
             {merits.map(m=>(
               <div key={m.title} style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px',textAlign:'center'}}>
                 <div style={{fontSize:'36px',marginBottom:'10px'}}>{m.icon}</div>
@@ -80,7 +80,7 @@ export default function SpacePage() {
       <div style={{background:'#fff',padding:'48px 24px'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
           <h2 style={{fontSize:'26px',fontWeight:'900',marginBottom:'32px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>ご利用者の声</h2>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'20px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px'}}>
             {voices.map(v=>(
               <div key={v.name} style={{background:'#FFF9E6',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px'}}>
                 <div style={{fontSize:'24px',color:'#F5A623',marginBottom:'10px'}}>★★★★★</div>

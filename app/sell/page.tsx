@@ -68,7 +68,7 @@ export default function SellPage() {
       <div style={{background:'#FFF9E6',padding:'48px 24px'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
           <h2 style={{fontSize:'26px',fontWeight:'900',marginBottom:'32px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>出店コネクトナビで売るメリット</h2>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'20px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px'}}>
             {merits.map(m=>(
               <div key={m.title} style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px',textAlign:'center'}}>
                 <div style={{fontSize:'36px',marginBottom:'10px'}}>{m.icon}</div>
