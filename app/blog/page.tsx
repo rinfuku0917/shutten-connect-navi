@@ -16,26 +16,7 @@ export default function BlogPage() {
   const rest = posts.slice(1)
   return (
     <div style={{minHeight:'100vh',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
-      <header style={{background:'#fff',borderBottom:'1px solid #e0e0e0',position:'sticky',top:0,zIndex:100,boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
-        <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 16px',height:'56px',display:'flex',alignItems:'center',gap:'16px'}}>
-          <Link href='/' style={{display:'flex',alignItems:'center',gap:'6px',textDecoration:'none',flexShrink:0}}>
-            <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
-            <span style={{fontWeight:'900',fontSize:'16px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
-          </Link>
-          <div style={{flex:1}}/>
-          <Link href='/login' style={{color:'#555',fontSize:'13px',fontWeight:'600',textDecoration:'none',padding:'6px 12px',borderRadius:'4px',border:'1px solid #ddd'}}>ログイン</Link>
-          <Link href='/register' style={{background:'#F5A623',color:'#fff',fontSize:'13px',fontWeight:'900',textDecoration:'none',padding:'6px 14px',borderRadius:'4px'}}>会員登録</Link>
-        </div>
-        <div style={{borderTop:'1px solid #f0f0f0'}}>
-          <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 16px',display:'flex'}}>
-            {[{label:'ホーム',href:'/'},{label:'出店したい',href:'/vendor'},{label:'お店を呼びたい',href:'/space'},{label:'出店者を探す',href:'/sellers'},{label:'出店場所を探す',href:'/places'},{label:'車両を売りたい',href:'/sell'},{label:'ブログ',href:'/blog'}].map(item=>(
-              <Link key={item.label} href={item.href} style={{color:item.href==='/blog'?'#F5A623':'#333',fontSize:'13px',fontWeight:item.href==='/blog'?'900':'600',padding:'10px 16px',textDecoration:'none',whiteSpace:'nowrap',borderBottom:item.href==='/blog'?'2px solid #F5A623':'2px solid transparent'}}>
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </header>
+      
 
       <div style={{background:'#fff',borderBottom:'1px solid #e0e0e0',padding:'16px 0'}}>
         <div style={{maxWidth:'900px',margin:'0 auto',padding:'0 16px',display:'flex',gap:'8px',flexWrap:'wrap'}}>

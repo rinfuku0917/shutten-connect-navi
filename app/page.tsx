@@ -100,7 +100,7 @@ export default function HomePage() {
       <div style={{background:'linear-gradient(135deg,#FFF8E1,#FFF3C4)',borderBottom:'1px solid #FFE082',padding:'24px 16px'}}>
         <div style={{maxWidth:'1200px',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px'}}>
           <div style={{flex:1}}>
-            <div style={{display:'inline-block',background:'#F5A623',color:'#fff',fontSize:'11px',fontWeight:'700',padding:'3px 12px',borderRadius:'999px',marginBottom:'10px'}}>出店場所 × 出店者 マッチング</div>
+            
             <h1 style={{fontSize:'28px',fontWeight:'900',color:'#1a1a1a',marginBottom:'8px',lineHeight:1.3}}>最高の出店場所が<br/>見つかる</h1>
             <p style={{fontSize:'13px',color:'#666',marginBottom:'16px',lineHeight:1.6}}>全国の出店場所・出店者をつなぐマッチングサービス</p>
             <div style={{display:'flex',gap:'10px'}}>
@@ -116,7 +116,7 @@ export default function HomePage() {
         <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 16px',display:'flex',justifyContent:'space-around'}}>
           {[{num:'1,248',label:'掲載場所'},{num:'3,410',label:'登録出店者'},{num:'647',label:'マッチング実績'},{num:'4.8',label:'平均評価'}].map(s=>(
             <div key={s.label} style={{textAlign:'center'}}>
-              <div style={{fontSize:'20px',fontWeight:'900',color:'#F5A623'}}>{s.num}</div>
+              
               <div style={{fontSize:'11px',color:'#999',marginTop:'2px'}}>{s.label}</div>
             </div>
           ))}
@@ -139,7 +139,7 @@ export default function HomePage() {
                 </div>
                 <div style={{padding:'10px',flex:1,display:'flex',flexDirection:'column'}}>
                   <div style={{fontSize:'12px',fontWeight:'700',color:'#1a1a1a',marginBottom:'4px',lineHeight:1.4,flex:1}}>{place.title}</div>
-                  <div style={{fontSize:'13px',fontWeight:'900',color:'#F5A623',marginBottom:'6px'}}>{place.fee}</div>
+                  
                   <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
                     <span style={{background:'#FFF3E0',color:'#E65100',fontSize:'10px',padding:'2px 5px',borderRadius:'3px',fontWeight:'600'}}>{place.tag}</span>
                     <span style={{background:'#F3F4F6',color:'#555',fontSize:'10px',padding:'2px 5px',borderRadius:'3px'}}>{place.type}</span>
@@ -163,7 +163,7 @@ export default function HomePage() {
                 <div style={{fontSize:'28px',marginBottom:'6px'}}>{s.img}</div>
                 <div style={{fontSize:'11px',fontWeight:'700',color:'#1a1a1a',marginBottom:'2px'}}>{s.name}</div>
                 <div style={{fontSize:'10px',color:'#999',marginBottom:'4px'}}>{s.genre}</div>
-                <div style={{fontSize:'11px',color:'#F5A623',fontWeight:'700'}}>★ {s.rating}</div>
+                
               </div>
             </Link>
           ))}
@@ -177,7 +177,7 @@ export default function HomePage() {
               <img src='/kitchen-car.png' style={{height:'36px',objectFit:'contain',mixBlendMode:'multiply'}}/>
               <div style={{fontWeight:'900',fontSize:'14px',color:'#1a1a1a'}}>出店したい方へ</div>
               <div style={{fontSize:'11px',color:'#666',lineHeight:1.6,flex:1}}>全国の出店場所を無料で探せます</div>
-              <div style={{fontSize:'12px',color:'#F5A623',fontWeight:'700'}}>詳しく見る →</div>
+              
             </div>
           </Link>
           <Link href='/space' style={{textDecoration:'none'}}>

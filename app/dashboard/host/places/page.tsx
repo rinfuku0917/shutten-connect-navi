@@ -59,14 +59,7 @@ export default function PlaceManagePage() {
         </div>
         <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
           {places.map(place=>(
-            <div key={place.id} style={{background:'#fff',borderRadius:'8px',border:place.pinned ? '2px solid #F5A623' : '1px solid #e0e0e0',padding:'16px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
-              <div style={{display:'flex',alignItems:'flex-start',gap:'16px'}}>
-                <div style={{flex:1}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px',flexWrap:'wrap'}}>
-                    {place.pinned && <span style={{background:'#F5A623',color:'#fff',fontSize:'11px',fontWeight:'700',padding:'2px 8px',borderRadius:'3px'}}>上位表示中</span>}
-                    <span style={{background:place.status==='published' ? '#E8F5E9' : '#F3F4F6',color:place.status==='published' ? '#2E7D32' : '#666',fontSize:'11px',fontWeight:'700',padding:'2px 8px',borderRadius:'3px'}}>{place.status==='published' ? '公開中' : '非公開'}</span>
-                    <span style={{background:'#EBF6FD',color:'#1D4ED8',fontSize:'11px',padding:'2px 8px',borderRadius:'3px'}}>{place.type}</span>
-                  </div>
+            
                   <div style={{fontSize:'15px',fontWeight:'700',color:'#1a1a1a',marginBottom:'6px'}}>{place.title}</div>
                   <div style={{display:'flex',gap:'16px',fontSize:'12px',color:'#999',flexWrap:'wrap'}}>
                     <span>{place.area}</span>

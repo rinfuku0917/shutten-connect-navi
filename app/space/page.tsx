@@ -39,8 +39,8 @@ export default function SpacePage() {
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px'}}>
             {steps.map((s,i)=>(
               <div key={s.num} style={{textAlign:'center',position:'relative'}}>
-                {i<steps.length-1 && <div style={{position:'absolute',top:'24px',right:'-10px',width:'20px',height:'2px',background:'#F5A623'}}></div>}
-                <div style={{width:'48px',height:'48px',borderRadius:'50%',background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'18px',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}>{s.num}</div>
+                {i<steps.length-1 && }
+                
                 <div style={{fontWeight:'900',fontSize:'15px',marginBottom:'8px'}}>{s.title}</div>
                 <div style={{fontSize:'12px',color:'#888',lineHeight:1.7}}>{s.desc}</div>
               </div>
@@ -68,7 +68,7 @@ export default function SpacePage() {
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px'}}>
             {voices.map(v=>(
               <div key={v.name} style={{background:'#FFF9E6',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px'}}>
-                <div style={{fontSize:'24px',color:'#F5A623',marginBottom:'10px'}}>★★★★★</div>
+                
                 <p style={{fontSize:'13px',color:'#555',lineHeight:1.8,marginBottom:'12px'}}>{v.comment}</p>
                 <div style={{fontWeight:'700',fontSize:'13px',color:'#1a1a1a'}}>{v.name}</div>
                 <div style={{fontSize:'12px',color:'#888'}}>{v.area}</div>
@@ -77,11 +77,7 @@ export default function SpacePage() {
           </div>
         </div>
       </div>
-      <div style={{background:'#F5A623',padding:'48px 24px',textAlign:'center'}}>
-        <h2 style={{fontSize:'28px',fontWeight:'900',color:'#fff',marginBottom:'12px'}}>今すぐ無料で募集を始めよう！</h2>
-        <p style={{color:'rgba(255,255,255,0.9)',marginBottom:'24px',fontSize:'15px'}}>登録無料・掲載無料・成約手数料なし</p>
-        <Link href='/register?role=host' style={{background:'#fff',color:'#E08A00',fontWeight:'900',fontSize:'18px',padding:'16px 48px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(0,0,0,0.15)'}}>無料で募集を始める</Link>
-      </div>
+      
       <footer style={{background:'#1E2A3B',color:'#fff',padding:'24px',textAlign:'center'}}>
         <Link href='/' style={{fontWeight:'900',fontSize:'16px',display:'block',color:'#fff',textDecoration:'none',marginBottom:'8px'}}>出店コネクトナビ</Link>
         <div style={{fontSize:'12px',color:'#666'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>

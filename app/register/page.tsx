@@ -55,14 +55,7 @@ export default function RegisterPage() {
 
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif',display:'flex',flexDirection:'column'}}>
-      <header style={{background:'#fff',borderBottom:'3px solid #F5A623',boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
-        <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 16px',height:'56px',display:'flex',alignItems:'center'}}>
-          <Link href='/' style={{display:'flex',alignItems:'center',gap:'6px',textDecoration:'none'}}>
-            <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
-            <span style={{fontWeight:'900',fontSize:'16px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
-          </Link>
-        </div>
-      </header>
+      
       <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px'}}>
         <div style={{background:'#fff',borderRadius:'16px',border:'2px solid #FFE0A0',boxShadow:'0 4px 20px rgba(245,166,35,0.15)',width:'100%',maxWidth:'440px',padding:'36px'}}>
           <h1 style={{fontSize:'22px',fontWeight:'900',marginBottom:'24px',textAlign:'center',color:'#1a1a1a'}}>無料会員登録</h1>

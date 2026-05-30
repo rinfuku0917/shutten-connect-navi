@@ -34,14 +34,7 @@ export default function SellPage() {
       </div>
       <div style={{background:'#fff',padding:'48px 24px'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
-          <div style={{background:'#FFF3CD',border:'2px solid #F5A623',borderRadius:'16px',padding:'32px'}}>
-            <h2 style={{fontSize:'22px',fontWeight:'900',color:'#B45309',marginBottom:'20px',textAlign:'center'}}>こんなお悩みありませんか？</h2>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-              {worries.map((w,i)=>(
-                <div key={i} style={{display:'flex',gap:'10px',alignItems:'flex-start',background:'#fff',borderRadius:'8px',padding:'14px'}}>
-                  <span style={{color:'#F5A623',fontWeight:'900',fontSize:'18px',flexShrink:0}}>😓</span>
-                  <span style={{fontSize:'13px',color:'#555',lineHeight:1.7}}>{w}</span>
-                </div>
+          
               ))}
             </div>
             <div style={{textAlign:'center',marginTop:'24px',fontSize:'20px',fontWeight:'900',color:'#B45309'}}>
@@ -83,11 +76,7 @@ export default function SellPage() {
           </div>
         </div>
       </div>
-      <div style={{background:'#F5A623',padding:'48px 24px',textAlign:'center'}}>
-        <h2 style={{fontSize:'28px',fontWeight:'900',color:'#fff',marginBottom:'12px'}}>今すぐ無料で掲載しよう！</h2>
-        <p style={{color:'rgba(255,255,255,0.9)',marginBottom:'24px',fontSize:'15px'}}>掲載無料・成約手数料なし・営業電話なし</p>
-        <Link href='/register' style={{background:'#fff',color:'#E08A00',fontWeight:'900',fontSize:'18px',padding:'16px 48px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(0,0,0,0.15)'}}>無料で車両を掲載する</Link>
-      </div>
+      
       <footer style={{background:'#1E2A3B',color:'#fff',padding:'24px',textAlign:'center'}}>
         <Link href='/' style={{fontWeight:'900',fontSize:'16px',display:'block',color:'#fff',textDecoration:'none',marginBottom:'8px'}}>出店コネクトナビ</Link>
         <div style={{fontSize:'12px',color:'#666'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>

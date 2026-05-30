@@ -136,9 +136,7 @@ export default function PlacesPage() {
             {filtered.map(place=>(
               <Link key={place.id} href={'/places/'+place.id} style={{textDecoration:'none',color:'inherit'}}>
                 <div style={{background:'#fff',borderRadius:'10px',overflow:'hidden',border:'1px solid #e8e8e8',boxShadow:'0 2px 8px rgba(0,0,0,0.06)',transition:'transform 0.15s,box-shadow 0.15s'}}>
-                  <div style={{height:'150px',background:'linear-gradient(135deg,#F5A623,#FFB74D)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'52px',position:'relative'}}>
-                    {place.img}
-                    <div style={{position:'absolute',top:'10px',left:'10px',background:place.tag==='イベント'?'#3A9BD5':'#F5A623',color:'#fff',fontSize:'10px',fontWeight:'700',padding:'3px 10px',borderRadius:'4px'}}>{place.tag}</div>
+                  
                     <div style={{position:'absolute',top:'10px',right:'10px',background:'rgba(0,0,0,0.55)',color:'#fff',fontSize:'10px',padding:'3px 10px',borderRadius:'4px'}}>📍{place.area}</div>
                   </div>
                   <div style={{padding:'14px',background:'linear-gradient(135deg,#FFF8E1,#FFF3C4)'}}>
