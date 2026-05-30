@@ -1,4 +1,6 @@
+'use client'
 import Link from 'next/link'
+import { useState } from 'react'
 
 const places = [
   {id:'1',img:'🏫',tag:'常設',area:'東京',title:'日本体育大学医療専門学校',fee:'日額5,000円',type:'キッチンカー',isNew:true},
@@ -40,30 +42,45 @@ const navItems = [
 ]
 
 export default function HomePage() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
     <div style={{minHeight:'100vh',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
       <header style={{background:'#fff',borderBottom:'1px solid #e0e0e0',position:'sticky',top:0,zIndex:100,boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
         <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 16px',height:'56px',display:'flex',alignItems:'center',gap:'12px'}}>
+          <button onClick={()=>setMenuOpen(!menuOpen)} style={{background:'none',border:'none',cursor:'pointer',padding:'4px',display:'flex',flexDirection:'column',gap:'5px',flexShrink:0}}>
+            <span style={{display:'block',width:'22px',height:'2px',background:'#333',borderRadius:'2px',transition:'all 0.3s',transform:menuOpen?'rotate(45deg) translate(5px,5px)':'none'}}></span>
+            <span style={{display:'block',width:'22px',height:'2px',background:'#333',borderRadius:'2px',opacity:menuOpen?0:1,transition:'all 0.3s'}}></span>
+            <span style={{display:'block',width:'22px',height:'2px',background:'#333',borderRadius:'2px',transition:'all 0.3s',transform:menuOpen?'rotate(-45deg) translate(5px,-5px)':'none'}}></span>
+          </button>
           <Link href='/' style={{display:'flex',alignItems:'center',gap:'6px',textDecoration:'none',flexShrink:0}}>
             <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
             <span style={{fontWeight:'900',fontSize:'16px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
           </Link>
           <div style={{flex:1,position:'relative'}}>
-            <input placeholder='場所・エリア・ジャンルで探す' style={{width:'100%',border:'1px solid #e0e0e0',borderRadius:'24px',padding:'8px 16px 8px 36px',fontSize:'14px',background:'#f6f6f6',boxSizing:'border-box',outline:'none'}}/>
+            <input placeholder='場所・エリア・ジャンルで探す' style={{width:'100%',border:'1px solid #e0e0e0',borderRadius:'24px',padding:'8px 16px 8px 36px',fontSize:'13px',background:'#f6f6f6',boxSizing:'border-box',outline:'none'}}/>
             <span style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',fontSize:'14px',color:'#999'}}>🔍</span>
           </div>
           <Link href='/login' style={{color:'#555',fontSize:'13px',fontWeight:'600',textDecoration:'none',padding:'6px 10px',borderRadius:'4px',border:'1px solid #ddd',flexShrink:0,whiteSpace:'nowrap'}}>ログイン</Link>
           <Link href='/register' style={{background:'#F5A623',color:'#fff',fontSize:'13px',fontWeight:'900',textDecoration:'none',padding:'6px 12px',borderRadius:'4px',flexShrink:0,whiteSpace:'nowrap'}}>会員登録</Link>
         </div>
-        <div style={{borderTop:'1px solid #f0f0f0',overflowX:'auto'}}>
-          <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 16px',display:'flex'}}>
-            {navItems.map(item=>(
-              <Link key={item.label} href={item.href} style={{color:'#333',fontSize:'13px',fontWeight:'600',padding:'10px 12px',textDecoration:'none',whiteSpace:'nowrap',display:'block'}}>
-                {item.label}
-              </Link>
-            ))}
+
+        {menuOpen && (
+          <div style={{position:'fixed',top:'56px',left:0,right:0,bottom:0,zIndex:200}}>
+            <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)'}} onClick={()=>setMenuOpen(false)}/>
+            <div style={{position:'absolute',top:0,left:0,width:'260px',height:'100%',background:'#fff',boxShadow:'4px 0 12px rgba(0,0,0,0.15)',padding:'16px 0'}}>
+              {navItems.map(item=>(
+                <Link key={item.label} href={item.href} onClick={()=>setMenuOpen(false)} style={{display:'block',padding:'14px 24px',fontSize:'15px',fontWeight:'600',color:'#1a1a1a',textDecoration:'none',borderBottom:'1px solid #f5f5f5'}}>
+                  {item.label}
+                </Link>
+              ))}
+              <div style={{padding:'16px 24px',display:'flex',flexDirection:'column',gap:'10px',marginTop:'8px'}}>
+                <Link href='/login' onClick={()=>setMenuOpen(false)} style={{display:'block',border:'1px solid #ddd',color:'#555',borderRadius:'8px',padding:'12px',fontSize:'14px',fontWeight:'600',textDecoration:'none',textAlign:'center'}}>ログイン</Link>
+                <Link href='/register' onClick={()=>setMenuOpen(false)} style={{display:'block',background:'#F5A623',color:'#fff',borderRadius:'8px',padding:'12px',fontSize:'14px',fontWeight:'900',textDecoration:'none',textAlign:'center'}}>会員登録(無料)</Link>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </header>
 
       <div style={{background:'#fff',borderBottom:'1px solid #e0e0e0',padding:'10px 0',overflowX:'auto'}}>
@@ -86,12 +103,12 @@ export default function HomePage() {
             <div style={{display:'inline-block',background:'#F5A623',color:'#fff',fontSize:'11px',fontWeight:'700',padding:'3px 12px',borderRadius:'999px',marginBottom:'10px'}}>出店場所 × 出店者 マッチング</div>
             <h1 style={{fontSize:'28px',fontWeight:'900',color:'#1a1a1a',marginBottom:'8px',lineHeight:1.3}}>最高の出店場所が<br/>見つかる</h1>
             <p style={{fontSize:'13px',color:'#666',marginBottom:'16px',lineHeight:1.6}}>全国の出店場所・出店者をつなぐマッチングサービス</p>
-            <div style={{display:'flex',gap:'10px',flexWrap:'nowrap'}}>
-              <Link href='/places' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'12px 20px',borderRadius:'8px',textDecoration:'none',whiteSpace:'nowrap'}}>出店場所を探す</Link>
-              <Link href='/register' style={{background:'#fff',color:'#F5A623',fontWeight:'900',fontSize:'14px',border:'2px solid #F5A623',padding:'10px 20px',borderRadius:'8px',textDecoration:'none',whiteSpace:'nowrap'}}>無料で登録</Link>
+            <div style={{display:'flex',gap:'10px'}}>
+              <Link href='/places' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'12px 16px',borderRadius:'8px',textDecoration:'none',whiteSpace:'nowrap'}}>出店場所を探す</Link>
+              <Link href='/register' style={{background:'#fff',color:'#F5A623',fontWeight:'900',fontSize:'14px',border:'2px solid #F5A623',padding:'10px 16px',borderRadius:'8px',textDecoration:'none',whiteSpace:'nowrap'}}>無料で登録</Link>
             </div>
           </div>
-          <img src='/kitchen-car.png' style={{height:'120px',objectFit:'contain',mixBlendMode:'multiply',flexShrink:0}}/>
+          <img src='/kitchen-car.png' style={{height:'110px',objectFit:'contain',mixBlendMode:'multiply',flexShrink:0}}/>
         </div>
       </div>
 
@@ -114,7 +131,7 @@ export default function HomePage() {
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:'12px'}}>
           {places.map(place=>(
             <Link key={place.id} href={'/places/'+place.id} style={{textDecoration:'none',color:'inherit'}}>
-              <div style={{background:'#fff',borderRadius:'8px',overflow:'hidden',border:'1px solid #e0e0e0',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',display:'flex',flexDirection:'column',height:'100%',alignItems:'stretch'}}>
+              <div style={{background:'#fff',borderRadius:'8px',overflow:'hidden',border:'1px solid #e0e0e0',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',display:'flex',flexDirection:'column',height:'100%'}}>
                 <div style={{height:'120px',background:'linear-gradient(135deg,#f5f5f5,#e8e8e8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'40px',position:'relative',flexShrink:0}}>
                   {place.img}
                   {place.isNew && <div style={{position:'absolute',top:'6px',left:'6px',background:'#FF4B4B',color:'#fff',fontSize:'9px',fontWeight:'700',padding:'2px 6px',borderRadius:'3px'}}>NEW</div>}
@@ -156,18 +173,18 @@ export default function HomePage() {
       <div style={{background:'#fff',borderTop:'1px solid #e0e0e0',padding:'16px'}}>
         <div style={{maxWidth:'1200px',margin:'0 auto',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
           <Link href='/vendor' style={{textDecoration:'none'}}>
-            <div style={{background:'linear-gradient(135deg,#FFF8E1,#FFE082)',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'8px',border:'1px solid #FFD54F'}}>
-              <img src='/kitchen-car.png' style={{height:'40px',objectFit:'contain',mixBlendMode:'multiply'}}/>
-              <div style={{fontWeight:'900',fontSize:'13px',color:'#1a1a1a',wordBreak:'keep-all'}}>出店したい方へ</div>
-              <div style={{fontSize:'11px',color:'#666',lineHeight:1.5}}>全国の出店場所を無料で探せます</div>
+            <div style={{background:'linear-gradient(135deg,#FFF8E1,#FFE082)',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'8px',border:'1px solid #FFD54F',height:'100%',boxSizing:'border-box'}}>
+              <img src='/kitchen-car.png' style={{height:'36px',objectFit:'contain',mixBlendMode:'multiply'}}/>
+              <div style={{fontWeight:'900',fontSize:'14px',color:'#1a1a1a'}}>出店したい方へ</div>
+              <div style={{fontSize:'11px',color:'#666',lineHeight:1.6,flex:1}}>全国の出店場所を無料で探せます</div>
               <div style={{fontSize:'12px',color:'#F5A623',fontWeight:'700'}}>詳しく見る →</div>
             </div>
           </Link>
           <Link href='/space' style={{textDecoration:'none'}}>
-            <div style={{background:'linear-gradient(135deg,#E3F2FD,#BBDEFB)',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'8px',border:'1px solid #90CAF9'}}>
-              <span style={{fontSize:'36px'}}>📣</span>
-              <div style={{fontWeight:'900',fontSize:'13px',color:'#1a1a1a',wordBreak:'keep-all'}}>お店を呼びたい方へ</div>
-              <div style={{fontSize:'11px',color:'#666',lineHeight:1.5}}>全国の出店者を無料で募集できます</div>
+            <div style={{background:'linear-gradient(135deg,#E3F2FD,#BBDEFB)',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'8px',border:'1px solid #90CAF9',height:'100%',boxSizing:'border-box'}}>
+              <span style={{fontSize:'32px'}}>📣</span>
+              <div style={{fontWeight:'900',fontSize:'14px',color:'#1a1a1a'}}>お店を呼びたい方へ</div>
+              <div style={{fontSize:'11px',color:'#666',lineHeight:1.6,flex:1}}>全国の出店者を無料で募集できます</div>
               <div style={{fontSize:'12px',color:'#3A9BD5',fontWeight:'700'}}>詳しく見る →</div>
             </div>
           </Link>
