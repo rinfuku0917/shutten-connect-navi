@@ -26,13 +26,7 @@ export default function NewPlacePage() {
 
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
-      <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 24px',height:'60px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <Link href='/' style={{display:'flex',alignItems:'center',gap:'10px',textDecoration:'none'}}>
-          <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'5px 10px',borderRadius:'5px'}}>出店</span>
-          <span style={{fontWeight:'900',fontSize:'18px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
-        </Link>
-        <Link href='/dashboard/host' style={{fontSize:'13px',color:'#3A9BD5',textDecoration:'none'}}>← ダッシュボードに戻る</Link>
-      </nav>
+      
 
       <div style={{maxWidth:'780px',margin:'0 auto',padding:'40px 24px'}}>
         <h1 style={{fontSize:'26px',fontWeight:'900',marginBottom:'8px',textAlign:'center',color:'#1a1a1a'}}>イベント・場所登録</h1>

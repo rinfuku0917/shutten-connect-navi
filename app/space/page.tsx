@@ -22,23 +22,8 @@ export default function SpacePage() {
   ]
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
-      <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 24px',height:'60px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <Link href='/' style={{display:'flex',alignItems:'center',gap:'10px',textDecoration:'none'}}>
-          <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'5px 10px',borderRadius:'5px'}}>出店</span>
-          <span style={{fontWeight:'900',fontSize:'18px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
-        </Link>
-        <div style={{display:'flex',gap:'10px'}}>
-          <Link href='/login' style={{border:'1px solid #ddd',color:'#555',borderRadius:'999px',padding:'6px 16px',fontSize:'13px',textDecoration:'none'}}>ログイン</Link>
-          <Link href='/register' style={{background:'#3A9BD5',color:'#fff',borderRadius:'999px',padding:'7px 18px',fontSize:'13px',fontWeight:'900',textDecoration:'none'}}>会員登録(無料)</Link>
-        </div>
-      </nav>
-      <div style={{background:'#F5A623',display:'flex'}}>
-        {[{label:'ホーム',href:'/'},{label:'出店したい',href:'/vendor'},{label:'お店を呼びたい',href:'/space'},{label:'出店者を探す',href:'/sellers'},{label:'出店場所を探す',href:'/places'},{label:'車両を売りたい',href:'/sell'}].map((item,i,arr)=>(
-          <Link key={item.label} href={item.href} style={{flex:1,color:'#fff',fontWeight:'900',fontSize:'13px',padding:'12px 0',textAlign:'center',textDecoration:'none',borderRight:i<arr.length-1?'1px solid rgba(255,255,255,0.3)':'none',background:item.href==='/space'?'rgba(0,0,0,0.15)':'transparent'}}>
-            {item.label}
-          </Link>
-        ))}
-      </div>
+      
+      
       <div style={{background:'linear-gradient(135deg,#FFF4B0,#FFE44D)',padding:'60px 24px',textAlign:'center'}}>
         <div style={{fontSize:'56px',marginBottom:'16px'}}>📣</div>
         <h1 style={{fontSize:'40px',fontWeight:'900',color:'#1a1a1a',marginBottom:'12px'}}>お店を呼びたい方へ</h1>
