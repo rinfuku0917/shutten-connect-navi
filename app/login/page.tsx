@@ -54,7 +54,7 @@ export default function LoginPage() {
             {error && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:'8px',padding:'12px',fontSize:'13px',color:'#DC2626',marginBottom:'16px'}}>{error}</div>}
             <div style={{marginBottom:'16px'}}>
               <label style={{fontSize:'13px',fontWeight:'600',color:'#555',display:'block',marginBottom:'6px'}}>メールアドレス</label>
-              <input value={email} onChange={e=>setEmail(e.target.value)} type='email' placeholder='example@email.com' style={{width:'100%',border:'1px solid #e0e0e0',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',boxSizing:'border-box',outline:'none'}}/>
+              <input value={email} onChange={e=>setEmail(e.target.value)} type='email' placeholder='example@email.com' style={{width:'100%',border:'1px solid #e0e0e0',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',boxSizing:'border-box',outline:'none',color:'#1a1a1a',background:'#fff'}}/>
             </div>
             <div style={{marginBottom:'24px'}}>
               <label style={{fontSize:'13px',fontWeight:'600',color:'#555',display:'block',marginBottom:'6px'}}>パスワード</label>
