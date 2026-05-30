@@ -93,7 +93,7 @@ export default function HomePage() {
           <h2 style={{fontSize:'18px',fontWeight:'900',color:'#1a1a1a'}}>新着の出店場所</h2>
           <Link href='/places' style={{fontSize:'13px',color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>もっと見る →</Link>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'12px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'12px'}}>
           {places.map(place=>(
             <Link key={place.id} href={'/places/'+place.id} style={{textDecoration:'none',color:'inherit'}}>
               <div style={{background:'#fff',borderRadius:'8px',overflow:'hidden',border:'1px solid #e0e0e0',boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
