@@ -132,7 +132,7 @@ export default function PlacesPage() {
             <button onClick={reset} style={{background:'#F5A623',color:'#fff',border:'none',borderRadius:'8px',padding:'10px 28px',fontSize:'14px',fontWeight:'700',cursor:'pointer'}}>条件をリセット</button>
           </div>
         ) : (
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'16px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:'16px'}}>
             {filtered.map(place=>(
               <Link key={place.id} href={'/places/'+place.id} style={{textDecoration:'none',color:'inherit'}}>
                 <div style={{background:'#fff',borderRadius:'10px',overflow:'hidden',border:'1px solid #e8e8e8',boxShadow:'0 2px 8px rgba(0,0,0,0.06)',transition:'transform 0.15s,box-shadow 0.15s'}}>
