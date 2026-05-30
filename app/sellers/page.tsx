@@ -63,7 +63,7 @@ export default function SellersPage() {
       </div>
       <div style={{maxWidth:'1000px',margin:'0 auto',padding:'32px 24px'}}>
         <div style={{fontSize:'13px',color:'#888',marginBottom:'20px'}}>{sellers.length}件の出店者が見つかりました</div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'16px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'12px'}}>
           {sellers.map(s=>(
             <Link key={s.id} href={'/sellers/'+s.id} style={{textDecoration:'none',color:'inherit'}}>
               <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #E5E7EB',overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,0.06)',cursor:'pointer'}}>
