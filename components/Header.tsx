@@ -7,9 +7,8 @@ const navItems = [
   { label: 'ホーム',        href: '/' },
   { label: '出店したい',    href: '/vendor' },
   { label: 'お店を呼びたい',href: '/space' },
-  { label: '出店者を探す',  href: '/search/vendors' },
-  { label: '出店場所を探す',href: '/search/spaces' },
-  { label: '制作・中古販売',href: '/make' },
+  { label: '出店者を探す',  href: '/sellers' },
+  { label: '出店場所を探す',href: '/places' },
   { label: '車両を売りたい',href: '/sell' },
 ]
 

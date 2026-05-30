@@ -75,16 +75,7 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
   return (
     <div style={{ minHeight: '100vh', background: '#FFF9E6' }}>
       {/* ナビ */}
-      <nav style={{ background: '#fff', borderBottom: '3px solid #F5A623', padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-          <span style={{ background: '#F5A623', color: '#fff', fontWeight: '900', fontSize: '14px', padding: '5px 10px', borderRadius: '5px' }}>出店</span>
-          <span style={{ fontWeight: '900', fontSize: '18px', color: '#1a1a1a' }}>コネクト<span style={{ color: '#F5A623' }}>ナビ</span></span>
-        </Link>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <Link href="/login" style={{ border: '1px solid #ddd', color: '#555', borderRadius: '999px', padding: '6px 16px', fontSize: '13px', textDecoration: 'none' }}>ログイン</Link>
-          <Link href="/register" style={{ background: '#3A9BD5', color: '#fff', borderRadius: '999px', padding: '7px 18px', fontSize: '13px', fontWeight: '900', textDecoration: 'none' }}>会員登録(無料)</Link>
-        </div>
-      </nav>
+      
 
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
         <Link href="/" style={{ color: '#3A9BD5', textDecoration: 'none', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginBottom: '20px' }}>

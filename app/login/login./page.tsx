@@ -11,22 +11,10 @@ export default function LoginPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#FFF9E6' }}>
       {/* ナビ */}
-      <nav style={{ background: '#fff', borderBottom: '3px solid #F5A623', padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-          <span style={{ background: '#F5A623', color: '#fff', fontWeight: '900', fontSize: '14px', padding: '5px 10px', borderRadius: '5px' }}>出店</span>
-          <span style={{ fontWeight: '900', fontSize: '18px', color: '#1a1a1a' }}>コネクト<span style={{ color: '#F5A623' }}>ナビ</span></span>
-        </Link>
-        <Link href="/register" style={{ background: '#3A9BD5', color: '#fff', borderRadius: '999px', padding: '7px 18px', fontSize: '13px', fontWeight: '900', textDecoration: 'none' }}>
-          会員登録(無料)
-        </Link>
-      </nav>
+      
 
       {/* オレンジバー */}
-      <div style={{ background: '#F5A623', display: 'flex' }}>
-        {['ホーム', '出店したい', 'お店を呼びたい', '出店者を探す', '出店場所を探す', '制作・中古販売', '車両を売りたい'].map((item, i, arr) => (
-          <button key={item} style={{ flex: 1, color: '#fff', fontWeight: '900', fontSize: '13px', padding: '12px 0', background: 'transparent', border: 'none', borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none', cursor: 'pointer' }}>{item}</button>
-        ))}
-      </div>
+      
 
       <div style={{ maxWidth: '480px', margin: '48px auto', padding: '0 16px' }}>
         <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', border: '1px solid #E5E7EB' }}>
