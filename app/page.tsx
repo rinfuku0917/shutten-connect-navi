@@ -28,7 +28,7 @@ export default function Home() {
           <button key={c} style={{display:'inline-block',padding:'6px 14px',margin:'0 4px',borderRadius:'20px',border:'1px solid #ddd',background:'#fff',fontSize:'13px',cursor:'pointer',whiteSpace:'nowrap',color:'#111',fontWeight:'700'}}>{c}</button>
         ))}
       </div>
-      <div style={{background:'linear-gradient(135deg,#FFF3CD,#FFE082)',padding:'40px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',maxWidth:'100%',overflow:'hidden'}}>
+      <div style={{background:'linear-gradient(rgba(0,0,0,0.3),rgba(0,0,0,0.3)),url(/hero-top.png) center/cover no-repeat',padding:'40px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',maxWidth:'100%',overflow:'hidden'}}>
         <div>
           <h1 style={{fontSize:'clamp(24px,5vw,40px)',fontWeight:'900',color:'#fff',lineHeight:1.3,marginBottom:'12px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>最高の出店場所が<br/>見つかる</h1>
           <p style={{fontSize:'14px',color:'#111',marginBottom:'20px'}}>全国の出店場所・出店者をつなぐマッチングサービス</p>
@@ -37,7 +37,7 @@ export default function Home() {
             <Link href='/register' style={{background:'#fff',color:'#111',padding:'12px 20px',borderRadius:'8px',fontWeight:'700',textDecoration:'none',fontSize:'14px',border:'2px solid #F5A623'}}>無料で登録</Link>
           </div>
         </div>
-        <div style={{fontSize:'80px',flexShrink:0}}>🚚</div>
+        
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',borderBottom:'1px solid #eee',background:'#fff'}}>
         {[['掲載場所','1,240+'],['登録出店者','3,800+'],['マッチング実績','12,500+'],['平均評価','4.8★']].map(([l,v])=>(
@@ -91,8 +91,8 @@ export default function Home() {
       <div style={{padding:'0 16px 24px',maxWidth:'1200px',margin:'0 auto'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
           <Link href='/vendor' style={{textDecoration:'none'}}>
-            <div style={{background:'linear-gradient(135deg,#FFF3CD,#FFE082)',borderRadius:'12px',padding:'20px',border:'1px solid #F5A623'}}>
-              <div style={{fontSize:'32px',marginBottom:'8px'}}>🚚</div>
+            <div style={{background:'linear-gradient(rgba(0,0,0,0.3),rgba(0,0,0,0.3)),url(/hero-top.png) center/cover no-repeat',borderRadius:'12px',padding:'20px'}}>
+              
               <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>出店したい方へ</div>
               <div style={{fontSize:'11px',color:'#111',marginBottom:'8px'}}>全国の出店場所を無料で探せます</div>
               <div style={{fontSize:'12px',color:'#111',fontWeight:'700'}}>詳しく見る →</div>
