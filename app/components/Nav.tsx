@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const navItems = [
+  { label: 'ホーム', href: '/' },
   { label: '出店したい', href: '/space' },
   { label: 'お店を呼びたい', href: '/vendor' },
   { label: '出店者を探す', href: '/sellers' },
@@ -15,26 +16,24 @@ const navItems = [
 export default function Nav() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
-
-  useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
-  }, [open])
-
+  useEffect(() => { document.body.style.overflow = open ? 'hidden' : '' }, [open])
   useEffect(() => { setOpen(false) }, [pathname])
 
   return (
     <>
-      <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 16px',height:'60px',display:'flex',alignItems:'center',justifyContent:'flex-end',position:'sticky',top:0,zIndex:100,boxSizing:'border-box',width:'100%'}}>
-        
+      <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 16px',height:'60px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100,boxSizing:'border-box',width:'100%'}}>
+        <Link href='/' style={{display:'flex',alignItems:'center',gap:'8px',textDecoration:'none',flexShrink:0}}>
+          <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
+          <span style={{fontWeight:'900',fontSize:'15px',color:'#1a1a1a'}}>コネクト <span style={{color:'#F5A623'}}>ナビ</span></span>
+        </Link>
         <div style={{display:'flex',gap:'4px',alignItems:'center',flexWrap:'nowrap'}} className="pc-nav">
           {navItems.slice(1).map(item => (
-            <Link key={item.href} href={item.href} style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:pathname===item.href?'#F5A623':'#222',whiteSpace:'nowrap',padding:'4px 8px',borderRadius:'4px',background:pathname===item.href?'#FFF8E7':'transparent'}}>{item.label}</Link>
+            <Link key={item.href} href={item.href} style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:pathname===item.href?'#F5A623':'#222',whiteSpace:'nowrap',padding:'4px 8px',borderRadius:'4px',background:pathname===item.href?'#FFF8F0':'transparent'}}>{item.label}</Link>
           ))}
           <Link href='/login' style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#222',border:'1px solid #999',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap',marginLeft:'4px'}}>ログイン</Link>
           <Link href='/register' style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#fff',background:'#F5A623',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap'}}>会員登録(無料)</Link>
         </div>
-        <button onClick={() => setOpen(v => !v)} style={{display:'flex',alignItems:'center',justifyContent:'center',width:'40px',height:'40px',borderRadius:'8px',border:'none',background:open?'#FFF3E0':'transparent',cursor:'pointer',flexShrink:0,order:-1,marginRight:'auto'}} className="ham-btn" aria-label="メニュー">
+        <button onClick={() => setOpen(v => !v)} className="ham-btn" aria-label="メニュー" style={{alignItems:'center',justifyContent:'center',width:'40px',height:'40px',borderRadius:'8px',border:'none',background:open?'#FFF3E0':'transparent',cursor:'pointer',flexShrink:0}}>
           <span style={{display:'block',width:'20px',height:'2px',background:'#1a1a1a',borderRadius:'2px',transition:'all .3s',transform:open?'rotate(45deg) translate(5px,5px)':'none'}}/>
           <span style={{display:'block',width:'20px',height:'2px',background:'#1a1a1a',borderRadius:'2px',margin:'4px 0',transition:'all .3s',opacity:open?0:1}}/>
           <span style={{display:'block',width:'20px',height:'2px',background:'#1a1a1a',borderRadius:'2px',transition:'all .3s',transform:open?'rotate(-45deg) translate(5px,-5px)':'none'}}/>
@@ -56,8 +55,9 @@ export default function Nav() {
           .pc-nav { display: none !important; }
           .ham-btn { display: flex !important; }
         }
-        * { box-sizing: border-box; }
-        body { max-width: 100vw; overflow-x: hidden; }
+        @media (min-width: 769px) {
+          .ham-btn { display: none !important; }
+        }
       `}</style>
     </>
   )
