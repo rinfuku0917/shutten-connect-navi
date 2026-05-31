@@ -46,7 +46,9 @@ export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <div style={{minHeight:'100vh',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
+    <>
+      <Nav />
+      <div style={{minHeight:'100vh',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
       
 
       <div style={{background:'#fff',borderBottom:'1px solid #e0e0e0',padding:'10px 0',overflowX:'auto'}}>

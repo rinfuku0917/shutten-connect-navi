@@ -17,7 +17,9 @@ export default function VendorPage() {
     {icon:'📋',title:'書類管理',desc:'許可証・保険証など必要書類をまとめて管理。'},
   ]
   return (
-    <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
+    <>
+      <Nav />
+      <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
       
       
       <div style={{background:'linear-gradient(135deg,#FFF4B0,#FFE44D)',padding:'60px 24px',textAlign:'center'}}>

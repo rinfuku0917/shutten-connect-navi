@@ -22,7 +22,9 @@ export default function SpacePage() {
     {name:'福岡天神オフィスビル管理組合',area:'福岡',comment:'ランチ出店を毎週募集しています。継続して良い出店者さんを見つけられています。'},
   ]
   return (
-    <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
+    <>
+      <Nav />
+      <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
       
       
       <div style={{background:'linear-gradient(135deg,#FFF4B0,#FFE44D)',padding:'60px 24px',textAlign:'center'}}>

@@ -17,7 +17,9 @@ const genres = ['すべて','キッチンカー','物販','ワークショップ
 
 export default function SellersPage() {
   return (
-    <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
+    <>
+      <Nav />
+      <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
       
       
       <div style={{background:'linear-gradient(135deg,#FFF4B0,#FFE44D)',padding:'40px 24px',textAlign:'center'}}>

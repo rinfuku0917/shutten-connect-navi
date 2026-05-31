@@ -24,7 +24,9 @@ export default function SellPage() {
     {q:'成約後のサポートはありますか？',a:'名義変更・車検証の手続きなど、成約後の手続きについてもサポートいたします。'},
   ]
   return (
-    <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
+    <>
+      <Nav />
+      <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
       
       
       <div style={{background:'linear-gradient(135deg,#FFF4B0,#FFE44D)',padding:'60px 24px',textAlign:'center'}}>

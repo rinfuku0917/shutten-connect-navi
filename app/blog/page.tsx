@@ -15,7 +15,9 @@ const categories = ['すべて','インタビュー','ガイド','ノウハウ']
 
 export default function BlogPage() {
   return (
-    <div style={{minHeight:'100vh',background:'#FFF9E6',fontFamily:'-apple-system,sans-serif'}}>
+    <>
+      <Nav />
+      <div style={{minHeight:'100vh',background:'#FFF9E6',fontFamily:'-apple-system,sans-serif'}}>
       <div style={{background:'linear-gradient(135deg,#FFF4CC,#FFE680)',padding:'48px 24px',textAlign:'center'}}>
         <div style={{fontSize:'40px',marginBottom:'12px'}}>📝</div>
         <h1 style={{fontSize:'clamp(28px,6vw,40px)',fontWeight:'900',color:'#1a1a1a',marginBottom:'8px'}}>ブログ</h1>

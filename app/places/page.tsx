@@ -46,7 +46,9 @@ export default function PlacesPage() {
   const selStyle = {border:'1px solid #e0e0e0',borderRadius:'6px',padding:'7px 12px',fontSize:'13px',background:'#fff',cursor:'pointer',color:'#333'}
 
   return (
-    <div style={{minHeight:'100vh',background:'#f8f9fa',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
+    <>
+      <Nav />
+      <div style={{minHeight:'100vh',background:'#f8f9fa',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
       
 
       <div style={{background:'#fff',borderBottom:'1px solid #e8e8e8',padding:'14px 0',boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
