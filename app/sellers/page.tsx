@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Nav from '../components/Nav'
 
 const sellers = [
   {id:'1',name:'たこ焼き 大阪屋',genre:'たこ焼き・粉もの',area:'関西',img:'🐙',rating:4.8,count:42,tags:['キッチンカー','ランチ','イベント']},

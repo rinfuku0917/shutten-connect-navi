@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import Nav from '../components/Nav'
 
 const posts = [
   {id:'1',title:'キッチンカー出店で月収100万円を達成した出店者さんにインタビュー',category:'インタビュー',date:'2026年5月28日',img:'🎤',tags:['インタビュー','キッチンカー','成功事例']},
