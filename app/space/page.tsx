@@ -39,7 +39,7 @@ export default function SpacePage() {
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px'}}>
             {steps.map((s,i)=>(
               <div key={s.num} style={{textAlign:'center',position:'relative'}}>
-                {i<steps.length-1 && }
+                {i<steps.length-1 && <div style={{position:"absolute",top:"24px",left:"calc(50% + 20px)",width:"calc(100% - 40px)",height:"2px",background:"#F5A623"}}></div>}
                 
                 <div style={{fontWeight:'900',fontSize:'15px',marginBottom:'8px'}}>{s.title}</div>
                 <div style={{fontSize:'12px',color:'#888',lineHeight:1.7}}>{s.desc}</div>
