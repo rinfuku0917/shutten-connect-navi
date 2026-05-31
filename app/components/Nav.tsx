@@ -26,10 +26,7 @@ export default function Nav() {
   return (
     <>
       <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 16px',height:'60px',display:'flex',alignItems:'center',justifyContent:'flex-end',position:'sticky',top:0,zIndex:100,boxSizing:'border-box',width:'100%'}}>
-        <Link href='/' style={{display:'flex',alignItems:'center',gap:'8px',textDecoration:'none',flexShrink:0}} className='pc-nav'>
-          <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
-          <span style={{fontWeight:'900',fontSize:'15px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
-        </Link>
+        
         <div style={{display:'flex',gap:'4px',alignItems:'center',flexWrap:'nowrap'}} className="pc-nav">
           {navItems.slice(1).map(item => (
             <Link key={item.href} href={item.href} style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:pathname===item.href?'#F5A623':'#222',whiteSpace:'nowrap',padding:'4px 8px',borderRadius:'4px',background:pathname===item.href?'#FFF8E7':'transparent'}}>{item.label}</Link>
