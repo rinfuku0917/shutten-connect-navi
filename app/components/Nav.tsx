@@ -21,10 +21,9 @@ export default function Nav() {
 
   return (
     <>
-      <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 16px',height:'60px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100,boxSizing:'border-box',width:'100%'}}>
-        <Link href='/' style={{display:'flex',alignItems:'center',gap:'8px',textDecoration:'none',flexShrink:0}}>
-          <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
-          <span style={{fontWeight:'900',fontSize:'15px',color:'#1a1a1a'}}>コネクト <span style={{color:'#F5A623'}}>ナビ</span></span>
+      <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 16px',height:'90px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100,boxSizing:'border-box',width:'100%'}}>
+        <Link href='/' style={{display:'flex',alignItems:'center',textDecoration:'none',flexShrink:0}}>
+          <img src='/logo.png' alt='出店コネクトナビ' className='logo-img' style={{height:'68px',width:'auto',maxWidth:'340px',objectFit:'contain'}} />
         </Link>
         <div style={{display:'flex',gap:'4px',alignItems:'center',flexWrap:'nowrap'}} className="pc-nav">
           {navItems.slice(1).map(item => (
@@ -51,6 +50,7 @@ export default function Nav() {
       <style>{`
         @media (max-width: 768px) {
           .pc-nav { display: none !important; }
+          .logo-img { height: 52px !important; max-width: 260px !important; }
           .ham-btn { display: flex !important; }
         }
         @media (min-width: 769px) {
