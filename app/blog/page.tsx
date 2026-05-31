@@ -50,7 +50,7 @@ export default function BlogPage() {
           {rest.map(post=>(
             <Link key={post.id} href={'/blog/'+post.id} style={{textDecoration:'none',color:'inherit'}}>
               <div style={{background:'#fff',borderRadius:'8px',border:'1px solid #e0e0e0',overflow:'hidden',boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
-                <div style={{background:'linear-gradient(135deg,#f5f5f5,#e8e8e8)',height:'120px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px'}}>
+                <div style={{background:'linear-gradient(135deg,#f5f5f5,#e8e8e8)',height:'120px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'clamp(28px, 6vw, 48px)'}}>
                   {post.img}
                 </div>
                 <div style={{padding:'16px'}}>

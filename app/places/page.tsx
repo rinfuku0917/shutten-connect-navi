@@ -98,7 +98,7 @@ export default function PlacesPage() {
       <div style={{maxWidth:'1200px',margin:'0 auto',padding:'20px'}}>
         {filtered.length === 0 ? (
           <div style={{textAlign:'center',padding:'80px 0',background:'#fff',borderRadius:'12px',border:'1px solid #e8e8e8'}}>
-            <div style={{fontSize:'48px',marginBottom:'16px'}}>🔍</div>
+            <div style={{fontSize:'clamp(28px, 6vw, 48px)',marginBottom:'16px'}}>🔍</div>
             <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'8px'}}>条件に合う出店場所が見つかりませんでした</div>
             <div style={{fontSize:'13px',color:'#999',marginBottom:'20px'}}>検索条件を変えて試してみてください</div>
             <button onClick={reset} style={{background:'#F5A623',color:'#fff',border:'none',borderRadius:'8px',padding:'10px 28px',fontSize:'14px',fontWeight:'700',cursor:'pointer'}}>条件をリセット</button>

@@ -25,7 +25,7 @@ export default function SpacePage() {
       
       
       <div style={{background:'linear-gradient(135deg,#FFF4B0,#FFE44D)',padding:'60px 24px',textAlign:'center'}}>
-        <div style={{fontSize:'56px',marginBottom:'16px'}}>📣</div>
+        <div style={{fontSize:'clamp(30px, 7vw, 56px)',marginBottom:'16px'}}>📣</div>
         <h1 style={{fontSize:'40px',fontWeight:'900',color:'#1a1a1a',marginBottom:'12px'}}>お店を呼びたい方へ</h1>
         <p style={{fontSize:'16px',color:'#555',marginBottom:'28px',lineHeight:1.8}}>イベント・商業施設・大学・オフィスなど<br/>あなたのスペースに最適な出店者を無料で募集できます</p>
         <div style={{display:'flex',gap:'16px',justifyContent:'center'}}>

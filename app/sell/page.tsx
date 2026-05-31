@@ -27,7 +27,7 @@ export default function SellPage() {
       
       
       <div style={{background:'linear-gradient(135deg,#FFF4B0,#FFE44D)',padding:'60px 24px',textAlign:'center'}}>
-        <div style={{fontSize:'56px',marginBottom:'16px'}}>🚐</div>
+        <div style={{fontSize:'clamp(30px, 7vw, 56px)',marginBottom:'16px'}}>🚐</div>
         <h1 style={{fontSize:'40px',fontWeight:'900',color:'#1a1a1a',marginBottom:'12px'}}>車両を売りたい方へ</h1>
         <p style={{fontSize:'16px',color:'#555',marginBottom:'28px',lineHeight:1.8}}>キッチンカー・移動販売車の売却なら<br/>出店コネクトナビにお任せください</p>
         <Link href='/register' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'16px',padding:'14px 40px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>無料で車両を掲載する</Link>

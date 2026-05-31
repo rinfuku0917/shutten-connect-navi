@@ -33,7 +33,7 @@ export default function RegisterPage() {
   if(done) return (
     <div style={{minHeight:'100vh',background:'#FFF9E6',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
       <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'48px 32px',maxWidth:'420px',textAlign:'center',boxShadow:'0 4px 16px rgba(0,0,0,0.08)'}}>
-        <div style={{fontSize:'48px',marginBottom:'16px'}}>📧</div>
+        <div style={{fontSize:'clamp(28px, 6vw, 48px)',marginBottom:'16px'}}>📧</div>
         <h2 style={{fontSize:'20px',fontWeight:'900',marginBottom:'12px',color:'#1a1a1a'}}>確認メールを送信しました</h2>
         <p style={{fontSize:'14px',color:'#666',lineHeight:1.8,marginBottom:'24px'}}>{email} に確認メールを送りました。メール内のリンクをクリックして登録を完了してください。</p>
         <Link href='/login' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'12px 32px',borderRadius:'8px',textDecoration:'none'}}>ログインへ</Link>
