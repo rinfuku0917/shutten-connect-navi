@@ -24,28 +24,28 @@ export default function Nav() {
 
   return (
     <>
-      <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 24px',height:'60px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100}}>
-        <Link href='/' style={{display:'flex',alignItems:'center',gap:'10px',textDecoration:'none'}}>
-          <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'5px 10px',borderRadius:'5px'}}>出店</span>
-          <span style={{fontWeight:'900',fontSize:'16px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
+      <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 16px',height:'60px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100,boxSizing:'border-box',width:'100%'}}>
+        <Link href='/' style={{display:'flex',alignItems:'center',gap:'8px',textDecoration:'none',flexShrink:0}}>
+          <span style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'5px'}}>出店</span>
+          <span style={{fontWeight:'900',fontSize:'15px',color:'#1a1a1a'}}>コネクト<span style={{color:'#F5A623'}}>ナビ</span></span>
         </Link>
-        <div style={{display:'flex',gap:'16px',alignItems:'center'}} className="pc-nav">
+        <div style={{display:'flex',gap:'12px',alignItems:'center',flexWrap:'nowrap'}} className="pc-nav">
           {navItems.slice(1).map(item => (
-            <Link key={item.href} href={item.href} style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color: pathname===item.href ? '#F5A623' : '#333'}}>{item.label}</Link>
+            <Link key={item.href} href={item.href} style={{textDecoration:'none',fontSize:'12px',fontWeight:'700',color:pathname===item.href?'#F5A623':'#333',whiteSpace:'nowrap'}}>{item.label}</Link>
           ))}
-          <Link href='/login' style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#333',border:'1px solid #ddd',padding:'6px 12px',borderRadius:'6px'}}>ログイン</Link>
-          <Link href='/register' style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#fff',background:'#F5A623',padding:'6px 12px',borderRadius:'6px'}}>会員登録(無料)</Link>
+          <Link href='/login' style={{textDecoration:'none',fontSize:'12px',fontWeight:'700',color:'#333',border:'1px solid #ddd',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap'}}>ログイン</Link>
+          <Link href='/register' style={{textDecoration:'none',fontSize:'12px',fontWeight:'700',color:'#fff',background:'#F5A623',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap'}}>会員登録(無料)</Link>
         </div>
-        <button onClick={() => setOpen(v => !v)} style={{display:'none',flexDirection:'column',justifyContent:'center',alignItems:'center',gap:'5px',width:'40px',height:'40px',background:'none',border:'none',cursor:'pointer'}} className="ham-btn" aria-label="メニュー">
-          <span style={{display:'block',width:'24px',height:'2px',background:'#333',borderRadius:'2px',transition:'all .3s',transform: open ? 'rotate(45deg) translate(5px,5px)' : 'none'}}/>
-          <span style={{display:'block',width:'24px',height:'2px',background:'#333',borderRadius:'2px',transition:'all .3s',opacity: open ? 0 : 1}}/>
-          <span style={{display:'block',width:'24px',height:'2px',background:'#333',borderRadius:'2px',transition:'all .3s',transform: open ? 'rotate(-45deg) translate(5px,-5px)' : 'none'}}/>
+        <button onClick={() => setOpen(v => !v)} style={{display:'none',flexDirection:'column',justifyContent:'center',alignItems:'center',gap:'5px',width:'40px',height:'40px',background:'#F5A623',border:'none',cursor:'pointer',borderRadius:'8px',flexShrink:0}} className="ham-btn" aria-label="メニュー">
+          <span style={{display:'block',width:'20px',height:'2px',background:'#fff',borderRadius:'2px',transition:'all .3s',transform:open?'rotate(45deg) translate(5px,5px)':'none'}}/>
+          <span style={{display:'block',width:'20px',height:'2px',background:'#fff',borderRadius:'2px',transition:'all .3s',opacity:open?0:1}}/>
+          <span style={{display:'block',width:'20px',height:'2px',background:'#fff',borderRadius:'2px',transition:'all .3s',transform:open?'rotate(-45deg) translate(5px,-5px)':'none'}}/>
         </button>
       </nav>
       {open && (
-        <div style={{position:'fixed',top:'63px',left:0,right:0,bottom:0,background:'#fff',zIndex:99,overflowY:'auto',padding:'16px'}}>
+        <div style={{position:'fixed',top:'63px',left:0,right:0,bottom:0,background:'#fff',zIndex:99,overflowY:'auto',padding:'16px',boxSizing:'border-box'}}>
           {navItems.map(item => (
-            <Link key={item.href} href={item.href} style={{display:'block',padding:'16px',fontSize:'16px',fontWeight:'700',color: pathname===item.href ? '#F5A623' : '#1a1a1a',textDecoration:'none',borderBottom:'1px solid #f0f0f0'}}>
+            <Link key={item.href} href={item.href} style={{display:'block',padding:'16px',fontSize:'16px',fontWeight:'700',color:pathname===item.href?'#F5A623':'#1a1a1a',textDecoration:'none',borderBottom:'1px solid #f0f0f0'}}>
               {item.label}
             </Link>
           ))}
@@ -60,6 +60,8 @@ export default function Nav() {
           .pc-nav { display: none !important; }
           .ham-btn { display: flex !important; }
         }
+        * { box-sizing: border-box; }
+        body { max-width: 100vw; overflow-x: hidden; }
       `}</style>
     </>
   )
