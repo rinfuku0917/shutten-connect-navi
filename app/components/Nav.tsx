@@ -34,9 +34,9 @@ export default function Nav() {
           <Link href='/register' style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#fff',background:'#F5A623',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap'}}>会員登録(無料)</Link>
         </div>
         <button onClick={() => setOpen(v => !v)} className="ham-btn" aria-label="メニュー" style={{alignItems:'center',justifyContent:'center',width:'40px',height:'40px',borderRadius:'8px',border:'none',background:open?'#FFF3E0':'transparent',cursor:'pointer',flexShrink:0}}>
-          <span style={{display:'block',width:'20px',height:'2px',background:'#1a1a1a',borderRadius:'2px',transition:'all .3s',transform:open?'rotate(45deg) translate(5px,5px)':'none'}}/>
-          <span style={{display:'block',width:'20px',height:'2px',background:'#1a1a1a',borderRadius:'2px',margin:'4px 0',transition:'all .3s',opacity:open?0:1}}/>
-          <span style={{display:'block',width:'20px',height:'2px',background:'#1a1a1a',borderRadius:'2px',transition:'all .3s',transform:open?'rotate(-45deg) translate(5px,-5px)':'none'}}/>
+          <span style={{display:'block',width:'22px',height:'2px',background:'#1a1a1a',borderRadius:'2px'}}/>
+          <span style={{display:'block',width:'22px',height:'2px',background:'#1a1a1a',borderRadius:'2px',margin:'5px 0'}}/>
+          <span style={{display:'block',width:'22px',height:'2px',background:'#1a1a1a',borderRadius:'2px'}}/>
         </button>
       </nav>
       {open && (
