@@ -81,4 +81,3 @@ export default function SellersPage() {
       </footer>
     </div>
   )
-}
