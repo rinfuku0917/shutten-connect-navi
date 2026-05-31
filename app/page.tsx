@@ -30,7 +30,7 @@ export default function Home() {
       </div>
       <div style={{background:'linear-gradient(135deg,#FFF3CD,#FFE082)',padding:'40px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',maxWidth:'100%',overflow:'hidden'}}>
         <div>
-          <h1 style={{fontSize:'clamp(24px,5vw,40px)',fontWeight:'900',color:'#1a1a1a',lineHeight:1.3,marginBottom:'12px'}}>最高の出店場所が<br/>見つかる</h1>
+          <h1 style={{fontSize:'clamp(24px,5vw,40px)',fontWeight:'900',color:'#fff',lineHeight:1.3,marginBottom:'12px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>最高の出店場所が<br/>見つかる</h1>
           <p style={{fontSize:'14px',color:'#111',marginBottom:'20px'}}>全国の出店場所・出店者をつなぐマッチングサービス</p>
           <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
             <Link href='/places' style={{background:'#F5A623',color:'#111',padding:'12px 20px',borderRadius:'8px',fontWeight:'700',textDecoration:'none',fontSize:'14px'}}>出店場所を探す</Link>
