@@ -116,7 +116,7 @@ export default function Home() {
           </div>
           <div style={{display:'flex',gap:'16px',flexWrap:'wrap',fontSize:'12px',marginBottom:'12px'}}>
             {['利用規約','プライバシーポリシー','お問い合わせ','運営会社','ブログ'].map(item=>(
-              <a key={item} href='#' style={{color:'#111',textDecoration:'none',fontWeight:'700',fontWeight:'600'}}>{item}</a>
+              <a key={item} href='#' style={{color:'#111',textDecoration:'none',fontWeight:'700'}}>{item}</a>
             ))}
           </div>
           <div style={{fontSize:'11px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
