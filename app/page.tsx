@@ -89,9 +89,9 @@ export default function Home() {
         </div>
       </div>
       <div style={{padding:'0 16px 24px',maxWidth:'1200px',margin:'0 auto'}}>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',alignItems:'stretch'}}>
           <Link href='/vendor' style={{textDecoration:'none'}}>
-            <div style={{background:'#F5A623',borderRadius:'12px',padding:'20px'}}>
+            <div style={{background:'#F5A623',borderRadius:'12px',padding:'20px',height:'100%',boxSizing:'border-box'}}>
               
               <div style={{fontWeight:'900',fontSize:'14px',color:'#fff',marginBottom:'4px'}}>出店したい方へ</div>
               <div style={{fontSize:'11px',color:'#fff',marginBottom:'8px'}}>全国の出店場所を無料で探せます</div>
@@ -99,7 +99,7 @@ export default function Home() {
             </div>
           </Link>
           <Link href='/space' style={{textDecoration:'none'}}>
-            <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'2px solid #F5A623'}}>
+            <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'2px solid #F5A623',height:'100%',boxSizing:'border-box'}}>
               <div style={{fontSize:'32px',marginBottom:'8px'}}>📣</div>
               <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>お店を呼びたい方へ</div>
               <div style={{fontSize:'11px',color:'#111',marginBottom:'8px'}}>全国の出店者を無料で募集できます</div>
@@ -108,7 +108,7 @@ export default function Home() {
           </Link>
         </div>
       </div>
-      <footer style={{background:'#1a1a1a',color:'#111',padding:'24px 16px'}}>
+      <footer style={{background:'#F5A623',color:'#111',padding:'24px 16px'}}>
         <div style={{maxWidth:'1200px',margin:'0 auto'}}>
           <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
             <span style={{background:'#F5A623',color:'#111',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
