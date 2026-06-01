@@ -91,7 +91,7 @@ export default function Home() {
       <div style={{padding:'0 16px 24px',maxWidth:'1200px',margin:'0 auto'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
           <Link href='/vendor' style={{textDecoration:'none'}}>
-            <div style={{background:'linear-gradient(rgba(0,0,0,0.3),rgba(0,0,0,0.3)),url(/hero-top.png) center/cover no-repeat',borderRadius:'12px',padding:'20px'}}>
+            <div style={{background:'#F5A623',borderRadius:'12px',padding:'20px'}}>
               
               <div style={{fontWeight:'900',fontSize:'14px',color:'#fff',marginBottom:'4px'}}>出店したい方へ</div>
               <div style={{fontSize:'11px',color:'#fff',marginBottom:'8px'}}>全国の出店場所を無料で探せます</div>
@@ -99,11 +99,11 @@ export default function Home() {
             </div>
           </Link>
           <Link href='/space' style={{textDecoration:'none'}}>
-            <div style={{background:'linear-gradient(135deg,#E3F2FD,#BBDEFB)',borderRadius:'12px',padding:'20px',border:'1px solid #90CAF9'}}>
+            <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'2px solid #F5A623'}}>
               <div style={{fontSize:'32px',marginBottom:'8px'}}>📣</div>
               <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>お店を呼びたい方へ</div>
               <div style={{fontSize:'11px',color:'#111',marginBottom:'8px'}}>全国の出店者を無料で募集できます</div>
-              <div style={{fontSize:'12px',color:'#fff',fontWeight:'700'}}>詳しく見る →</div>
+              <div style={{fontSize:'12px',color:'#111',fontWeight:'700'}}>詳しく見る →</div>
             </div>
           </Link>
         </div>
