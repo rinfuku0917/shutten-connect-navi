@@ -41,3 +41,19 @@ img { max-width: 100%; height: auto; }
   .grid-4 { grid-template-columns: 1fr; }
   .grid-auto { grid-template-columns: 1fr; }
 }
+
+
+/* 管理画面のモバイル対応 */
+@media (max-width: 768px) {
+  .admin-shell { flex-direction: column !important; }
+  .admin-sidebar { width: 100% !important; flex-direction: row !important; align-items: center; overflow-x: auto; }
+  .admin-sidebar-head { display: none !important; }
+  .admin-sidebar-nav { display: flex !important; flex-direction: row !important; flex: 1 !important; padding: 0 !important; }
+  .admin-sidebar-nav > div { border-left: none !important; border-bottom: 3px solid transparent; white-space: nowrap; padding: 12px 14px !important; }
+  .admin-sidebar-back { display: none !important; }
+  .admin-stats { grid-template-columns: repeat(2, 1fr) !important; }
+  .admin-two-col { grid-template-columns: 1fr !important; }
+}
+.admin-table-wrap { overflow-x: auto; }
+.admin-table-wrap table { min-width: 640px; }
+.admin-table-wrap td, .admin-table-wrap th { white-space: nowrap; }
