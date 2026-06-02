@@ -47,15 +47,15 @@ export default function SellerDashboard() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F1F5F9', display: 'flex' }}>
+    <div className='admin-shell' style={{ minHeight: '100vh', background: '#F1F5F9', display: 'flex' }}>
       {/* サイドバー */}
-      <div style={{ width: '200px', background: '#1E2A3B', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: '16px 14px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div className='admin-sidebar' style={{ width: '200px', background: '#1E2A3B', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <div className='admin-sidebar-head' style={{ padding: '16px 14px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ background: '#F5A623', color: '#fff', fontWeight: '900', fontSize: '12px', padding: '3px 7px', borderRadius: '4px', display: 'inline-block', marginBottom: '4px' }}>出店</div>
           <div style={{ fontSize: '14px', fontWeight: '700', color: '#fff' }}>コネクトナビ</div>
           <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>出店者ダッシュボード</div>
         </div>
-        <div style={{ padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className='admin-sidebar-head' style={{ padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#F5A623', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '900', color: '#fff', flexShrink: 0 }}>山</div>
             <div>
@@ -64,7 +64,7 @@ export default function SellerDashboard() {
             </div>
           </div>
         </div>
-        <nav style={{ padding: '8px 0', flex: 1 }}>
+        <nav className='admin-sidebar-nav' style={{ padding: '8px 0', flex: 1 }}>
           {navItems.map(item => (
             <div key={item.key} onClick={() => setTab(item.key as typeof tab)}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', cursor: 'pointer', color: tab === item.key ? '#fff' : 'rgba(255,255,255,0.6)', background: tab === item.key ? 'rgba(255,255,255,0.1)' : 'transparent', borderLeft: tab === item.key ? '3px solid #F5A623' : '3px solid transparent', fontSize: '13px', position: 'relative' }}>
@@ -73,7 +73,7 @@ export default function SellerDashboard() {
             </div>
           ))}
         </nav>
-        <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className='admin-sidebar-back' style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <Link href="/" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textDecoration: 'none' }}>← サイトに戻る</Link>
         </div>
       </div>
@@ -97,7 +97,7 @@ export default function SellerDashboard() {
           {/* ホーム */}
           {tab === 'home' && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
+              <div className='admin-stats' style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
                 {[
                   { label: '申込中', value: '2件', icon: '⏳', color: '#92400E', bg: '#FEF3C7' },
                   { label: '承認済（今月）', value: '1件', icon: '✅', color: '#16A34A', bg: '#ECFDF5' },
@@ -114,7 +114,7 @@ export default function SellerDashboard() {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                   <div style={{ padding: '13px 18px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontWeight: '700', fontSize: '13px' }}>📋 最近の申込</div>
@@ -230,7 +230,7 @@ export default function SellerDashboard() {
 
           {/* メッセージ */}
           {tab === 'messages' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '0', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden', minHeight: '500px' }}>
+            <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '0', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden', minHeight: '500px' }}>
               <div style={{ borderRight: '1px solid #E2E8F0' }}>
                 <div style={{ padding: '12px 14px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', background: '#FFF8E1', color: '#B45309' }}>💬 メッセージ一覧</div>
                 {messages.map(m => (
@@ -298,7 +298,7 @@ export default function SellerDashboard() {
 
           {/* プロフィール */}
           {tab === 'profile' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
                 <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>👤 基本情報</div>
                 {[
