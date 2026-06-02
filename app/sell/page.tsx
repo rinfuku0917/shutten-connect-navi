@@ -13,7 +13,7 @@ export default function SellPage() {
     <div>
       <Nav />
       <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-sell.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'280px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-        <h1 style={{fontSize:'32px',fontWeight:'900',color:'#111',marginBottom:'16px'}}>車両を売りたい方へ</h1>
+        <h1 style={{fontSize:'clamp(28px,4vw,44px)',fontWeight:'900',color:'#fff',marginBottom:'16px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>車両を売りたい方へ</h1>
         <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>キッチンカー・移動販売車を高値で売却しよう</p>
         <Link href='/register' style={{background:'#fff',color:'#111',fontWeight:'900',fontSize:'16px',padding:'14px 40px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>無料で車両を掲載する</Link>
       </div>
