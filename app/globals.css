@@ -63,3 +63,14 @@ img { max-width: 100%; height: auto; }
 @media (max-width: 640px) {
   .form-grid-2, .form-grid-3, .form-grid-4 { grid-template-columns: 1fr !important; }
 }
+
+
+/* ダッシュボードのサイドバー: スマホでは上部バーに */
+@media (max-width: 768px) {
+  .dash-shell { flex-direction: column !important; }
+  .dash-sidebar { width: 100% !important; flex-direction: row !important; align-items: center; overflow-x: auto; }
+  .dash-sidebar-head, .dash-sidebar-user { display: none !important; }
+  .dash-sidebar-nav { display: flex !important; flex-direction: row !important; flex: 1 !important; padding: 0 !important; }
+  .dash-sidebar-nav > a { white-space: nowrap; padding: 12px 14px !important; }
+  .dash-sidebar-back { border-top: none !important; white-space: nowrap; padding: 12px 14px !important; }
+}
