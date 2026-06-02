@@ -1,6 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { supabase } from '../../lib/supabase'
+
+type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string }
 
 const applies = [
   { id: '1', place: '日本体育大学医療専門学校', area: '東京', date: '6月3日（水）', time: '11:00〜16:00', type: 'キッチンカー', plan: '日額固定 5,000円', status: '承認済', statusColor: '#16A34A', statusBg: '#ECFDF5' },
@@ -36,6 +39,36 @@ export default function SellerDashboard() {
   const [tab, setTab] = useState<'home'|'applies'|'calendar'|'messages'|'docs'|'profile'>('home')
   const [chatOpen, setChatOpen] = useState<string|null>(null)
   const [msg, setMsg] = useState('')
+  const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
+  const [myId, setMyId] = useState<string|null>(null)
+  const [appId, setAppId] = useState<string|null>(null)
+
+  // ログイン中ユーザーの最初の申込に紐づくメッセージを読み込む
+  const loadMessages = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    setMyId(uid)
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('seller_id', uid)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const firstAppId = apps?.[0]?.id
+    if (!firstAppId) return
+    setAppId(firstAppId)
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('id, application_id, sender_id, body, sent_at')
+      .eq('application_id', firstAppId)
+      .order('sent_at', { ascending: true })
+    if (msgs) setDbMessages(msgs as DbMessage[])
+  }
+
+  useEffect(() => {
+    if (tab === 'messages') loadMessages()
+  }, [tab])
 
   const navItems = [
     { key: 'home', icon: '🏠', label: 'ホーム' },
@@ -232,39 +265,39 @@ export default function SellerDashboard() {
           {tab === 'messages' && (
             <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '0', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden', minHeight: '500px' }}>
               <div style={{ borderRight: '1px solid #E2E8F0' }}>
-                <div style={{ padding: '12px 14px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', background: '#FFF8E1', color: '#B45309' }}>💬 メッセージ一覧</div>
-                {messages.map(m => (
-                  <div key={m.id} onClick={() => setChatOpen(m.from)}
-                    style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: chatOpen === m.from ? '#FFF8E1' : '#fff', borderLeft: chatOpen === m.from ? '3px solid #F5A623' : '3px solid transparent' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                      <div style={{ fontSize: '12px', fontWeight: '700' }}>{m.from}</div>
-                      <div style={{ fontSize: '10px', color: '#64748B' }}>{m.time}</div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.msg}</div>
-                    {m.unread && <span style={{ display: 'inline-block', marginTop: '4px', background: '#DC2626', color: '#fff', borderRadius: '10px', fontSize: '9px', fontWeight: '700', padding: '1px 6px' }}>未読</span>}
-                  </div>
-                ))}
+                <div style={{ padding: '12px 14px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', background: '#FFF8E1', color: '#B45309' }}>メッセージ</div>
+                <div onClick={() => setChatOpen('main')}
+                  style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: chatOpen === 'main' ? '#FFF8E1' : '#fff', borderLeft: chatOpen === 'main' ? '3px solid #F5A623' : '3px solid transparent' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#1a1a1a' }}>募集者とのやり取り</div>
+                  <div style={{ fontSize: '11px', color: '#64748B', marginTop: '3px' }}>{dbMessages.length > 0 ? dbMessages[dbMessages.length-1].body : 'メッセージはまだありません'}</div>
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {chatOpen ? (
                   <>
-                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px' }}>{chatOpen}</div>
+                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>募集者とのやり取り</div>
                     <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC' }}>
-                      <div style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
-                        <div style={{ fontSize: '10px', color: '#64748B', marginBottom: '3px' }}>{chatOpen}</div>
-                        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>書類の確認が完了しました。当日よろしくお願いします！</div>
-                      </div>
-                      <div style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
-                        <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>ありがとうございます！当日もよろしくお願いします。</div>
-                      </div>
+                      {dbMessages.length === 0 ? (
+                        <div style={{ color: '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>まだメッセージがありません</div>
+                      ) : dbMessages.map(m => (
+                        m.sender_id === myId ? (
+                          <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
+                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>{m.body}</div>
+                          </div>
+                        ) : (
+                          <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
+                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a' }}>{m.body}</div>
+                          </div>
+                        )
+                      ))}
                     </div>
                     <div style={{ padding: '12px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', gap: '8px' }}>
-                      <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="メッセージを入力..." style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none' }} />
+                      <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="メッセージを入力..." style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
                       <button onClick={() => setMsg('')} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>送信</button>
                     </div>
                   </>
                 ) : (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '14px' }}>← メッセージを選択してください</div>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '14px' }}>メッセージを選択してください</div>
                 )}
               </div>
             </div>
