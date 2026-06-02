@@ -13,9 +13,9 @@ export default function SpacePage() {
   return (
     <div>
       <Nav />
-      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-top.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'280px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-        <h1 style={{fontSize:'32px',fontWeight:'900',color:'#111',marginBottom:'16px'}}>出店したい方へ</h1>
-        <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>全国の出店スペースを検索して、理想の場所を見つけよう</p>
+      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-top.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'300px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',width:'100%'}}>
+        <h1 style={{fontSize:'32px',fontWeight:'900',color:'#111',marginBottom:'16px'}} style={{color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.5)',fontSize:'clamp(32px,5vw,56px)',fontWeight:'900',marginBottom:'12px'}}>出店したい方へ</h1>
+        <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}} style={{color:'#fff',textShadow:'0 1px 4px rgba(0,0,0,0.5)'}}>全国の出店スペースを検索して、理想の場所を見つけよう</p>
         <div style={{display:'flex',gap:'12px',justifyContent:'center',flexWrap:'wrap'}}>
           <Link href='/places' style={{background:'#fff',color:'#111',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>出店場所を探す</Link>
           <Link href='/register' style={{background:'rgba(255,255,255,0.2)',color:'#111',fontWeight:'900',fontSize:'16px',border:'2px solid #fff',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none'}}>無料会員登録</Link>
@@ -35,7 +35,7 @@ export default function SpacePage() {
           </div>
         </div>
       </div>
-      <footer style={{background:'#1E2A3B',color:'#111',padding:'24px',textAlign:'center'}}>
+      <footer style={{background:'#F5A623',color:'#111',padding:'24px',textAlign:'center'}}>
         <Link href='/' style={{fontWeight:'900',fontSize:'16px',marginBottom:'8px',display:'block',color:'#111',textDecoration:'none'}}>出店コネクトナビ</Link>
         <div style={{fontSize:'12px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
       </footer>
