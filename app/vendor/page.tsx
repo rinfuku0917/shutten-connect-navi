@@ -26,7 +26,8 @@ export default function VendorPage() {
           <h2 style={{fontSize:'26px',fontWeight:'900',textAlign:'center',marginBottom:'36px',color:'#111'}}>ご利用の流れ</h2>
           <div className='grid-4' style={{gap:'20px',maxWidth:'900px',margin:'0 auto',textAlign:'center'}}>
             {steps.map((s,i) => (
-              <div key={s.num} style={{textAlign:'center',position:'relative',padding:'16px 8px'}}>
+              <div key={s.num} style={{textAlign:'center',padding:'16px 8px',display:'flex',flexDirection:'column',alignItems:'center'}}>
+                <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'18px',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'12px'}}>{i+1}</div>
                 <div style={{fontWeight:'900',fontSize:'15px',marginBottom:'8px',color:'#111',textAlign:'center'}}>{s.title}</div>
                 <div style={{fontSize:'12px',color:'#111',lineHeight:1.7}}>{s.desc}</div>
               </div>
