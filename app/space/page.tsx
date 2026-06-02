@@ -13,7 +13,7 @@ export default function SpacePage() {
   return (
     <div>
       <Nav />
-      <div style={{background:'linear-gradient(135deg,#F5A623,#F7C06E)',padding:'64px 24px',textAlign:'center'}}>
+      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-top.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'280px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
         <h1 style={{fontSize:'32px',fontWeight:'900',color:'#111',marginBottom:'16px'}}>出店したい方へ</h1>
         <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>全国の出店スペースを検索して、理想の場所を見つけよう</p>
         <div style={{display:'flex',gap:'12px',justifyContent:'center',flexWrap:'wrap'}}>
