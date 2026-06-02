@@ -57,3 +57,9 @@ img { max-width: 100%; height: auto; }
 .admin-table-wrap { overflow-x: auto; }
 .admin-table-wrap table { min-width: 640px; }
 .admin-table-wrap td, .admin-table-wrap th { white-space: nowrap; }
+
+
+/* 登録フォームのグリッド: スマホで1列に畳む */
+@media (max-width: 640px) {
+  .form-grid-2, .form-grid-3, .form-grid-4 { grid-template-columns: 1fr !important; }
+}

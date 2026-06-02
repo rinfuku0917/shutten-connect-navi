@@ -55,7 +55,7 @@ export default function NewPlacePage() {
               <textarea value={form.summary} onChange={e=>set('summary',e.target.value)} placeholder='イベントや施設の説明を入力してください。' rows={4} style={{width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box',color:'#1a1a1a',background:'#fff',resize:'vertical'}}/>
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
+            <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店日{req}</label>
                 <input value={form.date} onChange={e=>set('date',e.target.value)} placeholder='例：毎週日曜日（年末年始除く）' style={{width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box',color:'#1a1a1a',background:'#fff'}}/>
@@ -107,7 +107,7 @@ export default function NewPlacePage() {
           <div style={{background:'#fff',borderRadius:'12px',border:'2px solid #FFE0A0',padding:'28px',boxShadow:'0 2px 12px rgba(245,166,35,0.1)'}}>
             <h2 style={{fontSize:'16px',fontWeight:'900',marginBottom:'20px',borderLeft:'4px solid #F5A623',paddingLeft:'10px',color:'#1a1a1a'}}>出店条件・環境</h2>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
+            <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店料{req}</label>
                 <input value={form.fee} onChange={e=>set('fee',e.target.value)} placeholder='例：1日10,000円' style={{width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box',color:'#1a1a1a',background:'#fff'}}/>
@@ -118,7 +118,7 @@ export default function NewPlacePage() {
               </div>
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
+            <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>搬入時間{req}</label>
                 <select value={form.loadIn} onChange={e=>set('loadIn',e.target.value)} style={{width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box',color:'#1a1a1a',background:'#fff'}}>
@@ -133,7 +133,7 @@ export default function NewPlacePage() {
               </div>
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
+            <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>販売開始時間{req}</label>
                 <select value={form.startTime} onChange={e=>set('startTime',e.target.value)} style={{width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box',color:'#1a1a1a',background:'#fff'}}>
@@ -148,7 +148,7 @@ export default function NewPlacePage() {
               </div>
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'16px',marginBottom:'20px'}}>
+            <div className='form-grid-3' style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'16px',marginBottom:'20px'}}>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>希望メニュー</label>
                 <input value={form.menuWant} onChange={e=>set('menuWant',e.target.value)} placeholder='例：たこ焼き、クレープ' style={{width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box',color:'#1a1a1a',background:'#fff'}}/>
@@ -163,7 +163,7 @@ export default function NewPlacePage() {
               </div>
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'16px',marginBottom:'20px'}}>
+            <div className='form-grid-4' style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'16px',marginBottom:'20px'}}>
               {[{k:'power',l:'電源'},{k:'gas',l:'ガス機器'},{k:'water',l:'水道設備'},{k:'eatSpace',l:'飲食スペース'}].map(item=>(
                 <div key={item.k}>
                   <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>{item.l}{req}</label>
@@ -211,7 +211,7 @@ export default function NewPlacePage() {
               </div>
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
+            <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>過去の開催実績</label>
                 <div style={{display:'flex',gap:'24px',marginTop:'10px'}}>
