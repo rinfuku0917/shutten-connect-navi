@@ -22,7 +22,7 @@ export default function SellPage() {
           <div style={{textAlign:'center',marginTop:'24px',fontSize:'20px',fontWeight:'900',color:'#111'}}>
             出店コネクトナビではこんなお悩み必要なし！
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px',marginTop:'32px'}}>
+          <div className='grid-auto' style={{gap:'20px',marginTop:'32px'}}>
             {features.map(f => (
               <div key={f.title} style={{background:'#FFF9F0',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px',textAlign:'center'}}>
                 <div style={{fontSize:'36px',marginBottom:'10px'}}>{f.icon}</div>

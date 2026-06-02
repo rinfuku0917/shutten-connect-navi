@@ -24,7 +24,7 @@ export default function SpacePage() {
       <div style={{background:'#fff',padding:'48px 24px',textAlign:'center'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
           <h2 style={{fontSize:'26px',fontWeight:'900',marginBottom:'32px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>出店コネクトナビのメリット</h2>
-          <div className='merit-grid' style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'16px',maxWidth:'960px',margin:'0 auto',textAlign:'center'}}>
+          <div className='grid-4' style={{gap:'16px',maxWidth:'960px',margin:'0 auto',textAlign:'center'}}>
             {merits.map(m => (
               <div key={m.title} style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px',textAlign:'center'}}>
                 <div style={{fontSize:'36px',marginBottom:'10px'}}>{m.icon}</div>

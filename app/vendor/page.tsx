@@ -17,18 +17,18 @@ export default function VendorPage() {
         <h1 style={{fontSize:'32px',fontWeight:'900',color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.5)',marginBottom:'16px'}}>お店を呼びたい方へ</h1>
         <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>あなたのスペースに最適な出店者を見つけよう</p>
         <div style={{display:'flex',gap:'12px',justifyContent:'center',flexWrap:'wrap'}}>
-          <Link href='/sellers' style={{background:'#fff',color:'#111',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>出店者を探す</Link>
-          <Link href='/register' style={{background:'#0EA5E9',color:'#111',fontWeight:'900',fontSize:'16px',border:'#0EA5E9',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none'}}>無料会員登録</Link>
+          <Link href='/sellers' style={{background:'#fff',color:'#111',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>出店者を探す</Link>
+          <Link href='/register' style={{background:'#0EA5E9',color:'#111',fontWeight:'900',fontSize:'16px',border:'#0EA5E9',padding:'14px 36px',borderRadius:'999px',textDecoration:'none'}}>無料会員登録</Link>
         </div>
       </div>
       <div style={{background:'#fff',padding:'48px 24px'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
           <h2 style={{fontSize:'26px',fontWeight:'900',textAlign:'center',marginBottom:'36px',color:'#111'}}>ご利用の流れ</h2>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'20px',maxWidth:'900px',margin:'0 auto',textAlign:'center'}}>
+          <div className='grid-4' style={{gap:'20px',maxWidth:'900px',margin:'0 auto',textAlign:'center'}}>
             {steps.map((s,i) => (
               <div key={s.num} style={{textAlign:'center',position:'relative',padding:'16px 8px'}}>
                 <div style={{fontWeight:'900',fontSize:'15px',marginBottom:'8px',color:'#111',textAlign:'center'}}>{s.title}</div>
-                <div style={{fontSize:'12px',color:'#111',lineHeight:1.7,whiteSpace:'nowrap'}}>{s.desc}</div>
+                <div style={{fontSize:'12px',color:'#111',lineHeight:1.7}}>{s.desc}</div>
               </div>
             ))}
           </div>

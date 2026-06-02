@@ -26,9 +26,18 @@ body {
 }
 
 * { box-sizing: border-box; }
-html, body { max-width: 100%; overflow-x: hidden; }
+html, body { max-width: 100%; }
 img { max-width: 100%; height: auto; }
 
-@media (max-width: 600px) {
-  .merit-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+/* レスポンシブ・グリッド: PCは指定列、スマホは1〜2列に畳む */
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.grid-auto { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+@media (max-width: 640px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-auto { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 380px) {
+  .grid-4 { grid-template-columns: 1fr; }
+  .grid-auto { grid-template-columns: 1fr; }
 }

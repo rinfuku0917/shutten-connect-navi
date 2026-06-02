@@ -39,7 +39,7 @@ export default function Home() {
         </div>
         
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',borderBottom:'1px solid #eee',background:'#fff'}}>
+      <div className='grid-4' style={{borderBottom:'1px solid #eee',background:'#fff',gap:'0'}}>
         {[['掲載場所','1,240+'],['登録出店者','3,800+'],['マッチング実績','12,500+'],['平均評価','4.8★']].map(([l,v])=>(
           <div key={l} style={{padding:'16px',textAlign:'center',borderRight:'1px solid #eee'}}>
             <div style={{fontSize:'20px',fontWeight:'900',color:'#111'}}>{v}</div>
@@ -52,7 +52,7 @@ export default function Home() {
           <h2 style={{fontSize:'18px',fontWeight:'900',color:'#111'}}>新着の出店場所</h2>
           <Link href='/places' style={{color:'#111',fontWeight:'700',textDecoration:'none',fontSize:'14px'}}>もっと見る →</Link>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'16px'}}>
+        <div className='grid-auto' style={{gap:'16px'}}>
           {places.map(p=>(
             <div key={p.id} style={{background:'#fff',borderRadius:'12px',overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}>
               <div style={{background:'#F5A623',height:'120px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',position:'relative'}}>
