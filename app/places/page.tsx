@@ -13,7 +13,7 @@ export default function PlacesPage() {
   return (
     <div style={{background:'#FFF8F0',minHeight:'100vh'}}>
       <Nav />
-      <div style={{background:'linear-gradient(135deg,#F5A623,#F7C06E)',padding:'48px 24px',textAlign:'center'}}>
+      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-places.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'280px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
         <h1 style={{fontSize:'28px',fontWeight:'900',color:'#111',marginBottom:'8px'}}>出店場所を探す</h1>
         <p style={{fontSize:'14px',color:'rgba(255,255,255,0.9)'}}>全国の出店スペースから理想の場所を見つけよう</p>
       </div>
