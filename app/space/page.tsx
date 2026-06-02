@@ -21,7 +21,7 @@ export default function SpacePage() {
           <Link href='/register' style={{background:'rgba(255,255,255,0.2)',color:'#111',fontWeight:'900',fontSize:'16px',border:'2px solid #fff',padding:'14px 36px',borderRadius:'999px',whiteSpace:'nowrap',textDecoration:'none'}}>無料会員登録</Link>
         </div>
       </div>
-      <div style={{background:'#fff',padding:'48px 24px'}}>
+      <div style={{background:'#fff',padding:'48px 24px',textAlign:'center'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
           <h2 style={{fontSize:'26px',fontWeight:'900',marginBottom:'32px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>出店コネクトナビのメリット</h2>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'20px'}}>
