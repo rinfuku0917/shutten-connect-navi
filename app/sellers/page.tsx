@@ -13,9 +13,9 @@ export default function SellersPage() {
   return (
     <div style={{background:'#FFF8F0',minHeight:'100vh'}}>
       <Nav />
-      <div style={{background:'linear-gradient(135deg,#F5A623,#F7C06E)',padding:'48px 24px',textAlign:'center'}}>
-        <h1 style={{fontSize:'28px',fontWeight:'900',color:'#111',marginBottom:'8px'}}>出店者を探す</h1>
-        <p style={{fontSize:'14px',color:'rgba(255,255,255,0.9)'}}>あなたのスペースに合う出店者を見つけよう</p>
+      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-sellers.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'300px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+        <h1 style={{fontSize:'clamp(32px,5vw,56px)',fontWeight:'900',color:'#fff',marginBottom:'12px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}} style={{color:'#fff',fontSize:'clamp(36px,6vw,64px)',fontWeight:'900',textShadow:'0 2px 8px rgba(0,0,0,0.5)',marginBottom:'12px'}}>出店者を探す</h1>
+        <p style={{fontSize:'14px',color:'rgba(255,255,255,0.9)'}}><span style={{fontSize:'clamp(14px,2vw,20px)',color:'#fff',textShadow:'0 1px 4px rgba(0,0,0,0.5)'}}>あなたのスペースに合う出店者を見つけよう</span></p>
       </div>
       <div style={{maxWidth:'900px',margin:'0 auto',padding:'32px 16px'}}>
         <div style={{display:'grid',gap:'16px'}}>
