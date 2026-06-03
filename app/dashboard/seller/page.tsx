@@ -52,7 +52,6 @@ export default function SellerDashboard() {
   const [myId, setMyId] = useState<string|null>(null)
   const [appId, setAppId] = useState<string|null>(null)
   const [unread, setUnread] = useState(0)
-  const [unread, setUnread] = useState(0)
 
   // ログイン中ユーザーの最初の申込に紐づくメッセージを読み込む
   const loadMessages = async () => {
