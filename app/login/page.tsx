@@ -41,7 +41,7 @@ export default function LoginPage() {
   return (
     <div style={{minHeight:'100vh',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif',display:'flex',flexDirection:'column'}}>
       
-      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px'}}>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px',overflowY:'auto'}}>
         <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #e0e0e0',boxShadow:'0 4px 16px rgba(0,0,0,0.08)',width:'100%',maxWidth:'420px',overflow:'hidden'}}>
           <div style={{display:'flex',borderBottom:'1px solid #e0e0e0'}}>
             <button onClick={()=>setTab('seller')} style={{flex:1,padding:'16px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='seller'?'2px solid #F5A623':'2px solid transparent',color:tab==='seller'?'#F5A623':'#888'}}>

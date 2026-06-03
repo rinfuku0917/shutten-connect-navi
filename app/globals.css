@@ -21,7 +21,7 @@ body {
 }
 
 * { box-sizing: border-box; }
-html, body { max-width: 100%; }
+html, body { max-width: 100%; overflow-x: hidden; }
 img { max-width: 100%; height: auto; }
 
 
