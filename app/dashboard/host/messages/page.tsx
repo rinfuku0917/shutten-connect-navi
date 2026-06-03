@@ -11,20 +11,22 @@ export default function HostMessages() {
   const [msg, setMsg] = useState('')
   const [chatOpen, setChatOpen] = useState(false)
 
-  // 募集者の場所への申込に紐づくメッセージを読み込む
   const loadMessages = async () => {
     const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     setMyId(user.id)
-    const { data: places, error: pErr } = await supabase
+    const { data: places } = await supabase
       .from('places').select('id').eq('host_id', user.id)
     const placeIds = (places || []).map(p => p.id)
-    const { data: apps, error: aErr } = await supabase
+    if (placeIds.length === 0) { setDbMessages([]); setAppId(null); return }
+    const { data: apps } = await supabase
       .from('applications').select('id')
       .in('place_id', placeIds)
       .order('created_at', { ascending: false }).limit(1)
     const firstAppId = apps && apps[0] ? apps[0].id : null
     setAppId(firstAppId)
-    const { data: messages, error: mErr } = await supabase
+    if (!firstAppId) { setDbMessages([]); return }
+    const { data: messages } = await supabase
       .from('messages').select('id, application_id, sender_id, body, sent_at')
       .eq('application_id', firstAppId).order('sent_at', { ascending: true })
     setDbMessages(messages || [])
