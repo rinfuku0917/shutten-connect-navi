@@ -21,7 +21,7 @@ const vendors = [
 
 export default function Home() {
   return (
-    <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
+    <div style={{minHeight:'100vh',background:'#FFF9E6',width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
       <Nav />
       <div style={{background:'#fff',borderBottom:'1px solid #eee',padding:'8px 16px',overflowX:'auto',whiteSpace:'nowrap'}}>
         {['キッチンカー','テント','常設','イベント','学校・大学','オフィス','商業施設','公園・屋外'].map(c=>(
