@@ -10,27 +10,31 @@ export default function HostMessages() {
   const [appId, setAppId] = useState<string|null>(null)
   const [msg, setMsg] = useState('')
   const [chatOpen, setChatOpen] = useState(false)
+  const [debug, setDebug] = useState('読み込み中...')
 
   // 募集者の場所への申込に紐づくメッセージを読み込む
   const loadMessages = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setDebug('ユーザー取得失敗（未ログイン）'); return }
     setMyId(user.id)
-    // 自分が募集者(host)として持つ場所への申込を1件取得
-    const { data: places } = await supabase
+    const { data: places, error: pErr } = await supabase
       .from('places').select('id').eq('host_id', user.id)
     const placeIds = (places || []).map(p => p.id)
-    if (placeIds.length === 0) { setDbMessages([]); setAppId(null); return }
-    const { data: apps } = await supabase
+    if (pErr) { setDebug('places エラー: ' + pErr.message); return }
+    if (placeIds.length === 0) { setDebug('user.id=' + user.id + ' / 自分の場所が0件'); setDbMessages([]); setAppId(null); return }
+    const { data: apps, error: aErr } = await supabase
       .from('applications').select('id')
       .in('place_id', placeIds)
       .order('created_at', { ascending: false }).limit(1)
+    if (aErr) { setDebug('applications エラー: ' + aErr.message); return }
     const firstAppId = apps && apps[0] ? apps[0].id : null
     setAppId(firstAppId)
-    if (!firstAppId) { setDbMessages([]); return }
-    const { data: messages } = await supabase
+    if (!firstAppId) { setDebug('場所=' + placeIds.length + '件 / 申込が0件'); setDbMessages([]); return }
+    const { data: messages, error: mErr } = await supabase
       .from('messages').select('id, application_id, sender_id, body, sent_at')
       .eq('application_id', firstAppId).order('sent_at', { ascending: true })
+    if (mErr) { setDebug('messages エラー: ' + mErr.message); return }
+    setDebug('場所' + placeIds.length + '件 / 申込ID=' + firstAppId.slice(0,8) + ' / メッセージ' + (messages||[]).length + '件')
     setDbMessages(messages || [])
   }
 
@@ -50,6 +54,7 @@ export default function HostMessages() {
     <div style={{ padding: '20px 24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a1a', margin: 0 }}>メッセージ</h1>
+        <span style={{ fontSize: '11px', color: '#EF4444', marginLeft: '12px' }}>{debug}</span>
       </div>
       <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', minHeight: '520px', overflow: 'hidden' }}>
         <div style={{ width: '260px', borderRight: '1px solid #E2E8F0', flexShrink: 0 }}>
