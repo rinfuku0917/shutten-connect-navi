@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 const navItems = [
   { href: '/dashboard/host', icon: '📋', label: '場所・案件管理' },
   { href: '/dashboard/host/new-place', icon: '➕', label: '新規登録' },
+  { href: '/dashboard/host/messages', icon: '💬', label: 'メッセージ' },
 ]
 
 export default function HostSidebar() {
