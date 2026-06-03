@@ -20,8 +20,19 @@ export default function LoginPage() {
     if(err) { setError('メールアドレスまたはパスワードが正しくありません'); setLoading(false); return }
     if(data.user) {
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
-      if(profile?.role === 'host') router.push('/dashboard/host')
-      else if(profile?.role === 'admin') router.push('/admin')
+      const role = profile?.role
+      if(tab === 'seller' && role !== 'seller') {
+        await supabase.auth.signOut()
+        setError('このアカウントは出店者として登録されていません。募集者の方は「募集者ログイン」をお選びください。')
+        setLoading(false); return
+      }
+      if(tab === 'host' && role !== 'host' && role !== 'admin') {
+        await supabase.auth.signOut()
+        setError('このアカウントは募集者として登録されていません。出店者の方は「出店者ログイン」をお選びください。')
+        setLoading(false); return
+      }
+      if(role === 'host') router.push('/dashboard/host')
+      else if(role === 'admin') router.push('/admin')
       else router.push('/dashboard/seller')
     }
     setLoading(false)
