@@ -36,7 +36,14 @@ const docs = [
 ]
 
 export default function SellerDashboard() {
-  const [tab, setTab] = useState<'home'|'applies'|'calendar'|'messages'|'docs'|'profile'>('home')
+  type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'
+  const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile']
+  const getInitialTab = (): TabKey => {
+    if (typeof window === 'undefined') return 'home'
+    const t = new URLSearchParams(window.location.search).get('tab')
+    return (t && validTabs.includes(t as TabKey)) ? (t as TabKey) : 'home'
+  }
+  const [tab, setTab] = useState<TabKey>(getInitialTab())
   const [chatOpen, setChatOpen] = useState<string|null>(null)
   const [msg, setMsg] = useState('')
   const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
@@ -65,6 +72,13 @@ export default function SellerDashboard() {
       .order('sent_at', { ascending: true })
     if (msgs) setDbMessages(msgs as DbMessage[])
   }
+
+  // タブが変わったらURLの ?tab= を更新（リロードしても同じタブを保つ）
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tab)
+    window.history.replaceState(null, '', url.toString())
+  }, [tab])
 
   useEffect(() => {
     if (tab === 'messages') loadMessages()
