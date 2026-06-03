@@ -39,7 +39,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{minHeight:'100vh',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif',display:'flex',flexDirection:'column'}}>
+    <div style={{minHeight:'100vh',width:'100%',maxWidth:'100vw',overflowX:'hidden',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif',display:'flex',flexDirection:'column'}}>
       
       <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px',overflowY:'auto'}}>
         <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #e0e0e0',boxShadow:'0 4px 16px rgba(0,0,0,0.08)',width:'100%',maxWidth:'420px',overflow:'hidden'}}>
