@@ -69,3 +69,9 @@ img { max-width: 100%; height: auto; }
   .dash-sidebar-nav > a { white-space: nowrap; padding: 12px 14px !important; }
   .dash-sidebar-back { border-top: none !important; white-space: nowrap; padding: 12px 14px !important; }
 }
+
+/* 案件詳細ページ: スマホでは2カラムを1列に畳む */
+.detail-2col { max-width: 100%; }
+@media (max-width: 768px) {
+  .detail-2col { grid-template-columns: 1fr !important; }
+}

@@ -82,7 +82,7 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
           ← 一覧に戻る
         </Link>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '28px', alignItems: 'start' }}>
+        <div className='detail-2col' style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '28px', alignItems: 'start' }}>
           {/* 左カラム */}
           <div>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
