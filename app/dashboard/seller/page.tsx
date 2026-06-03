@@ -70,6 +70,18 @@ export default function SellerDashboard() {
     if (tab === 'messages') loadMessages()
   }, [tab])
 
+  // メッセージを送信する
+  const sendMessage = async () => {
+    const text = msg.trim()
+    if (!text || !appId || !myId) return
+    const { error } = await supabase
+      .from('messages')
+      .insert({ application_id: appId, sender_id: myId, body: text })
+    if (error) { alert('送信に失敗しました: ' + error.message); return }
+    setMsg('')
+    loadMessages()
+  }
+
   const navItems = [
     { key: 'home', icon: '🏠', label: 'ホーム' },
     { key: 'applies', icon: '📋', label: '申込一覧' },
@@ -292,8 +304,8 @@ export default function SellerDashboard() {
                       ))}
                     </div>
                     <div style={{ padding: '12px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', gap: '8px' }}>
-                      <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="メッセージを入力..." style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
-                      <button onClick={() => setMsg('')} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>送信</button>
+                      <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendMessage() }} placeholder="メッセージを入力..." style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
+                      <button onClick={sendMessage} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>送信</button>
                     </div>
                   </>
                 ) : (
