@@ -175,7 +175,7 @@ export default function SellerDashboard() {
                   { label: '申込中', value: '2件', icon: '⏳', color: '#92400E', bg: '#FEF3C7' },
                   { label: '承認済（今月）', value: '1件', icon: '✅', color: '#16A34A', bg: '#ECFDF5' },
                   { label: '出店予定日', value: '3日', icon: '📅', color: '#1D4ED8', bg: '#EBF6FD' },
-                  { label: '未読メッセージ', value: '1件', icon: '💬', color: '#DC2626', bg: '#FEE2E2' },
+                  { label: '未読メッセージ', value: unread + '件', icon: '💬', color: '#DC2626', bg: '#FEE2E2' },
                 ].map(s => (
                   <div key={s.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px' }}>{s.label}</div>
