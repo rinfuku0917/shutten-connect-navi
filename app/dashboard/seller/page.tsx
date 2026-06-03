@@ -76,16 +76,13 @@ export default function SellerDashboard() {
     if (msgs) setDbMessages(msgs as DbMessage[])
     const cnt = (msgs || []).filter(m => m.sender_id !== uid && !m.read_at).length
     setUnread(cnt)
-  }
-
-  // 相手から届いた未読を既読にする
-  const markRead = async () => {
-    const { data: userData } = await supabase.auth.getUser()
-    const uid = userData.user?.id
-    if (!uid || !appId) return
-    await supabase.from('messages').update({ read_at: new Date().toISOString() })
-      .eq('application_id', appId).neq('sender_id', uid).is('read_at', null)
-    setUnread(0)
+    // メッセージタブを開いているなら、その場で既読にする
+    const onMessages = new URL(window.location.href).searchParams.get('tab') === 'messages'
+    if (onMessages && cnt > 0) {
+      await supabase.from('messages').update({ read_at: new Date().toISOString() })
+        .eq('application_id', firstAppId).neq('sender_id', uid).is('read_at', null)
+      setUnread(0)
+    }
   }
 
   // タブが変わったらURLの ?tab= を更新（リロードしても同じタブを保つ）
@@ -96,7 +93,7 @@ export default function SellerDashboard() {
   }, [tab])
 
   useEffect(() => {
-    if (tab === 'messages') { loadMessages().then(() => markRead()); setChatOpen('main') }
+    if (tab === 'messages') { loadMessages(); setChatOpen('main') }
   }, [tab])
 
   // メッセージを送信する
