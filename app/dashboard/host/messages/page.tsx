@@ -20,9 +20,11 @@ export default function HostMessages() {
     const { data: places } = await supabase
       .from('places').select('id').eq('host_id', user.id)
     const placeIds = (places || []).map(p => p.id)
-    let appQuery = supabase.from('applications').select('id').order('created_at', { ascending: false }).limit(1)
-    if (placeIds.length > 0) appQuery = appQuery.in('place_id', placeIds)
-    const { data: apps } = await appQuery
+    if (placeIds.length === 0) { setDbMessages([]); setAppId(null); return }
+    const { data: apps } = await supabase
+      .from('applications').select('id')
+      .in('place_id', placeIds)
+      .order('created_at', { ascending: false }).limit(1)
     const firstAppId = apps && apps[0] ? apps[0].id : null
     setAppId(firstAppId)
     if (!firstAppId) { setDbMessages([]); return }
