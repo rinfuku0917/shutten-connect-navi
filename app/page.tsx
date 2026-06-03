@@ -77,7 +77,7 @@ export default function Home() {
           <h2 style={{fontSize:'18px',fontWeight:'900',color:'#111'}}>出店者を探す</h2>
           <Link href='/sellers' style={{color:'#111',fontWeight:'700',textDecoration:'none',fontSize:'14px'}}>もっと見る →</Link>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px'}}>
+        <div className='top-vendor-grid' style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px'}}>
           {vendors.map(v=>(
             <div key={v.id} style={{background:'#fff',borderRadius:'12px',padding:'16px',textAlign:'center',boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}>
               <div style={{fontSize:'36px',marginBottom:'8px'}}>{v.emoji}</div>
@@ -89,7 +89,7 @@ export default function Home() {
         </div>
       </div>
       <div style={{padding:'0 16px 24px',maxWidth:'1200px',margin:'0 auto'}}>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',alignItems:'stretch'}}>
+        <div className='top-2card-grid' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',alignItems:'stretch'}}>
           <Link href='/vendor' style={{textDecoration:'none'}}>
             <div style={{background:'#F5A623',borderRadius:'12px',padding:'20px',minHeight:'200px',boxSizing:'border-box',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
               <div style={{fontSize:'32px',marginBottom:'8px'}}>🚚</div>

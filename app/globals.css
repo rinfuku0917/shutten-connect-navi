@@ -75,3 +75,11 @@ img { max-width: 100%; height: auto; }
 @media (max-width: 768px) {
   .detail-2col { grid-template-columns: 1fr !important; }
 }
+
+/* トップページ: スマホでグリッドを畳む */
+.top-vendor-grid { max-width: 100%; }
+.top-2card-grid { max-width: 100%; }
+@media (max-width: 640px) {
+  .top-vendor-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .top-2card-grid { grid-template-columns: 1fr !important; }
+}
