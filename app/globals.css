@@ -45,7 +45,8 @@ img { max-width: 100%; height: auto; }
   .admin-sidebar-head { display: none !important; }
   .admin-sidebar-nav { display: flex !important; flex-direction: row !important; flex: 1 !important; padding: 0 !important; }
   .admin-sidebar-nav > div { border-left: none !important; border-bottom: 3px solid transparent; white-space: nowrap; padding: 12px 14px !important; }
-  .admin-sidebar-back { display: none !important; }
+  .admin-sidebar-back { border-top: none !important; white-space: nowrap; padding: 8px 12px !important; flex-shrink: 0; }
+  .admin-sidebar-back button { width: auto !important; padding: 8px 14px !important; }
   .admin-stats { grid-template-columns: repeat(2, 1fr) !important; }
   .admin-two-col { grid-template-columns: 1fr !important; }
 }
@@ -67,7 +68,8 @@ img { max-width: 100%; height: auto; }
   .dash-sidebar-head, .dash-sidebar-user { display: none !important; }
   .dash-sidebar-nav { display: flex !important; flex-direction: row !important; flex: 1 !important; padding: 0 !important; }
   .dash-sidebar-nav > a { white-space: nowrap; padding: 12px 14px !important; }
-  .dash-sidebar-back { border-top: none !important; white-space: nowrap; padding: 12px 14px !important; }
+  .dash-sidebar-back { border-top: none !important; white-space: nowrap; padding: 8px 12px !important; flex-shrink: 0; }
+  .dash-sidebar-back button { width: auto !important; padding: 8px 14px !important; }
 }
 
 /* 案件詳細ページ: スマホでは2カラムを1列に畳む */
