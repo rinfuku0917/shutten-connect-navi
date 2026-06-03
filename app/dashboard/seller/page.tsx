@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
+import { useRouter } from 'next/navigation'
 
 type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string }
 
@@ -36,6 +37,7 @@ const docs = [
 ]
 
 export default function SellerDashboard() {
+  const router = useRouter()
   type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'
   const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile']
   const getInitialTab = (): TabKey => {
@@ -133,7 +135,8 @@ export default function SellerDashboard() {
           ))}
         </nav>
         <div className='admin-sidebar-back' style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <Link href="/" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textDecoration: 'none' }}>← サイトに戻る</Link>
+          <Link href="/" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textDecoration: 'none', display: 'block', marginBottom: '10px' }}>← サイトに戻る</Link>
+          <button onClick={async () => { await supabase.auth.signOut(); router.push('/login') }} style={{ width: '100%', background: 'transparent', color: '#F5A623', border: '1px solid #F5A623', borderRadius: '6px', padding: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>ログアウト</button>
         </div>
       </div>
 

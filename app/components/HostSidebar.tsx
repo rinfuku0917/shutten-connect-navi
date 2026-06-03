@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { supabase } from '../lib/supabase'
 
 const navItems = [
   { href: '/dashboard/host', icon: '📋', label: '場所・案件管理' },
@@ -10,6 +11,7 @@ const navItems = [
 
 export default function HostSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   return (
     <div className='dash-sidebar' style={{ width: '200px', background: '#1E2A3B', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div className='dash-sidebar-head' style={{ padding: '16px 14px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
@@ -37,7 +39,8 @@ export default function HostSidebar() {
         })}
       </nav>
       <div className='dash-sidebar-back' style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-        <Link href='/' style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textDecoration: 'none' }}>← サイトに戻る</Link>
+        <Link href='/' style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textDecoration: 'none', display: 'block', marginBottom: '10px' }}>← サイトに戻る</Link>
+        <button onClick={async () => { await supabase.auth.signOut(); router.push('/login') }} style={{ width: '100%', background: 'transparent', color: '#F5A623', border: '1px solid #F5A623', borderRadius: '6px', padding: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>ログアウト</button>
       </div>
     </div>
   )
