@@ -11,7 +11,7 @@ export default function SpacePage() {
   ]
 
   return (
-    <div>
+    <div style={{width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
       <Nav />
       <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-top.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'300px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',width:'100%'}}>
         <h1 style={{color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.5)',fontSize:'clamp(26px,4vw,44px)',fontWeight:'900',marginBottom:'12px'}}>出店したい方へ</h1>
@@ -24,7 +24,7 @@ export default function SpacePage() {
       <div style={{background:'#fff',padding:'48px 24px',textAlign:'center'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
           <h2 style={{fontSize:'26px',fontWeight:'900',marginBottom:'32px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>出店コネクトナビのメリット</h2>
-          <div className='grid-4' style={{gap:'16px',maxWidth:'960px',margin:'0 auto',textAlign:'center',alignItems:'stretch'}}>
+          <div className='grid-4 space-merit-grid' style={{gap:'16px',maxWidth:'960px',margin:'0 auto',textAlign:'center',alignItems:'stretch'}}>
             {merits.map(m => (
               <div key={m.title} style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px 16px',textAlign:'center',height:'100%',display:'flex',flexDirection:'column',alignItems:'center'}}>
                 <div style={{fontSize:'36px',marginBottom:'10px'}}>{m.icon}</div>

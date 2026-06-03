@@ -90,3 +90,7 @@ img { max-width: 100%; height: auto; }
 @media (max-width: 768px) {
   .seller-msg-grid { grid-template-columns: 1fr !important; }
 }
+
+/* お店を呼びたい方へ: メリット4カードを全幅に収める */
+.space-merit-grid { max-width: 100% !important; }
+.space-merit-grid > div { min-width: 0; }
