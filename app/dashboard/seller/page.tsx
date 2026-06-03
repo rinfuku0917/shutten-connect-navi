@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 
-type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string }
+type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null }
 
 const applies = [
   { id: '1', place: '日本体育大学医療専門学校', area: '東京', date: '6月3日（水）', time: '11:00〜16:00', type: 'キッチンカー', plan: '日額固定 5,000円', status: '承認済', statusColor: '#16A34A', statusBg: '#ECFDF5' },
@@ -51,6 +51,8 @@ export default function SellerDashboard() {
   const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
   const [myId, setMyId] = useState<string|null>(null)
   const [appId, setAppId] = useState<string|null>(null)
+  const [unread, setUnread] = useState(0)
+  const [unread, setUnread] = useState(0)
 
   // ログイン中ユーザーの最初の申込に紐づくメッセージを読み込む
   const loadMessages = async () => {
@@ -69,10 +71,22 @@ export default function SellerDashboard() {
     setAppId(firstAppId)
     const { data: msgs } = await supabase
       .from('messages')
-      .select('id, application_id, sender_id, body, sent_at')
+      .select('id, application_id, sender_id, body, sent_at, read_at')
       .eq('application_id', firstAppId)
       .order('sent_at', { ascending: true })
     if (msgs) setDbMessages(msgs as DbMessage[])
+    const cnt = (msgs || []).filter(m => m.sender_id !== uid && !m.read_at).length
+    setUnread(cnt)
+  }
+
+  // 相手から届いた未読を既読にする
+  const markRead = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid || !appId) return
+    await supabase.from('messages').update({ read_at: new Date().toISOString() })
+      .eq('application_id', appId).neq('sender_id', uid).is('read_at', null)
+    setUnread(0)
   }
 
   // タブが変わったらURLの ?tab= を更新（リロードしても同じタブを保つ）
@@ -83,7 +97,7 @@ export default function SellerDashboard() {
   }, [tab])
 
   useEffect(() => {
-    if (tab === 'messages') { loadMessages(); setChatOpen('main') }
+    if (tab === 'messages') { loadMessages().then(() => markRead()); setChatOpen('main') }
   }, [tab])
 
   // メッセージを送信する
@@ -98,11 +112,13 @@ export default function SellerDashboard() {
     loadMessages()
   }
 
+  useEffect(() => { loadMessages() }, [])
+
   const navItems = [
     { key: 'home', icon: '🏠', label: 'ホーム' },
     { key: 'applies', icon: '📋', label: '申込一覧' },
     { key: 'calendar', icon: '📅', label: 'カレンダー' },
-    { key: 'messages', icon: '💬', label: 'メッセージ', badge: 1 },
+    { key: 'messages', icon: '💬', label: 'メッセージ', badge: unread > 0 ? unread : undefined },
     { key: 'docs', icon: '📁', label: '書類管理' },
     { key: 'profile', icon: '👤', label: 'プロフィール' },
   ]
