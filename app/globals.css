@@ -83,3 +83,10 @@ img { max-width: 100%; height: auto; }
   .top-vendor-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .top-2card-grid { grid-template-columns: 1fr !important; }
 }
+
+/* 出店者メッセージ画面: スマホで一覧と本体を縦積み・全幅に */
+.seller-msg-grid { max-width: 100%; }
+.seller-msg-grid > div { min-width: 0; }
+@media (max-width: 768px) {
+  .seller-msg-grid { grid-template-columns: 1fr !important; }
+}
