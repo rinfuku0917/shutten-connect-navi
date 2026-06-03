@@ -81,7 +81,7 @@ export default function SellerDashboard() {
   }, [tab])
 
   useEffect(() => {
-    if (tab === 'messages') loadMessages()
+    if (tab === 'messages') { loadMessages(); setChatOpen('main') }
   }, [tab])
 
   // メッセージを送信する
