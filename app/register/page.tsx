@@ -66,7 +66,7 @@ export default function RegisterPage() {
             ].map(r=>(
               <button key={r.val} onClick={()=>setRole(r.val as 'seller'|'host')} style={{border:role===r.val?'2px solid #F5A623':'1px solid #E5D5A0',borderRadius:'10px',padding:'16px 12px',background:role===r.val?'#FFF3C4':'#FFFBF0',cursor:'pointer',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
                 {r.val==='seller'
-                  ? <span style={{height:'48px',display:'flex',alignItems:'center',justifyContent:'center'}}><img src='/kitchen-car.png' style={{height:'44px',width:'60px',objectFit:'contain',mixBlendMode:'multiply'}} /></span>
+                  ? <span style={{height:'48px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'40px',lineHeight:1}}>🚚</span>
                   : <span style={{height:'48px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'40px',lineHeight:1}}>📣</span>
                 }
                 <span style={{fontSize:'13px',fontWeight:'700',color:role===r.val?'#E08A00':'#555'}}>{r.label}</span>
