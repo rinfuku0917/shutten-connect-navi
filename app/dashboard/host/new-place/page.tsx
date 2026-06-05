@@ -1,6 +1,8 @@
 'use client'
 import Link from 'next/link'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '../../../lib/supabase'
 
 export default function NewPlacePage() {
   const [form, setForm] = useState({
@@ -21,6 +23,48 @@ export default function NewPlacePage() {
   const times = ['選択してください', ...Array.from({length:18},(_,i)=>i+6).flatMap(h=>[`${h}:00`,`${h}:30`])]
   const prefs = ['選択してください','北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県']
   const inputStyle = {width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box' as const,color:'#1a1a1a',background:'#fff'}
+
+  const router = useRouter()
+  const [imageFile, setImageFile] = useState<File|null>(null)
+  const [saving, setSaving] = useState(false)
+  const [errMsg, setErrMsg] = useState('')
+
+  const handleSubmit = async () => {
+    setErrMsg('')
+    if(!form.title || !form.prefecture || form.prefecture==='選択してください') {
+      setErrMsg('イベント・施設名と都道府県は必須です'); return
+    }
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if(!user) { setErrMsg('ログインが必要です'); setSaving(false); return }
+
+    let imageUrl = ''
+    if(imageFile) {
+      const ext = imageFile.name.split('.').pop()
+      const path = user.id + '/' + Date.now() + '.' + ext
+      const { error: upErr } = await supabase.storage.from('place-images').upload(path, imageFile)
+      if(upErr) { setErrMsg('画像アップロード失敗: ' + upErr.message); setSaving(false); return }
+      const { data: pub } = supabase.storage.from('place-images').getPublicUrl(path)
+      imageUrl = pub.publicUrl
+    }
+
+    const { error: insErr } = await supabase.from('places').insert({
+      host_id: user.id,
+      title: form.title,
+      description: form.summary,
+      prefecture: form.prefecture,
+      address: form.address,
+      place_type: form.type,
+      fee: form.fee,
+      map_url: form.mapUrl,
+      recruit: form['募集内容'],
+      schedule: schedule,
+      image_url: imageUrl,
+      status: 'published',
+    })
+    if(insErr) { setErrMsg('登録失敗: ' + insErr.message); setSaving(false); return }
+    router.push('/dashboard/host')
+  }
 
   const Radio = ({name,val,label}:{name:string,val:string,label:string}) => (
     <label style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'14px'}}>
@@ -97,8 +141,10 @@ export default function NewPlacePage() {
               <div style={{marginTop:'8px'}}>
                 <label style={{background:'#F5A623',color:'#fff',padding:'8px 20px',borderRadius:'8px',cursor:'pointer',fontSize:'13px',fontWeight:'700'}}>
                   ファイルを選択
-                  <input type='file' accept='image/*' style={{display:'none'}}/>
+                  <input type='file' accept='image/*' onChange={e=>setImageFile(e.target.files?.[0]||null)} style={{display:'none'}}/>
                 </label>
+                {imageFile && <span style={{marginLeft:'12px',fontSize:'13px',color:'#1a1a1a'}}>{imageFile.name}</span>}
+                {imageFile && <span style={{marginLeft:'12px',fontSize:'13px',color:'#1a1a1a'}}>{imageFile.name}</span>}
               </div>
             </div>
 
@@ -250,9 +296,11 @@ export default function NewPlacePage() {
             </div>
           </div>
 
+          {errMsg && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:'8px',padding:'12px',fontSize:'13px',color:'#DC2626',textAlign:'center'}}>{errMsg}</div>}
+          {errMsg && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:'8px',padding:'12px',fontSize:'13px',color:'#DC2626',textAlign:'center'}}>{errMsg}</div>}
           <div style={{display:'flex',gap:'16px',justifyContent:'center',paddingBottom:'40px',flexWrap:'wrap'}}>
             <Link href='/dashboard/host' style={{border:'2px solid #E5E7EB',color:'#555',borderRadius:'999px',padding:'14px 40px',fontSize:'15px',fontWeight:'700',textDecoration:'none'}}>戻る</Link>
-            <button style={{background:'#F5A623',color:'#fff',border:'none',borderRadius:'999px',padding:'14px 48px',fontSize:'15px',fontWeight:'900',cursor:'pointer',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>この内容で登録</button>
+            <button onClick={handleSubmit} disabled={saving} style={{background:saving?'#ccc':'#F5A623',color:'#fff',border:'none',borderRadius:'999px',padding:'14px 48px',fontSize:'15px',fontWeight:'900',cursor:saving?'not-allowed':'pointer',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>{saving?'登録中...':'この内容で登録'}</button>
           </div>
         </div>
       </div>
