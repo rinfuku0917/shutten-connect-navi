@@ -1,15 +1,17 @@
 'use client'
 import Link from 'next/link'
 import Nav from './components/Nav'
+import { useState, useEffect } from 'react'
+import { supabase } from './lib/supabase'
 
-const places = [
-  {id:1,name:'日本体育大学医療専門学校（6〜8月スケジュール）',area:'東京',type:'常設',price:'日額5,000円',time:'11:00〜16:00',tags:['キッチンカー'],emoji:'🏫',isNew:true},
-  {id:2,name:'大阪公立大学りんくうキャンパス（7月募集）',area:'大阪',type:'常設',price:'無料',time:'11:00〜14:00',tags:['キッチンカー'],emoji:'🏫',isNew:true},
-  {id:3,name:'イオンモール富谷',area:'宮城',type:'常設',price:'要相談',time:'11:00〜17:00',tags:['キッチンカー','物販'],emoji:'🏪'},
-  {id:4,name:'町田美容専門学校',area:'東京',type:'常設',price:'日額3,000円',time:'11:30〜13:30',tags:['キッチンカー'],emoji:'🏫'},
-  {id:5,name:'福岡天神エリア オフィスビル',area:'福岡',type:'常設',price:'日額4,000円',time:'11:00〜14:00',tags:['キッチンカー'],emoji:'🏢'},
-  {id:6,name:'横浜みなとみらい 週末マルシェ',area:'神奈川',type:'イベント',price:'日額5,000円',time:'10:00〜17:00',tags:['テント','物販'],emoji:'🌳'},
-]
+type Place = {
+  id: string
+  title: string
+  prefecture: string | null
+  place_type: string | null
+  fee: string | null
+  image_url: string | null
+}
 const vendors = [
   {id:1,name:'たこ焼き大阪屋',genre:'たこ焼き',rating:4.8,emoji:'🐙'},
   {id:2,name:'La France',genre:'クレープ',rating:4.9,emoji:'🥞'},
@@ -20,6 +22,19 @@ const vendors = [
 ]
 
 export default function Home() {
+  const [places, setPlaces] = useState<Place[]>([])
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase
+        .from('places')
+        .select('id,title,prefecture,place_type,fee,image_url')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(6)
+      setPlaces(data || [])
+    }
+    load()
+  }, [])
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6',width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
       <Nav />
@@ -53,22 +68,23 @@ export default function Home() {
           <Link href='/places' style={{color:'#111',fontWeight:'700',textDecoration:'none',fontSize:'14px'}}>もっと見る →</Link>
         </div>
         <div className='grid-auto' style={{gap:'16px'}}>
+          {places.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px'}}>掲載中の出店場所はまだありません。</div>}
           {places.map(p=>(
-            <div key={p.id} style={{background:'#fff',borderRadius:'12px',overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}>
-              <div style={{background:'#F5A623',height:'120px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',position:'relative'}}>
-                {p.emoji}
-                {p.isNew && <span style={{position:'absolute',top:'8px',left:'8px',background:'#e53e3e',color:'#111',fontSize:'10px',fontWeight:'700',padding:'2px 6px',borderRadius:'4px'}}>NEW</span>}
-                <span style={{position:'absolute',top:'8px',right:'8px',background:'rgba(0,0,0,0.5)',color:'#111',fontSize:'10px',padding:'2px 6px',borderRadius:'4px'}}>📍{p.area}</span>
+            <Link key={p.id} href={'/places/' + p.id} style={{textDecoration:'none'}}>
+            <div style={{background:'#fff',borderRadius:'12px',overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}>
+              <div style={{background:'#F5A623',height:'120px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',position:'relative',backgroundImage:p.image_url?`url(${p.image_url})`:undefined,backgroundSize:'cover',backgroundPosition:'center'}}>
+                {!p.image_url && (p.place_type==='event'?'🎪':'🏪')}
+                {p.prefecture && <span style={{position:'absolute',top:'8px',right:'8px',background:'rgba(0,0,0,0.5)',color:'#fff',fontSize:'10px',padding:'2px 6px',borderRadius:'4px'}}>📍{p.prefecture}</span>}
               </div>
               <div style={{padding:'12px'}}>
                 <div style={{display:'flex',gap:'4px',marginBottom:'6px'}}>
-                  <span style={{background:'#FFF3CD',color:'#111',fontSize:'10px',fontWeight:'700',padding:'2px 6px',borderRadius:'4px'}}>{p.type}</span>
+                  <span style={{background:'#FFF3CD',color:'#111',fontSize:'10px',fontWeight:'700',padding:'2px 6px',borderRadius:'4px'}}>{p.place_type==='event'?'イベント':'常設'}</span>
                 </div>
-                <div style={{fontWeight:'700',fontSize:'13px',marginBottom:'4px',lineHeight:1.4,color:'#111'}}>{p.name}</div>
-                <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>{p.price}</div>
-                <div style={{fontSize:'11px',color:'#111'}}>⏰ {p.time}</div>
+                <div style={{fontWeight:'700',fontSize:'13px',marginBottom:'4px',lineHeight:1.4,color:'#111'}}>{p.title}</div>
+                <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>{p.fee || '要相談'}</div>
               </div>
             </div>
+            </Link>
           ))}
         </div>
       </div>
