@@ -1,15 +1,37 @@
 'use client'
 import Link from 'next/link'
 import Nav from '../components/Nav'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 
-const places = [
-  {id:'1',title:'渋谷ヒカリエ前 週末マルシェ',area:'渋谷区・渋谷駅徒歩1分',fee:'5,000円/日',time:'土日 10:00〜17:00',type:'マルシェ'},
-  {id:'2',title:'新宿駅東口 キッチンカースペース',area:'新宿区・新宿駅徒歩2分',fee:'8,000円/日',time:'平日 11:00〜15:00',type:'キッチンカー'},
-  {id:'3',title:'池袋西口公園 週末イベント',area:'豊島区・池袋駅徒歩3分',fee:'3,000円/日',time:'土日 10:00〜18:00',type:'イベント'},
-  {id:'4',title:'お台場海浜公園 フードフェス',area:'江東区・お台場海浜公園駅徒歩5分',fee:'10,000円/日',time:'土日祝 11:00〜20:00',type:'フェス'},
-]
+type Place = {
+  id: string
+  title: string
+  prefecture: string | null
+  fee: string | null
+  place_type: string | null
+  image_url: string | null
+}
+
 
 export default function PlacesPage() {
+  const [places, setPlaces] = useState<Place[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase
+        .from('places')
+        .select('id, title, prefecture, fee, place_type, image_url')
+        .eq('status', 'published')
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+      setPlaces(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
   return (
     <div style={{background:'#FFF8F0',minHeight:'100vh'}}>
       <Nav />
@@ -19,14 +41,20 @@ export default function PlacesPage() {
       </div>
       <div style={{maxWidth:'900px',margin:'0 auto',padding:'32px 16px'}}>
         <div style={{display:'grid',gap:'16px'}}>
+          {loading && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>読み込み中...</div>}
+          {!loading && places.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>掲載中の出店場所はまだありません。</div>}
           {places.map(place => (
-            <Link key={place.id} href={'/places/' + place.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',padding:'20px',color:'inherit'}}>
-              <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'8px'}}>{place.title}</div>
-              <div style={{fontSize:'13px',color:'#111',marginBottom:'6px'}}>{place.area}</div>
-              <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{place.fee}</div>
-              <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
-                <span style={{background:'#f8f9fa',color:'#111',fontSize:'11px',padding:'3px 8px',borderRadius:'4px',border:'1px solid #e8e8e8'}}>{place.time}</span>
-                <span style={{background:'#EBF6FD',color:'#1565C0',fontSize:'11px',padding:'3px 8px',borderRadius:'4px'}}>🏪 {place.type}</span>
+            <Link key={place.id} href={'/places/' + place.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',overflow:'hidden',color:'inherit'}}>
+              <div style={{height:'160px',background:'#F5A623',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',backgroundImage:place.image_url?`url(${place.image_url})`:undefined,backgroundSize:'cover',backgroundPosition:'center'}}>
+                {!place.image_url && (place.place_type==='event'?'🎪':'🏪')}
+              </div>
+              <div style={{padding:'20px'}}>
+                <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'8px'}}>{place.title}</div>
+                {place.prefecture && <div style={{fontSize:'13px',color:'#111',marginBottom:'6px'}}>📍 {place.prefecture}</div>}
+                <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{place.fee || '要相談'}</div>
+                <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                  <span style={{background:'#EBF6FD',color:'#1565C0',fontSize:'11px',padding:'3px 8px',borderRadius:'4px'}}>🏪 {place.place_type==='event'?'イベント':'常設'}</span>
+                </div>
               </div>
             </Link>
           ))}
