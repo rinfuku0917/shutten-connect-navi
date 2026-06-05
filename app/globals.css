@@ -96,3 +96,11 @@ img { max-width: 100%; height: auto; }
 /* お店を呼びたい方へ: メリット4カードを全幅に収める */
 .space-merit-grid { max-width: 100% !important; }
 .space-merit-grid > div { min-width: 0; }
+
+
+/* host-form-mobile */
+@media (max-width: 768px) {
+  .form-grid-2 { grid-template-columns: 1fr !important; }
+  .form-grid-3 { grid-template-columns: 1fr !important; }
+  .form-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+}
