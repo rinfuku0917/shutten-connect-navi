@@ -1,15 +1,20 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { supabase } from '../../lib/supabase'
 
-const initPlaces = [
-  {id:'1',title:'渋谷ヒカリエ前 週末マルシェ',area:'渋谷区',deadline:'2026/06/01',applications:12,updatedAt:'2026/05/28',pinned:true,status:'published'},
-  {id:'2',title:'新宿駅東口 キッチンカースペース',area:'新宿区',deadline:'2026/06/10',applications:5,updatedAt:'2026/05/25',pinned:false,status:'draft'},
-  {id:'3',title:'池袋西口公園 週末イベント',area:'豊島区',deadline:'2026/06/15',applications:8,updatedAt:'2026/05/20',pinned:false,status:'published'},
-]
+type Place = {
+  id: string
+  title: string
+  prefecture: string | null
+  status: string | null
+  pinned: boolean | null
+  created_at: string | null
+}
 
 export default function HostDashboard() {
-  const [places, setPlaces] = useState(initPlaces)
+  const [places, setPlaces] = useState<Place[]>([])
+  const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
 
   const showToast = (msg: string) => {
@@ -17,24 +22,41 @@ export default function HostDashboard() {
     setTimeout(() => setToast(''), 3000)
   }
 
-  const togglePin = (id: string) => {
-    setPlaces(prev => prev.map(p => p.id === id ? {...p, pinned: !p.pinned} : p))
+  const load = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setLoading(false); return }
+    const { data } = await supabase
+      .from('places')
+      .select('id,title,prefecture,status,pinned,created_at')
+      .eq('host_id', user.id)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+    setPlaces(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const togglePin = async (id: string, cur: boolean | null) => {
+    await supabase.from('places').update({ pinned: !cur }).eq('id', id)
     showToast('ピン留めを更新しました')
+    load()
   }
 
-  const refreshDate = (id: string) => {
-    showToast('更新日時を更新しました')
-  }
-
-  const toggleStatus = (id: string) => {
-    setPlaces(prev => prev.map(p => p.id === id ? {...p, status: p.status === 'published' ? 'draft' : 'published'} : p))
+  const toggleStatus = async (id: string, cur: string | null) => {
+    const next = cur === 'published' ? 'draft' : 'published'
+    await supabase.from('places').update({ status: next }).eq('id', id)
     showToast('公開状態を変更しました')
+    load()
   }
 
-  const deletePlace = (id: string) => {
-    setPlaces(prev => prev.filter(p => p.id !== id))
+  const deletePlace = async (id: string) => {
+    await supabase.from('places').delete().eq('id', id)
     showToast('削除しました')
+    load()
   }
+
+  const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('ja-JP') : '-'
 
   return (
     <div>
@@ -50,25 +72,29 @@ export default function HostDashboard() {
         <div style={{background:'#FFF8E1',border:'1px solid #FFE082',borderRadius:'8px',padding:'14px 16px',marginBottom:'24px',fontSize:'13px',color:'#B45309'}}>
           上位表示：ピン留めした案件は一覧ページの上位に表示されます（最大3件）。更新ボタンで新着順でも上位に表示できます。
         </div>
+        {loading ? (
+          <div style={{textAlign:'center',color:'#999',padding:'40px',fontSize:'14px'}}>読み込み中...</div>
+        ) : places.length === 0 ? (
+          <div style={{textAlign:'center',color:'#999',padding:'40px',fontSize:'14px'}}>まだ案件がありません。「＋ 新規登録」から登録してください。</div>
+        ) : (
         <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
           {places.map(place => (
             <div key={place.id} style={{background:'#fff',border:'1px solid #e0e0e0',borderRadius:'8px',padding:'16px'}}>
               <div style={{fontSize:'15px',fontWeight:'700',color:'#1a1a1a',marginBottom:'6px'}}>{place.title}</div>
               <div style={{display:'flex',gap:'16px',fontSize:'12px',color:'#999',flexWrap:'wrap'}}>
-                <span>{place.area}</span>
-                <span>締切：{place.deadline}</span>
-                <span>応募：{place.applications}件</span>
-                <span>更新：{place.updatedAt}</span>
+                <span>{place.prefecture || '-'}</span>
+                <span>状態：{place.status === 'published' ? '公開中' : '非公開'}</span>
+                <span>登録：{fmtDate(place.created_at)}</span>
               </div>
               <div style={{display:'flex',gap:'6px',flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end',marginTop:'8px'}}>
-                <button onClick={() => togglePin(place.id)} style={{background:place.pinned ? '#FFF8E1' : '#f6f6f6',color:place.pinned ? '#E08A00' : '#555',border:place.pinned ? '1px solid #FFD54F' : '1px solid #e0e0e0',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.pinned ? '上位解除' : '上位表示'}</button>
-                <button onClick={() => refreshDate(place.id)} style={{background:'#f6f6f6',color:'#555',border:'1px solid #e0e0e0',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>更新</button>
-                <button onClick={() => toggleStatus(place.id)} style={{background:place.status === 'published' ? '#FFF3E0' : '#E8F5E9',color:place.status === 'published' ? '#E65100' : '#2E7D32',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.status === 'published' ? '非公開にする' : '公開する'}</button>
+                <button onClick={() => togglePin(place.id, place.pinned)} style={{background:place.pinned ? '#FFF8E1' : '#f6f6f6',color:place.pinned ? '#E08A00' : '#555',border:place.pinned ? '1px solid #FFD54F' : '1px solid #e0e0e0',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.pinned ? '上位解除' : '上位表示'}</button>
+                <button onClick={() => toggleStatus(place.id, place.status)} style={{background:place.status === 'published' ? '#FFF3E0' : '#E8F5E9',color:place.status === 'published' ? '#E65100' : '#2E7D32',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.status === 'published' ? '非公開にする' : '公開する'}</button>
                 <button onClick={() => { if(window.confirm('削除しますか？')) deletePlace(place.id) }} style={{background:'#FEF2F2',color:'#DC2626',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>削除</button>
               </div>
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   )
