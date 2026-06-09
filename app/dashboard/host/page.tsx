@@ -12,8 +12,18 @@ type Place = {
   created_at: string | null
 }
 
+type HostApp = {
+  id: string
+  placeTitle: string
+  sellerName: string
+  date: string
+  format: string
+  status: string
+}
+
 export default function HostDashboard() {
   const [places, setPlaces] = useState<Place[]>([])
+  const [apps, setApps] = useState<HostApp[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
 
@@ -32,10 +42,36 @@ export default function HostDashboard() {
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
     setPlaces(data || [])
+
+    // 自分の場所への申込を取得
+    const placeIds = (data || []).map(p => p.id)
+    if (placeIds.length > 0) {
+      const { data: appData } = await supabase
+        .from('applications')
+        .select('id,apply_date,format,status,place_id,seller_id,places(title),profiles(name,shop_name)')
+        .in('place_id', placeIds)
+        .order('created_at', { ascending: false })
+      const mapped: HostApp[] = (appData || []).map((a: any) => ({
+        id: a.id,
+        placeTitle: a.places?.title || '(案件名なし)',
+        sellerName: a.profiles?.shop_name || a.profiles?.name || '(出店者)',
+        date: a.apply_date || '日付未定',
+        format: a.format || '-',
+        status: a.status || 'pending',
+      }))
+      setApps(mapped)
+    }
+
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
+
+  const decide = async (id: string, status: 'approved' | 'rejected') => {
+    await supabase.from('applications').update({ status }).eq('id', id)
+    showToast(status === 'approved' ? '承認しました' : '否認しました')
+    load()
+  }
 
   const togglePin = async (id: string, cur: boolean | null) => {
     await supabase.from('places').update({ pinned: !cur }).eq('id', id)
@@ -96,6 +132,42 @@ export default function HostDashboard() {
           ))}
         </div>
         )}
+
+        {/* 届いた出店申込 */}
+        <div style={{marginTop:'32px'}}>
+          <h2 style={{fontSize:'18px',fontWeight:'900',color:'#1a1a1a',marginBottom:'4px'}}>📋 届いた出店申込</h2>
+          <p style={{fontSize:'13px',color:'#888',marginBottom:'16px'}}>あなたの案件への出店申込を承認・否認できます</p>
+          {apps.length === 0 ? (
+            <div style={{textAlign:'center',color:'#999',padding:'32px',fontSize:'14px',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'8px'}}>まだ申込はありません。</div>
+          ) : (
+          <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+            {apps.map(a => {
+              const st = a.status === 'approved' ? {label:'承認済',c:'#16A34A',bg:'#ECFDF5'} : a.status === 'rejected' ? {label:'否認',c:'#DC2626',bg:'#FEE2E2'} : {label:'審査中',c:'#92400E',bg:'#FEF3C7'}
+              return (
+              <div key={a.id} style={{background:'#fff',border:'1px solid #e0e0e0',borderRadius:'8px',padding:'16px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px',flexWrap:'wrap'}}>
+                  <div style={{flex:1,minWidth:'180px'}}>
+                    <div style={{fontSize:'15px',fontWeight:'700',color:'#1a1a1a',marginBottom:'4px'}}>{a.sellerName}</div>
+                    <div style={{display:'flex',gap:'12px',fontSize:'12px',color:'#999',flexWrap:'wrap'}}>
+                      <span>案件：{a.placeTitle}</span>
+                      <span>📅 {a.date}</span>
+                      <span>{a.format}</span>
+                    </div>
+                  </div>
+                  <span style={{fontSize:'11px',fontWeight:'700',padding:'4px 12px',borderRadius:'20px',background:st.bg,color:st.c,flexShrink:0}}>{st.label}</span>
+                </div>
+                {a.status === 'pending' && (
+                  <div style={{display:'flex',gap:'8px',justifyContent:'flex-end',marginTop:'12px'}}>
+                    <button onClick={() => decide(a.id, 'approved')} style={{background:'#E8F5E9',color:'#2E7D32',border:'1px solid #A5D6A7',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer'}}>承認</button>
+                    <button onClick={() => { if(window.confirm('この申込を否認しますか？')) decide(a.id, 'rejected') }} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer'}}>否認</button>
+                  </div>
+                )}
+              </div>
+              )
+            })}
+          </div>
+          )}
+        </div>
       </div>
     </div>
   )
