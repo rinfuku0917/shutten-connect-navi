@@ -26,6 +26,7 @@ export default function PlaceDetail() {
   const router = useRouter()
   const [showEntry, setShowEntry] = useState(false)
   const [format, setFormat] = useState('')
+  const [selectedDates, setSelectedDates] = useState<string[]>([])
   const [entryDate, setEntryDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [entryErr, setEntryErr] = useState('')
@@ -40,19 +41,25 @@ export default function PlaceDetail() {
     setShowEntry(true)
   }
 
+  const toggleDate = (d: string) => {
+    setSelectedDates(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
+  }
+
   const submitEntry = async () => {
     setEntryErr('')
     if (!format) { setEntryErr('出店形式を選択してください'); return }
+    // 開催日がある案件は最低1日選択を必須に
+    const hasSchedule = !!(place && place.schedule && place.schedule.filter(d => d.date).length > 0)
+    const dates = hasSchedule ? selectedDates : (entryDate ? [entryDate] : [])
+    if (hasSchedule && dates.length === 0) { setEntryErr('出店希望日を1日以上選択してください'); return }
     setSubmitting(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setEntryErr('ログインが必要です'); setSubmitting(false); return }
-    const { error } = await supabase.from('applications').insert({
-      place_id: id,
-      seller_id: user.id,
-      format: format,
-      apply_date: entryDate || null,
-      status: '申込中',
-    })
+    // 選んだ日ごとに1行ずつ申込を作成（日付が無い案件は1件だけ作成）
+    const rows = dates.length > 0
+      ? dates.map(d => ({ place_id: id, seller_id: user.id, format, apply_date: d, status: '申込中' }))
+      : [{ place_id: id, seller_id: user.id, format, apply_date: null, status: '申込中' }]
+    const { error } = await supabase.from('applications').insert(rows)
     if (error) { setEntryErr('エントリー失敗: ' + error.message); setSubmitting(false); return }
     setSubmitting(false)
     setEntryDone(true)
@@ -182,8 +189,20 @@ export default function PlaceDetail() {
                         </label>
                       ))}
                     </div>
-                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', marginBottom: '8px' }}>出店希望日（任意）</div>
-                    <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} style={{ width: '100%', border: '1px solid #E5C07B', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', marginBottom: '16px', boxSizing: 'border-box', color: '#1a1a1a', background: '#fff' }} />
+                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', marginBottom: '8px' }}>出店希望日</div>
+                    {place.schedule && place.schedule.filter(d => d.date).length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                        <div style={{ fontSize: '12px', color: '#888' }}>出店したい日にチェックを入れてください（複数選択可）</div>
+                        {place.schedule.filter(d => d.date).map(d => (
+                          <label key={d.date} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', border: selectedDates.includes(d.date) ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#1a1a1a', background: selectedDates.includes(d.date) ? '#FFFBEB' : '#fff' }}>
+                            <input type="checkbox" checked={selectedDates.includes(d.date)} onChange={() => toggleDate(d.date)} style={{ accentColor: '#F5A623' }} />
+                            {d.date}（{d.start}〜{d.end}）
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} style={{ width: '100%', border: '1px solid #E5C07B', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', marginBottom: '16px', boxSizing: 'border-box', color: '#1a1a1a', background: '#fff' }} />
+                    )}
                     {entryErr && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px', fontSize: '13px', color: '#DC2626', marginBottom: '12px' }}>{entryErr}</div>}
                     <button onClick={submitEntry} disabled={submitting} style={{ width: '100%', background: submitting ? '#ccc' : '#3A9BD5', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', marginBottom: '8px' }}>
                       {submitting ? '送信中...' : 'エントリーする'}
