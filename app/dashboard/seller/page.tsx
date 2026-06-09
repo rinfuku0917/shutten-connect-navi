@@ -206,9 +206,9 @@ export default function SellerDashboard() {
             <>
               <div className='admin-stats' style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
                 {[
-                  { label: '申込中', value: '2件', icon: '⏳', color: '#92400E', bg: '#FEF3C7' },
-                  { label: '承認済（今月）', value: '1件', icon: '✅', color: '#16A34A', bg: '#ECFDF5' },
-                  { label: '出店予定日', value: '3日', icon: '📅', color: '#1D4ED8', bg: '#EBF6FD' },
+                  { label: '申込中', value: myApplies.filter(a => a.status === '審査中').length + '件', icon: '⏳', color: '#92400E', bg: '#FEF3C7' },
+                  { label: '承認済（今月）', value: myApplies.filter(a => a.status === '承認済').length + '件', icon: '✅', color: '#16A34A', bg: '#ECFDF5' },
+                  { label: '出店予定日', value: new Set(myApplies.filter(a => a.status === '承認済' && a.date && a.date !== '日付未定').map(a => a.date)).size + '日', icon: '📅', color: '#1D4ED8', bg: '#EBF6FD' },
                   { label: '未読メッセージ', value: unread + '件', icon: '💬', color: '#DC2626', bg: '#FEE2E2' },
                 ].map(s => (
                   <div key={s.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0' }}>
