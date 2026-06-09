@@ -28,13 +28,16 @@ const calDates = [
   { date: '6/28', day: '土', status: '申込可', place: '', color: '#FFF8E1', border: '#FCD34D', text: '#92400E' },
 ]
 
-const docs = [
-  { name: '運転免許証（表面）', required: true, status: '承認済', icon: '🪪' },
-  { name: '運転免許証（裏面）', required: true, status: '承認済', icon: '🪪' },
-  { name: '食品衛生責任者証', required: true, status: '審査中', icon: '📄' },
-  { name: '損害賠償保険証書', required: true, status: '未提出', icon: '🛡️' },
-  { name: 'その他許可証', required: false, status: '未提出', icon: '📋' },
+const docTypes = [
+  { key: 'license_front', name: '運転免許証（表面）', required: true, icon: '🪪' },
+  { key: 'license_back', name: '運転免許証（裏面）', required: true, icon: '🪪' },
+  { key: 'food_hygiene', name: '食品衛生責任者証', required: true, icon: '📄' },
+  { key: 'liability_insurance', name: '損害賠償保険証書', required: true, icon: '🛡️' },
+  { key: 'other_permit', name: 'その他許可証', required: false, icon: '📋' },
 ]
+
+const docStatusLabel = (s: string | undefined) =>
+  s === 'approved' ? '承認済' : s === 'pending' ? '審査中' : s === 'rejected' ? '否認' : '未提出'
 
 export default function SellerDashboard() {
   const router = useRouter()
@@ -54,6 +57,9 @@ export default function SellerDashboard() {
   const [unread, setUnread] = useState(0)
   type MyApply = { id: string, place: string, date: string, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
+  type DocRow = { id: string, doc_type: string, file_url: string, status: string }
+  const [myDocs, setMyDocs] = useState<DocRow[]>([])
+  const [uploadingType, setUploadingType] = useState<string | null>(null)
 
   const statusMap: Record<string, { label: string, color: string, bg: string }> = {
     pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' },
@@ -85,6 +91,38 @@ export default function SellerDashboard() {
       }
     })
     setMyApplies(mapped)
+  }
+
+  // ログイン中ユーザーの提出書類を読み込む
+  const loadDocs = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const { data } = await supabase
+      .from('seller_documents')
+      .select('id, doc_type, file_url, status')
+      .eq('seller_id', uid)
+    setMyDocs((data as DocRow[]) || [])
+  }
+
+  // 書類をアップロードする（docType: 書類種別キー, file: 選択ファイル）
+  const uploadDoc = async (docType: string, file: File) => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    setUploadingType(docType)
+    const ext = file.name.split('.').pop() || 'dat'
+    const path = uid + '/' + docType + '_' + Date.now() + '.' + ext
+    const up = await supabase.storage.from('seller-documents').upload(path, file, { upsert: true })
+    if (up.error) { alert('アップロード失敗: ' + up.error.message); setUploadingType(null); return }
+    // 既存の同種別レコードがあれば消してから作り直す（再提出対応）
+    await supabase.from('seller_documents').delete().eq('seller_id', uid).eq('doc_type', docType)
+    const ins = await supabase.from('seller_documents').insert({
+      seller_id: uid, doc_type: docType, file_url: path, status: 'pending'
+    })
+    if (ins.error) { alert('登録失敗: ' + ins.error.message); setUploadingType(null); return }
+    setUploadingType(null)
+    loadDocs()
   }
 
   // ログイン中ユーザーの最初の申込に紐づくメッセージを読み込む
@@ -142,7 +180,7 @@ export default function SellerDashboard() {
     loadMessages()
   }
 
-  useEffect(() => { loadMessages(); loadApplies() }, [])
+  useEffect(() => { loadMessages(); loadApplies(); loadDocs() }, [])
 
   const navItems = [
     { key: 'home', icon: '🏠', label: 'ホーム' },
@@ -245,7 +283,7 @@ export default function SellerDashboard() {
                   </div>
                   <div style={{ padding: '14px 18px' }}>
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                      {[{ label: '承認済', count: 2, color: '#16A34A', bg: '#ECFDF5' }, { label: '審査中', count: 1, color: '#92400E', bg: '#FEF3C7' }, { label: '未提出', count: 2, color: '#DC2626', bg: '#FEE2E2' }].map(d => (
+                      {[{ label: '承認済', count: docTypes.filter(t => docStatusLabel(myDocs.find(d => d.doc_type === t.key)?.status) === '承認済').length, color: '#16A34A', bg: '#ECFDF5' }, { label: '審査中', count: docTypes.filter(t => docStatusLabel(myDocs.find(d => d.doc_type === t.key)?.status) === '審査中').length, color: '#92400E', bg: '#FEF3C7' }, { label: '未提出', count: docTypes.filter(t => docStatusLabel(myDocs.find(d => d.doc_type === t.key)?.status) === '未提出').length, color: '#DC2626', bg: '#FEE2E2' }].map(d => (
                         <div key={d.label} style={{ flex: 1, background: d.bg, borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
                           <div style={{ fontSize: '18px', fontWeight: '900', color: d.color }}>{d.count}</div>
                           <div style={{ fontSize: '10px', color: d.color }}>{d.label}</div>
@@ -379,25 +417,32 @@ export default function SellerDashboard() {
           {/* 書類管理 */}
           {tab === 'docs' && (
             <>
-              <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#DC2626', display: 'flex', gap: '8px' }}>
-                <span>⚠️</span><span>損害賠償保険証書が未提出です。出店前に必ず提出してください。</span>
+              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
+                <span>📎</span><span>各書類のファイルを選んでアップロードしてください。提出後は「審査中」になります。</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {docs.map(doc => (
-                  <div key={doc.name} style={{ background: '#fff', borderRadius: '12px', border: `1px solid ${doc.status === '承認済' ? '#86EFAC' : doc.status === '審査中' ? '#FCD34D' : '#E2E8F0'}`, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ fontSize: '28px' }}>{doc.icon}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>{doc.name} {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}</div>
+                {docTypes.map(doc => {
+                  const rec = myDocs.find(d => d.doc_type === doc.key)
+                  const status = docStatusLabel(rec?.status)
+                  const border = status === '承認済' ? '#86EFAC' : status === '審査中' ? '#FCD34D' : status === '否認' ? '#FCA5A5' : '#E2E8F0'
+                  const badgeBg = status === '承認済' ? '#ECFDF5' : status === '審査中' ? '#FEF3C7' : status === '否認' ? '#FEE2E2' : '#F1F5F9'
+                  const badgeColor = status === '承認済' ? '#16A34A' : status === '審査中' ? '#92400E' : status === '否認' ? '#DC2626' : '#64748B'
+                  const isUploading = uploadingType === doc.key
+                  return (
+                    <div key={doc.key} style={{ background: '#fff', borderRadius: '12px', border: '1px solid ' + border, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ fontSize: '28px' }}>{doc.icon}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>{doc.name} {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}</div>
+                      </div>
+                      <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: badgeBg, color: badgeColor, flexShrink: 0 }}>{status}</span>
+                      <label style={{ background: isUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '700', cursor: isUploading ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
+                        {isUploading ? '送信中...' : (status === '未提出' ? '📎 アップロード' : '🔄 再提出')}
+                        <input type='file' accept='image/*,application/pdf' style={{ display: 'none' }} disabled={isUploading}
+                          onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDoc(doc.key, file); e.currentTarget.value = '' }} />
+                      </label>
                     </div>
-                    <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: doc.status === '承認済' ? '#ECFDF5' : doc.status === '審査中' ? '#FEF3C7' : '#F1F5F9', color: doc.status === '承認済' ? '#16A34A' : doc.status === '審査中' ? '#92400E' : '#64748B', flexShrink: 0 }}>{doc.status}</span>
-                    {doc.status === '未提出' && (
-                      <button style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', flexShrink: 0 }}>📎 アップロード</button>
-                    )}
-                    {doc.status === '承認済' && (
-                      <button style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}>👁️ 確認</button>
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </>
           )}
