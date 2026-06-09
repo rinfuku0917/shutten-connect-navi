@@ -61,7 +61,7 @@ export default function PlaceDetail() {
         ? dates.map(d => ({ place_id: id, seller_id: user.id, format, apply_date: d, status: 'pending' }))
         : [{ place_id: id, seller_id: user.id, format, apply_date: null, status: 'pending' }]
     const { error } = await supabase.from('applications').insert(rows)
-    if (error) { setEntryErr('エントリー失敗: ' + error.message); setSubmitting(false); return }
+    if (error) { const msg = error.message.includes('duplicate key') ? 'この案件には既に申込済みの日があります。' : 'エントリー失敗: ' + error.message; setEntryErr(msg); setSubmitting(false); return }
     setSubmitting(false)
     setEntryDone(true)
   }
