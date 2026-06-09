@@ -43,6 +43,12 @@ export default function AdminPage() {
       if (!user) { router.push('/login'); return }
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role !== 'admin') { router.push('/login'); return }
+      try {
+        const saved = localStorage.getItem('adminTab')
+        if (saved && ['dashboard','places','sellers','csv','docs'].includes(saved)) {
+          setTab(saved as typeof tab)
+        }
+      } catch {}
       setAuthChecked(true)
     }
     checkAdmin()
@@ -136,7 +142,7 @@ export default function AdminPage() {
           ].map((item) => (
             <div
               key={item.key}
-              onClick={() => setTab(item.key as typeof tab)}
+              onClick={() => { const k = item.key as typeof tab; setTab(k); try { localStorage.setItem('adminTab', k) } catch {} }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', cursor: 'pointer',
                 color: tab === item.key ? '#fff' : 'rgba(255,255,255,0.6)',
