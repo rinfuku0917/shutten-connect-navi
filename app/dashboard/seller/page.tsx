@@ -52,6 +52,40 @@ export default function SellerDashboard() {
   const [myId, setMyId] = useState<string|null>(null)
   const [appId, setAppId] = useState<string|null>(null)
   const [unread, setUnread] = useState(0)
+  type MyApply = { id: string, place: string, date: string, type: string, status: string, statusColor: string, statusBg: string }
+  const [myApplies, setMyApplies] = useState<MyApply[]>([])
+
+  const statusMap: Record<string, { label: string, color: string, bg: string }> = {
+    pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' },
+    approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' },
+    rejected: { label: '否認', color: '#DC2626', bg: '#FEE2E2' },
+  }
+
+  // ログイン中ユーザーの申込一覧を読み込む
+  const loadApplies = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const { data } = await supabase
+      .from('applications')
+      .select('id, apply_date, format, status, places(title)')
+      .eq('seller_id', uid)
+      .order('created_at', { ascending: false })
+    if (!data) return
+    const mapped: MyApply[] = data.map((a: any) => {
+      const s = statusMap[a.status] || { label: a.status, color: '#555', bg: '#F3F4F6' }
+      return {
+        id: a.id,
+        place: a.places?.title || '(案件名なし)',
+        date: a.apply_date || '日付未定',
+        type: a.format || '-',
+        status: s.label,
+        statusColor: s.color,
+        statusBg: s.bg,
+      }
+    })
+    setMyApplies(mapped)
+  }
 
   // ログイン中ユーザーの最初の申込に紐づくメッセージを読み込む
   const loadMessages = async () => {
@@ -108,7 +142,7 @@ export default function SellerDashboard() {
     loadMessages()
   }
 
-  useEffect(() => { loadMessages() }, [])
+  useEffect(() => { loadMessages(); loadApplies() }, [])
 
   const navItems = [
     { key: 'home', icon: '🏠', label: 'ホーム' },
@@ -193,11 +227,11 @@ export default function SellerDashboard() {
                     <div style={{ fontWeight: '700', fontSize: '13px' }}>📋 最近の申込</div>
                     <button onClick={() => setTab('applies')} style={{ background: 'none', border: 'none', color: '#3A9BD5', fontSize: '12px', cursor: 'pointer' }}>すべて見る</button>
                   </div>
-                  {applies.slice(0,3).map((a,i) => (
+                  {myApplies.slice(0,3).map((a,i) => (
                     <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 18px', borderBottom: i<2 ? '1px solid #F1F5F9' : 'none' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>{a.place}</div>
-                        <div style={{ fontSize: '11px', color: '#64748B' }}>{a.date} ／ {a.plan}</div>
+                        <div style={{ fontSize: '11px', color: '#64748B' }}>{a.date} ／ {a.type}</div>
                       </div>
                       <span style={{ fontSize: '10px', fontWeight: '700', padding: '3px 8px', borderRadius: '20px', background: a.statusBg, color: a.statusColor, flexShrink: 0 }}>{a.status}</span>
                     </div>
@@ -237,15 +271,14 @@ export default function SellerDashboard() {
                 ))}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {applies.map(a => (
+                {myApplies.map(a => (
                   <div key={a.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', background: '#EBF6FD', color: '#1D4ED8' }}>{a.area}</span>
                         <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', background: '#F1F5F9', color: '#64748B' }}>{a.type}</span>
                       </div>
                       <div style={{ fontSize: '14px', fontWeight: '700', marginBottom: '4px' }}>{a.place}</div>
-                      <div style={{ fontSize: '12px', color: '#64748B' }}>📅 {a.date} ／ ⏰ {a.time} ／ 💰 {a.plan}</div>
+                      <div style={{ fontSize: '12px', color: '#64748B' }}>📅 {a.date}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: a.statusBg, color: a.statusColor }}>{a.status}</span>
