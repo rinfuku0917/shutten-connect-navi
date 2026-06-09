@@ -56,9 +56,10 @@ export default function PlaceDetail() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setEntryErr('ログインが必要です'); setSubmitting(false); return }
     // 選んだ日ごとに1行ずつ申込を作成（日付が無い案件は1件だけ作成）
-    const rows = dates.length > 0
-      ? dates.map(d => ({ place_id: id, seller_id: user.id, format, apply_date: d, status: '申込中' }))
-      : [{ place_id: id, seller_id: user.id, format, apply_date: null, status: '申込中' }]
+    const rows: { place_id: string; seller_id: string; format: string; apply_date: string | null; status: string }[] =
+      dates.length > 0
+        ? dates.map(d => ({ place_id: id, seller_id: user.id, format, apply_date: d, status: '申込中' }))
+        : [{ place_id: id, seller_id: user.id, format, apply_date: null, status: '申込中' }]
     const { error } = await supabase.from('applications').insert(rows)
     if (error) { setEntryErr('エントリー失敗: ' + error.message); setSubmitting(false); return }
     setSubmitting(false)
