@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
 type Place = {
@@ -23,6 +23,40 @@ export default function PlaceDetail() {
   const id = params?.id as string
   const [place, setPlace] = useState<Place | null>(null)
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const [showEntry, setShowEntry] = useState(false)
+  const [format, setFormat] = useState('')
+  const [entryDate, setEntryDate] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [entryErr, setEntryErr] = useState('')
+  const [entryDone, setEntryDone] = useState(false)
+
+  const handleEntryClick = async () => {
+    setEntryErr('')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'seller') { router.push('/login'); return }
+    setShowEntry(true)
+  }
+
+  const submitEntry = async () => {
+    setEntryErr('')
+    if (!format) { setEntryErr('出店形式を選択してください'); return }
+    setSubmitting(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setEntryErr('ログインが必要です'); setSubmitting(false); return }
+    const { error } = await supabase.from('applications').insert({
+      place_id: id,
+      seller_id: user.id,
+      format: format,
+      apply_date: entryDate || null,
+      status: '申込中',
+    })
+    if (error) { setEntryErr('エントリー失敗: ' + error.message); setSubmitting(false); return }
+    setSubmitting(false)
+    setEntryDone(true)
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -118,15 +152,47 @@ export default function PlaceDetail() {
                 <div style={{ color: '#fff', fontWeight: '900', fontSize: '15px' }}>この案件に出店する</div>
               </div>
               <div style={{ padding: '20px' }}>
-                <div style={{ fontSize: '13px', color: '#888', marginBottom: '16px', lineHeight: 1.7 }}>
-                  会員登録すると全ての情報を確認できます！
-                </div>
-                <Link href="/login" style={{ display: 'block', background: '#3A9BD5', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', textDecoration: 'none', marginBottom: '10px' }}>
-                  詳細を確認・エントリーする
-                </Link>
-                <Link href="/register" style={{ display: 'block', border: '2px solid #F5A623', color: '#E08A00', textAlign: 'center', padding: '12px', borderRadius: '8px', fontWeight: '700', fontSize: '13px', textDecoration: 'none' }}>
-                  新規会員登録はこちら(無料)
-                </Link>
+                {entryDone ? (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '40px', marginBottom: '10px' }}>🎉</div>
+                    <div style={{ fontSize: '15px', fontWeight: '900', color: '#16A34A', marginBottom: '8px' }}>エントリーが完了しました</div>
+                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '16px', lineHeight: 1.7 }}>申込内容はマイページでご確認いただけます。</div>
+                    <Link href="/dashboard/seller" style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', textDecoration: 'none' }}>マイページへ</Link>
+                  </div>
+                ) : !showEntry ? (
+                  <>
+                    <div style={{ fontSize: '13px', color: '#888', marginBottom: '16px', lineHeight: 1.7 }}>
+                      出店者ログイン後、この案件にエントリーできます。
+                    </div>
+                    <button onClick={handleEntryClick} style={{ width: '100%', display: 'block', background: '#3A9BD5', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', border: 'none', cursor: 'pointer', marginBottom: '10px' }}>
+                      この案件にエントリーする
+                    </button>
+                    <Link href="/register" style={{ display: 'block', border: '2px solid #F5A623', color: '#E08A00', textAlign: 'center', padding: '12px', borderRadius: '8px', fontWeight: '700', fontSize: '13px', textDecoration: 'none' }}>
+                      新規会員登録はこちら(無料)
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', marginBottom: '14px' }}>出店形式を選択してください</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
+                      {['キッチンカー', 'テント'].map(opt => (
+                        <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', border: format === opt ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '12px 14px', fontSize: '14px', color: '#1a1a1a', background: format === opt ? '#FFFBEB' : '#fff' }}>
+                          <input type="radio" name="format" checked={format === opt} onChange={() => setFormat(opt)} style={{ accentColor: '#F5A623' }} />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', marginBottom: '8px' }}>出店希望日（任意）</div>
+                    <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} style={{ width: '100%', border: '1px solid #E5C07B', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', marginBottom: '16px', boxSizing: 'border-box', color: '#1a1a1a', background: '#fff' }} />
+                    {entryErr && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px', fontSize: '13px', color: '#DC2626', marginBottom: '12px' }}>{entryErr}</div>}
+                    <button onClick={submitEntry} disabled={submitting} style={{ width: '100%', background: submitting ? '#ccc' : '#3A9BD5', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', marginBottom: '8px' }}>
+                      {submitting ? '送信中...' : 'エントリーする'}
+                    </button>
+                    <button onClick={() => setShowEntry(false)} style={{ width: '100%', background: 'transparent', color: '#888', textAlign: 'center', padding: '8px', borderRadius: '8px', fontWeight: '700', fontSize: '13px', border: 'none', cursor: 'pointer' }}>
+                      キャンセル
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
