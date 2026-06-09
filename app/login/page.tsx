@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'seller'|'host'>('seller')
+  const [tab, setTab] = useState<'seller'|'host'|'admin'>('seller')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -26,9 +26,14 @@ export default function LoginPage() {
         setError('このアカウントは出店者として登録されていません。募集者の方は「募集者ログイン」をお選びください。')
         setLoading(false); return
       }
-      if(tab === 'host' && role !== 'host' && role !== 'admin') {
+      if(tab === 'host' && role !== 'host') {
         await supabase.auth.signOut()
         setError('このアカウントは募集者として登録されていません。出店者の方は「出店者ログイン」をお選びください。')
+        setLoading(false); return
+      }
+      if(tab === 'admin' && role !== 'admin') {
+        await supabase.auth.signOut()
+        setError('このアカウントは管理者として登録されていません。')
         setLoading(false); return
       }
       if(role === 'host') router.push('/dashboard/host')
@@ -50,10 +55,13 @@ export default function LoginPage() {
             <button onClick={()=>setTab('host')} style={{flex:1,padding:'16px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='host'?'2px solid #F5A623':'2px solid transparent',color:tab==='host'?'#F5A623':'#888'}}>
               募集者ログイン
             </button>
+            <button onClick={()=>setTab('admin')} style={{flex:1,padding:'16px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='admin'?'2px solid #F5A623':'2px solid transparent',color:tab==='admin'?'#F5A623':'#888'}}>
+              管理者ログイン
+            </button>
           </div>
           <div style={{padding:'32px'}}>
             <h1 style={{fontSize:'20px',fontWeight:'900',marginBottom:'24px',textAlign:'center',color:'#1a1a1a'}}>
-              {tab==='seller'?'出店者':'募集者'}としてログイン
+              {tab==='seller'?'出店者':tab==='host'?'募集者':'管理者'}としてログイン
             </h1>
             {error && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:'8px',padding:'12px',fontSize:'13px',color:'#DC2626',marginBottom:'16px'}}>{error}</div>}
             <div style={{marginBottom:'16px'}}>
