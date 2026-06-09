@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
@@ -21,13 +21,64 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs'>('dashboard')
   const [editPlace, setEditPlace] = useState<typeof dummyPlaces[0] | null>(null)
   const [sellers, setSellers] = useState(dummySellers)
   const [csvPreview, setCsvPreview] = useState<string[][]>([])
   const [csvImported, setCsvImported] = useState(false)
   const [showNewPlace, setShowNewPlace] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // ===== 書類審査（管理者） =====
+  type DocReview = { id: string, seller_id: string, doc_type: string, file_url: string, status: string, uploaded_at: string, sellerName: string }
+  const [docReviews, setDocReviews] = useState<DocReview[]>([])
+  const [docsLoading, setDocsLoading] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+  const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', other_permit: 'その他許可証' }
+
+  // 管理者ガード：admin以外は追い出す
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'admin') { router.push('/login'); return }
+      setAuthChecked(true)
+    }
+    checkAdmin()
+  }, [router])
+
+  // 全出店者の提出書類を読み込む
+  const loadDocReviews = async () => {
+    setDocsLoading(true)
+    const { data } = await supabase
+      .from('seller_documents')
+      .select('id, seller_id, doc_type, file_url, status, uploaded_at, profiles(name)')
+      .order('uploaded_at', { ascending: false })
+    const mapped: DocReview[] = (data || []).map((d: any) => ({
+      id: d.id, seller_id: d.seller_id, doc_type: d.doc_type, file_url: d.file_url,
+      status: d.status, uploaded_at: d.uploaded_at, sellerName: d.profiles?.name || '(出店者)'
+    }))
+    setDocReviews(mapped)
+    setDocsLoading(false)
+  }
+
+  // docsタブを開いたら読み込む
+  useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews() }, [tab, authChecked])
+
+  // 書類のプレビュー（署名付きURLを新規タブで開く）
+  const previewDoc = async (fileUrl: string) => {
+    const { data, error } = await supabase.storage.from('seller-documents').createSignedUrl(fileUrl, 60)
+    if (error || !data) { alert('プレビューURLの生成に失敗しました: ' + (error?.message || '')); return }
+    window.open(data.signedUrl, '_blank')
+  }
+
+  // 承認/否認
+  const reviewDoc = async (id: string, status: 'approved' | 'rejected') => {
+    const { error } = await supabase.from('seller_documents').update({ status }).eq('id', id)
+    if (error) { alert('更新失敗: ' + error.message); return }
+    loadDocReviews()
+  }
 
   const stats = [
     { label: '総出店者数', value: '3,410', icon: '👤', color: '#F5A623' },
@@ -80,6 +131,7 @@ export default function AdminPage() {
             { key: 'dashboard', icon: '📊', label: 'ダッシュボード' },
             { key: 'places', icon: '📋', label: '案件管理' },
             { key: 'sellers', icon: '👥', label: '出店者管理' },
+            { key: 'docs', icon: '📂', label: '書類審査' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
           ].map((item) => (
             <div
@@ -111,6 +163,7 @@ export default function AdminPage() {
             {tab === 'places' && '案件管理'}
             {tab === 'sellers' && '出店者管理'}
             {tab === 'csv' && 'CSVインポート'}
+            {tab === 'docs' && '書類審査'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', color: '#B45309', fontSize: '12px' }}>管</div>
@@ -342,6 +395,52 @@ export default function AdminPage() {
           )}
 
           {/* ===== CSVインポート ===== */}
+          {tab === 'docs' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <p style={{ fontSize: '13px', color: '#64748B' }}>出店者が提出した書類を確認し、承認または否認します。</p>
+                <button onClick={loadDocReviews} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>🔄 更新</button>
+              </div>
+              <div className='admin-table-wrap' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+                      {['出店者', '書類種別', '提出日時', 'ステータス', '操作'].map(h => (
+                        <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748B' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {docsLoading ? (
+                      <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>
+                    ) : docReviews.length === 0 ? (
+                      <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#999' }}>提出された書類はまだありません。</td></tr>
+                    ) : docReviews.map(d => {
+                      const meta = ({ approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' }, pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' }, rejected: { label: '否認', color: '#DC2626', bg: '#FEE2E2' } } as Record<string, { label: string, color: string, bg: string }>)[d.status] || { label: d.status, color: '#555', bg: '#F1F5F9' }
+                      return (
+                        <tr key={d.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                          <td style={{ padding: '12px 14px', fontWeight: '600' }}>{d.sellerName}</td>
+                          <td style={{ padding: '12px 14px' }}>{docTypeLabels[d.doc_type] || d.doc_type}</td>
+                          <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{new Date(d.uploaded_at).toLocaleString('ja-JP')}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: meta.bg, color: meta.color }}>{meta.label}</span>
+                          </td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <button onClick={() => previewDoc(d.file_url)} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>👁️ 確認</button>
+                              <button onClick={() => reviewDoc(d.id, 'approved')} style={{ background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
+                              <button onClick={() => { if (window.confirm('この書類を否認しますか？')) reviewDoc(d.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>否認</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {tab === 'csv' && (
             <>
               <div style={{ background: '#EBF6FD', border: '1px solid #93C5FD', borderRadius: '10px', padding: '14px 18px', marginBottom: '20px', fontSize: '13px', color: '#1D4ED8', lineHeight: 1.8 }}>
