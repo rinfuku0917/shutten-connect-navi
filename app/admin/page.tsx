@@ -230,9 +230,9 @@ export default function AdminPage() {
           {/* ===== 案件管理 ===== */}
           {tab === 'places' && (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input type="text" placeholder="🔍 案件名・エリアで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', width: '220px' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
+                  <input type="text" placeholder="🔍 案件名・エリアで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
                   <select style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none' }}>
                     <option>すべてのステータス</option>
                     <option>公開中</option>
@@ -336,9 +336,9 @@ export default function AdminPage() {
           {/* ===== 出店者管理 ===== */}
           {tab === 'sellers' && (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input type="text" placeholder="🔍 出店者名・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', width: '240px' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
+                  <input type="text" placeholder="🔍 出店者名・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
                   <select style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none' }}>
                     <option>すべて</option><option>承認済</option><option>審査中</option>
                   </select>
