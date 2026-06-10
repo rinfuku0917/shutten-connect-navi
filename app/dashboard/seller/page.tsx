@@ -387,10 +387,10 @@ export default function SellerDashboard() {
         </div>
         <div className='admin-sidebar-head' style={{ padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#F5A623', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '900', color: '#fff', flexShrink: 0 }}>山</div>
+            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#F5A623', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '900', color: '#fff', flexShrink: 0 }}>{profileForm.name ? profileForm.name.charAt(0) : '出'}</div>
             <div>
-              <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff' }}>山田 花子</div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>Hana's Sweets</div>
+              <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff' }}>{profileForm.name || '（未設定）'}</div>
+              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{profileForm.shop_name || ''}</div>
             </div>
           </div>
         </div>
