@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
+import { geocodeAddress } from '../../../../lib/geocode'
 
 export default function EditPlacePage() {
   const params = useParams()
@@ -73,11 +74,14 @@ export default function EditPlacePage() {
       imageUrl = pub.publicUrl
     }
 
+    const geo = await geocodeAddress((form.prefecture || '') + (form.address || ''))
     const { error: updErr } = await supabase.from('places').update({
       title: form.title,
       description: form.summary,
       prefecture: form.prefecture,
       address: form.address,
+      latitude: geo?.lat ?? null,
+      longitude: geo?.lon ?? null,
       place_type: form.type,
       fee: form.fee,
       map_url: form.mapUrl,

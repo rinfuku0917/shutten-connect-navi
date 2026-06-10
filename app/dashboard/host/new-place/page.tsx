@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
+import { geocodeAddress } from '../../../lib/geocode'
 
 export default function NewPlacePage() {
   const [form, setForm] = useState({
@@ -48,6 +49,7 @@ export default function NewPlacePage() {
       imageUrl = pub.publicUrl
     }
 
+    const geo = await geocodeAddress((form.prefecture || '') + (form.address || ''))
     const { error: insErr } = await supabase.from('places').insert({
       host_id: user.id,
       title: form.title,
@@ -60,6 +62,8 @@ export default function NewPlacePage() {
       recruit: form['募集内容'],
       schedule: schedule,
       image_url: imageUrl,
+      latitude: geo?.lat ?? null,
+      longitude: geo?.lon ?? null,
       status: 'published',
     })
     if(insErr) { setErrMsg('登録失敗: ' + insErr.message); setSaving(false); return }
