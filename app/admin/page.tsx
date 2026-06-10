@@ -21,7 +21,7 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales'>('dashboard')
   const [editPlace, setEditPlace] = useState<typeof dummyPlaces[0] | null>(null)
   const [sellers, setSellers] = useState(dummySellers)
   const [csvPreview, setCsvPreview] = useState<string[][]>([])
@@ -46,7 +46,7 @@ export default function AdminPage() {
       if (profile?.role !== 'admin') { router.push('/admin/login'); return }
       try {
         const saved = localStorage.getItem('adminTab')
-        if (saved && ['dashboard','places','sellers','csv','docs'].includes(saved)) {
+        if (saved && ['dashboard','places','sellers','csv','docs','sales'].includes(saved)) {
           setTab(saved as typeof tab)
         }
       } catch {}
@@ -72,6 +72,86 @@ export default function AdminPage() {
 
   // docsタブを開いたら読み込む
   useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews() }, [tab, authChecked])
+
+  // ===== 売上管理（管理者） =====
+  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, placeTitle: string, sellerName: string }
+  const [sales, setSales] = useState<SaleRow[]>([])
+  const [salesLoading, setSalesLoading] = useState(false)
+  // 売上入力フォーム
+  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number }
+  const [approvedApps, setApprovedApps] = useState<ApprovedApp[]>([])
+  const [saleAppId, setSaleAppId] = useState('')
+  const [saleDate, setSaleDate] = useState('')
+  const [saleRevenue, setSaleRevenue] = useState('')
+  const [saleSaving, setSaleSaving] = useState(false)
+  const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
+
+  // 出店料を計算（定額 + 売上×％）
+  const calcFee = (revenue: number, priceFixed: number, pricePct: number) => {
+    return Math.round((priceFixed || 0) + revenue * (pricePct || 0) / 100)
+  }
+
+  // 承認済み申込を読み込む（売上を記録できる対象）
+  const loadApprovedApps = async () => {
+    const { data } = await supabase
+      .from('applications')
+      .select('id, place_id, seller_id, places(title, price_fixed, price_share_pct), profiles(name)')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+    const mapped: ApprovedApp[] = (data || []).map((a: any) => ({
+      application_id: a.id, place_id: a.place_id, seller_id: a.seller_id,
+      placeTitle: a.places?.title || '(案件名なし)', sellerName: a.profiles?.name || '(出店者)',
+      price_fixed: a.places?.price_fixed || 0, price_share_pct: a.places?.price_share_pct || 0
+    }))
+    setApprovedApps(mapped)
+  }
+
+  // 指定月の売上一覧を読み込む
+  const loadSales = async () => {
+    setSalesLoading(true)
+    const start = saleMonth + '-01'
+    const [y, m] = saleMonth.split('-').map(Number)
+    const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
+    const { data } = await supabase
+      .from('sales')
+      .select('id, place_id, seller_id, sale_date, revenue, fee, places(title), profiles(name)')
+      .gte('sale_date', start).lt('sale_date', end)
+      .order('sale_date', { ascending: false })
+    const mapped: SaleRow[] = (data || []).map((s: any) => ({
+      id: s.id, place_id: s.place_id, seller_id: s.seller_id, sale_date: s.sale_date,
+      revenue: s.revenue, fee: s.fee, placeTitle: s.places?.title || '(案件名なし)', sellerName: s.profiles?.name || '(出店者)'
+    }))
+    setSales(mapped)
+    setSalesLoading(false)
+  }
+
+  // 売上を保存
+  const saveSale = async () => {
+    if (!saleAppId || !saleDate || !saleRevenue) { alert('案件・日付・売上金額をすべて入力してください'); return }
+    const app = approvedApps.find(a => a.application_id === saleAppId)
+    if (!app) { alert('対象の申込が見つかりません'); return }
+    const revenue = parseInt(saleRevenue, 10)
+    if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
+    setSaleSaving(true)
+    const fee = calcFee(revenue, app.price_fixed, app.price_share_pct)
+    const { error } = await supabase.from('sales').insert({
+      application_id: app.application_id, place_id: app.place_id, seller_id: app.seller_id,
+      sale_date: saleDate, revenue, fee
+    })
+    if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
+    setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleSaving(false)
+    loadSales()
+  }
+
+  const deleteSale = async (id: string) => {
+    const { error } = await supabase.from('sales').delete().eq('id', id)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    loadSales()
+  }
+
+  // salesタブを開いたら読み込む
+  useEffect(() => { if (tab === 'sales' && authChecked) { loadApprovedApps(); loadSales() } }, [tab, authChecked])
+  useEffect(() => { if (tab === 'sales' && authChecked) loadSales() }, [saleMonth])
 
   // 書類のプレビュー（署名付きURLを新規タブで開く）
   const previewDoc = async (fileUrl: string) => {
@@ -145,6 +225,8 @@ export default function AdminPage() {
             { key: 'places', icon: '📋', label: '案件管理' },
             { key: 'sellers', icon: '👥', label: '出店者管理' },
             { key: 'docs', icon: '📂', label: '書類審査' },
+            { key: 'sales', icon: '💰', label: '売上管理' },
+            { key: 'sales', icon: '💰', label: '売上管理' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
           ].map((item) => (
             <div
@@ -177,6 +259,7 @@ export default function AdminPage() {
             {tab === 'sellers' && '出店者管理'}
             {tab === 'csv' && 'CSVインポート'}
             {tab === 'docs' && '書類審査'}
+            {tab === 'sales' && '売上管理'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', color: '#B45309', fontSize: '12px' }}>管</div>
@@ -448,6 +531,91 @@ export default function AdminPage() {
                         </tr>
                       )
                     })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {tab === 'sales' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+                <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>承認済みの出店者の売上を案件・日付ごとに記録し、利益（売上−出店料）を集計します。</p>
+                <input type='month' value={saleMonth} onChange={e => setSaleMonth(e.target.value)} style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', flexShrink: 0 }} />
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '20px' }}>
+                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '14px', color: '#B45309' }}>💰 売上を記録</div>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: '2 1 200px', minWidth: 0 }}>
+                    <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>案件・出店者</label>
+                    <select value={saleAppId} onChange={e => setSaleAppId(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', background: '#fff' }}>
+                      <option value=''>選択してください</option>
+                      {approvedApps.map(a => (
+                        <option key={a.application_id} value={a.application_id}>{a.placeTitle}／{a.sellerName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+                    <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>売上日</label>
+                    <input type='date' value={saleDate} onChange={e => setSaleDate(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+                    <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>売上金額（円）</label>
+                    <input type='number' value={saleRevenue} onChange={e => setSaleRevenue(e.target.value)} placeholder='50000' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <button onClick={saveSale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{saleSaving ? '保存中...' : '記録する'}</button>
+                </div>
+                {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a.price_fixed, a.price_share_pct); return (
+                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B' }}>出店料の計算：定額{a.price_fixed.toLocaleString()}円 ＋ 売上{rev.toLocaleString()}円 × {a.price_share_pct}% = <strong style={{ color: '#1a1a1a' }}>{fee.toLocaleString()}円</strong> ／ 利益 <strong style={{ color: '#16A34A' }}>{(rev - fee).toLocaleString()}円</strong></div>
+                ) })()}
+              </div>
+
+              <div className='admin-stats' style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '14px', marginBottom: '20px' }}>
+                {(() => {
+                  const totalRev = sales.reduce((s, r) => s + r.revenue, 0)
+                  const totalFee = sales.reduce((s, r) => s + r.fee, 0)
+                  const cards = [
+                    { label: '月の売上', value: totalRev, color: '#F5A623' },
+                    { label: '出店料（手数料）', value: totalFee, color: '#3A9BD5' },
+                    { label: '利益（売上−出店料）', value: totalRev - totalFee, color: '#16A34A' },
+                  ]
+                  return cards.map(card => (
+                    <div key={card.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px' }}>{card.label}</div>
+                      <div style={{ fontSize: '20px', fontWeight: '900', color: card.color }}>¥{card.value.toLocaleString()}</div>
+                    </div>
+                  ))
+                })()}
+              </div>
+
+              <div className='admin-table-wrap' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr>
+                      {['売上日', '案件', '出店者', '売上', '出店料', '利益', ''].map(h => (
+                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: '600', borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesLoading ? (
+                      <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>
+                    ) : sales.length === 0 ? (
+                      <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>この月の売上記録はまだありません。</td></tr>
+                    ) : sales.map((s, i) => (
+                      <tr key={s.id} style={{ borderBottom: i < sales.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{s.sale_date}</td>
+                        <td style={{ padding: '10px 14px' }}>{s.placeTitle}</td>
+                        <td style={{ padding: '10px 14px' }}>{s.sellerName}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{s.fee.toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.revenue - s.fee).toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <button onClick={() => { if (window.confirm('この売上記録を削除しますか？')) deleteSale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
