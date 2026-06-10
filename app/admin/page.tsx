@@ -124,6 +124,12 @@ export default function AdminPage() {
     setCsvImported(true)
   }
 
+  if (!authChecked) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: '14px' }}>読み込み中...</div>
+    )
+  }
+
   return (
     <div className='admin-shell' style={{ minHeight: '100vh', background: '#F1F5F9', display: 'flex' }}>
       {/* サイドバー */}
