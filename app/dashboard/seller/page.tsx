@@ -119,7 +119,7 @@ export default function SellerDashboard() {
   const saveProfile = async () => {
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
-    if (!uid) { alert('ログイン情報が取得できません（このブラウザで未ログインの可能性）'); return }
+    if (!uid) return
     setProfileSaving(true)
     const areasArr = areasInput.split(/[・,、]/).map(s => s.trim()).filter(Boolean)
     const payload = {
