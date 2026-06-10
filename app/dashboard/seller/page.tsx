@@ -122,27 +122,32 @@ export default function SellerDashboard() {
     if (!uid) return
     setProfileSaving(true)
     const areasArr = areasInput.split(/[・,、]/).map(s => s.trim()).filter(Boolean)
-    const { error: pErr } = await supabase.from('profiles').update({
+    const payload = {
+      id: uid,
       name: profileForm.name, shop_name: profileForm.shop_name, email: profileForm.email,
       phone: profileForm.phone, genre: profileForm.genre, address: profileForm.address,
       areas: areasArr,
-    }).eq('id', uid)
+    }
+    const { data: pData, error: pErr } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' }).select()
     if (pErr) { alert('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
-    // SNS：platform単位でupsert/削除
+    if (!pData || pData.length === 0) { alert('保存できませんでした（権限設定をご確認ください）'); setProfileSaving(false); return }
     const platforms: { key: keyof SnsLinks, name: string }[] = [
       { key: 'instagram', name: 'instagram' }, { key: 'twitter', name: 'twitter' },
       { key: 'youtube', name: 'youtube' }, { key: 'tiktok', name: 'tiktok' },
     ]
     for (const pf of platforms) {
       const url = snsForm[pf.key].trim()
-      await supabase.from('sns_links').delete().eq('seller_id', uid).eq('platform', pf.name)
+      const { error: dErr } = await supabase.from('sns_links').delete().eq('seller_id', uid).eq('platform', pf.name)
+      if (dErr) { alert('SNS保存失敗(' + pf.name + '): ' + dErr.message); setProfileSaving(false); return }
       if (url) {
-        await supabase.from('sns_links').insert({ seller_id: uid, platform: pf.name, url })
+        const { error: iErr } = await supabase.from('sns_links').insert({ seller_id: uid, platform: pf.name, url })
+        if (iErr) { alert('SNS保存失敗(' + pf.name + '): ' + iErr.message); setProfileSaving(false); return }
       }
     }
     setProfileSaving(false)
     setProfileEdit(false)
-    loadProfile()
+    await loadProfile()
+    alert('プロフィールを保存しました')
   }
 
   const statusMap: Record<string, { label: string, color: string, bg: string }> = {
