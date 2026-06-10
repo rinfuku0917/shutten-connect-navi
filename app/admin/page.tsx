@@ -226,7 +226,6 @@ export default function AdminPage() {
             { key: 'sellers', icon: '👥', label: '出店者管理' },
             { key: 'docs', icon: '📂', label: '書類審査' },
             { key: 'sales', icon: '💰', label: '売上管理' },
-            { key: 'sales', icon: '💰', label: '売上管理' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
           ].map((item) => (
             <div
