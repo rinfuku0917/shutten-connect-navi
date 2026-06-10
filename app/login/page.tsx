@@ -19,10 +19,13 @@ export default function LoginPage() {
     const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
     if(err) { setError('メールアドレスまたはパスワードが正しくありません'); setLoading(false); return }
     if(data.user) {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
-      const role = profile?.role
-      alert('デバッグ: profile=' + JSON.stringify(profile) + ' / tab=' + tab)
-      alert('デバッグ: profile=' + JSON.stringify(profile) + ' / tab=' + tab)
+      // ログイン直後はセッション反映前にRLSで0行になることがあるため、取れなければ少し待ってリトライ
+      let role: string | undefined
+      for (let i = 0; i < 5; i++) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle()
+        if (profile?.role) { role = profile.role; break }
+        await new Promise(res => setTimeout(res, 300))
+      }
       if(tab === 'seller' && role !== 'seller') {
         await supabase.auth.signOut()
         setError('このアカウントは出店者として登録されていません。募集者の方は「募集者ログイン」をお選びください。')
