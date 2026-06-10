@@ -117,6 +117,7 @@ export default function SellerDashboard() {
 
   // プロフィール保存
   const saveProfile = async () => {
+    alert('保存ボタンが押されました（デバッグ）')
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     if (!uid) return
