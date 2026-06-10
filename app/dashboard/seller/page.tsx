@@ -41,8 +41,8 @@ const docStatusLabel = (s: string | undefined) =>
 
 export default function SellerDashboard() {
   const router = useRouter()
-  type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'
-  const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile']
+  type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'|'sales'
+  const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile','sales']
   const getInitialTab = (): TabKey => {
     if (typeof window === 'undefined') return 'home'
     const t = new URLSearchParams(window.location.search).get('tab')
@@ -65,6 +65,82 @@ export default function SellerDashboard() {
     pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' },
     approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' },
     rejected: { label: '否認', color: '#DC2626', bg: '#FEE2E2' },
+  }
+
+  // ===== 売上（出店者） =====
+  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number }
+  type SellerSale = { id: string, sale_date: string, placeTitle: string, revenue: number, fee: number }
+  const [myApprovedApps, setMyApprovedApps] = useState<SellerApp[]>([])
+  const [mySales, setMySales] = useState<SellerSale[]>([])
+  const [saleAppId, setSaleAppId] = useState('')
+  const [saleDate, setSaleDate] = useState('')
+  const [saleRevenue, setSaleRevenue] = useState('')
+  const [saleSaving, setSaleSaving] = useState(false)
+  const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
+  const calcFee = (revenue: number, priceFixed: number, pricePct: number) => Math.round(revenue * (pricePct/100) + (priceFixed||0))
+
+  // 自分の承認済み案件を読み込む
+  const loadMyApprovedApps = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const { data } = await supabase
+      .from('applications')
+      .select('id, place_id, places(title, price_fixed, price_share_pct)')
+      .eq('seller_id', uid).eq('status', 'approved')
+      .order('created_at', { ascending: false })
+    const mapped: SellerApp[] = (data || []).map((a: any) => ({
+      application_id: a.id, place_id: a.place_id,
+      placeTitle: a.places?.title || '(案件名なし)',
+      price_fixed: a.places?.price_fixed || 0, price_share_pct: a.places?.price_share_pct || 0,
+    }))
+    setMyApprovedApps(mapped)
+  }
+
+  // 自分の指定月の売上を読み込む
+  const loadMySales = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const start = saleMonth + '-01'
+    const [y, m] = saleMonth.split('-').map(Number)
+    const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
+    const { data } = await supabase
+      .from('sales')
+      .select('id, sale_date, revenue, fee, places(title)')
+      .eq('seller_id', uid).gte('sale_date', start).lt('sale_date', end)
+      .order('sale_date', { ascending: false })
+    const mapped: SellerSale[] = (data || []).map((s: any) => ({
+      id: s.id, sale_date: s.sale_date, revenue: s.revenue, fee: s.fee,
+      placeTitle: s.places?.title || '(案件名なし)',
+    }))
+    setMySales(mapped)
+  }
+
+  // 自分の売上を保存
+  const saveMySale = async () => {
+    if (!saleAppId || !saleDate || !saleRevenue) { alert('案件・日付・売上金額をすべて入力してください'); return }
+    const app = myApprovedApps.find(x => x.application_id === saleAppId)
+    if (!app) { alert('案件が選択されていません'); return }
+    const revenue = parseInt(saleRevenue, 10)
+    if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
+    setSaleSaving(true)
+    const fee = calcFee(revenue, app.price_fixed, app.price_share_pct)
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    const { error } = await supabase.from('sales').insert({
+      application_id: app.application_id, place_id: app.place_id, seller_id: uid,
+      sale_date: saleDate, revenue, fee
+    })
+    if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
+    setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleSaving(false)
+    loadMySales()
+  }
+
+  const deleteMySale = async (id: string) => {
+    const { error } = await supabase.from('sales').delete().eq('id', id)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    loadMySales()
   }
 
   // ログイン中ユーザーの申込一覧を読み込む
@@ -168,6 +244,13 @@ export default function SellerDashboard() {
     if (tab === 'messages') { loadMessages(); setChatOpen('main') }
   }, [tab])
 
+  useEffect(() => {
+    if (tab === 'sales') { loadMyApprovedApps(); loadMySales() }
+  }, [tab])
+  useEffect(() => {
+    if (tab === 'sales') loadMySales()
+  }, [saleMonth])
+
   // メッセージを送信する
   const sendMessage = async () => {
     const text = msg.trim()
@@ -188,6 +271,7 @@ export default function SellerDashboard() {
     { key: 'calendar', icon: '📅', label: 'カレンダー' },
     { key: 'messages', icon: '💬', label: 'メッセージ', badge: unread > 0 ? unread : undefined },
     { key: 'docs', icon: '📁', label: '書類管理' },
+    { key: 'sales', icon: '💰', label: '売上報告' },
     { key: 'profile', icon: '👤', label: 'プロフィール' },
   ]
 
@@ -232,6 +316,7 @@ export default function SellerDashboard() {
             {tab === 'calendar' && '出店カレンダー'}
             {tab === 'messages' && 'メッセージ'}
             {tab === 'docs' && '書類管理'}
+            {tab === 'sales' && '売上報告'}
             {tab === 'profile' && 'プロフィール'}
           </div>
           <Link href="/places" style={{ background: '#F5A623', color: '#fff', borderRadius: '8px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>＋ 新しい案件を探す</Link>
@@ -486,6 +571,86 @@ export default function SellerDashboard() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* 売上報告 */}
+          {tab === 'sales' && (
+            <>
+              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
+                <span>💰</span><span>承認された案件ごとに売上を入力すると、出店料（出店コネクトナビへのお支払い額）とあなたの利益（手取り）が自動計算されます。</span>
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '16px' }}>
+                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>📝 売上を入力</div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>案件</div>
+                    <select value={saleAppId} onChange={e => setSaleAppId(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', background: '#fff' }}>
+                      <option value=''>選択してください</option>
+                      {myApprovedApps.map(a => (<option key={a.application_id} value={a.application_id}>{a.placeTitle}</option>))}
+                    </select>
+                  </div>
+                  <div style={{ flex: '0 1 160px' }}>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上日</div>
+                    <input type='date' value={saleDate} onChange={e => setSaleDate(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
+                  </div>
+                  <div style={{ flex: '0 1 140px' }}>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上金額（円）</div>
+                    <input type='number' value={saleRevenue} onChange={e => setSaleRevenue(e.target.value)} placeholder='50000' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
+                  </div>
+                  <button onClick={saveMySale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{saleSaving ? '保存中...' : '記録する'}</button>
+                </div>
+                {saleAppId && (() => { const a = myApprovedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a.price_fixed, a.price_share_pct); return (
+                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B' }}>売上{rev.toLocaleString()}円 − 出店料{fee.toLocaleString()}円（税別・出店コネクトナビへ）＝ あなたの利益 <strong style={{ color: '#16A34A' }}>{(rev - fee).toLocaleString()}円</strong></div>
+                ) })()}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '14px', marginBottom: '20px' }}>
+                {(() => {
+                  const totalRev = mySales.reduce((s, r) => s + r.revenue, 0)
+                  const totalFee = mySales.reduce((s, r) => s + r.fee, 0)
+                  const cards = [
+                    { label: '月の売上', value: totalRev, color: '#F5A623' },
+                    { label: '出店料（お支払い・税別）', value: totalFee, color: '#3A9BD5' },
+                    { label: 'あなたの利益（手取り）', value: totalRev - totalFee, color: '#16A34A' },
+                  ]
+                  return cards.map(card => (
+                    <div key={card.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px' }}>{card.label}</div>
+                      <div style={{ fontSize: '20px', fontWeight: '900', color: card.color }}>¥{card.value.toLocaleString()}</div>
+                    </div>
+                  ))
+                })()}
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr>
+                      {['売上日', '案件', '売上', '出店料(税別)', 'あなたの利益', ''].map(h => (
+                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: '600', borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mySales.length === 0 ? (
+                      <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>この月の売上記録はまだありません。</td></tr>
+                    ) : mySales.map((s, i) => (
+                      <tr key={s.id} style={{ borderBottom: i < mySales.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{s.sale_date}</td>
+                        <td style={{ padding: '10px 14px' }}>{s.placeTitle}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{s.fee.toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.revenue - s.fee).toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <button onClick={() => { if (window.confirm('この売上記録を削除しますか？')) deleteMySale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>
