@@ -54,6 +54,8 @@ export default function SellerDashboard() {
   const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
   const [myId, setMyId] = useState<string|null>(null)
   const [appId, setAppId] = useState<string|null>(null)
+  type MsgThread = { application_id: string, placeTitle: string, lastBody: string, unread: number }
+  const [threads, setThreads] = useState<MsgThread[]>([])
   const [unread, setUnread] = useState(0)
   type MyApply = { id: string, place: string, date: string, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
@@ -201,7 +203,7 @@ export default function SellerDashboard() {
     loadDocs()
   }
 
-  // ログイン中ユーザーの最初の申込に紐づくメッセージを読み込む
+  // 自分の全申込のスレッド一覧を構築する
   const loadMessages = async () => {
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
@@ -209,28 +211,40 @@ export default function SellerDashboard() {
     setMyId(uid)
     const { data: apps } = await supabase
       .from('applications')
-      .select('id')
+      .select('id, places(title)')
       .eq('seller_id', uid)
       .order('created_at', { ascending: false })
-      .limit(1)
-    const firstAppId = apps?.[0]?.id
-    if (!firstAppId) return
-    setAppId(firstAppId)
     const { data: msgs } = await supabase
       .from('messages')
       .select('id, application_id, sender_id, body, sent_at, read_at')
-      .eq('application_id', firstAppId)
+      .order('sent_at', { ascending: true })
+    const all = (msgs || []) as DbMessage[]
+    const list: MsgThread[] = (apps || []).map((a: any) => {
+      const mine = all.filter(m => m.application_id === a.id)
+      const last = mine.length > 0 ? mine[mine.length - 1].body : 'メッセージはまだありません'
+      const un = mine.filter(m => m.sender_id !== uid && !m.read_at).length
+      return { application_id: a.id, placeTitle: a.places?.title || '(案件名なし)', lastBody: last, unread: un }
+    })
+    setThreads(list)
+    setUnread(list.reduce((s, t) => s + t.unread, 0))
+  }
+
+  // スレッド（案件）を開いてメッセージ取得＋既読化
+  const openThread = async (aid: string) => {
+    setAppId(aid)
+    setChatOpen(aid)
+    const uid = myId
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .eq('application_id', aid)
       .order('sent_at', { ascending: true })
     if (msgs) setDbMessages(msgs as DbMessage[])
-    const cnt = (msgs || []).filter(m => m.sender_id !== uid && !m.read_at).length
-    setUnread(cnt)
-    // メッセージタブを開いているなら、その場で既読にする
-    const onMessages = new URL(window.location.href).searchParams.get('tab') === 'messages'
-    if (onMessages && cnt > 0) {
+    if (uid) {
       await supabase.from('messages').update({ read_at: new Date().toISOString() })
-        .eq('application_id', firstAppId).neq('sender_id', uid).is('read_at', null)
-      setUnread(0)
+        .eq('application_id', aid).neq('sender_id', uid).is('read_at', null)
     }
+    loadMessages()
   }
 
   // タブが変わったらURLの ?tab= を更新（リロードしても同じタブを保つ）
@@ -241,7 +255,7 @@ export default function SellerDashboard() {
   }, [tab])
 
   useEffect(() => {
-    if (tab === 'messages') { loadMessages(); setChatOpen('main') }
+    if (tab === 'messages') { loadMessages(); setChatOpen(null) }
   }, [tab])
 
   useEffect(() => {
@@ -260,7 +274,7 @@ export default function SellerDashboard() {
       .insert({ application_id: appId, sender_id: myId, body: text })
     if (error) { alert('送信に失敗しました: ' + error.message); return }
     setMsg('')
-    loadMessages()
+    openThread(appId)
   }
 
   useEffect(() => { loadMessages(); loadApplies(); loadDocs() }, [])
@@ -406,7 +420,7 @@ export default function SellerDashboard() {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: a.statusBg, color: a.statusColor }}>{a.status}</span>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button onClick={() => { setTab('messages'); setChatOpen(a.place) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>💬 連絡</button>
+                        <button onClick={() => { setTab('messages'); openThread(a.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>💬 連絡</button>
                         {a.status === '否認' && <button style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #F5A623', borderRadius: '6px', background: '#FFF8E1', color: '#B45309', cursor: 'pointer' }}>再申込</button>}
                       </div>
                     </div>
@@ -462,16 +476,23 @@ export default function SellerDashboard() {
             <div className='admin-two-col seller-msg-grid' style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '0', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden', minHeight: '500px' }}>
               <div style={{ borderRight: '1px solid #E2E8F0' }}>
                 <div style={{ padding: '12px 14px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', background: '#FFF8E1', color: '#B45309' }}>メッセージ</div>
-                <div onClick={() => setChatOpen('main')}
-                  style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: chatOpen === 'main' ? '#FFF8E1' : '#fff', borderLeft: chatOpen === 'main' ? '3px solid #F5A623' : '3px solid transparent' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#1a1a1a' }}>運営とのやり取り</div>
-                  <div style={{ fontSize: '11px', color: '#64748B', marginTop: '3px' }}>{dbMessages.length > 0 ? dbMessages[dbMessages.length-1].body : 'メッセージはまだありません'}</div>
-                </div>
+                {threads.length === 0 ? (
+                  <div style={{ padding: '24px 14px', textAlign: 'center', color: '#999', fontSize: '12px' }}>承認済みの案件がありません。</div>
+                ) : threads.map(t => (
+                  <div key={t.application_id} onClick={() => openThread(t.application_id)}
+                    style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: appId === t.application_id ? '#FFF8E1' : '#fff', borderLeft: appId === t.application_id ? '3px solid #F5A623' : '3px solid transparent' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.placeTitle}</span>
+                      {t.unread > 0 && <span style={{ background: '#DC2626', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '10px', fontWeight: '700', flexShrink: 0 }}>{t.unread}</span>}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.lastBody}</div>
+                  </div>
+                ))}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {chatOpen ? (
                   <>
-                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>運営とのやり取り</div>
+                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>{threads.find(t => t.application_id === appId)?.placeTitle || '案件'}｜運営とのやり取り</div>
                     <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC' }}>
                       {dbMessages.length === 0 ? (
                         <div style={{ color: '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>まだメッセージがありません</div>
