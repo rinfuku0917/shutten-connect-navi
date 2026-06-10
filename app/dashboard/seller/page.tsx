@@ -464,14 +464,14 @@ export default function SellerDashboard() {
                 <div style={{ padding: '12px 14px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', background: '#FFF8E1', color: '#B45309' }}>メッセージ</div>
                 <div onClick={() => setChatOpen('main')}
                   style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: chatOpen === 'main' ? '#FFF8E1' : '#fff', borderLeft: chatOpen === 'main' ? '3px solid #F5A623' : '3px solid transparent' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#1a1a1a' }}>募集者とのやり取り</div>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#1a1a1a' }}>運営とのやり取り</div>
                   <div style={{ fontSize: '11px', color: '#64748B', marginTop: '3px' }}>{dbMessages.length > 0 ? dbMessages[dbMessages.length-1].body : 'メッセージはまだありません'}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {chatOpen ? (
                   <>
-                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>募集者とのやり取り</div>
+                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>運営とのやり取り</div>
                     <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC' }}>
                       {dbMessages.length === 0 ? (
                         <div style={{ color: '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>まだメッセージがありません</div>
