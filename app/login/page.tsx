@@ -22,6 +22,7 @@ export default function LoginPage() {
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
       const role = profile?.role
       alert('デバッグ: profile=' + JSON.stringify(profile) + ' / tab=' + tab)
+      alert('デバッグ: profile=' + JSON.stringify(profile) + ' / tab=' + tab)
       if(tab === 'seller' && role !== 'seller') {
         await supabase.auth.signOut()
         setError('このアカウントは出店者として登録されていません。募集者の方は「募集者ログイン」をお選びください。')
