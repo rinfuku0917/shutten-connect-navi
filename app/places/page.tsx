@@ -1,36 +1,90 @@
 'use client'
 import Link from 'next/link'
 import Nav from '../components/Nav'
-import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { geocodeAddress } from '../lib/geocode'
+
+// 地図はSSRでLeafletを読むと壊れるのでクライアントのみで読み込む
+const PlacesMap = dynamic(() => import('../components/PlacesMap'), {
+  ssr: false,
+  loading: () => <div style={{ height: '420px', width: '100%', borderRadius: '12px', background: '#EEE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '13px' }}>地図を読み込み中...</div>
+})
 
 type Place = {
   id: string
   title: string
   prefecture: string | null
+  address: string | null
   fee: string | null
   place_type: string | null
+  genres: string[] | null
   image_url: string | null
+  latitude: number | null
+  longitude: number | null
 }
-
 
 export default function PlacesPage() {
   const [places, setPlaces] = useState<Place[]>([])
   const [loading, setLoading] = useState(true)
+  const [kw, setKw] = useState('')
+  const [pref, setPref] = useState('')
+  const [genre, setGenre] = useState('')
+
+  // 物件読み込み
+  const load = async () => {
+    const { data } = await supabase
+      .from('places')
+      .select('id, title, prefecture, address, fee, place_type, genres, image_url, latitude, longitude')
+      .eq('status', 'published')
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+    setPlaces(data || [])
+    setLoading(false)
+    return data || []
+  }
 
   useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase
-        .from('places')
-        .select('id, title, prefecture, fee, place_type, image_url')
-        .eq('status', 'published')
-        .order('pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-      setPlaces(data || [])
-      setLoading(false)
-    }
-    load()
+    load().then(geocodeMissing)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 緯度経度が空の物件を、開いたときに1秒間隔で自動ジオコーディングして保存（ボタン不要）
+  const geocodeMissing = async (list: Place[]) => {
+    const missing = list.filter(p => (p.latitude == null || p.longitude == null) && (p.prefecture || p.address))
+    for (const p of missing) {
+      const geo = await geocodeAddress((p.prefecture || '') + (p.address || ''))
+      if (geo) {
+        await supabase.from('places').update({ latitude: geo.lat, longitude: geo.lon }).eq('id', p.id)
+        setPlaces(prev => prev.map(x => x.id === p.id ? { ...x, latitude: geo.lat, longitude: geo.lon } : x))
+      }
+      await new Promise(res => setTimeout(res, 1000)) // Nominatimは1秒1リクエスト
+    }
+  }
+
+  // 都道府県・ジャンルの選択肢を物件から自動生成
+  const prefList = useMemo(() => Array.from(new Set(places.map(p => p.prefecture).filter(Boolean))) as string[], [places])
+  const genreList = useMemo(() => Array.from(new Set(places.flatMap(p => p.genres || []).filter(Boolean))) as string[], [places])
+
+  // 検索フィルタ適用
+  const filtered = useMemo(() => places.filter(p => {
+    if (pref && p.prefecture !== pref) return false
+    if (genre && !(p.genres || []).includes(genre)) return false
+    if (kw) {
+      const hay = ((p.title || '') + (p.prefecture || '') + (p.address || '') + (p.fee || '')).toLowerCase()
+      if (!hay.includes(kw.toLowerCase())) return false
+    }
+    return true
+  }), [places, pref, genre, kw])
+
+  // 地図用ピン（緯度経度ありのみ）
+  const pins = useMemo(() => filtered
+    .filter(p => p.latitude != null && p.longitude != null)
+    .map(p => ({ id: p.id, title: p.title, prefecture: p.prefecture, fee: p.fee, latitude: p.latitude as number, longitude: p.longitude as number })),
+    [filtered])
+
+  const selectStyle = { padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #E2E8F0', fontSize: '13px', color: '#1a1a1a', background: '#fff', minWidth: '140px' }
 
   return (
     <div style={{background:'#FFF8F0',minHeight:'100vh'}}>
@@ -40,10 +94,36 @@ export default function PlacesPage() {
         <p style={{fontSize:'14px',color:'rgba(255,255,255,0.9)'}}>全国の出店スペースから理想の場所を見つけよう</p>
       </div>
       <div style={{maxWidth:'900px',margin:'0 auto',padding:'32px 16px'}}>
+
+        {/* 検索フィルタ */}
+        <div style={{ background:'#fff', border:'1px solid #e0e0e0', borderRadius:'12px', padding:'16px', marginBottom:'20px', display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center' }}>
+          <input value={kw} onChange={e=>setKw(e.target.value)} placeholder='キーワード（場所名・住所など）' style={{ ...selectStyle, flex:'1 1 200px' }} />
+          <select value={pref} onChange={e=>setPref(e.target.value)} style={selectStyle}>
+            <option value=''>都道府県（すべて）</option>
+            {prefList.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select value={genre} onChange={e=>setGenre(e.target.value)} style={selectStyle}>
+            <option value=''>ジャンル（すべて）</option>
+            {genreList.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+          {(kw || pref || genre) && (
+            <button onClick={()=>{setKw('');setPref('');setGenre('')}} style={{ padding:'10px 14px', borderRadius:'8px', border:'1.5px solid #E2E8F0', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#64748B' }}>クリア</button>
+          )}
+        </div>
+
+        {/* 地図 */}
+        <div style={{ marginBottom:'24px' }}>
+          <PlacesMap pins={pins} />
+          {pins.length === 0 && !loading && (
+            <div style={{ fontSize:'12px', color:'#999', marginTop:'8px', textAlign:'center' }}>地図に表示できる場所がありません（位置情報を取得中の場合があります）。</div>
+          )}
+        </div>
+
+        {/* カード一覧 */}
         <div style={{display:'grid',gap:'16px'}}>
           {loading && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>読み込み中...</div>}
-          {!loading && places.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>掲載中の出店場所はまだありません。</div>}
-          {places.map(place => (
+          {!loading && filtered.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>条件に合う出店場所が見つかりませんでした。</div>}
+          {filtered.map(place => (
             <Link key={place.id} href={'/places/' + place.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',overflow:'hidden',color:'inherit'}}>
               <div style={{height:'160px',background:'#F5A623',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',backgroundImage:place.image_url?`url(${place.image_url})`:undefined,backgroundSize:'cover',backgroundPosition:'center'}}>
                 {!place.image_url && (place.place_type==='event'?'🎪':'🏪')}
