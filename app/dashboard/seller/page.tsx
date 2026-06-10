@@ -128,7 +128,7 @@ export default function SellerDashboard() {
       phone: profileForm.phone, genre: profileForm.genre, address: profileForm.address,
       areas: areasArr,
     }
-    const { data: pData, error: pErr } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' }).select()
+    const { data: pData, error: pErr } = await supabase.from('profiles').update(payload).eq('id', uid).select()
     if (pErr) { alert('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
     if (!pData || pData.length === 0) { alert('保存できませんでした（権限設定をご確認ください）'); setProfileSaving(false); return }
     const platforms: { key: keyof SnsLinks, name: string }[] = [
