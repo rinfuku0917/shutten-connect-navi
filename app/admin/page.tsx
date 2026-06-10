@@ -214,70 +214,7 @@ export default function AdminPage() {
   // messagesタブを開いたら読み込む
   useEffect(() => { if (tab === 'messages' && authChecked) loadThreads() }, [tab, authChecked])
 
-  // ===== メッセージ（管理者）=====
-  type MsgThread = { application_id: string, sellerName: string, placeTitle: string, lastBody: string, unread: number }
-  type AdminMsg = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null }
-  const [threads, setThreads] = useState<MsgThread[]>([])
-  const [activeThread, setActiveThread] = useState<string | null>(null)
-  const [threadMsgs, setThreadMsgs] = useState<AdminMsg[]>([])
-  const [adminUid, setAdminUid] = useState<string | null>(null)
-  const [adminMsgInput, setAdminMsgInput] = useState('')
 
-  // 全スレッド（承認済み案件）を読み込む
-  const loadThreads = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const uid = session?.user?.id || null
-    setAdminUid(uid)
-    const { data: apps } = await supabase
-      .from('applications')
-      .select('id, seller_id, places(title), profiles(name)')
-      .eq('status', 'approved')
-      .order('created_at', { ascending: false })
-    const { data: msgs } = await supabase
-      .from('messages')
-      .select('id, application_id, sender_id, body, sent_at, read_at')
-      .order('sent_at', { ascending: true })
-    const all = (msgs || []) as AdminMsg[]
-    const list: MsgThread[] = (apps || []).map((a: any) => {
-      const mine = all.filter(m => m.application_id === a.id)
-      const last = mine.length > 0 ? mine[mine.length - 1].body : 'メッセージはまだありません'
-      const unread = mine.filter(m => m.sender_id !== uid && !m.read_at).length
-      return { application_id: a.id, sellerName: a.profiles?.name || '(出店者)', placeTitle: a.places?.title || '(案件名なし)', lastBody: last, unread }
-    })
-    setThreads(list)
-  }
-
-  // 選択スレッドのメッセージを読み込み、既読化する
-  const openThread = async (appId: string) => {
-    setActiveThread(appId)
-    const { data: msgs } = await supabase
-      .from('messages')
-      .select('id, application_id, sender_id, body, sent_at, read_at')
-      .eq('application_id', appId)
-      .order('sent_at', { ascending: true })
-    setThreadMsgs((msgs || []) as AdminMsg[])
-    // 相手（出店者）からの未読を既読化
-    if (adminUid) {
-      await supabase.from('messages').update({ read_at: new Date().toISOString() })
-        .eq('application_id', appId).neq('sender_id', adminUid).is('read_at', null)
-    }
-  }
-
-  // 管理者として返信を送信
-  const sendAdminMsg = async () => {
-    if (!adminMsgInput.trim() || !activeThread || !adminUid) return
-    const body = adminMsgInput.trim()
-    const { error } = await supabase.from('messages').insert({
-      application_id: activeThread, sender_id: adminUid, body
-    })
-    if (error) { alert('送信失敗: ' + error.message); return }
-    setAdminMsgInput('')
-    openThread(activeThread)
-    loadThreads()
-  }
-
-  // messagesタブを開いたら読み込む
-  useEffect(() => { if (tab === 'messages' && authChecked) loadThreads() }, [tab, authChecked])
 
   // salesタブを開いたら読み込む
   useEffect(() => { if (tab === 'sales' && authChecked) { loadApprovedApps(); loadSales() } }, [tab, authChecked])
