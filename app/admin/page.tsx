@@ -39,10 +39,11 @@ export default function AdminPage() {
   // 管理者ガード：admin以外は追い出す
   useEffect(() => {
     const checkAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      if (!user) { router.push('/admin/login'); return }
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (profile?.role !== 'admin') { router.push('/login'); return }
+      if (profile?.role !== 'admin') { router.push('/admin/login'); return }
       try {
         const saved = localStorage.getItem('adminTab')
         if (saved && ['dashboard','places','sellers','csv','docs'].includes(saved)) {
