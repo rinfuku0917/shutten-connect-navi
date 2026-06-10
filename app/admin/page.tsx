@@ -21,7 +21,7 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages'>('dashboard')
   const [editPlace, setEditPlace] = useState<typeof dummyPlaces[0] | null>(null)
   const [sellers, setSellers] = useState(dummySellers)
   const [csvPreview, setCsvPreview] = useState<string[][]>([])
@@ -46,7 +46,7 @@ export default function AdminPage() {
       if (profile?.role !== 'admin') { router.push('/admin/login'); return }
       try {
         const saved = localStorage.getItem('adminTab')
-        if (saved && ['dashboard','places','sellers','csv','docs','sales'].includes(saved)) {
+        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages'].includes(saved)) {
           setTab(saved as typeof tab)
         }
       } catch {}
@@ -149,6 +149,136 @@ export default function AdminPage() {
     loadSales()
   }
 
+  // ===== メッセージ（管理者）=====
+  type MsgThread = { application_id: string, sellerName: string, placeTitle: string, lastBody: string, unread: number }
+  type AdminMsg = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null }
+  const [threads, setThreads] = useState<MsgThread[]>([])
+  const [activeThread, setActiveThread] = useState<string | null>(null)
+  const [threadMsgs, setThreadMsgs] = useState<AdminMsg[]>([])
+  const [adminUid, setAdminUid] = useState<string | null>(null)
+  const [adminMsgInput, setAdminMsgInput] = useState('')
+
+  // 全スレッド（承認済み案件）を読み込む
+  const loadThreads = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const uid = session?.user?.id || null
+    setAdminUid(uid)
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('id, seller_id, places(title), profiles(name)')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .order('sent_at', { ascending: true })
+    const all = (msgs || []) as AdminMsg[]
+    const list: MsgThread[] = (apps || []).map((a: any) => {
+      const mine = all.filter(m => m.application_id === a.id)
+      const last = mine.length > 0 ? mine[mine.length - 1].body : 'メッセージはまだありません'
+      const unread = mine.filter(m => m.sender_id !== uid && !m.read_at).length
+      return { application_id: a.id, sellerName: a.profiles?.name || '(出店者)', placeTitle: a.places?.title || '(案件名なし)', lastBody: last, unread }
+    })
+    setThreads(list)
+  }
+
+  // 選択スレッドのメッセージを読み込み、既読化する
+  const openThread = async (appId: string) => {
+    setActiveThread(appId)
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .eq('application_id', appId)
+      .order('sent_at', { ascending: true })
+    setThreadMsgs((msgs || []) as AdminMsg[])
+    // 相手（出店者）からの未読を既読化
+    if (adminUid) {
+      await supabase.from('messages').update({ read_at: new Date().toISOString() })
+        .eq('application_id', appId).neq('sender_id', adminUid).is('read_at', null)
+    }
+  }
+
+  // 管理者として返信を送信
+  const sendAdminMsg = async () => {
+    if (!adminMsgInput.trim() || !activeThread || !adminUid) return
+    const body = adminMsgInput.trim()
+    const { error } = await supabase.from('messages').insert({
+      application_id: activeThread, sender_id: adminUid, body
+    })
+    if (error) { alert('送信失敗: ' + error.message); return }
+    setAdminMsgInput('')
+    openThread(activeThread)
+    loadThreads()
+  }
+
+  // messagesタブを開いたら読み込む
+  useEffect(() => { if (tab === 'messages' && authChecked) loadThreads() }, [tab, authChecked])
+
+  // ===== メッセージ（管理者）=====
+  type MsgThread = { application_id: string, sellerName: string, placeTitle: string, lastBody: string, unread: number }
+  type AdminMsg = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null }
+  const [threads, setThreads] = useState<MsgThread[]>([])
+  const [activeThread, setActiveThread] = useState<string | null>(null)
+  const [threadMsgs, setThreadMsgs] = useState<AdminMsg[]>([])
+  const [adminUid, setAdminUid] = useState<string | null>(null)
+  const [adminMsgInput, setAdminMsgInput] = useState('')
+
+  // 全スレッド（承認済み案件）を読み込む
+  const loadThreads = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const uid = session?.user?.id || null
+    setAdminUid(uid)
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('id, seller_id, places(title), profiles(name)')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .order('sent_at', { ascending: true })
+    const all = (msgs || []) as AdminMsg[]
+    const list: MsgThread[] = (apps || []).map((a: any) => {
+      const mine = all.filter(m => m.application_id === a.id)
+      const last = mine.length > 0 ? mine[mine.length - 1].body : 'メッセージはまだありません'
+      const unread = mine.filter(m => m.sender_id !== uid && !m.read_at).length
+      return { application_id: a.id, sellerName: a.profiles?.name || '(出店者)', placeTitle: a.places?.title || '(案件名なし)', lastBody: last, unread }
+    })
+    setThreads(list)
+  }
+
+  // 選択スレッドのメッセージを読み込み、既読化する
+  const openThread = async (appId: string) => {
+    setActiveThread(appId)
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .eq('application_id', appId)
+      .order('sent_at', { ascending: true })
+    setThreadMsgs((msgs || []) as AdminMsg[])
+    // 相手（出店者）からの未読を既読化
+    if (adminUid) {
+      await supabase.from('messages').update({ read_at: new Date().toISOString() })
+        .eq('application_id', appId).neq('sender_id', adminUid).is('read_at', null)
+    }
+  }
+
+  // 管理者として返信を送信
+  const sendAdminMsg = async () => {
+    if (!adminMsgInput.trim() || !activeThread || !adminUid) return
+    const body = adminMsgInput.trim()
+    const { error } = await supabase.from('messages').insert({
+      application_id: activeThread, sender_id: adminUid, body
+    })
+    if (error) { alert('送信失敗: ' + error.message); return }
+    setAdminMsgInput('')
+    openThread(activeThread)
+    loadThreads()
+  }
+
+  // messagesタブを開いたら読み込む
+  useEffect(() => { if (tab === 'messages' && authChecked) loadThreads() }, [tab, authChecked])
+
   // salesタブを開いたら読み込む
   useEffect(() => { if (tab === 'sales' && authChecked) { loadApprovedApps(); loadSales() } }, [tab, authChecked])
   useEffect(() => { if (tab === 'sales' && authChecked) loadSales() }, [saleMonth])
@@ -226,6 +356,7 @@ export default function AdminPage() {
             { key: 'sellers', icon: '👥', label: '出店者管理' },
             { key: 'docs', icon: '📂', label: '書類審査' },
             { key: 'sales', icon: '💰', label: '売上管理' },
+            { key: 'messages', icon: '💬', label: 'メッセージ' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
           ].map((item) => (
             <div
@@ -259,6 +390,7 @@ export default function AdminPage() {
             {tab === 'csv' && 'CSVインポート'}
             {tab === 'docs' && '書類審査'}
             {tab === 'sales' && '売上管理'}
+            {tab === 'messages' && 'メッセージ'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', color: '#B45309', fontSize: '12px' }}>管</div>
@@ -617,6 +749,55 @@ export default function AdminPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {tab === 'messages' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '16px', height: 'calc(100vh - 180px)' }}>
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflowY: 'auto' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>出店者一覧（案件ごと）</div>
+                {threads.length === 0 ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#999', fontSize: '13px' }}>承認済みの案件がありません。</div>
+                ) : threads.map(t => (
+                  <div key={t.application_id} onClick={() => openThread(t.application_id)}
+                    style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: activeThread === t.application_id ? '#FFF8E1' : '#fff', borderLeft: activeThread === t.application_id ? '3px solid #F5A623' : '3px solid transparent' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '700', color: '#1a1a1a' }}>{t.sellerName}</span>
+                      {t.unread > 0 && <span style={{ background: '#DC2626', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '10px', fontWeight: '700' }}>{t.unread}</span>}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>{t.placeTitle}</div>
+                    <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.lastBody}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column' }}>
+                {activeThread ? (
+                  <>
+                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>{threads.find(t => t.application_id === activeThread)?.sellerName || '出店者'} とのやり取り</div>
+                    <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC', overflowY: 'auto' }}>
+                      {threadMsgs.length === 0 ? (
+                        <div style={{ color: '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>まだメッセージがありません</div>
+                      ) : threadMsgs.map(m => (
+                        m.sender_id === adminUid ? (
+                          <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
+                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>{m.body}</div>
+                          </div>
+                        ) : (
+                          <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
+                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a' }}>{m.body}</div>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', gap: '8px' }}>
+                      <input value={adminMsgInput} onChange={e => setAdminMsgInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendAdminMsg() }} placeholder="メッセージを入力..." style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
+                      <button onClick={sendAdminMsg} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>送信</button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '14px' }}>左の一覧から出店者を選んでください</div>
+                )}
               </div>
             </div>
           )}
