@@ -539,7 +539,7 @@ export default function AdminPage() {
           {tab === 'sales' && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
-                <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>承認済みの出店者の売上を案件・日付ごとに記録し、利益（売上−出店料）を集計します。</p>
+                <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者の売上を記録すると、出店料（＝弊社の利益／出店コネクトナビへのお支払い額）を自動集計します。出店料は売上×料率（税別）で計算します。</p>
                 <input type='month' value={saleMonth} onChange={e => setSaleMonth(e.target.value)} style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', flexShrink: 0 }} />
               </div>
 
@@ -566,7 +566,7 @@ export default function AdminPage() {
                   <button onClick={saveSale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
                 {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a.price_fixed, a.price_share_pct); return (
-                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B' }}>出店料の計算：定額{a.price_fixed.toLocaleString()}円 ＋ 売上{rev.toLocaleString()}円 × {a.price_share_pct}% = <strong style={{ color: '#1a1a1a' }}>{fee.toLocaleString()}円</strong> ／ 利益 <strong style={{ color: '#16A34A' }}>{(rev - fee).toLocaleString()}円</strong></div>
+                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B' }}>出店料（税別）：定額{a.price_fixed.toLocaleString()}円 ＋ 売上{rev.toLocaleString()}円 × {a.price_share_pct}% = <strong style={{ color: '#1a1a1a' }}>{fee.toLocaleString()}円</strong> ／ 税込 <strong style={{ color: '#16A34A' }}>{Math.round(fee * 1.1).toLocaleString()}円</strong>（弊社の利益）</div>
                 ) })()}
               </div>
 
@@ -575,9 +575,9 @@ export default function AdminPage() {
                   const totalRev = sales.reduce((s, r) => s + r.revenue, 0)
                   const totalFee = sales.reduce((s, r) => s + r.fee, 0)
                   const cards = [
-                    { label: '月の売上', value: totalRev, color: '#F5A623' },
-                    { label: '出店料（手数料）', value: totalFee, color: '#3A9BD5' },
-                    { label: '利益（売上−出店料）', value: totalRev - totalFee, color: '#16A34A' },
+                    { label: '出店者総売上（参考）', value: totalRev, color: '#F5A623' },
+                    { label: '出店料 税別（弊社の利益）', value: totalFee, color: '#3A9BD5' },
+                    { label: '出店料 税込（お支払い総額）', value: Math.round(totalFee * 1.1), color: '#16A34A' },
                   ]
                   return cards.map(card => (
                     <div key={card.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0' }}>
@@ -592,7 +592,7 @@ export default function AdminPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                   <thead>
                     <tr>
-                      {['売上日', '案件', '出店者', '売上', '出店料', '利益', ''].map(h => (
+                      {['売上日', '案件', '出店者', '売上', '出店料(税別)', '出店料(税込)', ''].map(h => (
                         <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: '600', borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -609,7 +609,7 @@ export default function AdminPage() {
                         <td style={{ padding: '10px 14px' }}>{s.sellerName}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{s.fee.toLocaleString()}</td>
-                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.revenue - s.fee).toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{Math.round(s.fee * 1.1).toLocaleString()}</td>
                         <td style={{ padding: '10px 14px' }}>
                           <button onClick={() => { if (window.confirm('この売上記録を削除しますか？')) deleteSale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
                         </td>
