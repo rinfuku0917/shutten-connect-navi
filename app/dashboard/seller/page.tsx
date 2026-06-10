@@ -63,6 +63,88 @@ export default function SellerDashboard() {
   const [myDocs, setMyDocs] = useState<DocRow[]>([])
   const [uploadingType, setUploadingType] = useState<string | null>(null)
 
+  // ===== プロフィール（出店者） =====
+  type ProfileData = { name: string, shop_name: string, email: string, phone: string, genre: string, address: string, areas: string[] }
+  type SnsLinks = { instagram: string, twitter: string, youtube: string, tiktok: string }
+  const emptyProfile: ProfileData = { name: '', shop_name: '', email: '', phone: '', genre: '', address: '', areas: [] }
+  const emptySns: SnsLinks = { instagram: '', twitter: '', youtube: '', tiktok: '' }
+  const [profile, setProfile] = useState<ProfileData>(emptyProfile)
+  const [snsLinks, setSnsLinks] = useState<SnsLinks>(emptySns)
+  const [profileEdit, setProfileEdit] = useState(false)
+  const [profileForm, setProfileForm] = useState<ProfileData>(emptyProfile)
+  const [snsForm, setSnsForm] = useState<SnsLinks>(emptySns)
+  const [areasInput, setAreasInput] = useState('')
+  const [profileSaving, setProfileSaving] = useState(false)
+
+  // 自分のプロフィールとSNSを読み込む
+  const loadProfile = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const { data: p } = await supabase
+      .from('profiles')
+      .select('name, shop_name, email, phone, genre, address, areas')
+      .eq('id', uid).single()
+    if (p) {
+      const pd: ProfileData = {
+        name: p.name || '', shop_name: p.shop_name || '', email: p.email || '',
+        phone: p.phone || '', genre: p.genre || '', address: p.address || '',
+        areas: Array.isArray(p.areas) ? p.areas : [],
+      }
+      setProfile(pd)
+    }
+    const { data: links } = await supabase
+      .from('sns_links')
+      .select('platform, url')
+      .eq('seller_id', uid)
+    const sns: SnsLinks = { instagram: '', twitter: '', youtube: '', tiktok: '' }
+    ;(links || []).forEach((l: any) => {
+      if (l.platform === 'instagram') sns.instagram = l.url || ''
+      else if (l.platform === 'twitter') sns.twitter = l.url || ''
+      else if (l.platform === 'youtube') sns.youtube = l.url || ''
+      else if (l.platform === 'tiktok') sns.tiktok = l.url || ''
+    })
+    setSnsLinks(sns)
+  }
+
+  // 編集開始：表示値をフォームにコピー
+  const startProfileEdit = () => {
+    setProfileForm(profile)
+    setSnsForm(snsLinks)
+    setAreasInput(profile.areas.join('・'))
+    setProfileEdit(true)
+  }
+
+  // プロフィール保存
+  const saveProfile = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    setProfileSaving(true)
+    const areasArr = areasInput.split(/[・,、]/).map(s => s.trim()).filter(Boolean)
+    const { error: pErr } = await supabase.from('profiles').update({
+      name: profileForm.name, shop_name: profileForm.shop_name, email: profileForm.email,
+      phone: profileForm.phone, genre: profileForm.genre, address: profileForm.address,
+      areas: areasArr,
+    }).eq('id', uid)
+    if (pErr) { alert('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
+    // SNS：platform単位でupsert/削除
+    const platforms: { key: keyof SnsLinks, name: string }[] = [
+      { key: 'instagram', name: 'instagram' }, { key: 'twitter', name: 'twitter' },
+      { key: 'youtube', name: 'youtube' }, { key: 'tiktok', name: 'tiktok' },
+    ]
+    for (const pf of platforms) {
+      const url = snsForm[pf.key].trim()
+      await supabase.from('sns_links').delete().eq('seller_id', uid).eq('platform', pf.name)
+      if (url) {
+        await supabase.from('sns_links').insert({ seller_id: uid, platform: pf.name, url })
+      }
+    }
+    setProfileSaving(false)
+    setProfileEdit(false)
+    loadProfile()
+  }
+
   const statusMap: Record<string, { label: string, color: string, bg: string }> = {
     pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' },
     approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' },
@@ -277,7 +359,7 @@ export default function SellerDashboard() {
     openThread(appId)
   }
 
-  useEffect(() => { loadMessages(); loadApplies(); loadDocs() }, [])
+  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile() }, [])
 
   const navItems = [
     { key: 'home', icon: '🏠', label: 'ホーム' },
@@ -558,38 +640,78 @@ export default function SellerDashboard() {
             <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
                 <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>👤 基本情報</div>
-                {[
-                  { label: '氏名', value: '山田 花子' },
-                  { label: '店舗名', value: "Hana's Sweets" },
-                  { label: 'メール', value: 'hanako@example.com' },
-                  { label: '電話番号', value: '090-1234-5678' },
-                  { label: 'ジャンル', value: '焼き菓子・スイーツ' },
-                  { label: '活動エリア', value: '東京都・神奈川県' },
-                ].map(f => (
-                  <div key={f.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
-                    <div style={{ width: '100px', fontSize: '12px', color: '#64748B', flexShrink: 0 }}>{f.label}</div>
-                    <div style={{ fontSize: '13px', fontWeight: '500' }}>{f.value}</div>
-                  </div>
-                ))}
-                <button style={{ marginTop: '16px', width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>✏️ 編集する</button>
+                {!profileEdit ? (
+                  <>
+                    {[
+                      { label: '氏名', value: profile.name || '未設定' },
+                      { label: '店舗名', value: profile.shop_name || '未設定' },
+                      { label: 'メール', value: profile.email || '未設定' },
+                      { label: '電話番号', value: profile.phone || '未設定' },
+                      { label: 'ジャンル', value: profile.genre || '未設定' },
+                      { label: '活動エリア', value: profile.areas.length > 0 ? profile.areas.join('・') : '未設定' },
+                    ].map(fld => (
+                      <div key={fld.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+                        <div style={{ width: '100px', fontSize: '12px', color: '#64748B', flexShrink: 0 }}>{fld.label}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '500', color: fld.value === '未設定' ? '#94A3B8' : '#1a1a1a' }}>{fld.value}</div>
+                      </div>
+                    ))}
+                    <button onClick={startProfileEdit} style={{ marginTop: '16px', width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>✏️ 編集する</button>
+                  </>
+                ) : (
+                  <>
+                    {[
+                      { label: '氏名', key: 'name', ph: '例：山田 花子' },
+                      { label: '店舗名', key: 'shop_name', ph: "例：Hana's Sweets" },
+                      { label: 'メール', key: 'email', ph: '例：hanako@example.com' },
+                      { label: '電話番号', key: 'phone', ph: '例：090-1234-5678' },
+                      { label: 'ジャンル', key: 'genre', ph: '例：焼き菓子・スイーツ' },
+                    ].map(fld => (
+                      <div key={fld.key} style={{ marginBottom: '12px' }}>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{fld.label}</div>
+                        <input value={(profileForm as any)[fld.key]} onChange={e => setProfileForm({ ...profileForm, [fld.key]: e.target.value })} placeholder={fld.ph} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                      </div>
+                    ))}
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>活動エリア（「・」や「,」区切りで複数可）</div>
+                      <input value={areasInput} onChange={e => setAreasInput(e.target.value)} placeholder='例：東京都・神奈川県' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button onClick={() => setProfileEdit(false)} disabled={profileSaving} style={{ flex: 1, background: '#fff', color: '#64748B', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>キャンセル</button>
+                      <button onClick={saveProfile} disabled={profileSaving} style={{ flex: 2, background: profileSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: profileSaving ? 'not-allowed' : 'pointer' }}>{profileSaving ? '保存中...' : '保存する'}</button>
+                    </div>
+                  </>
+                )}
               </div>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
                 <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>📱 SNS・メディア</div>
-                {[
-                  { label: 'Instagram', value: '@hana_sweets', icon: '📸' },
-                  { label: 'X（Twitter）', value: '@hana_sweets_jp', icon: '🐦' },
-                  { label: 'YouTube', value: '未設定', icon: '▶️' },
-                  { label: 'TikTok', value: '未設定', icon: '🎵' },
-                ].map(s => (
-                  <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
-                    <span style={{ fontSize: '18px' }}>{s.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '11px', color: '#64748B' }}>{s.label}</div>
-                      <div style={{ fontSize: '13px', fontWeight: '500', color: s.value === '未設定' ? '#94A3B8' : '#1D4ED8' }}>{s.value}</div>
+                {!profileEdit ? (
+                  ([
+                    { label: 'Instagram', value: snsLinks.instagram, icon: '📸' },
+                    { label: 'X（Twitter）', value: snsLinks.twitter, icon: '🐦' },
+                    { label: 'YouTube', value: snsLinks.youtube, icon: '▶️' },
+                    { label: 'TikTok', value: snsLinks.tiktok, icon: '🎵' },
+                  ]).map(s => (
+                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+                      <span style={{ fontSize: '18px' }}>{s.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '11px', color: '#64748B' }}>{s.label}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '500', color: !s.value ? '#94A3B8' : '#1D4ED8' }}>{s.value || '未設定'}</div>
+                      </div>
                     </div>
-                    <button style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>編集</button>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  ([
+                    { label: 'Instagram', key: 'instagram', icon: '📸', ph: '例：@hana_sweets' },
+                    { label: 'X（Twitter）', key: 'twitter', icon: '🐦', ph: '例：@hana_sweets_jp' },
+                    { label: 'YouTube', key: 'youtube', icon: '▶️', ph: 'チャンネル名やURL' },
+                    { label: 'TikTok', key: 'tiktok', icon: '🎵', ph: '例：@hana_sweets' },
+                  ]).map(s => (
+                    <div key={s.key} style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{s.icon} {s.label}</div>
+                      <input value={(snsForm as any)[s.key]} onChange={e => setSnsForm({ ...snsForm, [s.key]: e.target.value })} placeholder={s.ph} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
