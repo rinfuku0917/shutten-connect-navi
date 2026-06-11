@@ -4,7 +4,6 @@ import Nav from '../components/Nav'
 import dynamic from 'next/dynamic'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { geocodeAddress } from '../lib/geocode'
 
 // 地図はSSRでLeafletを読むと壊れるのでクライアントのみで読み込む
 const PlacesMap = dynamic(() => import('../components/PlacesMap'), {
@@ -46,22 +45,11 @@ export default function PlacesPage() {
   }
 
   useEffect(() => {
-    load().then(geocodeMissing)
+    load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 緯度経度が空の物件を、開いたときに1秒間隔で自動ジオコーディングして保存（ボタン不要）
-  const geocodeMissing = async (list: Place[]) => {
-    const missing = list.filter(p => (p.latitude == null || p.longitude == null) && (p.prefecture || p.address))
-    for (const p of missing) {
-      const geo = await geocodeAddress((p.prefecture || '') + (p.address || ''))
-      if (geo) {
-        await supabase.from('places').update({ latitude: geo.lat, longitude: geo.lon }).eq('id', p.id)
-        setPlaces(prev => prev.map(x => x.id === p.id ? { ...x, latitude: geo.lat, longitude: geo.lon } : x))
-      }
-      await new Promise(res => setTimeout(res, 1000)) // Nominatimは1秒1リクエスト
-    }
-  }
 
   // 都道府県・ジャンルの選択肢を物件から自動生成
   const prefList = useMemo(() => Array.from(new Set(places.map(p => p.prefecture).filter(Boolean))) as string[], [places])
