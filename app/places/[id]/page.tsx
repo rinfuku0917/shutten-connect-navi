@@ -1,8 +1,10 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
 type Place = {
   id: string
@@ -16,6 +18,8 @@ type Place = {
   recruit: string | null
   schedule: { date: string, start: string, end: string }[] | null
   image_url: string | null
+  latitude: number | null
+  longitude: number | null
 }
 
 export default function PlaceDetail() {
@@ -145,6 +149,12 @@ export default function PlaceDetail() {
                 </tbody>
               </table>
             </div>
+
+            {place.latitude != null && place.longitude != null && (
+              <div style={{ marginBottom: '20px' }}>
+                <PlacesMap pins={[{ id: place.id, title: place.title, prefecture: place.prefecture, fee: place.fee, latitude: place.latitude, longitude: place.longitude }]} />
+              </div>
+            )}
 
             {place.recruit && (
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', padding: '20px' }}>
