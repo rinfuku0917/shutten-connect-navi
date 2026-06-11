@@ -1,15 +1,72 @@
 'use client'
 import Link from 'next/link'
 import Nav from '../components/Nav'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 
-const sellers = [
-  {id:'1',name:'田中フードトラック',category:'カフェ・ドリンク',area:'東京都全域',rating:4.8,reviews:32,img:'☕'},
-  {id:'2',name:'山田キッチンカー',category:'ランチ・弁当',area:'渋谷・新宿エリア',rating:4.6,reviews:18,img:'🍱'},
-  {id:'3',name:'鈴木スイーツ',category:'スイーツ・デザート',area:'神奈川県',rating:4.9,reviews:45,img:'🍰'},
-  {id:'4',name:'佐藤クレープ',category:'クレープ・軽食',area:'東京都23区',rating:4.7,reviews:27,img:'🥞'},
-]
+type Seller = {
+  id: string
+  name: string | null
+  shop_name: string | null
+  genre: string | null
+  rating: number
+  reviewCount: number
+}
+
+const genreEmoji = (genre: string | null): string => {
+  const g = genre || ''
+  if (g.includes('スイーツ') || g.includes('菓子') || g.includes('デザート')) return '🍰'
+  if (g.includes('ドリンク') || g.includes('カフェ') || g.includes('コーヒー')) return '☕'
+  if (g.includes('クレープ') || g.includes('軽食')) return '🥞'
+  if (g.includes('弁当') || g.includes('ランチ') || g.includes('まぜそば') || g.includes('麺') || g.includes('そば')) return '🍱'
+  if (g.includes('パン')) return '🥐'
+  return '🏪'
+}
 
 export default function SellersPage() {
+  const [sellers, setSellers] = useState<Seller[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      // 承認済み案件を持つ出店者だけを集める
+      const { data: apps } = await supabase
+        .from('applications')
+        .select('seller_id, profiles(id, name, shop_name, genre)')
+        .eq('status', 'approved')
+      const map = new Map<string, Seller>()
+      for (const a of (apps || []) as any[]) {
+        const p = a.profiles
+        if (p && !map.has(p.id)) {
+          map.set(p.id, { id: p.id, name: p.name, shop_name: p.shop_name, genre: p.genre, rating: 0, reviewCount: 0 })
+        }
+      }
+      // 各出店者の承認済みレビューの平均点・件数
+      const { data: reviews } = await supabase
+        .from('reviews')
+        .select('seller_id, rating')
+        .eq('status', 'approved')
+      const agg = new Map<string, { sum: number, count: number }>()
+      for (const r of (reviews || []) as any[]) {
+        if (!r.seller_id) continue
+        const cur = agg.get(r.seller_id) || { sum: 0, count: 0 }
+        cur.sum += r.rating || 0
+        cur.count += 1
+        agg.set(r.seller_id, cur)
+      }
+      for (const [id, s] of map) {
+        const a = agg.get(id)
+        if (a && a.count > 0) {
+          s.rating = Math.round((a.sum / a.count) * 10) / 10
+          s.reviewCount = a.count
+        }
+      }
+      setSellers(Array.from(map.values()))
+      setLoading(false)
+    }
+    load()
+  }, [])
+
   return (
     <div style={{background:'#FFF8F0',minHeight:'100vh'}}>
       <Nav />
@@ -19,14 +76,16 @@ export default function SellersPage() {
       </div>
       <div style={{maxWidth:'900px',margin:'0 auto',padding:'32px 16px'}}>
         <div style={{display:'grid',gap:'16px'}}>
+          {loading && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>読み込み中...</div>}
+          {!loading && sellers.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>掲載中の出店者はまだいません。</div>}
           {sellers.map(seller => (
             <Link key={seller.id} href={'/sellers/' + seller.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',padding:'20px',color:'inherit'}}>
               <div style={{display:'flex',gap:'16px',alignItems:'center'}}>
-                <div style={{fontSize:'40px',flexShrink:0}}>{seller.img}</div>
+                <div style={{fontSize:'40px',flexShrink:0}}>{genreEmoji(seller.genre)}</div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'4px'}}>{seller.name}</div>
-                  <div style={{fontSize:'13px',color:'#111',marginBottom:'4px'}}>{seller.category} · {seller.area}</div>
-                  <div style={{fontSize:'13px',color:'#111',fontWeight:'700'}}>★ {seller.rating} ({seller.reviews}件)</div>
+                  <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'4px'}}>{seller.shop_name || seller.name || '(店舗名未設定)'}</div>
+                  <div style={{fontSize:'13px',color:'#111',marginBottom:'4px'}}>{seller.genre || 'ジャンル未設定'}</div>
+                  <div style={{fontSize:'13px',color:'#111',fontWeight:'700'}}>{seller.reviewCount > 0 ? '★ ' + seller.rating + ' (' + seller.reviewCount + '件)' : 'レビューはまだありません'}</div>
                 </div>
               </div>
             </Link>
