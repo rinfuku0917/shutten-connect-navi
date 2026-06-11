@@ -223,7 +223,7 @@ export default function AdminPage() {
     setReviewsLoading(true)
     const { data } = await supabase
       .from('reviews')
-      .select('id, seller_id, reviewer_name, rating, comment, status, created_at, profiles(name, shop_name)')
+      .select('id, seller_id, reviewer_name, rating, comment, status, created_at, profiles!reviews_seller_id_fkey(name, shop_name)')
       .order('created_at', { ascending: false })
     const mapped: AdminReview[] = (data || []).map((r: any) => ({
       id: r.id, seller_id: r.seller_id, reviewer_name: r.reviewer_name, rating: r.rating,
