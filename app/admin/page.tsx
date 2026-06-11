@@ -21,7 +21,7 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews'>('dashboard')
   const [editPlace, setEditPlace] = useState<typeof dummyPlaces[0] | null>(null)
   const [sellers, setSellers] = useState(dummySellers)
   const [csvPreview, setCsvPreview] = useState<string[][]>([])
@@ -46,7 +46,7 @@ export default function AdminPage() {
       if (profile?.role !== 'admin') { router.push('/admin/login'); return }
       try {
         const saved = localStorage.getItem('adminTab')
-        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages'].includes(saved)) {
+        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews'].includes(saved)) {
           setTab(saved as typeof tab)
         }
       } catch {}
@@ -214,6 +214,35 @@ export default function AdminPage() {
   // messagesタブを開いたら読み込む
   useEffect(() => { if (tab === 'messages' && authChecked) loadThreads() }, [tab, authChecked])
 
+  // ===== レビュー審査（管理者）=====
+  type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
+  const [reviewList, setReviewList] = useState<AdminReview[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+
+  const loadReviewList = async () => {
+    setReviewsLoading(true)
+    const { data } = await supabase
+      .from('reviews')
+      .select('id, seller_id, reviewer_name, rating, comment, status, created_at, profiles(name, shop_name)')
+      .order('created_at', { ascending: false })
+    const mapped: AdminReview[] = (data || []).map((r: any) => ({
+      id: r.id, seller_id: r.seller_id, reviewer_name: r.reviewer_name, rating: r.rating,
+      comment: r.comment, status: r.status, created_at: r.created_at,
+      sellerName: r.profiles?.shop_name || r.profiles?.name || '(出店者)'
+    }))
+    setReviewList(mapped)
+    setReviewsLoading(false)
+  }
+
+  const setReviewStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from('reviews').update({ status }).eq('id', id)
+    if (error) { alert('更新失敗: ' + error.message); return }
+    loadReviewList()
+  }
+
+  // reviewsタブを開いたら読み込む
+  useEffect(() => { if (tab === 'reviews' && authChecked) loadReviewList() }, [tab, authChecked])
+
 
 
   // salesタブを開いたら読み込む
@@ -294,6 +323,7 @@ export default function AdminPage() {
             { key: 'docs', icon: '📂', label: '書類審査' },
             { key: 'sales', icon: '💰', label: '売上管理' },
             { key: 'messages', icon: '💬', label: 'メッセージ' },
+            { key: 'reviews', icon: '⭐', label: 'レビュー審査' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
           ].map((item) => (
             <div
@@ -328,6 +358,7 @@ export default function AdminPage() {
             {tab === 'docs' && '書類審査'}
             {tab === 'sales' && '売上管理'}
             {tab === 'messages' && 'メッセージ'}
+            {tab === 'reviews' && 'レビュー審査'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', color: '#B45309', fontSize: '12px' }}>管</div>
@@ -738,6 +769,61 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+
+          {tab === 'reviews' && (() => {
+            const pending = reviewList.filter(r => r.status === 'pending')
+            const done = reviewList.filter(r => r.status !== 'pending')
+            const Stars = ({ n }: { n: number }) => (<span style={{ color: '#F5A623', letterSpacing: '1px' }}>{'\u2605'.repeat(n)}<span style={{ color: '#ddd' }}>{'\u2605'.repeat(5 - n)}</span></span>)
+            return (
+            <div>
+              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
+                <span>\u2b50</span><span>お客様から投稿されたレビューを承認すると、出店者紹介ページに公開されます。却下すると公開されません。</span>
+              </div>
+
+              <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', margin: '0 0 10px' }}>承認待ち（{pending.length}件）</h3>
+              <div style={{ display: 'grid', gap: '12px', marginBottom: '28px' }}>
+                {reviewsLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
+                {!reviewsLoading && pending.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>承認待ちのレビューはありません。</div>}
+                {pending.map(r => (
+                  <div key={r.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #FFE082', padding: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                      <div style={{ fontSize: '13px', color: '#64748B' }}>出店者：<strong style={{ color: '#1a1a1a' }}>{r.sellerName}</strong> ／ 投稿者：{r.reviewer_name || '匿名'}</div>
+                      <Stars n={r.rating} />
+                    </div>
+                    {r.comment && <div style={{ fontSize: '14px', color: '#444', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: '10px' }}>{r.comment}</div>}
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button onClick={() => setReviewStatus(r.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認して公開</button>
+                      <button onClick={() => { if (window.confirm('このレビューを却下しますか？')) setReviewStatus(r.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>却下</button>
+                      <span style={{ fontSize: '11px', color: '#94A3B8', marginLeft: 'auto' }}>{new Date(r.created_at).toLocaleDateString('ja-JP')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', margin: '0 0 10px' }}>処理済み（{done.length}件）</h3>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {done.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>処理済みのレビューはまだありません。</div>}
+                {done.map(r => (
+                  <div key={r.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '14px', opacity: r.status === 'rejected' ? 0.6 : 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '6px' }}>
+                      <div style={{ fontSize: '12px', color: '#64748B' }}>出店者：<strong style={{ color: '#1a1a1a' }}>{r.sellerName}</strong> ／ 投稿者：{r.reviewer_name || '匿名'}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Stars n={r.rating} />
+                        <span style={{ fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '999px', background: r.status === 'approved' ? '#ECFDF5' : '#FEE2E2', color: r.status === 'approved' ? '#16A34A' : '#DC2626' }}>{r.status === 'approved' ? '公開中' : '却下'}</span>
+                      </div>
+                    </div>
+                    {r.comment && <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: '8px' }}>{r.comment}</div>}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {r.status === 'approved'
+                        ? <button onClick={() => { if (window.confirm('公開を取り消して却下にしますか？')) setReviewStatus(r.id, 'rejected') }} style={{ background: '#fff', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>公開を取り消す</button>
+                        : <button onClick={() => setReviewStatus(r.id, 'approved')} style={{ background: '#fff', color: '#16A34A', border: '1px solid #BBF7D0', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>承認して公開する</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            )
+          })()}
 
           {tab === 'csv' && (
             <>
