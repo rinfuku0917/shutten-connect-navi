@@ -29,7 +29,7 @@ export default function SellerDetailPage() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
   const [rname, setRname] = useState('')
-  const [rrating, setRrating] = useState(5)
+  const [rrating, setRrating] = useState(0)
   const [rcomment, setRcomment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
@@ -72,7 +72,7 @@ export default function SellerDetailPage() {
     })
     if (error) { setErr('送信に失敗しました: ' + error.message); setSubmitting(false); return }
     setSubmitting(false); setDone(true)
-    setRname(''); setRrating(5); setRcomment('')
+    setRname(''); setRrating(0); setRcomment('')
   }
 
   if (loading) return (<div style={{background:'#FFF8F0',minHeight:'100vh'}}><Nav /><div style={{textAlign:'center',padding:'80px 20px',color:'#999'}}>読み込み中...</div></div>)
