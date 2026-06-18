@@ -765,18 +765,18 @@ export default function SellerDashboard() {
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '16px' }}>
                 <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>📝 売上を入力</div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  <div style={{ flex: '1 1 200px' }}>
+                  <div className='sale-field' style={{ flex: '1 1 200px' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>案件</div>
                     <select value={saleAppId} onChange={e => setSaleAppId(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', background: '#fff' }}>
                       <option value=''>選択してください</option>
                       {myApprovedApps.map(a => (<option key={a.application_id} value={a.application_id}>{a.placeTitle}</option>))}
                     </select>
                   </div>
-                  <div style={{ flex: '0 1 160px' }}>
+                  <div className='sale-field' style={{ flex: '0 1 160px' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上日</div>
                     <input type='date' value={saleDate} onChange={e => setSaleDate(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
                   </div>
-                  <div style={{ flex: '0 1 140px' }}>
+                  <div className='sale-field' style={{ flex: '0 1 140px' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上金額（円）</div>
                     <input type='number' value={saleRevenue} onChange={e => setSaleRevenue(e.target.value)} placeholder='50000' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
                   </div>

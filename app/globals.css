@@ -116,3 +116,8 @@ img { max-width: 100%; height: auto; }
 @media (max-width: 640px) {
   .sales-input-grid { grid-template-columns: 1fr !important; }
 }
+
+/* 売上入力欄: スマホでは各欄を全幅にして1行1項目に（重なり防止） */
+@media (max-width: 640px) {
+  .sale-field { flex: 1 1 100% !important; }
+}
