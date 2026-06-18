@@ -9,7 +9,7 @@ export default function NewPlacePage() {
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
-    fee:'', visitors:'', loadIn:'', loadOut:'',
+    fee:'', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
     menuWant:'', menuNG:'', menuOther:'', power:'yes', gas:'yes', water:'yes',
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
@@ -58,6 +58,7 @@ export default function NewPlacePage() {
       address: form.address,
       place_type: form.type,
       fee: form.fee,
+      reminder_days: parseInt(form.reminderDays, 10) || 7,
       map_url: form.mapUrl,
       recruit: form['募集内容'],
       schedule: schedule,
@@ -186,6 +187,11 @@ export default function NewPlacePage() {
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店料{req}</label>
                 <input value={form.fee} onChange={e=>set('fee',e.target.value)} placeholder='例：1日10,000円' style={inputStyle}/>
+              </div>
+              <div style={{marginBottom:'20px'}}>
+                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>リマインド通知（出店日の何日前から出店者に表示するか）</label>
+                <input type='number' min='0' value={form.reminderDays} onChange={e=>set('reminderDays',e.target.value)} placeholder='例：7' style={inputStyle}/>
+                <div style={{fontSize:'12px',color:'#64748B',marginTop:'4px'}}>未入力の場合は7日前から表示されます。急ぎの案件は短め（3日など）に設定できます。</div>
               </div>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>動員目標</label>
