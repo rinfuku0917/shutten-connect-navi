@@ -216,6 +216,34 @@ export default function AdminPage() {
 
   // ===== レビュー審査（管理者）=====
   type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
+  // ===== 案件一覧（管理者・実データ） =====
+  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string }
+  const [placesList, setPlacesList] = useState<AdminPlace[]>([])
+  const [placesLoading, setPlacesLoading] = useState(false)
+  const loadPlacesList = async () => {
+    setPlacesLoading(true)
+    const { data } = await supabase
+      .from('places')
+      .select('id, title, prefecture, place_type, status, profiles(name), applications(count)')
+      .order('created_at', { ascending: false })
+    const mapped: AdminPlace[] = (data || []).map((p: any) => ({
+      id: p.id,
+      title: p.title || '(無題)',
+      host: p.profiles?.name || '(未設定)',
+      area: p.prefecture || '-',
+      type: p.place_type === 'event' ? 'イベント' : (p.place_type || '-'),
+      applies: p.applications?.[0]?.count ?? 0,
+      status: p.status === 'published' ? '公開中' : '下書き',
+    }))
+    setPlacesList(mapped)
+    setPlacesLoading(false)
+  }
+  const deletePlaceAdmin = async (id: string) => {
+    const { error } = await supabase.from('places').delete().eq('id', id)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    loadPlacesList()
+  }
+
   const [reviewList, setReviewList] = useState<AdminReview[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
 
@@ -242,6 +270,7 @@ export default function AdminPage() {
 
   // reviewsタブを開いたら読み込む
   useEffect(() => { if (tab === 'reviews' && authChecked) loadReviewList() }, [tab, authChecked])
+  useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
 
 
 
@@ -481,8 +510,10 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {dummyPlaces.map((place, i) => (
-                      <tr key={place.id} style={{ borderBottom: i < dummyPlaces.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                    {placesLoading && (<tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>)}
+                    {!placesLoading && placesList.length === 0 && (<tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>案件がありません。</td></tr>)}
+                    {placesList.map((place, i) => (
+                      <tr key={place.id} style={{ borderBottom: i < placesList.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '12px 14px', fontWeight: '600' }}>{place.title}</td>
                         <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{place.host}</td>
                         <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{place.area}</td>
@@ -491,8 +522,8 @@ export default function AdminPage() {
                         <td style={{ padding: '12px 14px' }}><span style={{ background: place.status === '公開中' ? '#ECFDF5' : '#F1F5F9', color: place.status === '公開中' ? '#16A34A' : '#64748B', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', fontSize: '11px' }}>{place.status}</span></td>
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <button onClick={() => setEditPlace(place)} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B' }}>✏️ 編集</button>
-                            <button style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>🗑️</button>
+                            <Link href={'/dashboard/host/edit-place/' + place.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', textDecoration: 'none' }}>✏️ 編集</Link>
+                            <button onClick={() => { if (window.confirm('この案件を削除しますか？')) deletePlaceAdmin(place.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>🗑️</button>
                           </div>
                         </td>
                       </tr>
