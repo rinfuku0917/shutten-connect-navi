@@ -57,7 +57,7 @@ export default function SellerDashboard() {
   type MsgThread = { application_id: string, placeTitle: string, lastBody: string, unread: number }
   const [threads, setThreads] = useState<MsgThread[]>([])
   const [unread, setUnread] = useState(0)
-  type MyApply = { id: string, place: string, date: string, rawDate: string | null, type: string, status: string, statusColor: string, statusBg: string }
+  type MyApply = { id: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
   type DocRow = { id: string, doc_type: string, file_url: string, status: string }
   const [myDocs, setMyDocs] = useState<DocRow[]>([])
@@ -239,7 +239,7 @@ export default function SellerDashboard() {
     if (!uid) return
     const { data } = await supabase
       .from('applications')
-      .select('id, apply_date, format, status, places(title)')
+      .select('id, apply_date, format, status, places(title, reminder_days)')
       .eq('seller_id', uid)
       .order('created_at', { ascending: false })
     if (!data) return
@@ -250,6 +250,7 @@ export default function SellerDashboard() {
         place: a.places?.title || '(案件名なし)',
         date: a.apply_date || '日付未定',
         rawDate: a.apply_date || null,
+        reminderDays: a.places?.reminder_days ?? 7,
         type: a.format || '-',
         status: s.label,
         statusColor: s.color,
@@ -431,7 +432,6 @@ export default function SellerDashboard() {
             <>
               {(() => {
                 const today = new Date(); today.setHours(0,0,0,0)
-                const WITHIN_DAYS = 30
                 const soon = myApplies
                   .filter(a => a.status === '承認済' && a.rawDate)
                   .map(a => {
@@ -439,7 +439,7 @@ export default function SellerDashboard() {
                     const diff = Math.round((d.getTime() - today.getTime()) / 86400000)
                     return { ...a, diff }
                   })
-                  .filter(a => a.diff >= 0 && a.diff <= WITHIN_DAYS)
+                  .filter(a => a.diff >= 0 && a.diff <= a.reminderDays)
                   .sort((x, y) => x.diff - y.diff)
                 if (soon.length === 0) return null
                 return (
