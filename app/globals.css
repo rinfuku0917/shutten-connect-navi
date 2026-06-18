@@ -111,10 +111,8 @@ img { max-width: 100%; height: auto; }
   .mobile-section-title { font-size: 20px !important; line-height: 1.4 !important; }
 }
 
-/* 売上報告の売上日・金額: スマホで1列に畳む（インラインstyleに勝つため!important） */
+/* 売上報告の売上日・金額グリッド（PC2列→スマホ1列、後勝ちで確実に） */
+.sales-input-grid { grid-template-columns: 1fr 1fr; }
 @media (max-width: 640px) {
   .sales-input-grid { grid-template-columns: 1fr !important; }
 }
-
-/* 売上報告の売上日・金額: PCは2列（インラインstyleから列指定を外したため、ここで定義） */
-.sales-input-grid { grid-template-columns: 1fr 1fr; }
