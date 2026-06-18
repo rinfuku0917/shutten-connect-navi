@@ -703,13 +703,30 @@ export default function SellerDashboard() {
                       { label: '店舗名', key: 'shop_name', ph: "例：Hana's Sweets" },
                       { label: 'メール', key: 'email', ph: '例：hanako@example.com' },
                       { label: '電話番号', key: 'phone', ph: '例：090-1234-5678' },
-                      { label: 'ジャンル', key: 'genre', ph: '例：焼き菓子・スイーツ' },
                     ].map(fld => (
                       <div key={fld.key} style={{ marginBottom: '12px' }}>
                         <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{fld.label}</div>
                         <input value={(profileForm as any)[fld.key]} onChange={e => setProfileForm({ ...profileForm, [fld.key]: e.target.value })} placeholder={fld.ph} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                       </div>
                     ))}
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>ジャンル</div>
+                      <select value={profileForm.genre} onChange={e => setProfileForm({ ...profileForm, genre: e.target.value })} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }}>
+                        <option value=''>選択してください</option>
+                        <optgroup label='飲食'>
+                          {['キッチンカー', '移動販売', '菓子・スイーツ', 'ドリンク', '農産物・加工品'].map(g => <option key={g} value={g}>{g}</option>)}
+                        </optgroup>
+                        <optgroup label='物販'>
+                          {['雑貨', 'ハンドメイド', 'アクセサリー', 'アパレル・古着', 'ペット関連'].map(g => <option key={g} value={g}>{g}</option>)}
+                        </optgroup>
+                        <optgroup label='体験'>
+                          {['ワークショップ', '体験型ブース', '占い・セラピー'].map(g => <option key={g} value={g}>{g}</option>)}
+                        </optgroup>
+                        <optgroup label='表現'>
+                          {['パフォーマー', 'アーティスト', 'ライブペイント', '音楽・ライブ'].map(g => <option key={g} value={g}>{g}</option>)}
+                        </optgroup>
+                      </select>
+                    </div>
                     <div style={{ marginBottom: '12px' }}>
                       <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>活動エリア（「・」や「,」区切りで複数可）</div>
                       <input value={areasInput} onChange={e => setAreasInput(e.target.value)} placeholder='例：東京都・神奈川県' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
