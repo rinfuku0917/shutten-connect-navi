@@ -121,3 +121,14 @@ img { max-width: 100%; height: auto; }
 @media (max-width: 640px) {
   .sale-field { flex: 1 1 100% !important; }
 }
+
+/* 売上入力欄の日付フィールド: iOSで横にはみ出すのを防ぐ */
+@media (max-width: 640px) {
+  .sale-field input[type="date"] {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
