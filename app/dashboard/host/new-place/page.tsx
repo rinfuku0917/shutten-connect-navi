@@ -188,15 +188,16 @@ export default function NewPlacePage() {
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店料{req}</label>
                 <input value={form.fee} onChange={e=>set('fee',e.target.value)} placeholder='例：1日10,000円' style={inputStyle}/>
               </div>
-              <div style={{marginBottom:'20px'}}>
-                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>リマインド通知（出店日の何日前から出店者に表示するか）</label>
-                <input type='number' min='0' value={form.reminderDays} onChange={e=>set('reminderDays',e.target.value)} placeholder='例：7' style={inputStyle}/>
-                <div style={{fontSize:'12px',color:'#64748B',marginTop:'4px'}}>未入力の場合は7日前から表示されます。急ぎの案件は短め（3日など）に設定できます。</div>
-              </div>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>動員目標</label>
                 <input value={form.visitors} onChange={e=>set('visitors',e.target.value)} placeholder='例：200名' style={inputStyle}/>
               </div>
+            </div>
+
+            <div style={{marginBottom:'20px'}}>
+              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>リマインド通知（出店日の何日前から出店者に表示するか）</label>
+              <input type='number' min='0' value={form.reminderDays} onChange={e=>set('reminderDays',e.target.value)} placeholder='例：7' style={{...inputStyle, maxWidth:'200px'}}/>
+              <div style={{fontSize:'12px',color:'#64748B',marginTop:'4px'}}>未入力の場合は7日前から表示されます。急ぎの案件は短め（3日など）に設定できます。</div>
             </div>
 
             <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
