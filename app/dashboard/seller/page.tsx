@@ -57,7 +57,7 @@ export default function SellerDashboard() {
   type MsgThread = { application_id: string, placeTitle: string, lastBody: string, unread: number }
   const [threads, setThreads] = useState<MsgThread[]>([])
   const [unread, setUnread] = useState(0)
-  type MyApply = { id: string, place: string, date: string, type: string, status: string, statusColor: string, statusBg: string }
+  type MyApply = { id: string, place: string, date: string, rawDate: string | null, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
   type DocRow = { id: string, doc_type: string, file_url: string, status: string }
   const [myDocs, setMyDocs] = useState<DocRow[]>([])
@@ -249,6 +249,7 @@ export default function SellerDashboard() {
         id: a.id,
         place: a.places?.title || '(案件名なし)',
         date: a.apply_date || '日付未定',
+        rawDate: a.apply_date || null,
         type: a.format || '-',
         status: s.label,
         statusColor: s.color,
@@ -428,6 +429,39 @@ export default function SellerDashboard() {
           {/* ホーム */}
           {tab === 'home' && (
             <>
+              {(() => {
+                const today = new Date(); today.setHours(0,0,0,0)
+                const WITHIN_DAYS = 30
+                const soon = myApplies
+                  .filter(a => a.status === '承認済' && a.rawDate)
+                  .map(a => {
+                    const d = new Date(a.rawDate + 'T00:00:00')
+                    const diff = Math.round((d.getTime() - today.getTime()) / 86400000)
+                    return { ...a, diff }
+                  })
+                  .filter(a => a.diff >= 0 && a.diff <= WITHIN_DAYS)
+                  .sort((x, y) => x.diff - y.diff)
+                if (soon.length === 0) return null
+                return (
+                  <div style={{ background: '#FFF8E1', border: '1.5px solid #FCD34D', borderRadius: '12px', padding: '16px 18px', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '20px' }}>📅</span>
+                      <span style={{ fontSize: '15px', fontWeight: '900', color: '#B45309' }}>もうすぐ出店日です</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {soon.map(a => (
+                        <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', background: '#fff', borderRadius: '8px', padding: '10px 14px', border: '1px solid #FDE68A' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.place}</div>
+                            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>{a.date}</div>
+                          </div>
+                          <span style={{ flexShrink: 0, background: a.diff <= 3 ? '#FEE2E2' : '#FEF3C7', color: a.diff <= 3 ? '#DC2626' : '#B45309', borderRadius: '999px', padding: '4px 12px', fontSize: '13px', fontWeight: '900', whiteSpace: 'nowrap' }}>{a.diff === 0 ? '本日' : 'あと' + a.diff + '日'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
               <div className='admin-stats' style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
                 {[
                   { label: '申込中', value: myApplies.filter(a => a.status === '審査中').length + '件', icon: '⏳', color: '#92400E', bg: '#FEF3C7' },
