@@ -797,8 +797,8 @@ export default function SellerDashboard() {
                     { label: 'あなたの利益（手取り）', value: totalRev - totalFee, color: '#16A34A' },
                   ]
                   return cards.map(card => (
-                    <div key={card.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px' }}>{card.label}</div>
+                    <div key={card.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px', minHeight: '32px' }}>{card.label}</div>
                       <div style={{ fontSize: '20px', fontWeight: '900', color: card.color }}>¥{card.value.toLocaleString()}</div>
                     </div>
                   ))
