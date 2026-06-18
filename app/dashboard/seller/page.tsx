@@ -479,7 +479,7 @@ export default function SellerDashboard() {
                 ))}
               </div>
 
-              <div className='admin-two-col sales-input-grid' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className='admin-two-col sales-input-grid' style={{ display: 'grid', gap: '16px' }}>
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                   <div style={{ padding: '13px 18px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontWeight: '700', fontSize: '13px' }}>📋 最近の申込</div>

@@ -115,3 +115,6 @@ img { max-width: 100%; height: auto; }
 @media (max-width: 640px) {
   .sales-input-grid { grid-template-columns: 1fr !important; }
 }
+
+/* 売上報告の売上日・金額: PCは2列（インラインstyleから列指定を外したため、ここで定義） */
+.sales-input-grid { grid-template-columns: 1fr 1fr; }
