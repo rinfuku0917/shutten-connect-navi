@@ -23,7 +23,31 @@ export default function AdminPage() {
   const router = useRouter()
   const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews'>('dashboard')
   const [editPlace, setEditPlace] = useState<typeof dummyPlaces[0] | null>(null)
-  const [sellers, setSellers] = useState(dummySellers)
+  type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
+  const [sellers, setSellers] = useState<AdminSeller[]>([])
+  const [sellersLoading, setSellersLoading] = useState(false)
+  const loadSellersList = async () => {
+    setSellersLoading(true)
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, name, shop_name, email, phone, genre, areas')
+      .eq('role', 'seller')
+      .order('name', { ascending: true })
+    const mapped: AdminSeller[] = (data || []).map((p: any) => ({
+      id: p.id,
+      name: p.name || '(未設定)',
+      shop: p.shop_name || '',
+      email: p.email || '',
+      phone: p.phone || '',
+      genre: p.genre || '—',
+      area: Array.isArray(p.areas) && p.areas.length > 0 ? p.areas.join('・') : '—',
+      sns: '',
+      status: '登録済',
+      docs: '—',
+    }))
+    setSellers(mapped)
+    setSellersLoading(false)
+  }
   const [csvPreview, setCsvPreview] = useState<string[][]>([])
   const [csvImported, setCsvImported] = useState(false)
   const [showNewPlace, setShowNewPlace] = useState(false)
@@ -271,6 +295,7 @@ export default function AdminPage() {
   // reviewsタブを開いたら読み込む
   useEffect(() => { if (tab === 'reviews' && authChecked) loadReviewList() }, [tab, authChecked])
   useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
+  useEffect(() => { if (tab === 'sellers' && authChecked) loadSellersList() }, [tab, authChecked])
 
 
 
@@ -584,6 +609,8 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
+                    {sellersLoading && (<tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>)}
+                    {!sellersLoading && sellers.length === 0 && (<tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>出店者がまだいません。</td></tr>)}
                     {sellers.map((s, i) => (
                       <tr key={s.id} style={{ borderBottom: i < sellers.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '10px 12px' }}>
