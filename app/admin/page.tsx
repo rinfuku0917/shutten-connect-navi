@@ -302,6 +302,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'reviews' && authChecked) loadReviewList() }, [tab, authChecked])
   useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
   useEffect(() => { if ((tab === 'sellers' || tab === 'dashboard') && authChecked) loadSellersList() }, [tab, authChecked])
+  useEffect(() => { if (tab === 'dashboard' && authChecked) loadStats() }, [tab, authChecked])
 
 
 
@@ -323,11 +324,25 @@ export default function AdminPage() {
     loadDocReviews()
   }
 
+  type RecentApp = { id: string, name: string, place: string, date: string, status: string }
+  const [statCounts, setStatCounts] = useState({ sellers: 0, hosts: 0, places: 0, monthApps: 0 })
+  const [recentApps, setRecentApps] = useState<RecentApp[]>([])
+  const loadStats = async () => {
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
+    const sellerRes = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'seller')
+    const hostRes = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'host')
+    const placeRes = await supabase.from('places').select('id', { count: 'exact', head: true })
+    const monthRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).gte('created_at', monthStart.toISOString())
+    setStatCounts({ sellers: sellerRes.count || 0, hosts: hostRes.count || 0, places: placeRes.count || 0, monthApps: monthRes.count || 0 })
+    const { data: apps } = await supabase.from('applications').select('id, status, created_at, places(title), profiles(name)').order('created_at', { ascending: false }).limit(3)
+    const statusJa = (s: string) => s === 'approved' ? '承認済' : s === 'rejected' ? '否認' : '審査中'
+    setRecentApps((apps || []).map((a: any) => ({ id: a.id, name: a.profiles?.name || '(出店者)', place: a.places?.title || '(案件名なし)', date: a.created_at ? new Date(a.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '', status: statusJa(a.status) })))
+  }
   const stats = [
-    { label: '総出店者数', value: '3,410', icon: '👤', color: '#F5A623' },
-    { label: '総募集者数', value: '892', icon: '🏪', color: '#3A9BD5' },
-    { label: '掲載案件数', value: '1,248', icon: '📋', color: '#16A34A' },
-    { label: '今月の申込', value: '312', icon: '📬', color: '#7C3AED' },
+    { label: '総出店者数', value: statCounts.sellers.toLocaleString(), icon: '👤', color: '#F5A623' },
+    { label: '総募集者数', value: statCounts.hosts.toLocaleString(), icon: '🏪', color: '#3A9BD5' },
+    { label: '掲載案件数', value: statCounts.places.toLocaleString(), icon: '📋', color: '#16A34A' },
+    { label: '今月の申込', value: statCounts.monthApps.toLocaleString(), icon: '📬', color: '#7C3AED' },
   ]
 
   const handleCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -446,12 +461,9 @@ export default function AdminPage() {
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                   <div style={{ padding: '14px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '14px' }}>📬 最新の申込</div>
                   <div style={{ padding: '0' }}>
-                    {[
-                      { name: '山田 花子', place: '渋谷ヒカリエ前マルシェ', date: '6/7', status: '審査中' },
-                      { name: '田中 健太', place: '大阪城公園フリマ', date: '6/14', status: '承認済' },
-                      { name: '鈴木 次郎', place: '代々木公園マルシェ', date: '6/21', status: '審査中' },
-                    ].map((a, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 18px', borderBottom: '1px solid #F1F5F9' }}>
+                    {recentApps.length === 0 && (<div style={{ padding: '20px 18px', color: '#999', fontSize: '13px' }}>申込はまだありません。</div>)}
+                    {recentApps.map((a, i) => (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 18px', borderBottom: '1px solid #F1F5F9' }}>
                         <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#B45309', flexShrink: 0 }}>{a.name[0]}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: '12px', fontWeight: '600' }}>{a.name}</div>
