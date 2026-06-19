@@ -26,6 +26,7 @@ export default function AdminPage() {
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
+  const [sellerKw, setSellerKw] = useState('')
   const loadSellersList = async () => {
     setSellersLoading(true)
     const { data } = await supabase
@@ -295,7 +296,7 @@ export default function AdminPage() {
   // reviewsタブを開いたら読み込む
   useEffect(() => { if (tab === 'reviews' && authChecked) loadReviewList() }, [tab, authChecked])
   useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
-  useEffect(() => { if (tab === 'sellers' && authChecked) loadSellersList() }, [tab, authChecked])
+  useEffect(() => { if ((tab === 'sellers' || tab === 'dashboard') && authChecked) loadSellersList() }, [tab, authChecked])
 
 
 
@@ -589,7 +590,7 @@ export default function AdminPage() {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
-                  <input type="text" placeholder="🔍 出店者名・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
+                  <input type="text" value={sellerKw} onChange={e => setSellerKw(e.target.value)} placeholder="🔍 出店者名・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
                   <select style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none' }}>
                     <option>すべて</option><option>承認済</option><option>審査中</option>
                   </select>
@@ -609,9 +610,13 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
+                    {(() => {
+                      const kw = sellerKw.trim().toLowerCase()
+                      const filteredSellers = kw ? sellers.filter(s => (s.name || '').toLowerCase().includes(kw) || (s.email || '').toLowerCase().includes(kw)) : sellers
+                      return (<>
                     {sellersLoading && (<tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>)}
-                    {!sellersLoading && sellers.length === 0 && (<tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>出店者がまだいません。</td></tr>)}
-                    {sellers.map((s, i) => (
+                    {!sellersLoading && filteredSellers.length === 0 && (<tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>{kw ? '該当する出店者がいません。' : '出店者がまだいません。'}</td></tr>)}
+                    {filteredSellers.map((s, i) => (
                       <tr key={s.id} style={{ borderBottom: i < sellers.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
@@ -641,6 +646,8 @@ export default function AdminPage() {
                         </td>
                       </tr>
                     ))}
+                    </>)
+                    })()}
                   </tbody>
                 </table>
               </div>
