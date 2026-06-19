@@ -268,6 +268,11 @@ export default function AdminPage() {
     if (error) { alert('削除失敗: ' + error.message); return }
     loadPlacesList()
   }
+  const deleteSellerAdmin = async (id: string) => {
+    const { error } = await supabase.from('profiles').delete().eq('id', id)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    loadSellersList()
+  }
 
   const [reviewList, setReviewList] = useState<AdminReview[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
@@ -640,8 +645,8 @@ export default function AdminPage() {
                         </td>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ display: 'flex', gap: '4px' }}>
-                            <button style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #E2E8F0', borderRadius: '5px', background: '#fff', cursor: 'pointer' }}>✏️</button>
-                            <button style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #FCA5A5', borderRadius: '5px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>🗑️</button>
+                            <button onClick={() => window.open('/sellers/' + s.id, '_blank')} title="公開プロフィールを見る" style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #E2E8F0', borderRadius: '5px', background: '#fff', cursor: 'pointer' }}>👁️</button>
+                            <button onClick={() => { if (window.confirm(s.name + ' を削除しますか？この操作は取り消せません。')) deleteSellerAdmin(s.id) }} style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #FCA5A5', borderRadius: '5px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>🗑️</button>
                           </div>
                         </td>
                       </tr>
