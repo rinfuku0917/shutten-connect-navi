@@ -350,12 +350,14 @@ export default function AdminPage() {
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const text = ev.target?.result as string
-      const rows = text.split('\n').filter(r => r.trim()).map(r => r.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
+      const buf = ev.target?.result as ArrayBuffer
+      let text = new TextDecoder('utf-8').decode(buf)
+      if (text.includes('\uFFFD')) { try { text = new TextDecoder('shift-jis').decode(buf) } catch (err) {} }
+      const rows = text.split(/\r?\n/).filter(r => r.trim()).map(r => r.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
       setCsvPreview(rows)
       setCsvImported(false)
     }
-    reader.readAsText(file, 'UTF-8')
+    reader.readAsArrayBuffer(file)
   }
 
   const importCSV = () => {
