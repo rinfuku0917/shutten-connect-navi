@@ -917,15 +917,18 @@ export default function AdminPage() {
               <div style={{ marginBottom: '20px', textAlign: 'center' }}>
                 <button
                   onClick={() => {
-                    const csv = '出店者名,店舗名,メール,電話番号,ジャンル,エリア,SNS\n山田 花子,Hana\'s Sweets,hanako@example.com,090-1234-5678,焼き菓子,東京都,@hana_sweets\n田中 健太,クラフト工房,kenta@example.com,080-2345-6789,ハンドメイド,大阪府,@craft_kenta'
+                    const esc = (v: string) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'
+                    const header = ['出店者名', '店舗名', 'メール', '電話番号', 'ジャンル', 'エリア'].join(',')
+                    const rows = sellers.map(s => [s.name, s.shop, s.email, s.phone, s.genre, s.area].map(esc).join(','))
+                    const csv = [header, ...rows].join('\n')
                     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
                     const url = URL.createObjectURL(blob)
                     const a = document.createElement('a')
-                    a.href = url; a.download = 'sample.csv'; a.click()
+                    a.href = url; a.download = 'sellers.csv'; a.click()
                   }}
                   style={{ background: '#fff', border: '1.5px solid #3A9BD5', color: '#1D4ED8', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  📄 サンプルCSVをダウンロード
+                  📄 出店者一覧をCSVでダウンロード
                 </button>
               </div>
 
