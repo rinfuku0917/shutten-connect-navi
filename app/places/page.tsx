@@ -101,7 +101,11 @@ export default function PlacesPage() {
 
         {/* 地図 */}
         <div style={{ marginBottom:'24px' }}>
-          <PlacesMap pins={pins} />
+          {loading ? (
+            <div style={{ height: '420px', width: '100%', borderRadius: '12px', background: '#EEE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '13px' }}>地図を読み込み中...</div>
+          ) : (
+            <PlacesMap pins={pins} />
+          )}
           {pins.length === 0 && !loading && (
             <div style={{ fontSize:'12px', color:'#999', marginTop:'8px', textAlign:'center' }}>地図に表示できる場所がありません（位置情報を取得中の場合があります）。</div>
           )}

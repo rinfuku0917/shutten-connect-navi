@@ -1,5 +1,6 @@
 'use client'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { useEffect } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import Link from 'next/link'
@@ -24,8 +25,19 @@ export type MapPin = {
   longitude: number
 }
 
+// データ更新時に地図を作り直さず、setViewで滑らかに追従させる
+function MapFollower({ pins }: { pins: MapPin[] }) {
+  const map = useMap()
+  useEffect(() => {
+    if (pins.length > 0) {
+      map.setView([pins[0].latitude, pins[0].longitude], 10, { animate: true })
+    }
+  }, [pins, map])
+  return null
+}
+
 export default function PlacesMap({ pins }: { pins: MapPin[] }) {
-  // 日本全体が見える初期表示（中心は本州あたり、ズーム5）
+  // 初回マウント時の中心（データがあればその先頭、なければ日本全体）
   const center: [number, number] = pins.length > 0
     ? [pins[0].latitude, pins[0].longitude]
     : [36.2048, 138.2529]
@@ -33,6 +45,7 @@ export default function PlacesMap({ pins }: { pins: MapPin[] }) {
 
   return (
     <MapContainer center={center} zoom={zoom} style={{ height: '420px', width: '100%', borderRadius: '12px' }} scrollWheelZoom={true}>
+      <MapFollower pins={pins} />
       <TileLayer
         attribution='&copy; OpenStreetMap contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
