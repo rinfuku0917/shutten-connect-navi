@@ -389,10 +389,10 @@ export default function SellerDashboard() {
         </div>
         <div className='admin-sidebar-head' style={{ padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#F5A623', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '900', color: '#fff', flexShrink: 0 }}>{(profileForm.shop_name || profileForm.name) ? (profileForm.shop_name || profileForm.name).charAt(0) : '出'}</div>
+            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#F5A623', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '900', color: '#fff', flexShrink: 0 }}>{(profile.shop_name || profile.name) ? (profile.shop_name || profile.name).charAt(0) : '出'}</div>
             <div>
-              <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff' }}>{profileForm.shop_name || profileForm.name || '（未設定）'}</div>
-              {profileForm.name && <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{profileForm.name} 様</div>}
+              <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff' }}>{profile.shop_name || profile.name || '（未設定）'}</div>
+              {profile.name && <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{profile.name} 様</div>}
             </div>
           </div>
         </div>
