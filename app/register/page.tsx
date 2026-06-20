@@ -2,7 +2,6 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useRouter } from 'next/navigation'
 
 const AREA_GROUPS: { region: string, prefs: string[] }[] = [
   { region: '関東', prefs: ['東京','神奈川','千葉','埼玉','茨城','群馬','栃木'] },
@@ -15,7 +14,6 @@ const AREA_GROUPS: { region: string, prefs: string[] }[] = [
 ]
 
 export default function RegisterPage() {
-  const router = useRouter()
   const [role, setRole] = useState<'seller'|'host'>('seller')
   const [name, setName] = useState('')
   const [nameKana, setNameKana] = useState('')
@@ -40,21 +38,17 @@ export default function RegisterPage() {
     if(password.length < 6) { setError('パスワードは6文字以上で入力してください'); return }
     if(role === 'seller' && areas.length === 0) { setError('出店エリアを1つ以上選択してください'); return }
     setLoading(true); setError('')
-    const { data, error: err } = await supabase.auth.signUp({
+    const metadata: Record<string, unknown> = {
+      name, role, name_kana: nameKana, address, phone,
+    }
+    if (company) metadata.shop_name = company
+    if (role === 'seller' && areas.length > 0) metadata.areas = areas
+    const { error: err } = await supabase.auth.signUp({
       email, password,
-      options: { data: { name, role } }
+      options: { data: metadata }
     })
     if(err) { setError(err.message); setLoading(false); return }
-    if(data.user) {
-      await supabase.from('profiles').upsert({
-        id: data.user.id, role, name,
-        name_kana: nameKana,
-        shop_name: company || null,
-        address, email, phone,
-        areas: role === 'seller' ? areas : null,
-      })
-      setDone(true)
-    }
+    setDone(true)
     setLoading(false)
   }
 
