@@ -22,7 +22,6 @@ const dummyPlaces = [
 export default function AdminPage() {
   const router = useRouter()
   const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported'>('dashboard')
-  const [editPlace, setEditPlace] = useState<typeof dummyPlaces[0] | null>(null)
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
@@ -598,31 +597,6 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-
-              {editPlace && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ background: '#fff', borderRadius: '14px', padding: '24px', width: '560px', maxHeight: '80vh', overflowY: 'auto' }}>
-                    <div style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: '#B45309' }}>✏️ 案件を編集：{editPlace.title}</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                      {[
-                        { label: '案件タイトル', value: editPlace.title, full: true },
-                        { label: 'オーナー', value: editPlace.host },
-                        { label: 'エリア', value: editPlace.area },
-                        { label: '出店形態', value: editPlace.type },
-                      ].map((f, i) => (
-                        <div key={i} style={f.full ? { gridColumn: '1 / -1' } : {}}>
-                          <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '4px' }}>{f.label}</label>
-                          <input type="text" defaultValue={f.value} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                      <button onClick={() => setEditPlace(null)} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>キャンセル</button>
-                      <button onClick={() => { setEditPlace(null); alert('保存しました') }} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>保存する</button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
 
