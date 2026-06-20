@@ -21,7 +21,7 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported'>('dashboard')
   const [editPlace, setEditPlace] = useState<typeof dummyPlaces[0] | null>(null)
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
@@ -71,7 +71,7 @@ export default function AdminPage() {
       if (profile?.role !== 'admin') { router.push('/admin/login'); return }
       try {
         const saved = localStorage.getItem('adminTab')
-        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews'].includes(saved)) {
+        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported'].includes(saved)) {
           setTab(saved as typeof tab)
         }
       } catch {}
@@ -303,6 +303,26 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
   useEffect(() => { if ((tab === 'sellers' || tab === 'dashboard') && authChecked) loadSellersList() }, [tab, authChecked])
   useEffect(() => { if (tab === 'dashboard' && authChecked) loadStats() }, [tab, authChecked])
+  type ImportedSeller = { id: string, reg_no: number | null, registered_at: string | null, shop_name: string | null, rep_name: string | null, email: string | null, address: string | null, phone: string | null, area: string | null, genre: string | null }
+  const [imported, setImported] = useState<ImportedSeller[]>([])
+  const [importedLoading, setImportedLoading] = useState(false)
+  const [importedTotal, setImportedTotal] = useState(0)
+  const [importedKw, setImportedKw] = useState('')
+  const [importedPage, setImportedPage] = useState(0)
+  const IMPORTED_PER_PAGE = 20
+  const loadImported = async () => {
+    setImportedLoading(true)
+    const from = importedPage * IMPORTED_PER_PAGE
+    const to = from + IMPORTED_PER_PAGE - 1
+    let q = supabase.from('imported_sellers').select('id, reg_no, registered_at, shop_name, rep_name, email, address, phone, area, genre', { count: 'exact' })
+    const kw = importedKw.trim()
+    if (kw) { q = q.or('shop_name.ilike.%' + kw + '%,rep_name.ilike.%' + kw + '%,email.ilike.%' + kw + '%') }
+    const { data, count } = await q.order('reg_no', { ascending: false }).range(from, to)
+    setImported((data || []) as ImportedSeller[])
+    setImportedTotal(count || 0)
+    setImportedLoading(false)
+  }
+  useEffect(() => { if (tab === 'imported' && authChecked) loadImported() }, [tab, authChecked, importedPage])
 
 
 
@@ -402,6 +422,7 @@ export default function AdminPage() {
             { key: 'messages', icon: '💬', label: 'メッセージ' },
             { key: 'reviews', icon: '⭐', label: 'レビュー審査' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
+            { key: 'imported', icon: '📇', label: 'インポート名簿' },
           ].map((item) => (
             <div
               key={item.key}
@@ -436,6 +457,7 @@ export default function AdminPage() {
             {tab === 'sales' && '売上管理'}
             {tab === 'messages' && 'メッセージ'}
             {tab === 'reviews' && 'レビュー審査'}
+            {tab === 'imported' && 'インポート名簿'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', color: '#B45309', fontSize: '12px' }}>管</div>
@@ -909,6 +931,49 @@ export default function AdminPage() {
             )
           })()}
 
+          {tab === 'imported' && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ fontSize: '13px', color: '#64748B' }}>全 <b style={{ color: '#1a1a1a' }}>{importedTotal.toLocaleString()}</b> 件のインポート名簿</div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input type="text" value={importedKw} onChange={e => setImportedKw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { setImportedPage(0); loadImported() } }} placeholder="🔍 店舗名・代表者・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', width: '260px', maxWidth: '60vw' }} />
+                  <button onClick={() => { setImportedPage(0); loadImported() }} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>検索</button>
+                </div>
+              </div>
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '900px' }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC' }}>
+                      {['No.', '店舗名・屋号', '代表者', 'メール', '電話番号', '住所', '販売エリア', '登録日'].map(h => (
+                        <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: '600', borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importedLoading && (<tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>)}
+                    {!importedLoading && imported.length === 0 && (<tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>該当するデータがありません。</td></tr>)}
+                    {imported.map((s, i) => (
+                      <tr key={s.id} style={{ borderBottom: i < imported.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                        <td style={{ padding: '10px 12px', color: '#94A3B8' }}>{s.reg_no ?? '—'}</td>
+                        <td style={{ padding: '10px 12px', fontWeight: '600' }}>{s.shop_name || '—'}</td>
+                        <td style={{ padding: '10px 12px' }}>{s.rep_name || '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#3A9BD5' }}>{s.email || '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#64748B', whiteSpace: 'nowrap' }}>{s.phone || '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#64748B', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.address || ''}>{s.address || '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#64748B', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.area || ''}>{s.area || '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#94A3B8', whiteSpace: 'nowrap' }}>{s.registered_at ? new Date(s.registered_at).toLocaleDateString('ja-JP') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
+                <button disabled={importedPage === 0} onClick={() => setImportedPage(p => Math.max(0, p - 1))} style={{ background: importedPage === 0 ? '#F1F5F9' : '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: importedPage === 0 ? 'default' : 'pointer', color: importedPage === 0 ? '#CBD5E1' : '#1a1a1a' }}>← 前へ</button>
+                <span style={{ fontSize: '13px', color: '#64748B' }}>{importedPage + 1} / {Math.max(1, Math.ceil(importedTotal / IMPORTED_PER_PAGE))} ページ</span>
+                <button disabled={(importedPage + 1) * IMPORTED_PER_PAGE >= importedTotal} onClick={() => setImportedPage(p => p + 1)} style={{ background: (importedPage + 1) * IMPORTED_PER_PAGE >= importedTotal ? '#F1F5F9' : '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: (importedPage + 1) * IMPORTED_PER_PAGE >= importedTotal ? 'default' : 'pointer', color: (importedPage + 1) * IMPORTED_PER_PAGE >= importedTotal ? '#CBD5E1' : '#1a1a1a' }}>次へ →</button>
+              </div>
+            </>
+          )}
           {tab === 'csv' && (
             <>
               <div style={{ background: '#EBF6FD', border: '1px solid #93C5FD', borderRadius: '10px', padding: '14px 18px', marginBottom: '20px', fontSize: '13px', color: '#1D4ED8', lineHeight: 1.8 }}>
