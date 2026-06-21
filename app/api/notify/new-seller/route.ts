@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       `エリア: ${areasText}`,
       '',
       '管理画面で詳細を確認してください。',
-      'https://shutten-connect-navi-bakv.vercel.app/admin',
+      'https://shutten-navi.vercel.app/admin',
     ].join('\n')
 
     const { error } = await resend.emails.send({
