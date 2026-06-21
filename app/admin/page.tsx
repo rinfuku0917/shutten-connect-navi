@@ -268,8 +268,15 @@ export default function AdminPage() {
     loadPlacesList()
   }
   const deleteSellerAdmin = async (id: string) => {
-    const { error } = await supabase.from('profiles').delete().eq('id', id)
-    if (error) { alert('削除失敗: ' + error.message); return }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { alert('ログインが必要です'); return }
+    const res = await fetch('/api/admin/delete-seller', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, requesterId: user.id }),
+    })
+    const result = await res.json()
+    if (!res.ok) { alert('削除失敗: ' + (result.error || '不明なエラー')); return }
     loadSellersList()
   }
 
