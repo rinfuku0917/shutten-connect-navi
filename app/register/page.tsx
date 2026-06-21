@@ -48,6 +48,21 @@ export default function RegisterPage() {
       options: { data: metadata }
     })
     if(err) { setError(err.message); setLoading(false); return }
+    // 管理者へ新規登録メール通知（失敗しても登録は成功させる）
+    try {
+      await fetch('/api/notify/new-seller', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role, name,
+          shop_name: company || null,
+          email, phone,
+          areas: role === 'seller' ? areas : null,
+        }),
+      })
+    } catch (e) {
+      console.error('メール通知に失敗しましたが登録は完了しました', e)
+    }
     setDone(true)
     setLoading(false)
   }
