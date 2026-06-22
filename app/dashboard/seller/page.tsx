@@ -64,9 +64,9 @@ export default function SellerDashboard() {
   const [uploadingType, setUploadingType] = useState<string | null>(null)
 
   // ===== プロフィール（出店者） =====
-  type ProfileData = { name: string, shop_name: string, email: string, phone: string, genre: string, address: string, areas: string[] }
+  type ProfileData = { name: string, shop_name: string, email: string, phone: string, genre: string, address: string, areas: string[], bio: string, sales_type: string, vehicle_type: string, size_length: string, size_width: string, size_height: string, equipment: string, menu: string }
   type SnsLinks = { instagram: string, twitter: string, youtube: string, tiktok: string }
-  const emptyProfile: ProfileData = { name: '', shop_name: '', email: '', phone: '', genre: '', address: '', areas: [] }
+  const emptyProfile: ProfileData = { name: '', shop_name: '', email: '', phone: '', genre: '', address: '', areas: [], bio: '', sales_type: '', vehicle_type: '', size_length: '', size_width: '', size_height: '', equipment: '', menu: '' }
   const emptySns: SnsLinks = { instagram: '', twitter: '', youtube: '', tiktok: '' }
   const [profile, setProfile] = useState<ProfileData>(emptyProfile)
   const [snsLinks, setSnsLinks] = useState<SnsLinks>(emptySns)
@@ -75,6 +75,8 @@ export default function SellerDashboard() {
   const [snsForm, setSnsForm] = useState<SnsLinks>(emptySns)
   const [areasInput, setAreasInput] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
+  const [photos, setPhotos] = useState<string[]>([])
+  const [photoUploading, setPhotoUploading] = useState(false)
 
   // 自分のプロフィールとSNSを読み込む
   const loadProfile = async () => {
@@ -83,15 +85,19 @@ export default function SellerDashboard() {
     if (!uid) return
     const { data: p } = await supabase
       .from('profiles')
-      .select('name, shop_name, email, phone, genre, address, areas')
+      .select('name, shop_name, email, phone, genre, address, areas, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, photos')
       .eq('id', uid).single()
     if (p) {
       const pd: ProfileData = {
         name: p.name || '', shop_name: p.shop_name || '', email: p.email || '',
         phone: p.phone || '', genre: p.genre || '', address: p.address || '',
         areas: Array.isArray(p.areas) ? p.areas : [],
+        bio: p.bio || '', sales_type: p.sales_type || '', vehicle_type: p.vehicle_type || '',
+        size_length: p.size_length || '', size_width: p.size_width || '', size_height: p.size_height || '',
+        equipment: p.equipment || '', menu: p.menu || '',
       }
       setProfile(pd)
+      setPhotos(Array.isArray(p.photos) ? p.photos : [])
     }
     const { data: links } = await supabase
       .from('sns_links')
@@ -115,6 +121,38 @@ export default function SellerDashboard() {
     setProfileEdit(true)
   }
 
+  // 写真アップロード（最大8枚, seller-photos バケット）
+  const uploadPhoto = async (file: File) => {
+    if (photos.length >= 8) { alert('写真は最大8枚までです'); return }
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    setPhotoUploading(true)
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+    const path = uid + '/' + Date.now() + '.' + ext
+    const up = await supabase.storage.from('seller-photos').upload(path, file, { upsert: true })
+    if (up.error) { alert('写真アップロード失敗: ' + up.error.message); setPhotoUploading(false); return }
+    const { data: pub } = supabase.storage.from('seller-photos').getPublicUrl(path)
+    const newPhotos = [...photos, pub.publicUrl]
+    setPhotos(newPhotos)
+    const { error: dbErr } = await supabase.from('profiles').update({ photos: newPhotos }).eq('id', uid)
+    if (dbErr) { alert('写真の保存に失敗: ' + dbErr.message) }
+    setPhotoUploading(false)
+  }
+
+  // 写真削除
+  const removePhoto = async (url: string) => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const newPhotos = photos.filter(p => p !== url)
+    setPhotos(newPhotos)
+    const { error: dbErr } = await supabase.from('profiles').update({ photos: newPhotos }).eq('id', uid)
+    if (dbErr) { alert('写真の削除に失敗: ' + dbErr.message); return }
+    const marker = '/seller-photos/'
+    const idx = url.indexOf(marker)
+    if (idx !== -1) { const sp = url.substring(idx + marker.length); await supabase.storage.from('seller-photos').remove([sp]) }
+  }
   // プロフィール保存
   const saveProfile = async () => {
     const { data: userData } = await supabase.auth.getUser()
@@ -127,6 +165,9 @@ export default function SellerDashboard() {
       name: profileForm.name, shop_name: profileForm.shop_name, email: profileForm.email,
       phone: profileForm.phone, genre: profileForm.genre, address: profileForm.address,
       areas: areasArr,
+      bio: profileForm.bio, sales_type: profileForm.sales_type, vehicle_type: profileForm.vehicle_type,
+      size_length: profileForm.size_length, size_width: profileForm.size_width, size_height: profileForm.size_height,
+      equipment: profileForm.equipment, menu: profileForm.menu, photos,
     }
     const { data: pData, error: pErr } = await supabase.from('profiles').update(payload).eq('id', uid).select()
     if (pErr) { alert('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
@@ -694,6 +735,41 @@ export default function SellerDashboard() {
                         <div style={{ fontSize: '13px', fontWeight: '500', color: fld.value === '未設定' ? '#94A3B8' : '#1a1a1a' }}>{fld.value}</div>
                       </div>
                     ))}
+                    {photos.length > 0 && (
+                      <div style={{ padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+                        <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '8px' }}>店舗・商品写真</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                          {photos.map((url, i) => (
+                            <div key={i} style={{ position: 'relative', paddingTop: '100%', borderRadius: '6px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
+                              <img src={url} alt={'p' + i} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {profile.bio && (
+                      <div style={{ padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+                        <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>紹介文・特徴</div>
+                        <div style={{ fontSize: '13px', color: '#1a1a1a', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{profile.bio}</div>
+                      </div>
+                    )}
+                    {[
+                      { label: '販売形態', value: profile.sales_type },
+                      { label: '車種', value: profile.vehicle_type },
+                      { label: 'サイズ', value: [profile.size_length, profile.size_width, profile.size_height].filter(Boolean).join(' × ') },
+                      { label: '設備', value: profile.equipment },
+                    ].filter(f => f.value).map(fld => (
+                      <div key={fld.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+                        <div style={{ width: '100px', fontSize: '12px', color: '#64748B', flexShrink: 0 }}>{fld.label}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a' }}>{fld.value}</div>
+                      </div>
+                    ))}
+                    {profile.menu && (
+                      <div style={{ padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+                        <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>メニュー</div>
+                        <div style={{ fontSize: '13px', color: '#1a1a1a', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{profile.menu}</div>
+                      </div>
+                    )}
                     <button onClick={startProfileEdit} style={{ marginTop: '16px', width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>✏️ 編集する</button>
                   </>
                 ) : (
@@ -709,6 +785,64 @@ export default function SellerDashboard() {
                         <input value={(profileForm as any)[fld.key]} onChange={e => setProfileForm({ ...profileForm, [fld.key]: e.target.value })} placeholder={fld.ph} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                       </div>
                     ))}
+                    {/* 店舗・商品写真（最大8枚） */}
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>店舗・商品写真（最大8枚）</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                        {photos.map((url, i) => (
+                          <div key={i} style={{ position: 'relative', paddingTop: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
+                            <img src={url} alt={'photo' + i} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <button onClick={() => removePhoto(url)} style={{ position: 'absolute', top: '4px', right: '4px', width: '22px', height: '22px', borderRadius: '11px', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '14px', lineHeight: '1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                          </div>
+                        ))}
+                        {photos.length < 8 && (
+                          <label style={{ paddingTop: '100%', position: 'relative', borderRadius: '8px', border: '1.5px dashed #CBD5E1', cursor: photoUploading ? 'wait' : 'pointer', background: '#F8FAFC' }}>
+                            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '11px' }}>
+                              <span style={{ fontSize: '20px' }}>{photoUploading ? '⏳' : '＋'}</span>
+                              <span>{photoUploading ? '追加中' : '写真追加'}</span>
+                            </div>
+                            <input type='file' accept='image/*' style={{ display: 'none' }} disabled={photoUploading} onChange={e => { const file = e.target.files?.[0]; if (file) uploadPhoto(file); e.target.value = '' }} />
+                          </label>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '6px' }}>1枚目が一覧やトップに表示されます。写真は追加・削除した時点で自動保存されます。</div>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>紹介文・特徴</div>
+                      <textarea value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder='お店や商品の魅力、こだわりなどを自由にご記入ください' rows={3} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>販売形態</div>
+                        <input value={profileForm.sales_type} onChange={e => setProfileForm({ ...profileForm, sales_type: e.target.value })} placeholder='例：キッチンカー' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>車種</div>
+                        <input value={profileForm.vehicle_type} onChange={e => setProfileForm({ ...profileForm, vehicle_type: e.target.value })} placeholder='例：軽トラック' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>サイズ（全長・全幅・高さ）</div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input value={profileForm.size_length} onChange={e => setProfileForm({ ...profileForm, size_length: e.target.value })} placeholder='全長' style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                        <input value={profileForm.size_width} onChange={e => setProfileForm({ ...profileForm, size_width: e.target.value })} placeholder='全幅' style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                        <input value={profileForm.size_height} onChange={e => setProfileForm({ ...profileForm, size_height: e.target.value })} placeholder='高さ' style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>設備</div>
+                      <input value={profileForm.equipment} onChange={e => setProfileForm({ ...profileForm, equipment: e.target.value })} placeholder='例：給排水タンク、発電機、冷蔵庫' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>メニュー</div>
+                      <textarea value={profileForm.menu} onChange={e => setProfileForm({ ...profileForm, menu: e.target.value })} placeholder='例：まぜそば 850円 / 台湾まぜそば 950円' rows={2} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+                    </div>
+
                     <div style={{ marginBottom: '12px' }}>
                       <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>ジャンル</div>
                       <select value={profileForm.genre} onChange={e => setProfileForm({ ...profileForm, genre: e.target.value })} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }}>
