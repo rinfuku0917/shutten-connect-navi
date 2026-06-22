@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       .eq('id', requesterId)
       .maybeSingle()
     if (reqErr) {
-      return NextResponse.json({ error: '権限確認に失敗: ' + reqErr.message }, { status: 500 })
+      return NextResponse.json({ error: '権限確認に失敗しました' }, { status: 500 })
     }
     if (!requester || requester.role !== 'admin') {
       return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
