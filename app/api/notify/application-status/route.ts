@@ -48,7 +48,7 @@ export async function POST(req: Request) {
           '',
           'ご申込いただいた「' + placeTitle + '」への出店が承認されました。',
           '',
-          'ホストとメッセージでやり取りを進め、当日に向けてご準備ください。',
+          '担当者とメッセージでやり取りを進め、当日に向けてご準備ください。',
           'https://shutten-connect-navi-bakv.vercel.app/dashboard/seller',
         ]
       : [
