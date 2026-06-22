@@ -175,12 +175,14 @@ export default function AdminPage() {
 
   // ===== メッセージ（管理者）=====
   type MsgThread = { application_id: string, sellerName: string, placeTitle: string, lastBody: string, unread: number }
-  type AdminMsg = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null }
+  type AdminMsg = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, file_url?: string | null }
   const [threads, setThreads] = useState<MsgThread[]>([])
   const [activeThread, setActiveThread] = useState<string | null>(null)
   const [threadMsgs, setThreadMsgs] = useState<AdminMsg[]>([])
   const [adminUid, setAdminUid] = useState<string | null>(null)
   const [adminMsgInput, setAdminMsgInput] = useState('')
+  const [adminMsgFile, setAdminMsgFile] = useState<File | null>(null)
+  const [adminMsgUploading, setAdminMsgUploading] = useState(false)
 
   // 全スレッド（承認済み案件）を読み込む
   const loadThreads = async () => {
@@ -194,7 +196,7 @@ export default function AdminPage() {
       .order('created_at', { ascending: false })
     const { data: msgs } = await supabase
       .from('messages')
-      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
       .order('sent_at', { ascending: true })
     const all = (msgs || []) as AdminMsg[]
     const list: MsgThread[] = (apps || []).map((a: any) => {
@@ -211,7 +213,7 @@ export default function AdminPage() {
     setActiveThread(appId)
     const { data: msgs } = await supabase
       .from('messages')
-      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
       .eq('application_id', appId)
       .order('sent_at', { ascending: true })
     setThreadMsgs((msgs || []) as AdminMsg[])
@@ -223,14 +225,43 @@ export default function AdminPage() {
   }
 
   // 管理者として返信を送信
+  // 添付ファイルを表示する（画像はインライン、それ以外はリンク）
+  const renderAttachment = (filePath: string, isMine: boolean) => {
+    const { data } = supabase.storage.from('message-attachments').getPublicUrl(filePath)
+    const url = data.publicUrl
+    const isImage = /\.(jpe?g|png|gif|webp)$/i.test(filePath)
+    if (isImage) {
+      return (
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', marginTop: '6px' }}>
+          <img src={url} alt="添付画像" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block' }} />
+        </a>
+      )
+    }
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '6px', fontSize: '12px', textDecoration: 'underline', color: isMine ? '#fff' : '#2563EB' }}>📎 ファイルを開く</a>
+    )
+  }
+
   const sendAdminMsg = async () => {
-    if (!adminMsgInput.trim() || !activeThread || !adminUid) return
+    if ((!adminMsgInput.trim() && !adminMsgFile) || !activeThread || !adminUid) return
     const body = adminMsgInput.trim()
+    setAdminMsgUploading(true)
+    let fileUrl: string | null = null
+    if (adminMsgFile) {
+      const rawExt = (adminMsgFile.name.split('.').pop() || '').toLowerCase()
+      const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : 'dat'
+      const path = adminUid + '/msg-' + Date.now() + '.' + ext
+      const up = await supabase.storage.from('message-attachments').upload(path, adminMsgFile, { upsert: true })
+      if (up.error) { alert('添付に失敗しました: ' + up.error.message); setAdminMsgUploading(false); return }
+      fileUrl = path
+    }
     const { error } = await supabase.from('messages').insert({
-      application_id: activeThread, sender_id: adminUid, body
+      application_id: activeThread, sender_id: adminUid, body, file_url: fileUrl
     })
-    if (error) { alert('送信失敗: ' + error.message); return }
+    if (error) { alert('送信失敗: ' + error.message); setAdminMsgUploading(false); return }
     setAdminMsgInput('')
+    setAdminMsgFile(null)
+    setAdminMsgUploading(false)
     openThread(activeThread)
     loadThreads()
   }
@@ -836,18 +867,32 @@ export default function AdminPage() {
                       ) : threadMsgs.map(m => (
                         m.sender_id === adminUid ? (
                           <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
-                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>{m.body}</div>
+                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>
+                              {m.body && <div>{m.body}</div>}
+                              {m.file_url && renderAttachment(m.file_url, true)}
+                            </div>
                           </div>
                         ) : (
                           <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
-                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a' }}>{m.body}</div>
+                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a' }}>
+                              {m.body && <div>{m.body}</div>}
+                              {m.file_url && renderAttachment(m.file_url, false)}
+                            </div>
                           </div>
                         )
                       ))}
                     </div>
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', gap: '8px' }}>
-                      <input value={adminMsgInput} onChange={e => setAdminMsgInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendAdminMsg() }} placeholder="メッセージを入力..." style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
-                      <button onClick={sendAdminMsg} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>送信</button>
+                    {adminMsgFile ? (
+                      <div style={{ padding: '8px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', background: '#FFF7ED' }}>
+                        <span style={{ fontSize: '12px', color: '#9A3412', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📎 {adminMsgFile.name}</span>
+                        <button onClick={() => setAdminMsgFile(null)} style={{ background: 'none', border: 'none', color: '#9A3412', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>✕</button>
+                      </div>
+                    ) : null}
+                    <div style={{ padding: '12px 16px', borderTop: adminMsgFile ? 'none' : '1px solid #E2E8F0', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <label htmlFor="admin-msg-file-input" style={{ cursor: adminMsgUploading ? 'not-allowed' : 'pointer', fontSize: '20px', opacity: adminMsgUploading ? 0.4 : 1, userSelect: 'none' }}>📎</label>
+                      <input id="admin-msg-file-input" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={adminMsgUploading} onChange={e => { const file = e.target.files?.[0]; if (file) setAdminMsgFile(file); e.currentTarget.value = '' }} />
+                      <input value={adminMsgInput} onChange={e => setAdminMsgInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendAdminMsg() }} placeholder="メッセージを入力..." disabled={adminMsgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
+                      <button onClick={sendAdminMsg} disabled={adminMsgUploading} style={{ background: adminMsgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: adminMsgUploading ? 'not-allowed' : 'pointer' }}>{adminMsgUploading ? '...' : '送信'}</button>
                     </div>
                   </>
                 ) : (
