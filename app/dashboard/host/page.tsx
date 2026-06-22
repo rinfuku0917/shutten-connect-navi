@@ -69,6 +69,26 @@ export default function HostDashboard() {
 
   const decide = async (id: string, status: 'approved' | 'rejected') => {
     await supabase.from('applications').update({ status }).eq('id', id)
+    // 出店者へステータス通知（失敗しても処理は継続）
+    try {
+      await fetch('/api/notify/application-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId: id, status }),
+      })
+    } catch (e) {
+      console.error('ステータス通知に失敗しました', e)
+    }
+    // 出店者へステータス通知（失敗しても処理は継続）
+    try {
+      await fetch('/api/notify/application-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId: id, status }),
+      })
+    } catch (e) {
+      console.error('ステータス通知に失敗しました', e)
+    }
     showToast(status === 'approved' ? '承認しました' : '否認しました')
     load()
   }
