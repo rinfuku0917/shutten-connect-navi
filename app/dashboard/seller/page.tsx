@@ -43,12 +43,7 @@ export default function SellerDashboard() {
   const router = useRouter()
   type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'|'sales'
   const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile','sales']
-  const getInitialTab = (): TabKey => {
-    if (typeof window === 'undefined') return 'home'
-    const t = new URLSearchParams(window.location.search).get('tab')
-    return (t && validTabs.includes(t as TabKey)) ? (t as TabKey) : 'home'
-  }
-  const [tab, setTab] = useState<TabKey>(getInitialTab())
+  const [tab, setTab] = useState<TabKey>('home')
   const [chatOpen, setChatOpen] = useState<string|null>(null)
   const [msg, setMsg] = useState('')
   const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
@@ -421,7 +416,8 @@ export default function SellerDashboard() {
     setMsgUploading(true)
     let fileUrl = null
     if (msgFile) {
-      const ext = msgFile.name.split('.').pop() || 'dat'
+      const rawExt = (msgFile.name.split('.').pop() || '').toLowerCase()
+      const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : 'dat'
       const path = myId + '/msg-' + Date.now() + '.' + ext
       const up = await supabase.storage.from('message-attachments').upload(path, msgFile, { upsert: true })
       if (up.error) { alert('添付に失敗しました: ' + up.error.message); setMsgUploading(false); return }
@@ -436,6 +432,12 @@ export default function SellerDashboard() {
     setMsgUploading(false)
     openThread(appId)
   }
+
+  // マウント後にURLのtabパラメータを反映（ハイドレーション不一致を防ぐ）
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t && validTabs.includes(t as TabKey)) setTab(t as TabKey)
+  }, [])
 
   useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile() }, [])
 
