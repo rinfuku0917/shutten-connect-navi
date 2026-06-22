@@ -68,6 +68,16 @@ export default function PlaceDetail() {
     if (error) { const msg = error.message.includes('duplicate key') ? 'この案件には既に申込済みの日があります。' : 'エントリー失敗: ' + error.message; setEntryErr(msg); setSubmitting(false); return }
     setSubmitting(false)
     setEntryDone(true)
+    // ホストへ申込通知（失敗しても応募は成功させる）
+    try {
+      await fetch('/api/notify/new-application', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeId: id, sellerId: user.id, dates }),
+      })
+    } catch (e) {
+      console.error('申込通知に失敗しましたが応募は完了しました', e)
+    }
   }
 
   useEffect(() => {
