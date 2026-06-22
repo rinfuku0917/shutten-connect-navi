@@ -69,6 +69,16 @@ export default function HostMessages() {
     const { error } = await supabase
       .from('messages').insert({ application_id: appId, sender_id: myId, body: text, file_url: fileUrl })
     if (error) { alert('送信に失敗しました: ' + error.message); setMsgUploading(false); return }
+    // 相手へ新着メッセージ通知（失敗しても送信は成功扱い）
+    try {
+      await fetch('/api/notify/new-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId: appId, senderId: myId }),
+      })
+    } catch (e) {
+      console.error('メッセージ通知に失敗しました', e)
+    }
     setMsg('')
     setMsgFile(null)
     setMsgUploading(false)

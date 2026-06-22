@@ -56,6 +56,17 @@ export const MessageForm = ({ applicationId, senderId, onMessageSent }: MessageF
       const { error: msgError } = await supabase.from('messages').insert(insertData);
       if (msgError) throw msgError;
 
+      // 相手へ新着メッセージ通知（失敗しても送信は成功扱い）
+      try {
+        await fetch('/api/notify/new-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ applicationId, senderId }),
+        });
+      } catch (e) {
+        console.error('メッセージ通知に失敗しました', e);
+      }
+
       setMessage('');
       removeAttachment();
       onMessageSent();

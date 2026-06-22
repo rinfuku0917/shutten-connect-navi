@@ -262,6 +262,16 @@ export default function AdminPage() {
     setAdminMsgInput('')
     setAdminMsgFile(null)
     setAdminMsgUploading(false)
+    // 相手へ新着メッセージ通知（失敗しても送信は成功扱い）
+    try {
+      await fetch('/api/notify/new-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId: activeThread, senderId: adminUid }),
+      })
+    } catch (e) {
+      console.error('メッセージ通知に失敗しました', e)
+    }
     openThread(activeThread)
     loadThreads()
   }
