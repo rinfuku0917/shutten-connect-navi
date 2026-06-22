@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 
-type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null }
+type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, file_url?: string | null }
 
 const applies = [
   { id: '1', place: '日本体育大学医療専門学校', area: '東京', date: '6月3日（水）', time: '11:00〜16:00', type: 'キッチンカー', plan: '日額固定 5,000円', status: '承認済', statusColor: '#16A34A', statusBg: '#ECFDF5' },
@@ -346,7 +346,7 @@ export default function SellerDashboard() {
       .order('created_at', { ascending: false })
     const { data: msgs } = await supabase
       .from('messages')
-      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
       .order('sent_at', { ascending: true })
     const all = (msgs || []) as DbMessage[]
     const list: MsgThread[] = (apps || []).map((a: any) => {
@@ -366,7 +366,7 @@ export default function SellerDashboard() {
     const uid = myId
     const { data: msgs } = await supabase
       .from('messages')
-      .select('id, application_id, sender_id, body, sent_at, read_at')
+      .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
       .eq('application_id', aid)
       .order('sent_at', { ascending: true })
     if (msgs) setDbMessages(msgs as DbMessage[])
@@ -395,15 +395,45 @@ export default function SellerDashboard() {
     if (tab === 'sales') loadMySales()
   }, [saleMonth])
 
+  const [msgFile, setMsgFile] = useState<File | null>(null)
+  const [msgUploading, setMsgUploading] = useState(false)
+  // 添付ファイルを表示する（画像はインライン、それ以外はリンク）
+  const renderAttachment = (filePath: string, isMine: boolean) => {
+    const { data } = supabase.storage.from('message-attachments').getPublicUrl(filePath)
+    const url = data.publicUrl
+    const isImage = /\.(jpe?g|png|gif|webp)$/i.test(filePath)
+    if (isImage) {
+      return (
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', marginTop: '6px' }}>
+          <img src={url} alt="添付画像" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block' }} />
+        </a>
+      )
+    }
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '6px', fontSize: '12px', textDecoration: 'underline', color: isMine ? '#fff' : '#2563EB' }}>📎 ファイルを開く</a>
+    )
+  }
+
   // メッセージを送信する
   const sendMessage = async () => {
     const text = msg.trim()
-    if (!text || !appId || !myId) return
+    if ((!text && !msgFile) || !appId || !myId) return
+    setMsgUploading(true)
+    let fileUrl = null
+    if (msgFile) {
+      const ext = msgFile.name.split('.').pop() || 'dat'
+      const path = myId + '/msg-' + Date.now() + '.' + ext
+      const up = await supabase.storage.from('message-attachments').upload(path, msgFile, { upsert: true })
+      if (up.error) { alert('添付に失敗しました: ' + up.error.message); setMsgUploading(false); return }
+      fileUrl = path
+    }
     const { error } = await supabase
       .from('messages')
-      .insert({ application_id: appId, sender_id: myId, body: text })
-    if (error) { alert('送信に失敗しました: ' + error.message); return }
+      .insert({ application_id: appId, sender_id: myId, body: text, file_url: fileUrl })
+    if (error) { alert('送信に失敗しました: ' + error.message); setMsgUploading(false); return }
     setMsg('')
+    setMsgFile(null)
+    setMsgUploading(false)
     openThread(appId)
   }
 
@@ -661,18 +691,32 @@ export default function SellerDashboard() {
                       ) : dbMessages.map(m => (
                         m.sender_id === myId ? (
                           <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
-                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>{m.body}</div>
+                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>
+                              {m.body && <div>{m.body}</div>}
+                              {m.file_url && renderAttachment(m.file_url, true)}
+                            </div>
                           </div>
                         ) : (
                           <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
-                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a' }}>{m.body}</div>
+                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a' }}>
+                              {m.body && <div>{m.body}</div>}
+                              {m.file_url && renderAttachment(m.file_url, false)}
+                            </div>
                           </div>
                         )
                       ))}
                     </div>
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', gap: '8px' }}>
-                      <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendMessage() }} placeholder="メッセージを入力..." style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
-                      <button onClick={sendMessage} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>送信</button>
+                    {msgFile ? (
+                      <div style={{ padding: '8px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', background: '#FFF7ED' }}>
+                        <span style={{ fontSize: '12px', color: '#9A3412', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📎 {msgFile.name}</span>
+                        <button onClick={() => setMsgFile(null)} style={{ background: 'none', border: 'none', color: '#9A3412', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>✕</button>
+                      </div>
+                    ) : null}
+                    <div style={{ padding: '12px 16px', borderTop: msgFile ? 'none' : '1px solid #E2E8F0', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <label htmlFor="msg-file-input" style={{ cursor: msgUploading ? 'not-allowed' : 'pointer', fontSize: '20px', opacity: msgUploading ? 0.4 : 1, userSelect: 'none' }}>📎</label>
+                      <input id="msg-file-input" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={msgUploading} onChange={e => { const file = e.target.files?.[0]; if (file) setMsgFile(file); e.currentTarget.value = '' }} />
+                      <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendMessage() }} placeholder="メッセージを入力..." disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
+                      <button onClick={sendMessage} disabled={msgUploading} style={{ background: msgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: msgUploading ? 'not-allowed' : 'pointer' }}>{msgUploading ? '...' : '送信'}</button>
                     </div>
                   </>
                 ) : (
