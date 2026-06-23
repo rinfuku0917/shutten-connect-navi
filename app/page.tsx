@@ -127,7 +127,7 @@ export default function Home() {
       <footer style={{background:'#F5A623',color:'#111',padding:'24px 16px'}}>
         <div style={{maxWidth:'1200px',margin:'0 auto'}}>
           <div style={{display:'flex',gap:'16px',flexWrap:'wrap',fontSize:'12px',marginBottom:'12px'}}>
-            {[{label:'利用規約',href:'#',ext:false},{label:'プライバシーポリシー',href:'#',ext:false},{label:'お問い合わせ',href:'/contact',ext:false},{label:'運営会社',href:'/company',ext:false},{label:'ブログ',href:'/blog',ext:false}].map(item=>(
+            {[{label:'利用規約',href:'/terms',ext:false},{label:'プライバシーポリシー',href:'/privacy',ext:false},{label:'お問い合わせ',href:'/contact',ext:false},{label:'運営会社',href:'/company',ext:false},{label:'ブログ',href:'/blog',ext:false}].map(item=>(
               <a key={item.label} href={item.href} target={item.ext?'_blank':undefined} rel={item.ext?'noopener noreferrer':undefined} style={{color:'#111',textDecoration:'none',fontWeight:'700'}}>{item.label}</a>
             ))}
           </div>
