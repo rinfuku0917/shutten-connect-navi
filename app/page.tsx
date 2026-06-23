@@ -131,8 +131,8 @@ export default function Home() {
             <span style={{fontWeight:'900',fontSize:'16px'}}>コネクト<span style={{color:'#111'}}>ナビ</span></span>
           </div>
           <div style={{display:'flex',gap:'16px',flexWrap:'wrap',fontSize:'12px',marginBottom:'12px'}}>
-            {['利用規約','プライバシーポリシー','お問い合わせ','運営会社','ブログ'].map(item=>(
-              <a key={item} href='#' style={{color:'#111',textDecoration:'none',fontWeight:'700'}}>{item}</a>
+            {[{label:'利用規約',href:'#'},{label:'プライバシーポリシー',href:'#'},{label:'お問い合わせ',href:'#'},{label:'運営会社',href:'/company'},{label:'ブログ',href:'/blog'}].map(item=>(
+              <a key={item.label} href={item.href} style={{color:'#111',textDecoration:'none',fontWeight:'700'}}>{item.label}</a>
             ))}
           </div>
           <div style={{fontSize:'11px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
