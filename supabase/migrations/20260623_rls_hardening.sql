@@ -53,3 +53,22 @@ create policy "users update own thread messages" on public.messages
       where p.host_id = auth.uid()
     )
   );
+
+-- ============================================================
+-- 追記: sales テーブルのRLS強化
+-- 旧 "sales_all_anon"(ALL = true, 誰でもアクセス可)を廃止し、
+-- 管理者は全件 / 出店者は自分の売上のみ操作可に変更。
+-- ============================================================
+drop policy if exists "sales_all_anon" on public.sales;
+
+create policy "admin all sales" on public.sales
+  for all using (public.is_admin());
+
+create policy "sellers read own sales" on public.sales
+  for select using (seller_id = auth.uid());
+
+create policy "sellers insert own sales" on public.sales
+  for insert with check (seller_id = auth.uid());
+
+create policy "sellers delete own sales" on public.sales
+  for delete using (seller_id = auth.uid());
