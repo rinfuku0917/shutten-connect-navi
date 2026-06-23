@@ -34,7 +34,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '出店者取得失敗' }, { status: 500 })
     }
 
-    const docLabel = doc.doc_type || '提出書類'
+    const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', other_permit: 'その他許可証' }
+    const docLabel = docTypeLabels[doc.doc_type] || doc.doc_type || '提出書類'
     const reasonText = (reason && String(reason).trim()) ? String(reason).trim() : '記載なし'
 
     const subject = '【出店コネクトナビ】提出書類について再提出のお願い'
