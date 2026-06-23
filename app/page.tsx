@@ -126,13 +126,9 @@ export default function Home() {
       </div>
       <footer style={{background:'#F5A623',color:'#111',padding:'24px 16px'}}>
         <div style={{maxWidth:'1200px',margin:'0 auto'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
-            <span style={{background:'#F5A623',color:'#111',fontWeight:'900',fontSize:'13px',padding:'4px 8px',borderRadius:'4px'}}>出店</span>
-            <span style={{fontWeight:'900',fontSize:'16px'}}>コネクト<span style={{color:'#111'}}>ナビ</span></span>
-          </div>
           <div style={{display:'flex',gap:'16px',flexWrap:'wrap',fontSize:'12px',marginBottom:'12px'}}>
-            {[{label:'利用規約',href:'#'},{label:'プライバシーポリシー',href:'#'},{label:'お問い合わせ',href:'#'},{label:'運営会社',href:'/company'},{label:'ブログ',href:'/blog'}].map(item=>(
-              <a key={item.label} href={item.href} style={{color:'#111',textDecoration:'none',fontWeight:'700'}}>{item.label}</a>
+            {[{label:'利用規約',href:'#',ext:false},{label:'プライバシーポリシー',href:'#',ext:false},{label:'お問い合わせ',href:'/contact',ext:false},{label:'運営会社',href:'/company',ext:false},{label:'ブログ',href:'/blog',ext:false}].map(item=>(
+              <a key={item.label} href={item.href} target={item.ext?'_blank':undefined} rel={item.ext?'noopener noreferrer':undefined} style={{color:'#111',textDecoration:'none',fontWeight:'700'}}>{item.label}</a>
             ))}
           </div>
           <div style={{fontSize:'11px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
