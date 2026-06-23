@@ -38,7 +38,7 @@ export const MessageForm = ({ applicationId, senderId, onMessageSent }: MessageF
         const timestamp = Date.now();
         const filePath = applicationId + '/' + timestamp + '-' + attachment.name;
         const { data, error } = await supabase.storage
-          .from('message_attachments')
+          .from('message-attachments')
           .upload(filePath, attachment);
         if (error) throw error;
         fileUrl = data.path;

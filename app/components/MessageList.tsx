@@ -20,7 +20,7 @@ interface MessageListProps {
 }
 
 function FileLink({ filePath, fileName, isMine }: { filePath: string; fileName: string; isMine: boolean }) {
-  const url = supabase.storage.from('message_attachments').getPublicUrl(filePath).data.publicUrl;
+  const url = supabase.storage.from('message-attachments').getPublicUrl(filePath).data.publicUrl;
   const cls = isMine ? 'text-xs mt-2 underline block text-blue-100' : 'text-xs mt-2 underline block text-blue-500';
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className={cls}>
