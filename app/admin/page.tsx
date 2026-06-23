@@ -385,8 +385,11 @@ export default function AdminPage() {
   }
 
   // 承認/否認
-  const reviewDoc = async (id: string, status: 'approved' | 'rejected') => {
-    const { error } = await supabase.from('seller_documents').update({ status }).eq('id', id)
+  const reviewDoc = async (id: string, status: 'approved' | 'rejected', reason?: string) => {
+    const patch: { status: string; reject_reason?: string | null } = { status }
+    if (status === 'rejected') patch.reject_reason = reason || null
+    if (status === 'approved') patch.reject_reason = null
+    const { error } = await supabase.from('seller_documents').update(patch).eq('id', id)
     if (error) { alert('更新失敗: ' + error.message); return }
     loadDocReviews()
   }
@@ -752,7 +755,7 @@ export default function AdminPage() {
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               <button onClick={() => previewDoc(d.file_url)} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>👁️ 確認</button>
                               <button onClick={() => reviewDoc(d.id, 'approved')} style={{ background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
-                              <button onClick={() => { if (window.confirm('この書類を否認しますか？')) reviewDoc(d.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>否認</button>
+                              <button onClick={async () => { const reason = window.prompt('否認理由を入力してください（出店者にメールで通知されます）'); if (reason === null) return; await reviewDoc(d.id, 'rejected', reason); try { await fetch('/api/notify/document-rejected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId: d.id, reason }) }) } catch (e) { console.error('否認通知に失敗', e) } }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>否認</button>
                             </div>
                           </td>
                         </tr>
