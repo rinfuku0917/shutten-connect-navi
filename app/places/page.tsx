@@ -30,7 +30,7 @@ export default function PlacesPage() {
   const [kw, setKw] = useState('')
   const [pref, setPref] = useState('')
   const [genre, setGenre] = useState('')
-
+const [showMap, setShowMap] = useState(false)
   // 物件読み込み
   const load = async () => {
     const { data } = await supabase
@@ -99,15 +99,23 @@ export default function PlacesPage() {
           )}
         </div>
 
-        {/* 地図 */}
+        {/* 地図（トグルで開閉） */}
         <div style={{ marginBottom:'24px' }}>
-          {loading ? (
-            <div style={{ height: '420px', width: '100%', borderRadius: '12px', background: '#EEE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '13px' }}>地図を読み込み中...</div>
-          ) : (
-            <PlacesMap pins={pins} />
-          )}
-          {pins.length === 0 && !loading && (
-            <div style={{ fontSize:'12px', color:'#999', marginTop:'8px', textAlign:'center' }}>地図に表示できる場所がありません（位置情報を取得中の場合があります）。</div>
+          <button onClick={() => setShowMap(v => !v)} style={{ width:'100%', padding:'12px', borderRadius:'10px', border:'1.5px solid #E2E8F0', background:'#fff', color:'#1a1a1a', fontSize:'14px', fontWeight:'700', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
+            🗺️ {showMap ? '地図を閉じる' : '地図で見る'}
+            <span style={{ fontSize:'12px', color:'#888' }}>{showMap ? '▲' : '▼'}</span>
+          </button>
+          {showMap && (
+            <div style={{ marginTop:'12px' }}>
+              {loading ? (
+                <div style={{ height: '320px', width: '100%', borderRadius: '12px', background: '#EEE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '13px' }}>地図を読み込み中...</div>
+              ) : (
+                <PlacesMap pins={pins} />
+              )}
+              {pins.length === 0 && !loading && (
+                <div style={{ fontSize:'12px', color:'#999', marginTop:'8px', textAlign:'center' }}>地図に表示できる場所がありません（位置情報を取得中の場合があります）。</div>
+              )}
+            </div>
           )}
         </div>
 
