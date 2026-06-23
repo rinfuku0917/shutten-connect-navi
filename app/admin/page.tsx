@@ -395,7 +395,7 @@ export default function AdminPage() {
   }
 
   type RecentApp = { id: string, name: string, place: string, date: string, status: string }
-  const [statCounts, setStatCounts] = useState({ sellers: 0, hosts: 0, places: 0, monthApps: 0 })
+  const [statCounts, setStatCounts] = useState({ sellers: 0, hosts: 0, places: 0, monthApps: 0, gmv: 0, fee: 0, totalApps: 0, approvedApps: 0 })
   const [recentApps, setRecentApps] = useState<RecentApp[]>([])
   const loadStats = async () => {
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
@@ -403,7 +403,12 @@ export default function AdminPage() {
     const hostRes = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'host')
     const placeRes = await supabase.from('places').select('id', { count: 'exact', head: true })
     const monthRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).gte('created_at', monthStart.toISOString())
-    setStatCounts({ sellers: sellerRes.count || 0, hosts: hostRes.count || 0, places: placeRes.count || 0, monthApps: monthRes.count || 0 })
+    const salesRes = await supabase.from('sales').select('revenue, fee')
+    const gmv = (salesRes.data || []).reduce((sum: number, s: any) => sum + (s.revenue || 0), 0)
+    const feeTotal = (salesRes.data || []).reduce((sum: number, s: any) => sum + (s.fee || 0), 0)
+    const totalAppsRes = await supabase.from('applications').select('id', { count: 'exact', head: true })
+    const approvedAppsRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).eq('status', 'approved')
+    setStatCounts({ sellers: sellerRes.count || 0, hosts: hostRes.count || 0, places: placeRes.count || 0, monthApps: monthRes.count || 0, gmv, fee: feeTotal, totalApps: totalAppsRes.count || 0, approvedApps: approvedAppsRes.count || 0 })
     const { data: apps } = await supabase.from('applications').select('id, status, created_at, places(title), profiles(name)').order('created_at', { ascending: false }).limit(3)
     const statusJa = (s: string) => s === 'approved' ? '承認済' : s === 'rejected' ? '否認' : '審査中'
     setRecentApps((apps || []).map((a: any) => ({ id: a.id, name: a.profiles?.name || '(出店者)', place: a.places?.title || '(案件名なし)', date: a.created_at ? new Date(a.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '', status: statusJa(a.status) })))
@@ -413,6 +418,9 @@ export default function AdminPage() {
     { label: '総募集者数', value: statCounts.hosts.toLocaleString(), icon: '🏪', color: '#3A9BD5' },
     { label: '掲載案件数', value: statCounts.places.toLocaleString(), icon: '📋', color: '#16A34A' },
     { label: '今月の申込', value: statCounts.monthApps.toLocaleString(), icon: '📬', color: '#7C3AED' },
+    { label: '累計GMV', value: '¥' + statCounts.gmv.toLocaleString(), icon: '💰', color: '#DC2626' },
+    { label: '手数料収入', value: '¥' + statCounts.fee.toLocaleString(), icon: '🏦', color: '#0891B2' },
+    { label: '成約率', value: statCounts.totalApps > 0 ? Math.round(statCounts.approvedApps / statCounts.totalApps * 100) + '%' : '—', icon: '✅', color: '#65A30D' },
   ]
 
   const handleCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
