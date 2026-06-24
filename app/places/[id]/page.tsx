@@ -27,6 +27,7 @@ export default function PlaceDetail() {
   const id = params?.id as string
   const [place, setPlace] = useState<Place | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isSeller, setIsSeller] = useState(false)
   const router = useRouter()
   const [showEntry, setShowEntry] = useState(false)
   const [format, setFormat] = useState('')
@@ -85,6 +86,11 @@ export default function PlaceDetail() {
       const { data } = await supabase.from('places').select('*').eq('id', id).single()
       setPlace(data)
       setLoading(false)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+        if (prof?.role === 'seller') setIsSeller(true)
+      }
     }
     if (id) load()
   }, [id])
@@ -148,7 +154,7 @@ export default function PlaceDetail() {
                   {[
                     { label: '日程', value: scheduleText },
                     { label: 'アクセス', value: place.address || '要相談' },
-                    { label: '出店料', value: place.fee || '要相談' },
+                    { label: '出店料', value: isSeller ? (place.fee || '要相談') : '🔒 出店者ログイン後に表示' },
                     { label: '出店形態', value: tag },
                   ].map((row, i) => (
                     <tr key={row.label} style={{ borderBottom: i < 3 ? '1px solid #F3F4F6' : 'none' }}>
@@ -240,7 +246,7 @@ export default function PlaceDetail() {
               <h4 style={{ fontSize: '13px', fontWeight: '900', marginBottom: '10px', color: '#B45309' }}>📋 基本情報</h4>
               <div style={{ fontSize: '12px', color: '#666', lineHeight: 2 }}>
                 {place.prefecture && <div>📍 {place.prefecture}</div>}
-                <div>💴 {place.fee || '要相談'}</div>
+                <div>💴 {isSeller ? (place.fee || '要相談') : '🔒 ログイン後に表示'}</div>
                 <div>🚚 {tag}</div>
               </div>
             </div>

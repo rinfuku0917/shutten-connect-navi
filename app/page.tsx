@@ -25,6 +25,7 @@ export default function Home() {
   const [places, setPlaces] = useState<Place[]>([])
   const [stats, setStats] = useState({ places: 0, sellers: 0, matches: 0, rating: 0 })
   const [sellers, setSellers] = useState<Seller[]>([])
+  const [isSeller, setIsSeller] = useState(false)
   useEffect(() => {
     const loadSellers = async () => {
       const { data } = await supabase
@@ -64,6 +65,14 @@ export default function Home() {
       })
     }
     loadStats()
+    const checkSeller = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+        if (prof?.role === 'seller') setIsSeller(true)
+      }
+    }
+    checkSeller()
   }, [])
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6',width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
@@ -115,7 +124,7 @@ export default function Home() {
                   <span style={{background:'#FFF3CD',color:'#111',fontSize:'10px',fontWeight:'700',padding:'2px 6px',borderRadius:'4px'}}>{p.place_type==='event'?'イベント':'常設'}</span>
                 </div>
                 <div style={{fontWeight:'700',fontSize:'13px',marginBottom:'4px',lineHeight:1.4,color:'#111'}}>{p.title}</div>
-                <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>{p.fee || '要相談'}</div>
+                <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>{isSeller ? (p.fee || '要相談') : '🔒 ログイン後表示'}</div>
               </div>
             </div>
             </Link>

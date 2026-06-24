@@ -27,6 +27,7 @@ type Place = {
 export default function PlacesPage() {
   const [places, setPlaces] = useState<Place[]>([])
   const [loading, setLoading] = useState(true)
+  const [isSeller, setIsSeller] = useState(false)
   const [kw, setKw] = useState('')
   const [pref, setPref] = useState('')
   const [genre, setGenre] = useState('')
@@ -44,8 +45,17 @@ const [showMap, setShowMap] = useState(false)
     return data || []
   }
 
+  const checkSeller = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (prof?.role === 'seller') setIsSeller(true)
+    }
+  }
+
   useEffect(() => {
     load()
+    checkSeller()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -131,7 +141,7 @@ const [showMap, setShowMap] = useState(false)
               <div style={{padding:'20px'}}>
                 <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'8px'}}>{place.title}</div>
                 {place.prefecture && <div style={{fontSize:'13px',color:'#111',marginBottom:'6px'}}>📍 {place.prefecture}</div>}
-                <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{place.fee || '要相談'}</div>
+                <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{isSeller ? (place.fee || '要相談') : '🔒 ログイン後表示'}</div>
                 <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
                   <span style={{background:'#EBF6FD',color:'#1565C0',fontSize:'11px',padding:'3px 8px',borderRadius:'4px'}}>🏪 {place.place_type==='event'?'イベント':'常設'}</span>
                 </div>
