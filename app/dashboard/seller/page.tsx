@@ -73,6 +73,15 @@ export default function SellerDashboard() {
   const [photos, setPhotos] = useState<string[]>([])
   const [photoUploading, setPhotoUploading] = useState(false)
 
+  // ===== 提供メニュー =====
+  type MenuItem = { id: string, name: string, price: number | null, photo_url: string | null, sort_order: number }
+  const [menus, setMenus] = useState<MenuItem[]>([])
+  const [menuName, setMenuName] = useState("")
+  const [menuPrice, setMenuPrice] = useState("")
+  const [menuPhotoUrl, setMenuPhotoUrl] = useState("")
+  const [menuPhotoUploading, setMenuPhotoUploading] = useState(false)
+  const [menuSaving, setMenuSaving] = useState(false)
+
   // 自分のプロフィールとSNSを読み込む
   const loadProfile = async () => {
     const { data: userData } = await supabase.auth.getUser()
@@ -106,6 +115,18 @@ export default function SellerDashboard() {
       else if (l.platform === 'tiktok') sns.tiktok = l.url || ''
     })
     setSnsLinks(sns)
+    await loadMenus(uid)
+  }
+
+  // 自分のメニューを読み込む
+  const loadMenus = async (uid: string) => {
+    const { data } = await supabase
+      .from('menus')
+      .select('id, name, price, photo_url, sort_order')
+      .eq('seller_id', uid)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+    setMenus((data || []) as MenuItem[])
   }
 
   // 編集開始：表示値をフォームにコピー
@@ -148,6 +169,60 @@ export default function SellerDashboard() {
     const idx = url.indexOf(marker)
     if (idx !== -1) { const sp = url.substring(idx + marker.length); await supabase.storage.from('seller-photos').remove([sp]) }
   }
+
+  // メニュー写真アップロード（seller-photos バケット, menu- 始まり）
+  const uploadMenuPhoto = async (file: File) => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    setMenuPhotoUploading(true)
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+    const filePath = uid + '/menu-' + Date.now() + '.' + ext
+    const up = await supabase.storage.from('seller-photos').upload(filePath, file, { upsert: true })
+    if (up.error) { alert('写真アップロード失敗: ' + up.error.message); setMenuPhotoUploading(false); return }
+    const { data: pub } = supabase.storage.from('seller-photos').getPublicUrl(filePath)
+    setMenuPhotoUrl(pub.publicUrl)
+    setMenuPhotoUploading(false)
+  }
+
+  // メニュー追加
+  const addMenu = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    if (!menuName.trim()) { alert('メニュー名を入力してください'); return }
+    setMenuSaving(true)
+    const priceNum = menuPrice.trim() === '' ? null : parseInt(menuPrice.replace(/[^0-9]/g, ''), 10)
+    const nextOrder = menus.length > 0 ? Math.max(...menus.map(m => m.sort_order)) + 1 : 0
+    const { error } = await supabase.from('menus').insert({
+      seller_id: uid,
+      name: menuName.trim(),
+      price: priceNum,
+      photo_url: menuPhotoUrl || null,
+      sort_order: nextOrder,
+    })
+    if (error) { alert('メニューの追加に失敗: ' + error.message); setMenuSaving(false); return }
+    setMenuName(''); setMenuPrice(''); setMenuPhotoUrl('')
+    await loadMenus(uid)
+    setMenuSaving(false)
+  }
+
+  // メニュー削除
+  const deleteMenu = async (m: MenuItem) => {
+    if (!confirm('このメニューを削除しますか？')) return
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const { error } = await supabase.from('menus').delete().eq('id', m.id)
+    if (error) { alert('メニューの削除に失敗: ' + error.message); return }
+    if (m.photo_url) {
+      const mk = '/seller-photos/'
+      const idx = m.photo_url.indexOf(mk)
+      if (idx !== -1) { const sp = m.photo_url.substring(idx + mk.length); await supabase.storage.from('seller-photos').remove([sp]) }
+    }
+    await loadMenus(uid)
+  }
+
   // プロフィール保存
   const saveProfile = async () => {
     const { data: userData } = await supabase.auth.getUser()
@@ -852,6 +927,61 @@ export default function SellerDashboard() {
                         )}
                       </div>
                       <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '6px' }}>1枚目が一覧やトップに表示されます。写真は追加・削除した時点で自動保存されます。</div>
+                    </div>
+
+                    {/* 提供メニュー */}
+                    <div style={{ marginBottom: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>提供メニュー</div>
+
+                      {/* 登録済みメニュー一覧 */}
+                      {menus.length > 0 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '12px' }}>
+                          {menus.map((m) => (
+                            <div key={m.id} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden', position: 'relative', background: '#fff' }}>
+                              {m.photo_url ? (
+                                <div style={{ width: '100%', paddingTop: '66%', position: 'relative' }}>
+                                  <img src={m.photo_url} alt={m.name} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </div>
+                              ) : (
+                                <div style={{ width: '100%', paddingTop: '66%', position: 'relative', background: '#F1F5F9' }}>
+                                  <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>🍽️</div>
+                                </div>
+                              )}
+                              <button onClick={() => deleteMenu(m)} style={{ position: 'absolute', top: '6px', right: '6px', width: '22px', height: '22px', borderRadius: '11px', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '14px', lineHeight: '1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                              <div style={{ padding: '8px 10px' }}>
+                                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a' }}>{m.name}</div>
+                                <div style={{ fontSize: '13px', color: '#F5A623', fontWeight: 700, marginTop: '2px' }}>{m.price != null ? m.price.toLocaleString() + '円' : '価格応相談'}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* メニュー追加フォーム */}
+                      <div style={{ border: '1px dashed #CBD5E1', borderRadius: '10px', padding: '12px', background: '#F8FAFC' }}>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                          {/* 写真 */}
+                          {menuPhotoUrl ? (
+                            <div style={{ width: '64px', height: '64px', borderRadius: '8px', overflow: 'hidden', position: 'relative', flexShrink: 0, border: '1px solid #E2E8F0' }}>
+                              <img src={menuPhotoUrl} alt='menu' style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <button onClick={() => setMenuPhotoUrl('')} style={{ position: 'absolute', top: '2px', right: '2px', width: '18px', height: '18px', borderRadius: '9px', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '12px', lineHeight: '1', cursor: 'pointer' }}>×</button>
+                            </div>
+                          ) : (
+                            <label style={{ width: '64px', height: '64px', borderRadius: '8px', border: '1.5px dashed #CBD5E1', cursor: menuPhotoUploading ? 'wait' : 'pointer', background: '#fff', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '10px' }}>
+                              <span style={{ fontSize: '18px' }}>{menuPhotoUploading ? '⏳' : '📷'}</span>
+                              <span>{menuPhotoUploading ? '' : '写真'}</span>
+                              <input type='file' accept='image/*' style={{ display: 'none' }} disabled={menuPhotoUploading} onChange={e => { const file = e.target.files?.[0]; if (file) uploadMenuPhoto(file); e.target.value = '' }} />
+                            </label>
+                          )}
+                          {/* 名前・価格 */}
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input value={menuName} onChange={e => setMenuName(e.target.value)} placeholder='メニュー名（例：ダックステーキ）' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                            <input value={menuPrice} onChange={e => setMenuPrice(e.target.value)} placeholder='価格（例：1000）※数字のみ' inputMode='numeric' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                          </div>
+                        </div>
+                        <button onClick={addMenu} disabled={menuSaving} style={{ width: '100%', background: menuSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 700, cursor: menuSaving ? 'not-allowed' : 'pointer' }}>{menuSaving ? '追加中...' : '＋ メニューを追加'}</button>
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '6px' }}>追加したメニューは出店者紹介ページに表示されます。</div>
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
