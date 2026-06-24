@@ -34,6 +34,8 @@ export default function SellerDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [err, setErr] = useState('')
+  type MenuItem = { id: string, name: string, price: number | null, photo_url: string | null, sort_order: number }
+  const [menus, setMenus] = useState<MenuItem[]>([])
 
   const loadReviews = async () => {
     const { data } = await supabase
@@ -53,6 +55,13 @@ export default function SellerDetailPage() {
         .eq('id', id).single()
       setSeller(s as Seller)
       await loadReviews()
+      const { data: menuData } = await supabase
+        .from('menus')
+        .select('id, name, price, photo_url, sort_order')
+        .eq('seller_id', id)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+      setMenus((menuData || []) as MenuItem[])
       setLoading(false)
     }
     load()
@@ -103,6 +112,31 @@ export default function SellerDetailPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px' }}>
               {seller.photos.slice(0, 8).map((url, i) => (
                 <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', aspectRatio: '1 / 1', borderRadius: '10px', overflow: 'hidden', border: '1px solid #e0e0e0', backgroundImage: 'url(' + url + ')', backgroundSize: 'cover', backgroundPosition: 'center' }}></a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {menus.length > 0 && (
+          <div style={{ marginTop: '28px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: '900', color: '#1a1a1a', margin: '0 0 12px' }}>提供メニュー</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
+              {menus.map((m) => (
+                <div key={m.id} style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px', overflow: 'hidden' }}>
+                  {m.photo_url ? (
+                    <div style={{ width: '100%', paddingTop: '70%', position: 'relative' }}>
+                      <img src={m.photo_url} alt={m.name} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  ) : (
+                    <div style={{ width: '100%', paddingTop: '70%', position: 'relative', background: '#F1F5F9' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🍽️</div>
+                    </div>
+                  )}
+                  <div style={{ padding: '10px 12px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#1a1a1a' }}>{m.name}</div>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#F5A623', marginTop: '4px' }}>{m.price != null ? m.price.toLocaleString() + '円' : '価格応相談'}</div>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
