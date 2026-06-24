@@ -87,8 +87,8 @@ export default function SellersPage() {
                   <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',backgroundImage:'url('+seller.photos[0]+')',backgroundSize:'cover',backgroundPosition:'center'}}></div>
                 </div>
               ) : (
-                <div style={{width:'100%',paddingTop:'66%',position:'relative',background:'linear-gradient(135deg,#FFF3DD,#FFE4C0)'}}>
-                  <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'44px',opacity:0.5}}>{genreEmoji(seller.genre)}</div>
+                <div style={{width:'100%',paddingTop:'66%',position:'relative',background:'#F1F0EC'}}>
+                  <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px',color:'#B0AEA8',letterSpacing:'1px'}}>No image</div>
                 </div>
               )}
               <div style={{padding:'14px',display:'flex',flexDirection:'column',gap:'6px',flex:1}}>
