@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
-type Seller = { id: string, name: string | null, shop_name: string | null, genre: string | null, areas: string[] | null }
+type Seller = { id: string, name: string | null, shop_name: string | null, genre: string | null, areas: string[] | null, photos: string[] | null }
 type Review = { id: string, reviewer_name: string | null, rating: number, comment: string | null, created_at: string }
 
 const genreEmoji = (genre: string | null): string => {
@@ -49,7 +49,7 @@ export default function SellerDetailPage() {
     const load = async () => {
       const { data: s } = await supabase
         .from('profiles')
-        .select('id, name, shop_name, genre, areas')
+        .select('id, name, shop_name, genre, areas, photos')
         .eq('id', id).single()
       setSeller(s as Seller)
       await loadReviews()
@@ -96,6 +96,17 @@ export default function SellerDetailPage() {
             <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: '700' }}>{reviews.length > 0 ? <><Stars n={avg} /> <span style={{ color: '#1a1a1a' }}>{avg}</span> <span style={{ color: '#94A3B8', fontSize: '12px' }}>({reviews.length}件)</span></> : <span style={{ color: '#94A3B8', fontSize: '13px' }}>レビューはまだありません</span>}</div>
           </div>
         </div>
+
+        {seller.photos && seller.photos.length > 0 && (
+          <div style={{ marginTop: '24px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: '900', color: '#1a1a1a', margin: '0 0 12px' }}>店舗・商品写真</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px' }}>
+              {seller.photos.slice(0, 8).map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', aspectRatio: '1 / 1', borderRadius: '10px', overflow: 'hidden', border: '1px solid #e0e0e0', backgroundImage: 'url(' + url + ')', backgroundSize: 'cover', backgroundPosition: 'center' }}></a>
+              ))}
+            </div>
+          </div>
+        )}
 
         <h2 style={{ fontSize: '16px', fontWeight: '900', color: '#1a1a1a', margin: '28px 0 12px' }}>お客様のレビュー</h2>
         <div style={{ display: 'grid', gap: '12px' }}>
