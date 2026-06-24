@@ -23,6 +23,7 @@ const vendors = [
 
 export default function Home() {
   const [places, setPlaces] = useState<Place[]>([])
+  const [stats, setStats] = useState({ places: 0, sellers: 0, matches: 0, rating: 0 })
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase
@@ -34,6 +35,24 @@ export default function Home() {
       setPlaces(data || [])
     }
     load()
+    const loadStats = async () => {
+      const placesCount = await supabase.from('places').select('id', { count: 'exact', head: true }).eq('status', 'published')
+      const sellersCount = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'seller')
+      const matchesCount = await supabase.from('applications').select('id', { count: 'exact', head: true }).eq('status', 'approved')
+      const reviewsData = await supabase.from('reviews').select('rating').eq('status', 'approved')
+      let avg = 0
+      if (reviewsData.data && reviewsData.data.length > 0) {
+        const sum = reviewsData.data.reduce((a, r) => a + (r.rating || 0), 0)
+        avg = Math.round((sum / reviewsData.data.length) * 10) / 10
+      }
+      setStats({
+        places: placesCount.count || 0,
+        sellers: sellersCount.count || 0,
+        matches: matchesCount.count || 0,
+        rating: avg,
+      })
+    }
+    loadStats()
   }, [])
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6',width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
@@ -59,7 +78,7 @@ export default function Home() {
         
       </div>
       <div className='grid-4' style={{borderBottom:'1px solid #eee',background:'#fff',gap:'0'}}>
-        {[['掲載場所','1,240+'],['登録出店者','3,800+'],['マッチング実績','12,500+'],['平均評価','4.8★']].map(([l,v])=>(
+        {[['掲載場所',String(stats.places)],['登録出店者',String(stats.sellers)],['マッチング実績',String(stats.matches)],['平均評価',stats.rating > 0 ? stats.rating + '★' : '-']].map(([l,v])=>(
           <div key={l} style={{padding:'16px',textAlign:'center',borderRight:'1px solid #eee'}}>
             <div style={{fontSize:'20px',fontWeight:'900',color:'#111'}}>{v}</div>
             <div style={{fontSize:'11px',color:'#111'}}>{l}</div>
