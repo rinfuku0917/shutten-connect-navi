@@ -97,7 +97,6 @@ export default function SellerDetailPage() {
         <Link href='/sellers' style={{ fontSize: '13px', color: '#64748B', textDecoration: 'none' }}>← 出店者一覧に戻る</Link>
 
         <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e0e0e0', padding: '24px', marginTop: '12px', display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <div style={{ fontSize: '56px', flexShrink: 0 }}>{genreEmoji(seller.genre)}</div>
           <div style={{ flex: 1 }}>
             <h1 style={{ fontSize: '22px', fontWeight: '900', color: '#1a1a1a', marginBottom: '6px' }}>{seller.shop_name || seller.name || '(店舗名未設定)'}</h1>
             <div style={{ fontSize: '13px', color: '#555', marginBottom: '4px' }}>{seller.genre || 'ジャンル未設定'}</div>
