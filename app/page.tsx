@@ -12,19 +12,30 @@ type Place = {
   fee: string | null
   image_url: string | null
 }
-const vendors = [
-  {id:1,name:'たこ焼き大阪屋',genre:'たこ焼き',rating:4.8,emoji:'🐙'},
-  {id:2,name:'La France',genre:'クレープ',rating:4.9,emoji:'🥞'},
-  {id:3,name:'炭火屋',genre:'焼き鳥',rating:4.7,emoji:'🔨'},
-  {id:4,name:'スパイス',genre:'カレー',rating:4.6,emoji:'🍛'},
-  {id:5,name:'BREW',genre:'コーヒー',rating:4.9,emoji:'☕'},
-  {id:6,name:'ソウルキッチン',genre:'韓国料理',rating:4.5,emoji:'🌮'},
-]
 
+type Seller = {
+  id: string
+  shop_name: string | null
+  name: string | null
+  genre: string | null
+  photos: string[] | null
+  avatar_url: string | null
+}
 export default function Home() {
   const [places, setPlaces] = useState<Place[]>([])
   const [stats, setStats] = useState({ places: 0, sellers: 0, matches: 0, rating: 0 })
+  const [sellers, setSellers] = useState<Seller[]>([])
   useEffect(() => {
+    const loadSellers = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id,shop_name,name,genre,photos,avatar_url')
+        .eq('role', 'seller')
+        .order('created_at', { ascending: false })
+        .limit(6)
+      setSellers(data || [])
+    }
+    loadSellers()
     const load = async () => {
       const { data } = await supabase
         .from('places')
@@ -117,14 +128,24 @@ export default function Home() {
           <Link href='/sellers' style={{color:'#111',fontWeight:'700',textDecoration:'none',fontSize:'14px'}}>もっと見る →</Link>
         </div>
         <div className='top-vendor-grid' style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px'}}>
-          {vendors.map(v=>(
-            <div key={v.id} style={{background:'#fff',borderRadius:'12px',padding:'16px',textAlign:'center',boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}>
-              <div style={{fontSize:'36px',marginBottom:'8px'}}>{v.emoji}</div>
-              <div style={{fontWeight:'700',fontSize:'13px',color:'#111'}}>{v.name}</div>
-              <div style={{fontSize:'11px',color:'#111',marginBottom:'4px'}}>{v.genre}</div>
-              <div style={{color:'#111',fontSize:'12px',fontWeight:'700'}}>★ {v.rating}</div>
+          {sellers.map(sl=>{
+            const img = (sl.photos && sl.photos.length > 0) ? sl.photos[0] : (sl.avatar_url || null)
+            const label = sl.shop_name || sl.name || '出店者'
+            return (
+            <Link key={sl.id} href={'/sellers/' + sl.id} style={{textDecoration:'none'}}>
+            <div style={{background:'#fff',borderRadius:'12px',overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}>
+              {img ? (
+                <div style={{width:'100%',height:'120px',backgroundImage:'url('+img+')',backgroundSize:'cover',backgroundPosition:'center'}}></div>
+              ) : (
+                <div style={{width:'100%',height:'120px',background:'#F0E6D2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'28px',fontWeight:'900',color:'#C9A86A'}}>{label.charAt(0)}</div>
+              )}
+              <div style={{padding:'12px',textAlign:'center'}}>
+                <div style={{fontWeight:'700',fontSize:'13px',color:'#111',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{label}</div>
+                <div style={{fontSize:'11px',color:'#777',marginTop:'4px'}}>{sl.genre || 'ジャンル未設定'}</div>
+              </div>
             </div>
-          ))}
+            </Link>
+          )})}
         </div>
       </div>
       <div style={{padding:'0 16px 24px',maxWidth:'1200px',margin:'0 auto'}}>
