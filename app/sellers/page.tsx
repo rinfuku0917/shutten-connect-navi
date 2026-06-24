@@ -9,6 +9,7 @@ type Seller = {
   name: string | null
   shop_name: string | null
   genre: string | null
+  photos: string[]
   rating: number
   reviewCount: number
 }
@@ -29,16 +30,16 @@ export default function SellersPage() {
 
   useEffect(() => {
     const load = async () => {
-      // 承認済み案件を持つ出店者だけを集める
-      const { data: apps } = await supabase
-        .from('applications')
-        .select('seller_id, profiles(id, name, shop_name, genre)')
-        .eq('status', 'approved')
+      // 登録している出店者全員を取得
+      const { data: sellerRows } = await supabase
+        .from('profiles')
+        .select('id, name, shop_name, genre, photos')
+        .eq('role', 'seller')
+        .order('created_at', { ascending: false })
       const map = new Map<string, Seller>()
-      for (const a of (apps || []) as any[]) {
-        const p = a.profiles
+      for (const p of (sellerRows || []) as any[]) {
         if (p && !map.has(p.id)) {
-          map.set(p.id, { id: p.id, name: p.name, shop_name: p.shop_name, genre: p.genre, rating: 0, reviewCount: 0 })
+          map.set(p.id, { id: p.id, name: p.name, shop_name: p.shop_name, genre: p.genre, photos: Array.isArray(p.photos) ? p.photos : [], rating: 0, reviewCount: 0 })
         }
       }
       // 各出店者の承認済みレビューの平均点・件数
@@ -81,7 +82,11 @@ export default function SellersPage() {
           {sellers.map(seller => (
             <Link key={seller.id} href={'/sellers/' + seller.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',padding:'20px',color:'inherit'}}>
               <div style={{display:'flex',gap:'16px',alignItems:'center'}}>
-                <div style={{fontSize:'40px',flexShrink:0}}>{genreEmoji(seller.genre)}</div>
+                {seller.photos && seller.photos.length > 0 ? (
+                  <div style={{width:'64px',height:'64px',borderRadius:'10px',flexShrink:0,backgroundImage:'url('+seller.photos[0]+')',backgroundSize:'cover',backgroundPosition:'center',border:'1px solid #e0e0e0'}}></div>
+                ) : (
+                  <div style={{fontSize:'40px',flexShrink:0,width:'64px',textAlign:'center'}}>{genreEmoji(seller.genre)}</div>
+                )}
                 <div style={{flex:1}}>
                   <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'4px'}}>{seller.shop_name || seller.name || '(店舗名未設定)'}</div>
                   <div style={{fontSize:'13px',color:'#111',marginBottom:'4px'}}>{seller.genre || 'ジャンル未設定'}</div>
