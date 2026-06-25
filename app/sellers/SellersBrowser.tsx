@@ -15,8 +15,25 @@ const MAX_AREA_TAGS = 4
 
 function toArray(v: string[] | string | null): string[] {
   if (!v) return []
-  const parts = Array.isArray(v) ? v : v.split(/[,、，]/)
-  return parts.map((s) => (s ?? '').toString().trim()).filter(Boolean)
+  let arr: unknown[]
+  if (Array.isArray(v)) {
+    arr = v
+  } else {
+    const t = v.trim()
+    if (t.startsWith('[') && t.endsWith(']')) {
+      try {
+        const j = JSON.parse(t)
+        arr = Array.isArray(j) ? j : [t]
+      } catch {
+        arr = t.split(/[,、，]/)
+      }
+    } else {
+      arr = t.split(/[,、，]/)
+    }
+  }
+  return arr
+    .map((s) => (s ?? '').toString().replace(/^[\[\]"'\s]+|[\[\]"'\s]+$/g, '').trim())
+    .filter(Boolean)
 }
 
 const CORPORATE_MARKERS = ['株式会社', '合同会社', '有限会社', '合資会社', '合名会社', '(株)', '（株）', '(有)', '（有）']
