@@ -54,7 +54,7 @@ export default function AdminPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   // ===== 書類審査（管理者） =====
-  type DocReview = { id: string, seller_id: string, doc_type: string, file_url: string, status: string, uploaded_at: string, sellerName: string }
+  type DocReview = { id: string, seller_id: string, doc_type: string, file_url: string, status: string, uploaded_at: string, sellerName: string, sellerShop: string, expiry_date: string | null }
   const [docReviews, setDocReviews] = useState<DocReview[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
@@ -84,11 +84,12 @@ export default function AdminPage() {
     setDocsLoading(true)
     const { data } = await supabase
       .from('seller_documents')
-      .select('id, seller_id, doc_type, file_url, status, uploaded_at, profiles(name)')
+      .select('id, seller_id, doc_type, file_url, status, uploaded_at, expiry_date, profiles(name, shop_name)')
       .order('uploaded_at', { ascending: false })
     const mapped: DocReview[] = (data || []).map((d: any) => ({
       id: d.id, seller_id: d.seller_id, doc_type: d.doc_type, file_url: d.file_url,
-      status: d.status, uploaded_at: d.uploaded_at, sellerName: d.profiles?.name || '(出店者)'
+      status: d.status, uploaded_at: d.uploaded_at, expiry_date: d.expiry_date || null,
+      sellerName: d.profiles?.name || '(出店者)', sellerShop: d.profiles?.shop_name || ''
     }))
     setDocReviews(mapped)
     setDocsLoading(false)
@@ -761,43 +762,72 @@ export default function AdminPage() {
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者が提出した書類を確認し、承認または否認します。</p>
                 <button onClick={loadDocReviews} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>🔄 更新</button>
               </div>
-              <div className='admin-table-wrap' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #E2E8F0', background: '#F8FAFC' }}>
-                      {['出店者', '書類種別', '提出日時', 'ステータス', '操作'].map(h => (
-                        <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748B' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {docsLoading ? (
-                      <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>
-                    ) : docReviews.length === 0 ? (
-                      <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#999' }}>提出された書類はまだありません。</td></tr>
-                    ) : docReviews.map(d => {
-                      const meta = ({ approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' }, pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' }, rejected: { label: '否認', color: '#DC2626', bg: '#FEE2E2' } } as Record<string, { label: string, color: string, bg: string }>)[d.status] || { label: d.status, color: '#555', bg: '#F1F5F9' }
+              {docsLoading ? (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999' }}>読み込み中...</div>
+              ) : docReviews.length === 0 ? (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999' }}>提出された書類はまだありません。</div>
+              ) : (() => {
+                // seller_id ごとに書類をグループ化
+                const groups: Record<string, DocReview[]> = {}
+                for (const d of docReviews) { (groups[d.seller_id] ||= []).push(d) }
+                const docOrder = ['license_front', 'license_back', 'food_hygiene', 'liability_insurance', 'other_permit']
+                const sellerIds = Object.keys(groups)
+                // 有効期限の状態を判定（期限切れ / 間近 / 通常 / 未設定）
+                const expiryInfo = (dateStr: string | null) => {
+                  if (!dateStr) return { text: '未設定', color: '#94A3B8', bg: '#F1F5F9' }
+                  const today = new Date(); today.setHours(0, 0, 0, 0)
+                  const exp = new Date(dateStr); exp.setHours(0, 0, 0, 0)
+                  const days = Math.round((exp.getTime() - today.getTime()) / 86400000)
+                  const jp = exp.toLocaleDateString('ja-JP')
+                  if (days < 0) return { text: jp + '（期限切れ）', color: '#DC2626', bg: '#FEE2E2' }
+                  if (days <= 30) return { text: jp + '（あと' + days + '日）', color: '#B45309', bg: '#FEF3C7' }
+                  return { text: jp, color: '#475569', bg: '#F1F5F9' }
+                }
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {sellerIds.map(sid => {
+                      const docs = groups[sid].slice().sort((a, b) => docOrder.indexOf(a.doc_type) - docOrder.indexOf(b.doc_type))
+                      const head = docs[0]
+                      const counts = { approved: 0, pending: 0, rejected: 0 } as Record<string, number>
+                      for (const d of docs) { if (counts[d.status] !== undefined) counts[d.status]++ }
                       return (
-                        <tr key={d.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                          <td style={{ padding: '12px 14px', fontWeight: '600' }}>{d.sellerName}</td>
-                          <td style={{ padding: '12px 14px' }}>{docTypeLabels[d.doc_type] || d.doc_type}</td>
-                          <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{new Date(d.uploaded_at).toLocaleString('ja-JP')}</td>
-                          <td style={{ padding: '12px 14px' }}>
-                            <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: meta.bg, color: meta.color }}>{meta.label}</span>
-                          </td>
-                          <td style={{ padding: '12px 14px' }}>
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                              <button onClick={() => previewDoc(d.file_url)} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>👁️ 確認</button>
-                              <button onClick={() => reviewDoc(d.id, 'approved')} style={{ background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
-                              <button onClick={async () => { const reason = window.prompt('否認理由を入力してください（出店者にメールで通知されます）'); if (reason === null) return; await reviewDoc(d.id, 'rejected', reason); try { await fetch('/api/notify/document-rejected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId: d.id, reason }) }) } catch (e) { console.error('否認通知に失敗', e) } }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>否認</button>
+                        <div key={sid} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                          {/* 出店者ヘッダー */}
+                          <div style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ fontWeight: '700', fontSize: '15px', color: '#1E2A3B' }}>
+                              {head.sellerName}{head.sellerShop && <span style={{ fontWeight: '400', fontSize: '13px', color: '#64748B', marginLeft: '8px' }}>（{head.sellerShop}）</span>}
                             </div>
-                          </td>
-                        </tr>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              {counts.pending > 0 && <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: '#FEF3C7', color: '#92400E' }}>審査中 {counts.pending}</span>}
+                              {counts.approved > 0 && <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: '#ECFDF5', color: '#16A34A' }}>承認済 {counts.approved}</span>}
+                              {counts.rejected > 0 && <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: '#FEE2E2', color: '#DC2626' }}>否認 {counts.rejected}</span>}
+                            </div>
+                          </div>
+                          {/* 書類一覧 */}
+                          <div>
+                            {docs.map(d => {
+                              const meta = ({ approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' }, pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' }, rejected: { label: '否認', color: '#DC2626', bg: '#FEE2E2' } } as Record<string, { label: string, color: string, bg: string }>)[d.status] || { label: d.status, color: '#555', bg: '#F1F5F9' }
+                              const exp = expiryInfo(d.expiry_date)
+                              return (
+                                <div key={d.id} style={{ borderBottom: '1px solid #F1F5F9', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                                  <div style={{ flex: '1 1 160px', minWidth: 0, fontWeight: '600', fontSize: '13px' }}>{docTypeLabels[d.doc_type] || d.doc_type}</div>
+                                  <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: meta.bg, color: meta.color, flexShrink: 0 }}>{meta.label}</span>
+                                  <span style={{ fontSize: '11px', fontWeight: '600', padding: '3px 10px', borderRadius: '6px', background: exp.bg, color: exp.color, flexShrink: 0 }}>📅 {exp.text}</span>
+                                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
+                                    <button onClick={() => previewDoc(d.file_url)} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>👁️ 確認</button>
+                                    <button onClick={() => reviewDoc(d.id, 'approved')} style={{ background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
+                                    <button onClick={async () => { const reason = window.prompt('否認理由を入力してください（出店者にメールで通知されます）'); if (reason === null) return; await reviewDoc(d.id, 'rejected', reason); try { await fetch('/api/notify/document-rejected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId: d.id, reason }) }) } catch (e) { console.error('否認通知に失敗', e) } }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>否認</button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
                       )
                     })}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
 
