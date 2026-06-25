@@ -21,6 +21,19 @@ type Seller = {
   photos: string[] | null
   avatar_url: string | null
 }
+function toArr(v: string[] | string | null): string[] {
+  if (!v) return []
+  let arr: unknown[]
+  if (Array.isArray(v)) { arr = v }
+  else {
+    const t = v.trim()
+    if (t.startsWith('[') && t.endsWith(']')) {
+      try { const j = JSON.parse(t); arr = Array.isArray(j) ? j : [t] }
+      catch { arr = t.split(/[,、，]/) }
+    } else { arr = t.split(/[,、，]/) }
+  }
+  return arr.map(x => (x ?? '').toString().replace(/^[\[\]"'\s]+|[\[\]"'\s]+$/g, '').trim()).filter(Boolean)
+}
 export default function Home() {
   const [places, setPlaces] = useState<Place[]>([])
   const [stats, setStats] = useState({ places: 0, sellers: 0, matches: 0, rating: 0 })
@@ -150,7 +163,16 @@ export default function Home() {
               )}
               <div style={{padding:'12px',textAlign:'center'}}>
                 <div style={{fontWeight:'700',fontSize:'13px',color:'#111',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{label}</div>
-                <div style={{fontSize:'11px',color:'#777',marginTop:'4px'}}>{sl.genre || 'ジャンル未設定'}</div>
+                {(() => {
+                  const gs = toArr(sl.genre)
+                  return gs.length > 0 ? (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'4px',justifyContent:'center',marginTop:'6px'}}>
+                      {gs.map(g => (<span key={g} style={{fontSize:'10px',fontWeight:'700',color:'#B45309',background:'#FFF3E0',padding:'2px 8px',borderRadius:'999px'}}>{g}</span>))}
+                    </div>
+                  ) : (
+                    <div style={{fontSize:'11px',color:'#777',marginTop:'4px'}}>ジャンル未設定</div>
+                  )
+                })()}
               </div>
             </div>
             </Link>
