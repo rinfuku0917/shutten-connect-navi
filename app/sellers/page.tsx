@@ -19,7 +19,7 @@ async function fetchSellers(): Promise<Seller[]> {
   for (let from = 0; ; from += CHUNK) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, shop_name, genre, areas')
+      .select('id, shop_name, genre, areas, photos')
       .eq('role', 'seller')
       .eq('approval_status', 'approved')
       .order('shop_name', { ascending: true, nullsFirst: false })

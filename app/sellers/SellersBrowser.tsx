@@ -8,6 +8,7 @@ export type Seller = {
   shop_name: string | null
   genre: string[] | string | null
   areas: string[] | string | null
+  photos: string[] | null
 }
 
 const PER_PAGE = 30
@@ -204,7 +205,15 @@ export default function SellersBrowser({ initialSellers }: { initialSellers: Sel
             const genres = toArray(s.genre)
             return (
               <li key={s.id}>
-                <Link href={`/sellers/${s.id}`} className="group flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+                <Link href={`/sellers/${s.id}`} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+                  <div className="aspect-[16/10] w-full overflow-hidden bg-amber-50" style={s.photos && s.photos.length > 0 ? { backgroundImage: `url(${s.photos[0]})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
+                    {(!s.photos || s.photos.length === 0) && (
+                      <div className="flex h-full w-full items-center justify-center text-4xl font-bold text-amber-300">
+                        {(displayShopName(s) || '店').trim().charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-lg font-semibold leading-snug text-stone-900">
                       {displayShopName(s) || <span className="text-stone-400">（店名未登録）</span>}
@@ -232,6 +241,7 @@ export default function SellersBrowser({ initialSellers }: { initialSellers: Sel
                       </div>
                     </div>
                   )}
+                  </div>
                 </Link>
               </li>
             )
