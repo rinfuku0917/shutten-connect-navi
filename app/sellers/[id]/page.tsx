@@ -143,9 +143,9 @@ export default function SellerDetailPage() {
         {seller.photos && seller.photos.length > 0 && (
           <div style={{ marginTop: '28px' }}>
             <h2 style={sectionTitle}>店舗・商品写真</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: seller.photos.length === 1 ? '1fr' : 'repeat(2, 1fr)', gap: '12px' }}>
               {seller.photos.slice(0, 8).map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', aspectRatio: '1 / 1', borderRadius: '12px', overflow: 'hidden', border: '1px solid #EDE7DE', background: 'center/cover url(' + url + ')' }} />
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', aspectRatio: seller.photos!.length === 1 ? '16 / 10' : '4 / 3', borderRadius: '14px', overflow: 'hidden', border: '1px solid #EDE7DE', background: 'center/cover url(' + url + ')' }} />
               ))}
             </div>
           </div>
