@@ -72,6 +72,7 @@ export default function SellerDetailPage() {
         .from('profiles')
         .select('id, name, shop_name, genre, areas, photos')
         .eq('id', id)
+        .eq('approval_status', 'approved')
         .single()
       setSeller(s as Seller)
       await loadReviews()

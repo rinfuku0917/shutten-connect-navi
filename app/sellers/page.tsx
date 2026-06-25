@@ -21,6 +21,7 @@ async function fetchSellers(): Promise<Seller[]> {
       .from('profiles')
       .select('id, shop_name, genre, areas')
       .eq('role', 'seller')
+      .eq('approval_status', 'approved')
       .order('shop_name', { ascending: true, nullsFirst: false })
       .range(from, from + CHUNK - 1)
 

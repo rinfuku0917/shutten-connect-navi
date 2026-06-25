@@ -72,6 +72,8 @@ export default function SellerDashboard() {
   const [profileSaving, setProfileSaving] = useState(false)
   const [photos, setPhotos] = useState<string[]>([])
   const [photoUploading, setPhotoUploading] = useState(false)
+  const [approvalStatus, setApprovalStatus] = useState<string>('unsubmitted')
+  const [publishSaving, setPublishSaving] = useState(false)
 
   // ===== 提供メニュー =====
   type MenuItem = { id: string, name: string, price: number | null, photo_url: string | null, sort_order: number }
@@ -89,7 +91,7 @@ export default function SellerDashboard() {
     if (!uid) return
     const { data: p } = await supabase
       .from('profiles')
-      .select('name, shop_name, email, phone, genre, address, areas, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, photos')
+      .select('name, shop_name, email, phone, genre, address, areas, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, photos, approval_status')
       .eq('id', uid).single()
     if (p) {
       const pd: ProfileData = {
@@ -101,6 +103,7 @@ export default function SellerDashboard() {
         equipment: p.equipment || '', menu: p.menu || '',
       }
       setProfile(pd)
+      setApprovalStatus(p.approval_status || 'unsubmitted')
       setPhotos(Array.isArray(p.photos) ? p.photos : [])
     }
     const { data: links } = await supabase
@@ -221,6 +224,23 @@ export default function SellerDashboard() {
       if (idx !== -1) { const sp = m.photo_url.substring(idx + mk.length); await supabase.storage.from('seller-photos').remove([sp]) }
     }
     await loadMenus(uid)
+  }
+
+  // 公開を申請する（unsubmitted/rejected -> pending）
+  const requestPublish = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    setPublishSaving(true)
+    const { error } = await supabase.from('profiles').update({
+      approval_status: 'pending',
+      publish_requested: true,
+      submitted_at: new Date().toISOString(),
+    }).eq('id', uid)
+    setPublishSaving(false)
+    if (error) { alert('申請に失敗しました: ' + error.message); return }
+    setApprovalStatus('pending')
+    alert('公開を申請しました。運営の承認をお待ちください。')
   }
 
   // プロフィール保存
@@ -838,6 +858,30 @@ export default function SellerDashboard() {
 
           {/* プロフィール */}
           {tab === 'profile' && (
+            <>
+            {(() => {
+              const map: Record<string, { label: string, sub: string, color: string, bg: string, border: string }> = {
+                unsubmitted: { label: '未公開', sub: '「公開を申請する」を押すと、運営の承認後にあなたのページが公開されます。', color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' },
+                pending: { label: '審査中', sub: '公開を申請しました。運営の承認をお待ちください。', color: '#92400E', bg: '#FEF3C7', border: '#FCD34D' },
+                approved: { label: '公開中', sub: 'あなたのページは一般公開されています。', color: '#16A34A', bg: '#ECFDF5', border: '#86EFAC' },
+                rejected: { label: '非承認', sub: '今回は公開が見送られました。内容を見直して再申請できます。', color: '#DC2626', bg: '#FEE2E2', border: '#FCA5A5' },
+              }
+              const st = map[approvalStatus] || map.unsubmitted
+              return (
+                <div style={{ gridColumn: '1 / -1', background: st.bg, border: '1.5px solid ' + st.border, borderRadius: '12px', padding: '16px 18px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 900, color: st.color, background: '#fff', padding: '3px 10px', borderRadius: '999px', border: '1px solid ' + st.border }}>{st.label}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a1a' }}>掲載ステータス</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px' }}>{st.sub}</div>
+                  </div>
+                  {(approvalStatus === 'unsubmitted' || approvalStatus === 'rejected') && (
+                    <button onClick={requestPublish} disabled={publishSaving} style={{ background: publishSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: publishSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{publishSaving ? '送信中...' : (approvalStatus === 'rejected' ? '再申請する' : '公開を申請する')}</button>
+                  )}
+                </div>
+              )
+            })()}
             <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
                 <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>👤 基本情報</div>
@@ -1080,6 +1124,7 @@ export default function SellerDashboard() {
                 )}
               </div>
             </div>
+            </>
           )}
 
           {/* 売上報告 */}

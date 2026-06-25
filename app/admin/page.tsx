@@ -21,7 +21,7 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
@@ -70,7 +70,7 @@ export default function AdminPage() {
       if (profile?.role !== 'admin') { router.push('/admin/login'); return }
       try {
         const saved = localStorage.getItem('adminTab')
-        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported'].includes(saved)) {
+        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported','publish'].includes(saved)) {
           setTab(saved as typeof tab)
         }
       } catch {}
@@ -324,6 +324,29 @@ export default function AdminPage() {
   const [reviewList, setReviewList] = useState<AdminReview[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
 
+  // ===== 公開申請の承認（管理者）=====
+  type PubReq = { id: string, name: string | null, shop_name: string | null, genre: string | null, areas: string[] | null, approval_status: string, submitted_at: string | null }
+  const [pubReqs, setPubReqs] = useState<PubReq[]>([])
+  const [pubLoading, setPubLoading] = useState(false)
+  const loadPubReqs = async () => {
+    setPubLoading(true)
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, name, shop_name, genre, areas, approval_status, submitted_at')
+      .eq('role', 'seller')
+      .in('approval_status', ['pending', 'rejected'])
+      .order('submitted_at', { ascending: true })
+    setPubReqs((data || []) as PubReq[])
+    setPubLoading(false)
+  }
+  const setApproval = async (id: string, status: 'approved' | 'rejected') => {
+    const patch: { approval_status: string, approved_at?: string | null } = { approval_status: status }
+    if (status === 'approved') patch.approved_at = new Date().toISOString()
+    const { error } = await supabase.from('profiles').update(patch).eq('id', id)
+    if (error) { alert('更新失敗: ' + error.message); return }
+    loadPubReqs()
+  }
+
   const loadReviewList = async () => {
     setReviewsLoading(true)
     const { data } = await supabase
@@ -347,6 +370,7 @@ export default function AdminPage() {
 
   // reviewsタブを開いたら読み込む
   useEffect(() => { if (tab === 'reviews' && authChecked) loadReviewList() }, [tab, authChecked])
+  useEffect(() => { if (tab === 'publish' && authChecked) loadPubReqs() }, [tab, authChecked])
   useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
   useEffect(() => { if ((tab === 'sellers' || tab === 'dashboard') && authChecked) loadSellersList() }, [tab, authChecked])
   useEffect(() => { if (tab === 'dashboard' && authChecked) loadStats() }, [tab, authChecked])
@@ -479,6 +503,7 @@ export default function AdminPage() {
             { key: 'sales', icon: '💰', label: '売上管理' },
             { key: 'messages', icon: '💬', label: 'メッセージ' },
             { key: 'reviews', icon: '⭐', label: 'レビュー審査' },
+            { key: 'publish', icon: '✅', label: '公開申請' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
             { key: 'imported', icon: '📇', label: 'インポート名簿' },
           ].map((item) => (
@@ -515,6 +540,7 @@ export default function AdminPage() {
             {tab === 'sales' && '売上管理'}
             {tab === 'messages' && 'メッセージ'}
             {tab === 'reviews' && 'レビュー審査'}
+            {tab === 'publish' && '公開申請'}
             {tab === 'imported' && 'インポート名簿'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -973,6 +999,53 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+            )
+          })()}
+
+          {tab === 'publish' && (() => {
+            const pending = pubReqs.filter(r => r.approval_status === 'pending')
+            const rejected = pubReqs.filter(r => r.approval_status === 'rejected')
+            const toArr = (v: string[] | string | null): string[] => {
+              if (!v) return []
+              if (Array.isArray(v)) return v.map(x => String(x).replace(/^[\[\]"'\s]+|[\[\]"'\s]+$/g, '')).filter(Boolean)
+              const t = String(v).trim()
+              try { const j = JSON.parse(t); if (Array.isArray(j)) return j.map(x => String(x)).filter(Boolean) } catch {}
+              return t.split(/[,、，]/).map(x => x.replace(/^[\[\]"'\s]+|[\[\]"'\s]+$/g, '')).filter(Boolean)
+            }
+            const Card = ({ r }: { r: PubReq }) => (
+              <div style={{ background: '#fff', borderRadius: '12px', border: r.approval_status === 'pending' ? '1px solid #FFE082' : '1px solid #E2E8F0', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a1a1a' }}>{r.shop_name || '（店名未登録）'}</div>
+                    <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>{r.genre || 'ジャンル未設定'}{toArr(r.areas).length > 0 ? ' ／ ' + toArr(r.areas).join('・') : ''}</div>
+                    <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>申請日時：{r.submitted_at ? new Date(r.submitted_at).toLocaleString('ja-JP') : '—'}</div>
+                  </div>
+                  {r.approval_status === 'rejected' && <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', background: '#FEE2E2', color: '#DC2626', flexShrink: 0 }}>非承認</span>}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={() => window.open('/sellers/' + r.id, '_blank')} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>👁️ プレビュー</button>
+                  <button onClick={() => setApproval(r.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>承認して公開</button>
+                  {r.approval_status === 'pending' && <button onClick={() => { if (window.confirm('この申請を非承認にしますか？')) setApproval(r.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>非承認</button>}
+                </div>
+              </div>
+            )
+            return (
+            <div>
+              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
+                <span>✅</span><span>出店者が「公開を申請」すると、ここに表示されます。承認すると出店者一覧（/sellers）に公開されます。</span>
+              </div>
+              <h3 style={{ fontSize: '14px', fontWeight: 900, color: '#1a1a1a', margin: '0 0 10px' }}>承認待ち（{pending.length}件）</h3>
+              <div style={{ display: 'grid', gap: '12px', marginBottom: '28px' }}>
+                {pubLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
+                {!pubLoading && pending.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>承認待ちの申請はありません。</div>}
+                {pending.map(r => <Card key={r.id} r={r} />)}
+              </div>
+              <h3 style={{ fontSize: '14px', fontWeight: 900, color: '#1a1a1a', margin: '0 0 10px' }}>非承認（{rejected.length}件）</h3>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {!pubLoading && rejected.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>非承認の申請はありません。</div>}
+                {rejected.map(r => <Card key={r.id} r={r} />)}
               </div>
             </div>
             )
