@@ -14,6 +14,7 @@ export default function HostSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [unread, setUnread] = useState(0)
+  const [userName, setUserName] = useState('')
 
   // 自分の場所への申込に届いた未読メッセージ数を数える
   const loadUnread = async () => {
@@ -40,7 +41,17 @@ export default function HostSidebar() {
     }
   }
 
+  // ログイン中の募集者の名前を取得
+  const loadUserName = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const { data: prof } = await supabase.from('profiles').select('name, shop_name').eq('id', uid).single()
+    setUserName(prof?.shop_name || prof?.name || '')
+  }
+
   useEffect(() => { loadUnread() }, [pathname])
+  useEffect(() => { loadUserName() }, [])
 
   return (
     <div className='dash-sidebar' style={{ width: '200px', background: '#1E2A3B', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
@@ -51,9 +62,9 @@ export default function HostSidebar() {
       </div>
       <div className='dash-sidebar-user' style={{ padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#F5A623', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '900', color: '#fff', flexShrink: 0 }}>渋</div>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#F5A623', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '900', color: '#fff', flexShrink: 0 }}>{userName ? userName.charAt(0) : '・'}</div>
           <div>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff' }}>渋谷マルシェ実行委員会</div>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff' }}>{userName || '読み込み中...'}</div>
             <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>募集者</div>
           </div>
         </div>
