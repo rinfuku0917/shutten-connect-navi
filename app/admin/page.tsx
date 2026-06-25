@@ -57,6 +57,7 @@ export default function AdminPage() {
   type DocReview = { id: string, seller_id: string, doc_type: string, file_url: string, status: string, uploaded_at: string, sellerName: string, sellerShop: string, expiry_date: string | null }
   const [docReviews, setDocReviews] = useState<DocReview[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
+  const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
   const [authChecked, setAuthChecked] = useState(false)
   const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', other_permit: 'その他許可証' }
 
@@ -758,9 +759,14 @@ export default function AdminPage() {
           {/* ===== CSVインポート ===== */}
           {tab === 'docs' && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', gap: '12px' }}>
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者が提出した書類を確認し、承認または否認します。</p>
                 <button onClick={loadDocReviews} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>🔄 更新</button>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                {([{ key: 'all', label: 'すべて' }, { key: 'pending', label: '要対応' }, { key: 'expiring', label: '期限1ヶ月以内' }] as { key: 'all' | 'pending' | 'expiring', label: string }[]).map(btn => (
+                  <button key={btn.key} onClick={() => setDocFilter(btn.key)} style={{ background: docFilter === btn.key ? '#F5A623' : '#fff', color: docFilter === btn.key ? '#fff' : '#64748B', border: '1px solid ' + (docFilter === btn.key ? '#F5A623' : '#E2E8F0'), borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>{btn.label}</button>
+                ))}
               </div>
               {docsLoading ? (
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999' }}>読み込み中...</div>
@@ -783,9 +789,28 @@ export default function AdminPage() {
                   if (days <= 30) return { text: jp + '（あと' + days + '日）', color: '#B45309', bg: '#FEF3C7' }
                   return { text: jp, color: '#475569', bg: '#F1F5F9' }
                 }
+                // 有効期限が30日以内（期限切れ含む）かどうか
+                const isExpiringSoon = (dateStr: string | null) => {
+                  if (!dateStr) return false
+                  const today = new Date(); today.setHours(0, 0, 0, 0)
+                  const exp = new Date(dateStr); exp.setHours(0, 0, 0, 0)
+                  const days = Math.round((exp.getTime() - today.getTime()) / 86400000)
+                  return days <= 30
+                }
+                // フィルター適用：表示する出店者を絞り込む
+                const shownIds = sellerIds.filter(sid => {
+                  const ds = groups[sid]
+                  if (docFilter === 'pending') return ds.some(d => d.status === 'pending')
+                  if (docFilter === 'expiring') return ds.some(d => isExpiringSoon(d.expiry_date))
+                  return true
+                })
+                if (shownIds.length === 0) {
+                  const emptyMsg = docFilter === 'pending' ? '審査中の書類がある出店者はいません。' : docFilter === 'expiring' ? '有効期限が1ヶ月以内の出店者はいません。' : '提出された書類はまだありません。'
+                  return <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999' }}>{emptyMsg}</div>
+                }
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {sellerIds.map(sid => {
+                    {shownIds.map(sid => {
                       const docs = groups[sid].slice().sort((a, b) => docOrder.indexOf(a.doc_type) - docOrder.indexOf(b.doc_type))
                       const head = docs[0]
                       const counts = { approved: 0, pending: 0, rejected: 0 } as Record<string, number>
