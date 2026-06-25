@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import SellersBrowser, { type Seller } from './SellersBrowser'
 
+// 一覧から完全に除外する店舗（運営法人など）
+const EXCLUDED_SHOP_NAMES = ['株式会社nav', '株式会社アーク']
+
 // このロースターはほぼ静的。10分キャッシュ（常に最新にしたい場合は 0 か "force-dynamic" に）
 export const revalidate = 600
 
@@ -20,8 +23,8 @@ async function fetchAllSellers(): Promise<Seller[]> {
   for (let from = 0; ; from += CHUNK) {
     const { data, error } = await supabase
       .from('imported_sellers')
-      // 表示に必要な列のみ取得（email / phone は個人情報のため取得しない）
-      .select('id, reg_no, shop_name, rep_name, genre, area')
+      // 表示に必要な列のみ取得（rep_name / email / phone は個人情報のため取得しない）
+      .select('id, reg_no, shop_name, genre, area')
       .order('reg_no', { ascending: true })
       .range(from, from + CHUNK - 1)
 
@@ -38,7 +41,8 @@ export default async function SellersPage() {
   let errorMessage: string | null = null
 
   try {
-    sellers = await fetchAllSellers()
+    const all = await fetchAllSellers()
+    sellers = all.filter((s) => !EXCLUDED_SHOP_NAMES.includes((s.shop_name ?? '').trim()))
   } catch (e) {
     errorMessage = e instanceof Error ? e.message : '不明なエラーが発生しました'
   }

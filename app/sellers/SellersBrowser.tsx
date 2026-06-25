@@ -6,7 +6,6 @@ export type Seller = {
   id: string
   reg_no: number
   shop_name: string | null
-  rep_name: string | null
   genre: string | null
   area: string | null
 }
@@ -23,8 +22,22 @@ function splitTokens(v: string | null): string[] {
     .filter(Boolean)
 }
 
+// 法人格を示す語。これらを含む shop_name は店名として表示しない（行は残す）
+const CORPORATE_MARKERS = ['株式会社', '合同会社', '有限会社', '合資会社', '合名会社', '(株)', '（株）', '(有)', '（有）']
+
+function isCorporateName(name: string): boolean {
+  return CORPORATE_MARKERS.some((m) => name.includes(m))
+}
+
+// 表示用の店舗名。法人名・空欄なら null（→「（店名未登録）」表示）。検索もこの値が対象
+function displayShopName(s: Seller): string | null {
+  const name = (s.shop_name ?? '').trim()
+  if (!name || isCorporateName(name)) return null
+  return name
+}
+
 function matchesSeller(s: Seller, q: string, g: string, a: string): boolean {
-  if (q && !(s.shop_name ?? '').toLowerCase().includes(q.toLowerCase())) return false
+  if (q && !(displayShopName(s) ?? '').toLowerCase().includes(q.toLowerCase())) return false
   if (g && !splitTokens(s.genre).includes(g)) return false
   if (a && !splitTokens(s.area).includes(a)) return false
   return true
@@ -233,14 +246,12 @@ export default function SellersBrowser({ initialSellers }: { initialSellers: Sel
               >
                 <div className="flex items-start justify-between gap-2">
                   <h2 className="text-lg font-semibold leading-snug text-slate-900">
-                    {s.shop_name?.trim() || <span className="text-slate-400">（店名未登録）</span>}
+                    {displayShopName(s) || <span className="text-slate-400">（店名未登録）</span>}
                   </h2>
                   <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-500">
                     No.{s.reg_no}
                   </span>
                 </div>
-
-                {s.rep_name && <p className="mt-1 text-sm text-slate-500">{s.rep_name}</p>}
 
                 {genres.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
