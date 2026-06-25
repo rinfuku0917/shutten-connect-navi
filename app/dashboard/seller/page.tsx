@@ -54,7 +54,7 @@ export default function SellerDashboard() {
   const [unread, setUnread] = useState(0)
   type MyApply = { id: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
-  type DocRow = { id: string, doc_type: string, file_url: string, status: string }
+  type DocRow = { id: string, doc_type: string, file_url: string, status: string, expiry_date: string | null }
   const [myDocs, setMyDocs] = useState<DocRow[]>([])
   const [uploadingType, setUploadingType] = useState<string | null>(null)
 
@@ -398,7 +398,7 @@ export default function SellerDashboard() {
     if (!uid) return
     const { data } = await supabase
       .from('seller_documents')
-      .select('id, doc_type, file_url, status')
+      .select('id, doc_type, file_url, status, expiry_date')
       .eq('seller_id', uid)
     setMyDocs((data as DocRow[]) || [])
   }
@@ -420,6 +420,25 @@ export default function SellerDashboard() {
     })
     if (ins.error) { alert('登録失敗: ' + ins.error.message); setUploadingType(null); return }
     setUploadingType(null)
+    loadDocs()
+  }
+
+  // 有効期限だけを保存する（免許証は表裏の両方に同じ期限を書き込む）
+  const saveExpiry = async (docType: string, value: string) => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const expiry = value === '' ? null : value
+    // 免許証の表面で入力したら、表・裏の両方を更新する
+    const targets = (docType === 'license_front' || docType === 'license_back')
+      ? ['license_front', 'license_back']
+      : [docType]
+    for (const t of targets) {
+      await supabase.from('seller_documents')
+        .update({ expiry_date: expiry })
+        .eq('seller_id', uid)
+        .eq('doc_type', t)
+    }
     loadDocs()
   }
 
@@ -837,18 +856,32 @@ export default function SellerDashboard() {
                   const badgeBg = status === '承認済' ? '#ECFDF5' : status === '審査中' ? '#FEF3C7' : status === '否認' ? '#FEE2E2' : '#F1F5F9'
                   const badgeColor = status === '承認済' ? '#16A34A' : status === '審査中' ? '#92400E' : status === '否認' ? '#DC2626' : '#64748B'
                   const isUploading = uploadingType === doc.key
+                  // 期限欄を出すか: ファイル提出済み かつ 免許裏面ではない（裏面は表面と共有のため非表示）
+                  const showExpiry = !!rec && doc.key !== 'license_back'
+                  const expiryLabel = doc.key === 'license_front' ? '運転免許証の有効期限' : '有効期限'
                   return (
-                    <div key={doc.key} style={{ background: '#fff', borderRadius: '12px', border: '1px solid ' + border, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      <div style={{ fontSize: '28px' }}>{doc.icon}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>{doc.name} {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}</div>
+                    <div key={doc.key} style={{ background: '#fff', borderRadius: '12px', border: '1px solid ' + border, padding: '16px 20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{ fontSize: '28px' }}>{doc.icon}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>{doc.name} {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}</div>
+                        </div>
+                        <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: badgeBg, color: badgeColor, flexShrink: 0 }}>{status}</span>
+                        <label style={{ background: isUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '700', cursor: isUploading ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
+                          {isUploading ? '送信中...' : (status === '未提出' ? '📎 アップロード' : '🔄 再提出')}
+                          <input type='file' accept='image/*,application/pdf' style={{ display: 'none' }} disabled={isUploading}
+                            onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDoc(doc.key, file); e.currentTarget.value = '' }} />
+                        </label>
                       </div>
-                      <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: badgeBg, color: badgeColor, flexShrink: 0 }}>{status}</span>
-                      <label style={{ background: isUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '700', cursor: isUploading ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
-                        {isUploading ? '送信中...' : (status === '未提出' ? '📎 アップロード' : '🔄 再提出')}
-                        <input type='file' accept='image/*,application/pdf' style={{ display: 'none' }} disabled={isUploading}
-                          onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDoc(doc.key, file); e.currentTarget.value = '' }} />
-                      </label>
+                      {showExpiry && (
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #E2E8F0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>📅 {expiryLabel}</span>
+                          <input type='date' defaultValue={rec?.expiry_date || ''}
+                            onChange={(e) => saveExpiry(doc.key, e.target.value)}
+                            style={{ fontSize: '13px', padding: '6px 10px', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#1E2A3B' }} />
+                          {rec?.expiry_date && <span style={{ fontSize: '11px', color: '#16A34A', fontWeight: '600' }}>✓ 保存済み</span>}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
