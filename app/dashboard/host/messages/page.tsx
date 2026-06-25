@@ -24,7 +24,7 @@ export default function HostMessages() {
     const { data: apps } = await supabase
       .from('applications').select('id')
       .in('place_id', placeIds)
-      .order('created_at', { ascending: false }).limit(1)
+      .order('apply_date', { ascending: false }).limit(1)
     const firstAppId = apps && apps[0] ? apps[0].id : null
     setAppId(firstAppId)
     if (!firstAppId) { setDbMessages([]); return }
