@@ -88,7 +88,7 @@ export default function Home() {
     checkSeller()
   }, [])
   return (
-    <div style={{minHeight:'100vh',background:'#FFF9E6',width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
+    <div style={{minHeight:'100vh',backgroundColor:'#FFF9E6',backgroundImage:'url(/top-bg.jpg)',backgroundSize:'cover',backgroundPosition:'top center',backgroundRepeat:'no-repeat',backgroundAttachment:'fixed',width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
       <Nav />
       <div style={{background:'#fff',borderBottom:'1px solid #eee',padding:'8px 16px',overflowX:'auto',whiteSpace:'nowrap'}}>
         {['キッチンカー','テント','常設','イベント','学校・大学','オフィス','商業施設','公園・屋外'].map(c=>(
