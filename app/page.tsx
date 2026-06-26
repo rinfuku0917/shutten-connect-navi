@@ -96,9 +96,7 @@ export default function Home() {
         ))}
       </div>
       <div style={{position:'relative',padding:'40px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',maxWidth:'100%',overflow:'hidden'}}>
-        <video autoPlay loop muted playsInline poster="/hero-poster.jpg" style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',objectFit:'cover',zIndex:0}}>
-          <source src="/hero-video.mp4" type="video/mp4" />
-        </video>
+        <img src="/hero-main.jpg" alt="" style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',objectFit:'cover',zIndex:0}} />
         <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',background:'linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.45))',zIndex:1}}></div>
         <div style={{position:'relative',zIndex:2}}>
           <h1 style={{fontSize:'clamp(24px,5vw,40px)',fontWeight:'900',color:'#fff',lineHeight:1.3,marginBottom:'12px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>最高の出店場所が<br/>見つかる</h1>
