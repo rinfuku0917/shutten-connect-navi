@@ -88,7 +88,7 @@ export default function Home() {
     checkSeller()
   }, [])
   return (
-    <div style={{minHeight:'100vh',backgroundColor:'#FFF9E6',backgroundImage:'url(/top-bg.jpg)',backgroundSize:'cover',backgroundPosition:'top center',backgroundRepeat:'no-repeat',backgroundAttachment:'fixed',width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
+    <div style={{minHeight:'100vh',backgroundColor:'#FFF9E6',backgroundImage:'url(/hero-main.jpg)',backgroundSize:'cover',backgroundPosition:'top center',backgroundRepeat:'no-repeat',backgroundAttachment:'fixed',width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
       <Nav />
       <div style={{background:'#fff',borderBottom:'1px solid #eee',padding:'8px 16px',overflowX:'auto',whiteSpace:'nowrap'}}>
         {['キッチンカー','テント','常設','イベント','学校・大学','オフィス','商業施設','公園・屋外'].map(c=>(
@@ -96,7 +96,9 @@ export default function Home() {
         ))}
       </div>
       <div style={{position:'relative',padding:'40px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',maxWidth:'100%',overflow:'hidden'}}>
-        <img src="/hero-main.jpg" alt="" style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',objectFit:'cover',zIndex:0}} />
+        <video autoPlay loop muted playsInline poster="/hero-poster.jpg" style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',objectFit:'cover',zIndex:0}}>
+          <source src="/hero-video.mp4" type="video/mp4" />
+        </video>
         <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',background:'linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.45))',zIndex:1}}></div>
         <div style={{position:'relative',zIndex:2}}>
           <h1 style={{fontSize:'clamp(24px,5vw,40px)',fontWeight:'900',color:'#fff',lineHeight:1.3,marginBottom:'12px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>最高の出店場所が<br/>見つかる</h1>
