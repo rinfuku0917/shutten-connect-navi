@@ -23,7 +23,7 @@ export default function Nav() {
     <>
       <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 16px',height:'90px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100,boxSizing:'border-box',width:'100%'}}>
         <Link href='/' style={{display:'flex',alignItems:'center',textDecoration:'none',flexShrink:0}}>
-          <img src='/logo.png' alt='出店コネクトナビ' className='logo-img' style={{height:'88px',width:'auto',maxWidth:'420px',objectFit:'contain'}} />
+          <img src='/logo.png' alt='出店コネクトナビ' className='logo-img' style={{height:'120px',width:'auto',maxWidth:'480px',objectFit:'contain'}} />
         </Link>
         <div style={{display:'flex',gap:'4px',alignItems:'center',flexWrap:'nowrap'}} className="pc-nav">
           {navItems.slice(1).map(item => (
@@ -50,7 +50,7 @@ export default function Nav() {
       <style>{`
         @media (max-width: 768px) {
           .pc-nav { display: none !important; }
-          .logo-img { height: 60px !important; max-width: 300px !important; }
+          .logo-img { height: 130px !important; max-width: 90vw !important; }
           .ham-btn { display: flex !important; }
         }
         @media (min-width: 769px) {
