@@ -403,13 +403,22 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'sales' && authChecked) { loadApprovedApps(); loadSales() } }, [tab, authChecked])
   useEffect(() => { if (tab === 'sales' && authChecked) loadSales() }, [saleMonth])
 
+  // 書類プレビュー用モーダルの状態（横向き画像対応）
+  const [previewImg, setPreviewImg] = useState<string | null>(null);
+  const [previewRotation, setPreviewRotation] = useState(0);
+
   // 書類のプレビュー（署名付きURLを新規タブで開く）
-  const previewDoc = async (fileUrl: string) => {
+const previewDoc = async (fileUrl: string) => {
     const { data, error } = await supabase.storage.from('seller-documents').createSignedUrl(fileUrl, 60)
     if (error || !data) { alert('プレビューURLの生成に失敗しました: ' + (error?.message || '')); return }
-    window.open(data.signedUrl, '_blank')
+    const isPdf = /\.pdf(\?|$)/i.test(fileUrl)
+    if (isPdf) {
+      window.open(data.signedUrl, '_blank')
+    } else {
+      setPreviewRotation(0)
+      setPreviewImg(data.signedUrl)
+    }
   }
-
   // 承認/否認
   const reviewDoc = async (id: string, status: 'approved' | 'rejected', reason?: string) => {
     const patch: { status: string; reject_reason?: string | null } = { status }
@@ -1234,6 +1243,26 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+      {/* 書類画像プレビュー用モーダル（横向き対応・回転ボタン付き） */}
+      {previewImg && (
+        <div
+          onClick={() => setPreviewImg(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+        >
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setPreviewRotation(r => (r - 90 + 360) % 360)} style={{ background: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>↺ 左に回転</button>
+            <button onClick={() => setPreviewRotation(r => (r + 90) % 360)} style={{ background: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>↻ 右に回転</button>
+            <button onClick={() => setPreviewImg(null)} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>✕ 閉じる</button>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', maxHeight: 'calc(100% - 60px)', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <img
+              src={previewImg}
+              alt="書類プレビュー"
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transform: 'rotate(' + previewRotation + 'deg)', imageOrientation: 'from-image', transition: 'transform 0.2s' }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
