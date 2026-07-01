@@ -45,7 +45,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const post = await getPost(slug)
   if (!post) notFound()
 
-  const html = await marked.parse(post.content)
+  let html = await marked.parse(post.content)
+  html = html.split('<table>').join('<div class="table-wrap"><table>')
+  html = html.split('</table>').join('</table></div>')
   const dateStr = post.published_at ? new Date(post.published_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
 
   const jsonLd = {
@@ -99,7 +101,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         .post-body li { margin-bottom: 8px; }
         .post-body strong { color: #B45309; font-weight: 700; }
         .post-body a { color: #F5A623; }
-        .post-body table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+        .table-wrap { overflow-x: auto; margin: 20px 0; -webkit-overflow-scrolling: touch; } .post-body table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 480px; }
         .post-body th, .post-body td { border: 1px solid #E2E8F0; padding: 10px 12px; text-align: left; }
         .post-body th { background: #FFF8F0; font-weight: 700; }
         .post-body blockquote { border-left: 4px solid #F5A623; background: #FFF8F0; margin: 20px 0; padding: 12px 20px; border-radius: 0 8px 8px 0; }
