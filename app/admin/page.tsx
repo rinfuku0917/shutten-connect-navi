@@ -59,6 +59,7 @@ export default function AdminPage() {
   const [docsLoading, setDocsLoading] = useState(false)
   const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
   const [authChecked, setAuthChecked] = useState(false)
+  const [adminUid, setAdminUid] = useState<string | null>(null)
 
   // ===== ブログ記事管理 =====
   type BlogPost = { id: string; slug: string; title: string; content: string; excerpt: string | null; category: string | null; cover_emoji: string | null; meta_description: string | null; status: string; published_at: string | null; created_at: string }
@@ -148,6 +149,7 @@ export default function AdminPage() {
       if (!user) { router.push('/admin/login'); return }
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role !== 'admin') { router.push('/admin/login'); return }
+      setAdminUid(user.id)
       try {
         const saved = localStorage.getItem('adminTab')
         if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog'].includes(saved)) {
@@ -260,7 +262,6 @@ export default function AdminPage() {
   const [threads, setThreads] = useState<MsgThread[]>([])
   const [activeThread, setActiveThread] = useState<string | null>(null)
   const [threadMsgs, setThreadMsgs] = useState<AdminMsg[]>([])
-  const [adminUid, setAdminUid] = useState<string | null>(null)
   const [adminMsgInput, setAdminMsgInput] = useState('')
   const [adminMsgFile, setAdminMsgFile] = useState<File | null>(null)
   const [adminMsgUploading, setAdminMsgUploading] = useState(false)
