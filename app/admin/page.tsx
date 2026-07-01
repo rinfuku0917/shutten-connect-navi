@@ -21,7 +21,7 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
@@ -59,6 +59,85 @@ export default function AdminPage() {
   const [docsLoading, setDocsLoading] = useState(false)
   const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
   const [authChecked, setAuthChecked] = useState(false)
+
+  // ===== ブログ記事管理 =====
+  type BlogPost = { id: string; slug: string; title: string; content: string; excerpt: string | null; category: string | null; cover_emoji: string | null; meta_description: string | null; status: string; published_at: string | null; created_at: string }
+  const [posts, setPosts] = useState<BlogPost[]>([])
+  const [postsLoading, setPostsLoading] = useState(false)
+  const [editingPost, setEditingPost] = useState<BlogPost | null>(null)
+  const [pTitle, setPTitle] = useState('')
+  const [pSlug, setPSlug] = useState('')
+  const [pCategory, setPCategory] = useState('')
+  const [pEmoji, setPEmoji] = useState('📝')
+  const [pExcerpt, setPExcerpt] = useState('')
+  const [pMeta, setPMeta] = useState('')
+  const [pContent, setPContent] = useState('')
+  const [pStatus, setPStatus] = useState('draft')
+  const [pSaving, setPSaving] = useState(false)
+  const [pMsg, setPMsg] = useState('')
+
+  const loadPosts = async () => {
+    setPostsLoading(true)
+    try {
+      const res = await fetch('/api/posts?all=1')
+      const json = await res.json()
+      if (json.posts) setPosts(json.posts)
+    } catch { /* noop */ }
+    setPostsLoading(false)
+  }
+
+  const resetPostForm = () => {
+    setEditingPost(null); setPTitle(''); setPSlug(''); setPCategory(''); setPEmoji('📝')
+    setPExcerpt(''); setPMeta(''); setPContent(''); setPStatus('draft'); setPMsg('')
+  }
+
+  const startEditPost = (p: BlogPost) => {
+    setEditingPost(p); setPTitle(p.title); setPSlug(p.slug); setPCategory(p.category || '')
+    setPEmoji(p.cover_emoji || '📝'); setPExcerpt(p.excerpt || ''); setPMeta(p.meta_description || '')
+    setPContent(p.content); setPStatus(p.status); setPMsg('')
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const savePost = async (asStatus: string) => {
+    if (!pTitle.trim() || !pSlug.trim() || !pContent.trim()) { setPMsg('タイトル・URL・本文は必須です'); return }
+    if (!adminUid) { setPMsg('認証情報がありません。再ログインしてください'); return }
+    setPSaving(true); setPMsg('')
+    const payload = {
+      requesterId: adminUid, id: editingPost?.id,
+      slug: pSlug.trim(), title: pTitle.trim(), content: pContent,
+      excerpt: pExcerpt.trim() || null, category: pCategory.trim() || null,
+      cover_emoji: pEmoji || '📝', meta_description: pMeta.trim() || null, status: asStatus,
+    }
+    try {
+      const res = await fetch('/api/posts', {
+        method: editingPost ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok) { setPMsg('エラー: ' + (json.error || '保存に失敗しました')); setPSaving(false); return }
+      setPMsg(asStatus === 'published' ? '✅ 公開しました' : '✅ 下書き保存しました')
+      resetPostForm(); loadPosts()
+    } catch {
+      setPMsg('通信エラーが発生しました')
+    }
+    setPSaving(false)
+  }
+
+  const deletePost = async (p: BlogPost) => {
+    if (!adminUid) return
+    if (!confirm('「' + p.title + '」を削除しますか？この操作は取り消せません。')) return
+    try {
+      const res = await fetch('/api/posts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId: adminUid, id: p.id }),
+      })
+      const json = await res.json()
+      if (!res.ok) { alert('削除に失敗: ' + (json.error || '')); return }
+      loadPosts()
+    } catch { alert('通信エラー') }
+  }
   const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', other_permit: 'その他許可証' }
 
   // 管理者ガード：admin以外は追い出す
@@ -71,7 +150,7 @@ export default function AdminPage() {
       if (profile?.role !== 'admin') { router.push('/admin/login'); return }
       try {
         const saved = localStorage.getItem('adminTab')
-        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported','publish'].includes(saved)) {
+        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog'].includes(saved)) {
           setTab(saved as typeof tab)
         }
       } catch {}
@@ -373,6 +452,7 @@ export default function AdminPage() {
   // reviewsタブを開いたら読み込む
   useEffect(() => { if (tab === 'reviews' && authChecked) loadReviewList() }, [tab, authChecked])
   useEffect(() => { if (tab === 'publish' && authChecked) loadPubReqs() }, [tab, authChecked])
+  useEffect(() => { if (tab === 'blog' && authChecked) loadPosts() }, [tab, authChecked])
   useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
   useEffect(() => { if ((tab === 'sellers' || tab === 'dashboard') && authChecked) loadSellersList() }, [tab, authChecked])
   useEffect(() => { if (tab === 'dashboard' && authChecked) loadStats() }, [tab, authChecked])
@@ -515,6 +595,7 @@ const previewDoc = async (fileUrl: string) => {
             { key: 'messages', icon: '💬', label: 'メッセージ' },
             { key: 'reviews', icon: '⭐', label: 'レビュー審査' },
             { key: 'publish', icon: '✅', label: '公開申請' },
+            { key: 'blog', icon: '📝', label: 'ブログ' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
             { key: 'imported', icon: '📇', label: 'インポート名簿' },
           ].map((item) => (
@@ -552,6 +633,7 @@ const previewDoc = async (fileUrl: string) => {
             {tab === 'messages' && 'メッセージ'}
             {tab === 'reviews' && 'レビュー審査'}
             {tab === 'publish' && '公開申請'}
+            {tab === 'blog' && 'ブログ記事管理'}
             {tab === 'imported' && 'インポート名簿'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1114,6 +1196,87 @@ const previewDoc = async (fileUrl: string) => {
             </div>
             )
           })()}
+
+          {tab === 'blog' && (
+            <div>
+              <div style={{ background: '#EBF6FD', border: '1px solid #93C5FD', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '13px', color: '#1D4ED8', display: 'flex', gap: '8px' }}>
+                <span>📝</span><span>ブログ記事を作成・公開できます。公開した記事は <b>/blog</b> に表示され、検索エンジンにも登録されます。本文はMarkdown（見出しは # ## 、箇条書きは - ）で書けます。</span>
+              </div>
+
+              {/* 投稿フォーム */}
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '28px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: 900, color: '#1a1a1a', margin: 0 }}>{editingPost ? '✏️ 記事を編集' : '➕ 新規記事を作成'}</h3>
+                  {editingPost && <button onClick={resetPostForm} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>新規作成に戻る</button>}
+                </div>
+                <div style={{ display: 'grid', gap: '14px' }}>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>タイトル <span style={{ color: '#DC2626' }}>*</span></label>
+                    <input type="text" value={pTitle} onChange={e => setPTitle(e.target.value)} placeholder="例：キッチンカー開業の費用はいくら？初期費用の内訳と抑えるコツ" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>URL（半角英数字） <span style={{ color: '#DC2626' }}>*</span></label>
+                      <input type="text" value={pSlug} onChange={e => setPSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} placeholder="kitchen-car-startup-cost" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
+                      <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px' }}>公開URL: /blog/{pSlug || '（ここに入る）'}</div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>カテゴリ</label>
+                      <input type="text" value={pCategory} onChange={e => setPCategory(e.target.value)} placeholder="ガイド / インタビュー / トレンド など" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>絵文字</label>
+                      <input type="text" value={pEmoji} onChange={e => setPEmoji(e.target.value)} placeholder="📝" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '20px', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>抜粋（一覧に表示される短い説明）</label>
+                      <input type="text" value={pExcerpt} onChange={e => setPExcerpt(e.target.value)} placeholder="記事の要約を1〜2文で" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>メタディスクリプション（SEO用・検索結果に出る説明文 120字程度）</label>
+                    <textarea value={pMeta} onChange={e => setPMeta(e.target.value)} rows={2} placeholder="検索結果に表示される説明。キーワードを含めて120字程度で。" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>本文（Markdown） <span style={{ color: '#DC2626' }}>*</span></label>
+                    <textarea value={pContent} onChange={e => setPContent(e.target.value)} rows={16} placeholder={'# 見出し1\n\n本文をここに書きます。\n\n## 見出し2\n\n- 箇条書き1\n- 箇条書き2'} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace', lineHeight: 1.7 }} />
+                  </div>
+                  {pMsg && <div style={{ fontSize: '13px', fontWeight: 700, color: pMsg.startsWith('✅') ? '#16A34A' : '#DC2626', padding: '8px 0' }}>{pMsg}</div>}
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button disabled={pSaving} onClick={() => savePost('published')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 700, cursor: pSaving ? 'default' : 'pointer', opacity: pSaving ? 0.6 : 1 }}>{pSaving ? '保存中...' : (editingPost ? '更新して公開' : '公開する')}</button>
+                    <button disabled={pSaving} onClick={() => savePost('draft')} style={{ background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 700, cursor: pSaving ? 'default' : 'pointer', opacity: pSaving ? 0.6 : 1 }}>下書き保存</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 記事一覧 */}
+              <h3 style={{ fontSize: '14px', fontWeight: 900, color: '#1a1a1a', margin: '0 0 12px' }}>投稿済みの記事（{posts.length}件）</h3>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {postsLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
+                {!postsLoading && posts.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>まだ記事がありません。上のフォームから作成してください。</div>}
+                {posts.map(p => (
+                  <div key={p.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '32px', flexShrink: 0 }}>{p.cover_emoji || '📝'}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '999px', background: p.status === 'published' ? '#DCFCE7' : '#FEF3C7', color: p.status === 'published' ? '#16A34A' : '#B45309' }}>{p.status === 'published' ? '公開中' : '下書き'}</span>
+                        {p.category && <span style={{ fontSize: '11px', color: '#64748B' }}>{p.category}</span>}
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a1a', lineHeight: 1.5 }}>{p.title}</div>
+                      <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px', fontFamily: 'monospace' }}>/blog/{p.slug}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
+                      {p.status === 'published' && <button onClick={() => window.open('/blog/' + p.slug, '_blank')} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>👁️ 見る</button>}
+                      <button onClick={() => startEditPost(p)} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ 編集</button>
+                      <button onClick={() => deletePost(p)} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🗑️ 削除</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {tab === 'imported' && (
             <>
