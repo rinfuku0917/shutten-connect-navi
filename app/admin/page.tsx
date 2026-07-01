@@ -76,6 +76,27 @@ export default function AdminPage() {
   const [pStatus, setPStatus] = useState('draft')
   const [pSaving, setPSaving] = useState(false)
   const [pMsg, setPMsg] = useState('')
+  const [imgUploading, setImgUploading] = useState(false)
+  const blogImgInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadBlogImage = async (file: File) => {
+    if (!adminUid) { setPMsg('認証情報がありません。再ログインしてください'); return }
+    setImgUploading(true); setPMsg('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('requesterId', adminUid)
+      const res = await fetch('/api/upload-image', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) { setPMsg('画像アップロード失敗: ' + (json.error || '')); setImgUploading(false); return }
+      // 本文の末尾に画像記法を追加
+      setPContent(prev => prev + (prev.endsWith('\n') || prev === '' ? '' : '\n\n') + '![画像](' + json.url + ')\n\n')
+      setPMsg('✅ 画像を挿入しました（本文の末尾に追加されました）')
+    } catch {
+      setPMsg('画像アップロードで通信エラーが発生しました')
+    }
+    setImgUploading(false)
+  }
 
   const loadPosts = async () => {
     setPostsLoading(true)
@@ -1241,7 +1262,13 @@ const previewDoc = async (fileUrl: string) => {
                     <textarea value={pMeta} onChange={e => setPMeta(e.target.value)} rows={2} placeholder="検索結果に表示される説明。キーワードを含めて120字程度で。" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>本文（Markdown） <span style={{ color: '#DC2626' }}>*</span></label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '6px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>本文（Markdown） <span style={{ color: '#DC2626' }}>*</span></label>
+                      <div>
+                        <input ref={blogImgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadBlogImage(f); if (e.target) e.target.value = '' }} />
+                        <button type="button" disabled={imgUploading} onClick={() => blogImgInputRef.current?.click()} style={{ background: imgUploading ? '#F1F5F9' : '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: imgUploading ? 'default' : 'pointer' }}>{imgUploading ? '⏳ アップロード中...' : '🖼️ 画像を挿入'}</button>
+                      </div>
+                    </div>
                     <textarea value={pContent} onChange={e => setPContent(e.target.value)} rows={16} placeholder={'# 見出し1\n\n本文をここに書きます。\n\n## 見出し2\n\n- 箇条書き1\n- 箇条書き2'} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace', lineHeight: 1.7 }} />
                   </div>
                   {pMsg && <div style={{ fontSize: '13px', fontWeight: 700, color: pMsg.startsWith('✅') ? '#16A34A' : '#DC2626', padding: '8px 0' }}>{pMsg}</div>}
