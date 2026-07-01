@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 type Post = {
   id: string; slug: string; title: string
-  excerpt: string | null; category: string | null; cover_emoji: string | null
+  excerpt: string | null; category: string | null; cover_emoji: string | null; content: string
   published_at: string | null
 }
 
@@ -21,7 +21,7 @@ async function getPosts(): Promise<Post[]> {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return []
   const sb = createClient(url, key)
-  const { data } = await sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at').eq('status', 'published').order('published_at', { ascending: false })
+  const { data } = await sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content').eq('status', 'published').order('published_at', { ascending: false })
   return (data as Post[]) || []
 }
 
@@ -43,7 +43,12 @@ export default async function BlogPage() {
             {posts.map(post => (
               <Link key={post.id} href={'/blog/' + post.slug} style={{ textDecoration: 'none', display: 'block', background: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px', padding: '20px', color: 'inherit' }}>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                  <div style={{ fontSize: '40px', flexShrink: 0 }}>{post.cover_emoji || '📝'}</div>
+                  {(() => {
+                    const m = post.content && post.content.match(/!\[[^\]]*\]\((https:\/\/[^)]+)\)/);
+                    return m
+                      ? <img src={m[1]} alt="" style={{ width: '96px', height: '96px', objectFit: 'cover', borderRadius: '10px', flexShrink: 0 }} />
+                      : <div style={{ fontSize: '40px', flexShrink: 0 }}>{post.cover_emoji || '📝'}</div>
+                  })()}
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                       {post.category && <span style={{ background: '#FFF3E0', color: '#B45309', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>{post.category}</span>}
