@@ -91,9 +91,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
       <style>{`
         .post-body { font-size: 16px; line-height: 1.9; color: #333; }
-        .post-body h1 { font-size: 26px; font-weight: 900; color: #1a1a1a; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 3px solid #F5A623; }
-        .post-body h2 { font-size: 22px; font-weight: 800; color: #1a1a1a; margin: 36px 0 14px; padding-left: 12px; border-left: 5px solid #F5A623; }
-        .post-body h3 { font-size: 18px; font-weight: 700: color: #1a1a1a; margin: 28px 0 12px; }
+        .post-body h1 { font-size: 30px; font-weight: 900; color: #1a1a1a; margin: 56px 0 20px; padding: 0 0 12px; border-bottom: 4px solid #F5A623; }
+        .post-body h2 { font-size: 25px; font-weight: 900; color: #1a1a1a; margin: 52px 0 20px; padding: 14px 18px; background: #FFF3E0; border-left: 8px solid #F5A623; border-radius: 0 8px 8px 0; }
+        .post-body h3 { font-size: 20px; font-weight: 800; color: #B45309; margin: 36px 0 14px; padding-left: 14px; border-left: 4px solid #F5A623; }
         .post-body p { margin: 0 0 18px; }
         .post-body ul, .post-body ol { margin: 0 0 18px; padding-left: 24px; }
         .post-body li { margin-bottom: 8px; }
