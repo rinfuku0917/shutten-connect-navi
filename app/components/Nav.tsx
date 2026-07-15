@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { supabase } from '../lib/supabase'
 
 const navItems = [
   { label: 'ホーム', href: '/' },
@@ -19,6 +20,21 @@ export default function Nav() {
   useEffect(() => { document.body.style.overflow = open ? 'hidden' : '' }, [open])
   useEffect(() => { setOpen(false) }, [pathname])
 
+  const [role, setRole] = useState<string | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
+  useEffect(() => {
+    ;(async () => {
+      const { data } = await supabase.auth.getUser()
+      if (data.user) {
+        const { data: prof } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle()
+        setRole(prof?.role ?? null)
+      } else { setRole(null) }
+      setAuthChecked(true)
+    })()
+  }, [pathname])
+  const myPage = role === 'host' ? '/dashboard/host' : '/dashboard/seller'
+  const doLogout = async () => { await supabase.auth.signOut(); window.location.href = '/' }
+
   return (
     <>
       <nav style={{background:'#fff',borderBottom:'3px solid #F5A623',padding:'0 16px',height:'90px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100,boxSizing:'border-box',width:'100%'}}>
@@ -29,7 +45,7 @@ export default function Nav() {
           {navItems.slice(1).map(item => (
             <Link key={item.href} href={item.href} style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:pathname===item.href?'#F5A623':'#222',whiteSpace:'nowrap',padding:'4px 8px',borderRadius:'4px',background:pathname===item.href?'#FFF8F0':'transparent'}}>{item.label}</Link>
           ))}
-          <Link href='/login' style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#222',border:'1px solid #999',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap',marginLeft:'4px'}}>ログイン</Link>
+          {!authChecked ? null : role ? (<><Link href={myPage} style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#fff',background:'#F5A623',padding:'5px 12px',borderRadius:'6px',whiteSpace:'nowrap',marginLeft:'4px'}}>🏠 マイページ</Link><button onClick={doLogout} style={{fontSize:'13px',fontWeight:'700',color:'#666',background:'#fff',border:'1px solid #ccc',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap',cursor:'pointer'}}>ログアウト</button></>) : (<><Link href='/login' style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#222',border:'1px solid #999',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap',marginLeft:'4px'}}>ログイン</Link></>)}
           <Link href='/register' style={{textDecoration:'none',fontSize:'13px',fontWeight:'700',color:'#fff',background:'#F5A623',padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap'}}>会員登録(無料)</Link>
         </div>
         <button onClick={() => setOpen(v => !v)} className="ham-btn" aria-label="メニュー" style={{alignItems:'center',justifyContent:'center',flexDirection:'column',width:'44px',height:'44px',borderRadius:'10px',border:'2px solid #F5A623',background:open?'#F5A623':'#fff',cursor:'pointer',flexShrink:0,padding:'8px',gap:'5px'}}>
@@ -43,7 +59,7 @@ export default function Nav() {
           <Link key={item.href} href={item.href} style={{display:'flex',alignItems:'center',padding:'16px',fontSize:'16px',fontWeight:'700',color:pathname===item.href?'#F5A623':'#1a1a1a',textDecoration:'none',borderBottom:'1px solid #f0f0f0'}}>{item.label}</Link>
         ))}
         <div style={{marginTop:'20px',display:'flex',flexDirection:'column',gap:'10px'}}>
-          <Link href='/login' style={{display:'block',padding:'14px',textAlign:'center',border:'2px solid #F5A623',borderRadius:'8px',color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>ログイン</Link>
+          {!authChecked ? null : role ? (<><Link href={myPage} style={{display:'block',padding:'14px',textAlign:'center',background:'#F5A623',borderRadius:'8px',color:'#fff',fontWeight:'700',textDecoration:'none'}}>🏠 マイページ</Link><button onClick={doLogout} style={{display:'block',width:'100%',padding:'14px',textAlign:'center',background:'#fff',border:'2px solid #ccc',borderRadius:'8px',color:'#666',fontWeight:'700',cursor:'pointer'}}>ログアウト</button></>) : (<><Link href='/login' style={{display:'block',padding:'14px',textAlign:'center',border:'2px solid #F5A623',borderRadius:'8px',color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>ログイン</Link></>)}
           <Link href='/register' style={{display:'block',padding:'14px',textAlign:'center',background:'#F5A623',borderRadius:'8px',color:'#fff',fontWeight:'700',textDecoration:'none'}}>無料会員登録</Link>
         </div>
       </div>
