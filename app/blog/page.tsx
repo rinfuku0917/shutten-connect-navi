@@ -16,17 +16,24 @@ type Post = {
   published_at: string | null
 }
 
-async function getPosts(): Promise<Post[]> {
+const PER_PAGE = 2
+
+async function getPosts(page: number): Promise<{ posts: Post[]; total: number }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) return []
+  if (!url || !key) return { posts: [], total: 0 }
   const sb = createClient(url, key)
-  const { data } = await sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content').eq('status', 'published').order('published_at', { ascending: false })
-  return (data as Post[]) || []
+  const start = (page - 1) * PER_PAGE
+  const end = start + PER_PAGE - 1
+  const { data, count } = await sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content', { count: 'exact' }).eq('status', 'published').order('published_at', { ascending: false }).range(start, end)
+  return { posts: (data as Post[]) || [], total: count || 0 }
 }
 
-export default async function BlogPage() {
-  const posts = await getPosts()
+export default async function BlogPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const sp = await searchParams
+  const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
+  const { posts, total } = await getPosts(page)
+  const totalPages = Math.ceil(total / PER_PAGE)
 
   return (
     <div style={{ background: '#FFF8F0', minHeight: '100vh' }}>
@@ -60,6 +67,19 @@ export default async function BlogPage() {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' }}>
+            {page > 1 && (
+              <a href={'/blog?page=' + (page - 1)} style={{ padding: '8px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', background: '#fff', color: '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>← 前へ</a>
+            )}
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+              <a key={n} href={'/blog?page=' + n} style={{ padding: '8px 14px', border: n === page ? '1px solid #F5A623' : '1px solid #e0e0e0', borderRadius: '8px', background: n === page ? '#F5A623' : '#fff', color: n === page ? '#fff' : '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700, minWidth: '20px', textAlign: 'center' }}>{n}</a>
+            ))}
+            {page < totalPages && (
+              <a href={'/blog?page=' + (page + 1)} style={{ padding: '8px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', background: '#fff', color: '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>次へ →</a>
+            )}
           </div>
         )}
       </div>
