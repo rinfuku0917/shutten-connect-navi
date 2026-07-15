@@ -202,11 +202,11 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews() }, [tab, authChecked])
 
   // ===== 売上管理（管理者） =====
-  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, placeTitle: string, sellerName: string }
+  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string }
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
-  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number }
+  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number }
   const [approvedApps, setApprovedApps] = useState<ApprovedApp[]>([])
   const [saleAppId, setSaleAppId] = useState('')
   const [saleDate, setSaleDate] = useState('')
@@ -214,22 +214,28 @@ export default function AdminPage() {
   const [saleSaving, setSaleSaving] = useState(false)
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
 
-  // 出店料を計算（定額 + 売上×％）
-  const calcFee = (revenue: number, priceFixed: number, pricePct: number) => {
-    return Math.round((priceFixed || 0) + revenue * (pricePct || 0) / 100)
+  // 料金を計算（取引先分・弊社利益・お支払い総額を返す。per_event固定は日次では0扱い＝次フェーズ）
+  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string }) => {
+    const placeFixed = a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0)
+    const companyFixed = a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0)
+    const placeFee = Math.round(placeFixed + revenue * (a.price_share_pct || 0) / 100)
+    const companyFee = Math.round(companyFixed + revenue * (a.company_share_pct || 0) / 100)
+    return { placeFee, companyFee, totalPay: placeFee + companyFee }
   }
 
   // 承認済み申込を読み込む（売上を記録できる対象）
   const loadApprovedApps = async () => {
     const { data } = await supabase
       .from('applications')
-      .select('id, place_id, seller_id, places(title, price_fixed, price_share_pct), profiles(name)')
+      .select('id, place_id, seller_id, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct), profiles!applications_seller_id_fkey(name)')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
     const mapped: ApprovedApp[] = (data || []).map((a: any) => ({
       application_id: a.id, place_id: a.place_id, seller_id: a.seller_id,
       placeTitle: a.places?.title || '(案件名なし)', sellerName: a.profiles?.name || '(出店者)',
-      price_fixed: a.places?.price_fixed || 0, price_share_pct: a.places?.price_share_pct || 0
+      price_fixed: a.places?.price_fixed || 0, price_share_pct: a.places?.price_share_pct || 0,
+      place_fixed_unit: a.places?.place_fixed_unit || 'per_day', company_fixed_amount: a.places?.company_fixed_amount || 0,
+      company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0
     }))
     setApprovedApps(mapped)
   }
@@ -242,12 +248,13 @@ export default function AdminPage() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, place_id, seller_id, sale_date, revenue, fee, places(title), profiles(name)')
+      .select('id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, places(title), profiles!sales_seller_id_fkey(name)')
       .gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SaleRow[] = (data || []).map((s: any) => ({
       id: s.id, place_id: s.place_id, seller_id: s.seller_id, sale_date: s.sale_date,
-      revenue: s.revenue, fee: s.fee, placeTitle: s.places?.title || '(案件名なし)', sellerName: s.profiles?.name || '(出店者)'
+      revenue: s.revenue, fee: s.fee, place_fee: s.place_fee ?? 0, company_fee: s.company_fee ?? s.fee, total_pay: s.total_pay ?? s.fee,
+      placeTitle: s.places?.title || '(案件名なし)', sellerName: s.profiles?.name || '(出店者)'
     }))
     setSales(mapped)
     setSalesLoading(false)
@@ -261,10 +268,10 @@ export default function AdminPage() {
     const revenue = parseInt(saleRevenue, 10)
     if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
     setSaleSaving(true)
-    const fee = calcFee(revenue, app.price_fixed, app.price_share_pct)
+    const { placeFee, companyFee, totalPay } = calcFees(revenue, app)
     const { error } = await supabase.from('sales').insert({
       application_id: app.application_id, place_id: app.place_id, seller_id: app.seller_id,
-      sale_date: saleDate, revenue, fee
+      sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: totalPay
     })
     if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
     setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleSaving(false)
@@ -385,14 +392,14 @@ export default function AdminPage() {
   // ===== レビュー審査（管理者）=====
   type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
   // ===== 案件一覧（管理者・実データ） =====
-  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string }
+  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, fee: string }
   const [placesList, setPlacesList] = useState<AdminPlace[]>([])
   const [placesLoading, setPlacesLoading] = useState(false)
   const loadPlacesList = async () => {
     setPlacesLoading(true)
     const { data } = await supabase
       .from('places')
-      .select('id, title, prefecture, place_type, status, profiles(name), applications(count)')
+      .select('id, title, prefecture, place_type, status, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, fee, profiles(name), applications(count)')
       .order('created_at', { ascending: false })
     const mapped: AdminPlace[] = (data || []).map((p: any) => ({
       id: p.id,
@@ -402,9 +409,31 @@ export default function AdminPage() {
       type: p.place_type === 'event' ? 'イベント' : (p.place_type || '-'),
       applies: p.applications?.[0]?.count ?? 0,
       status: p.status === 'published' ? '公開中' : '下書き',
+      price_fixed: p.price_fixed ?? 0, price_share_pct: p.price_share_pct ?? 0, place_fixed_unit: p.place_fixed_unit || 'per_day',
+      company_fixed_amount: p.company_fixed_amount ?? 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct ?? 0,
+      fee: p.fee || '',
     }))
     setPlacesList(mapped)
     setPlacesLoading(false)
+  }
+
+  // ===== 料金設定モーダル =====
+  const [feePlace, setFeePlace] = useState<AdminPlace | null>(null)
+  const [feeForm, setFeeForm] = useState({ price_fixed: 0, price_share_pct: 0, place_fixed_unit: 'per_day', company_fixed_amount: 0, company_fixed_unit: 'per_day', company_share_pct: 0 })
+  const [feeSaving, setFeeSaving] = useState(false)
+  const openFeeModal = (p: AdminPlace) => {
+    setFeePlace(p)
+    setFeeForm({ price_fixed: p.price_fixed || 0, price_share_pct: p.price_share_pct || 0, place_fixed_unit: p.place_fixed_unit || 'per_day', company_fixed_amount: p.company_fixed_amount || 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct || 0 })
+  }
+  const saveFee = async () => {
+    if (!feePlace) return
+    setFeeSaving(true)
+    const { error } = await supabase.from('places').update({
+      price_fixed: feeForm.price_fixed, price_share_pct: feeForm.price_share_pct, place_fixed_unit: feeForm.place_fixed_unit,
+      company_fixed_amount: feeForm.company_fixed_amount, company_fixed_unit: feeForm.company_fixed_unit, company_share_pct: feeForm.company_share_pct
+    }).eq('id', feePlace.id)
+    if (error) { alert('保存失敗: ' + error.message); setFeeSaving(false); return }
+    setFeeSaving(false); setFeePlace(null); loadPlacesList()
   }
   const deletePlaceAdmin = async (id: string) => {
     const { error } = await supabase.from('places').delete().eq('id', id)
@@ -788,6 +817,7 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '12px 14px' }}><span style={{ background: place.status === '公開中' ? '#ECFDF5' : '#F1F5F9', color: place.status === '公開中' ? '#16A34A' : '#64748B', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', fontSize: '11px' }}>{place.status}</span></td>
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => openFeeModal(place)} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FDE68A', borderRadius: '6px', background: '#FFFBEB', cursor: 'pointer', color: '#B45309', fontWeight: '700' }}>💰 料金</button>
                             <Link href={'/dashboard/host/edit-place/' + place.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', textDecoration: 'none' }}>✏️ 編集</Link>
                             <button onClick={() => { if (window.confirm('この案件を削除しますか？')) deletePlaceAdmin(place.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>🗑️</button>
                           </div>
@@ -797,6 +827,41 @@ const previewDoc = async (fileUrl: string) => {
                   </tbody>
                 </table>
               </div>
+
+              {feePlace && (() => {
+                const ff = feeForm
+                const dispFixed = (ff.price_fixed||0) + (ff.company_fixed_amount||0)
+                const dispPct = (ff.price_share_pct||0) + (ff.company_share_pct||0)
+                const unitLabel = (u: string) => u === 'per_event' ? '期間' : '日'
+                const ex = 50000
+                const pf = (ff.place_fixed_unit=== 'per_event' ?0:(ff.price_fixed||0)) + ex*(ff.price_share_pct||0)/100
+                const cf = (ff.company_fixed_unit=== 'per_event' ?0:(ff.company_fixed_amount||0)) + ex*(ff.company_share_pct||0)/100
+                return (
+                <div onClick={()=>setFeePlace(null)} style={{ position: 'fixed', inset:0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex:1000, padding: '20px' }}>
+                  <div onClick={e=>e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '24px', width: '560px', maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+                    <div style={{ fontWeight:900, fontSize: '16px', marginBottom: '4px', color: '#1a1a1a' }}>💰 料金設定</div>
+                    <div style={{ fontSize: '13px', color: '#64748B', marginBottom: '18px' }}>{feePlace.title}</div>
+                    <div style={{ fontWeight:700, fontSize: '13px', color: '#B45309', marginBottom: '8px' }}>取引先の取り分（出店者には内訳を見せません）</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+                      <div><label style={{fontSize: '11px',color: '#64748B'}}>固定額（円）</label><input type= 'number' value={ff.price_fixed} onChange={e=>setFeeForm({...ff, price_fixed: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
+                      <div><label style={{fontSize: '11px',color: '#64748B'}}>単位</label><select value={ff.place_fixed_unit} onChange={e=>setFeeForm({...ff, place_fixed_unit: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value= 'per_day'>1日あたり</option><option value= 'per_event'>期間で1回</option></select></div>
+                      <div><label style={{fontSize: '11px',color: '#64748B'}}>歩合（%）</label><input type= 'number' value={ff.price_share_pct} onChange={e=>setFeeForm({...ff, price_share_pct: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
+                    </div>
+                    <div style={{ fontWeight:700, fontSize: '13px', color: '#3A9BD5', marginBottom: '8px' }}>弊社の利益</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '18px' }}>
+                      <div><label style={{fontSize: '11px',color: '#64748B'}}>固定額（円）</label><input type= 'number' value={ff.company_fixed_amount} onChange={e=>setFeeForm({...ff, company_fixed_amount: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
+                      <div><label style={{fontSize: '11px',color: '#64748B'}}>単位</label><select value={ff.company_fixed_unit} onChange={e=>setFeeForm({...ff, company_fixed_unit: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value= 'per_day'>1日あたり</option><option value= 'per_event'>期間で1回</option></select></div>
+                      <div><label style={{fontSize: '11px',color: '#64748B'}}>歩合（%）</label><input type= 'number' value={ff.company_share_pct} onChange={e=>setFeeForm({...ff, company_share_pct: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
+                    </div>
+                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '13px' }}><div style={{fontWeight:700,color: '#16A34A',marginBottom: '4px'}}>👀 出店者に見える表示</div>出店料：{dispFixed.toLocaleString()}円/{unitLabel(ff.place_fixed_unit)}{dispPct>0? ' ＋ 売上の'+dispPct+ '%' : ''}</div>
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '18px', fontSize: '12px', color: '#64748B', lineHeight:1.8 }}><div style={{fontWeight:700,color: '#1a1a1a',marginBottom: '4px'}}>🔒 管理側の内訳（売上{ex.toLocaleString()}円/日の例）</div>取引先分：{Math.round(pf).toLocaleString()}円 ／ 弊社の利益：<strong style={{color: '#3A9BD5'}}>{Math.round(cf).toLocaleString()}円</strong> ／ 総額：<strong style={{color: '#16A34A'}}>{Math.round(pf+cf).toLocaleString()}円</strong></div>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                      <button onClick={()=>setFeePlace(null)} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>キャンセル</button>
+                      <button onClick={saveFee} disabled={feeSaving} style={{ background: feeSaving? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 22px', fontSize: '13px', fontWeight:700, cursor:feeSaving? 'not-allowed' : 'pointer' }}>{feeSaving? '保存中...' : '保存する'}</button>
+                    </div>
+                  </div>
+                </div>
+                ) })()}
             </>
           )}
 
@@ -998,19 +1063,23 @@ const previewDoc = async (fileUrl: string) => {
                   </div>
                   <button onClick={saveSale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
-                {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a.price_fixed, a.price_share_pct); return (
-                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B' }}>出店料（税別）：定額{a.price_fixed.toLocaleString()}円 ＋ 売上{rev.toLocaleString()}円 × {a.price_share_pct}% = <strong style={{ color: '#1a1a1a' }}>{fee.toLocaleString()}円</strong> ／ 税込 <strong style={{ color: '#16A34A' }}>{Math.round(fee * 1.1).toLocaleString()}円</strong>（弊社の利益）</div>
+                {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const { placeFee, companyFee, totalPay } = calcFees(rev, a); return (
+                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B', lineHeight: 1.9 }}>
+                    <div>取引先分（税別）：<strong style={{ color: '#1a1a1a' }}>{placeFee.toLocaleString()}円</strong></div>
+                    <div>弊社の利益（税別）：<strong style={{ color: '#3A9BD5' }}>{companyFee.toLocaleString()}円</strong></div>
+                    <div>お支払い総額（税別）：<strong style={{ color: '#16A34A' }}>{totalPay.toLocaleString()}円</strong> ／ 税込 <strong style={{ color: '#16A34A' }}>{Math.round(totalPay * 1.1).toLocaleString()}円</strong></div>
+                  </div>
                 ) })()}
               </div>
 
               <div className='admin-stats' style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '14px', marginBottom: '20px' }}>
                 {(() => {
-                  const totalRev = sales.reduce((s, r) => s + r.revenue, 0)
-                  const totalFee = sales.reduce((s, r) => s + r.fee, 0)
+                  const totalCompany = sales.reduce((s, r) => s + (r.company_fee ?? r.fee), 0)
+                  const totalPay = sales.reduce((s, r) => s + (r.total_pay ?? r.fee), 0)
                   const cards = [
-                    { label: '出店者総売上（参考）', value: totalRev, color: '#F5A623' },
-                    { label: '出店料 税別（弊社の利益）', value: totalFee, color: '#3A9BD5' },
-                    { label: '出店料 税込（お支払い総額）', value: Math.round(totalFee * 1.1), color: '#16A34A' },
+                    { label: '弊社の利益 税別（合計）', value: totalCompany, color: '#3A9BD5' },
+                    { label: 'お支払い総額 税別（合計）', value: totalPay, color: '#16A34A' },
+                    { label: 'お支払い総額 税込（合計）', value: Math.round(totalPay * 1.1), color: '#16A34A' },
                   ]
                   return cards.map(card => (
                     <div key={card.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0' }}>
@@ -1025,24 +1094,26 @@ const previewDoc = async (fileUrl: string) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                   <thead>
                     <tr>
-                      {['売上日', '案件', '出店者', '売上', '出店料(税別)', '出店料(税込)', ''].map(h => (
+                      {['売上日', '案件', '出店者', '売上', '取引先分', '弊社利益', '総額(税別)', '総額(税込)', ''].map(h => (
                         <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: '600', borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {salesLoading ? (
-                      <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>
+                      <tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>
                     ) : sales.length === 0 ? (
-                      <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>この月の売上記録はまだありません。</td></tr>
+                      <tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>この月の売上記録はまだありません。</td></tr>
                     ) : sales.map((s, i) => (
                       <tr key={s.id} style={{ borderBottom: i < sales.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{s.sale_date}</td>
                         <td style={{ padding: '10px 14px' }}>{s.placeTitle}</td>
                         <td style={{ padding: '10px 14px' }}>{s.sellerName}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
-                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{s.fee.toLocaleString()}</td>
-                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{Math.round(s.fee * 1.1).toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#64748B' }}>¥{(s.place_fee ?? 0).toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{(s.company_fee ?? s.fee).toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.total_pay ?? s.fee).toLocaleString()}</td>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{Math.round((s.total_pay ?? s.fee) * 1.1).toLocaleString()}</td>
                         <td style={{ padding: '10px 14px' }}>
                           <button onClick={() => { if (window.confirm('この売上記録を削除しますか？')) deleteSale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
                         </td>
