@@ -21,7 +21,7 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
@@ -500,8 +500,33 @@ export default function AdminPage() {
     loadReviewList()
   }
 
+  type PendingApp = { id: string; apply_date: string | null; format: string | null; sellerName: string; placeTitle: string }
+  const [pendingApps, setPendingApps] = useState<PendingApp[]>([])
+  const [pendingLoading, setPendingLoading] = useState(false)
+  const loadPendingApps = async () => {
+    setPendingLoading(true)
+    const { data } = await supabase
+      .from('applications')
+      .select('id, apply_date, format, status, profiles!applications_seller_id_fkey(name, shop_name), places(title)')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    const mapped: PendingApp[] = (data || []).map((a: any) => ({
+      id: a.id, apply_date: a.apply_date, format: a.format,
+      sellerName: a.profiles?.shop_name || a.profiles?.name || '(出店者)',
+      placeTitle: a.places?.title || '(案件)'
+    }))
+    setPendingApps(mapped)
+    setPendingLoading(false)
+  }
+  const setAppStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from('applications').update({ status }).eq('id', id)
+    if (error) { alert('更新失敗: ' + error.message); return }
+    loadPendingApps()
+  }
+
   // reviewsタブを開いたら読み込む
   useEffect(() => { if (tab === 'reviews' && authChecked) loadReviewList() }, [tab, authChecked])
+  useEffect(() => { if (tab === 'applications' && authChecked) loadPendingApps() }, [tab, authChecked])
   useEffect(() => { if (tab === 'publish' && authChecked) loadPubReqs() }, [tab, authChecked])
   useEffect(() => { if (tab === 'blog' && authChecked) loadPosts() }, [tab, authChecked])
   useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
@@ -645,6 +670,7 @@ const previewDoc = async (fileUrl: string) => {
             { key: 'sales', icon: '💰', label: '売上管理' },
             { key: 'messages', icon: '💬', label: 'メッセージ' },
             { key: 'reviews', icon: '⭐', label: 'レビュー審査' },
+            { key: 'applications', icon: '🎪', label: '出店承認' },
             { key: 'publish', icon: '✅', label: '公開申請' },
             { key: 'blog', icon: '📝', label: 'ブログ' },
             { key: 'csv', icon: '📥', label: 'CSVインポート' },
@@ -683,6 +709,7 @@ const previewDoc = async (fileUrl: string) => {
             {tab === 'sales' && '売上管理'}
             {tab === 'messages' && 'メッセージ'}
             {tab === 'reviews' && 'レビュー審査'}
+            {tab === 'applications' && '出店承認'}
             {tab === 'publish' && '公開申請'}
             {tab === 'blog' && 'ブログ記事管理'}
             {tab === 'imported' && 'インポート名簿'}
@@ -1187,6 +1214,34 @@ const previewDoc = async (fileUrl: string) => {
               </div>
             </div>
           )}
+
+          {tab === 'applications' && (() => {
+            return (
+            <div>
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#1D4ED8', display: 'flex', gap: '8px' }}>
+                <span>🎪</span><span>出店者からの応募を承認すると、マッチングが成立します。却下すると取り消されます。</span>
+              </div>
+              <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', margin: '0 0 10px' }}>承認待ち（{pendingApps.length}件）</h3>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {pendingLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
+                {!pendingLoading && pendingApps.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>承認待ちの応募はありません。</div>}
+                {pendingApps.map(a => (
+                  <div key={a.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #BFDBFE', padding: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                      <div style={{ fontSize: '13px', color: '#64748B' }}>出店者：<strong style={{ color: '#1a1a1a' }}>{a.sellerName}</strong> ／ 案件：<strong style={{ color: '#1a1a1a' }}>{a.placeTitle}</strong></div>
+                      <span style={{ fontSize: '11px', color: '#94A3B8' }}>{a.format || '形態未設定'}</span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#444', marginBottom: '10px' }}>出店希望日：{a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP') : '—'}</div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button onClick={() => setAppStatus(a.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>✅承認</button>
+                      <button onClick={() => { if (window.confirm('この応募を却下しますか？')) setAppStatus(a.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>却下</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            )
+          })()}
 
           {tab === 'reviews' && (() => {
             const pending = reviewList.filter(r => r.status === 'pending')
