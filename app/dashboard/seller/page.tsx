@@ -39,7 +39,7 @@ export default function SellerDashboard() {
   const router = useRouter()
   type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'|'sales'
   const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile','sales']
-  const [tab, setTab] = useState<TabKey>('home')
+  const [tab, setTab] = useState<TabKey>(() => { if (typeof window === 'undefined') return 'home'; const t = new URLSearchParams(window.location.search).get('tab'); return (t && validTabs.includes(t as TabKey)) ? (t as TabKey) : 'home' })
   const [chatOpen, setChatOpen] = useState<string|null>(null)
   const [msg, setMsg] = useState('')
   const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
@@ -542,12 +542,6 @@ export default function SellerDashboard() {
     setMsgUploading(false)
     openThread(appId)
   }
-
-  // マウント後にURLのtabパラメータを反映（ハイドレーション不一致を防ぐ）
-  useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get('tab')
-    if (t && validTabs.includes(t as TabKey)) setTab(t as TabKey)
-  }, [])
 
   useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile() }, [])
 
