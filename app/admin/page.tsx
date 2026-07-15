@@ -160,7 +160,7 @@ export default function AdminPage() {
       loadPosts()
     } catch { alert('通信エラー') }
   }
-  const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', other_permit: 'その他許可証' }
+  const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', business_permit: '営業許可証', pl_insurance: 'PL保険証券', inspection_sample: '検体（検査結果）', other_permit: 'その他許可証' }
 
   // 管理者ガード：admin以外は追い出す
   useEffect(() => {

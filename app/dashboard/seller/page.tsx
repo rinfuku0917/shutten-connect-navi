@@ -19,20 +19,16 @@ const messages = [
   { id: '3', from: 'イオンモール富谷', msg: '今回はご応募いただきありがとうございました。', time: '2日前', unread: false },
 ]
 
-const calDates = [
-  { date: '6/3', day: '水', status: '承認済', place: '日体大医療', color: '#ECFDF5', border: '#86EFAC', text: '#16A34A' },
-  { date: '6/7', day: '土', status: '申込可', place: '', color: '#FFF8E1', border: '#FCD34D', text: '#92400E' },
-  { date: '6/8', day: '日', status: '申込可', place: '', color: '#FFF8E1', border: '#FCD34D', text: '#92400E' },
-  { date: '6/14', day: '土', status: '否認', place: 'イオンモール', color: '#FEE2E2', border: '#FCA5A5', text: '#DC2626' },
-  { date: '6/21', day: '土', status: '審査中', place: 'みなとみらい', color: '#FEF3C7', border: '#FCD34D', text: '#92400E' },
-  { date: '6/28', day: '土', status: '申込可', place: '', color: '#FFF8E1', border: '#FCD34D', text: '#92400E' },
-]
+const calDates: { date: string; status: string; place?: string; color: string; border: string; text: string }[] = []
 
 const docTypes = [
   { key: 'license_front', name: '運転免許証（表面）', required: true, icon: '🪪' },
   { key: 'license_back', name: '運転免許証（裏面）', required: true, icon: '🪪' },
   { key: 'food_hygiene', name: '食品衛生責任者証', required: true, icon: '📄' },
   { key: 'liability_insurance', name: '損害賠償保険証書', required: true, icon: '🛡️' },
+  { key: 'business_permit', name: '営業許可証', required: true, icon: '🏪' },
+  { key: 'pl_insurance', name: 'PL保険証券', required: true, icon: '🛡️' },
+  { key: 'inspection_sample', name: '検体（検査結果）', required: false, icon: '🧪' },
   { key: 'other_permit', name: 'その他許可証', required: false, icon: '📋' },
 ]
 
