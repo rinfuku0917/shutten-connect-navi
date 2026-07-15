@@ -17,11 +17,28 @@ type Place = {
   prefecture: string | null
   address: string | null
   fee: string | null
+  price_fixed: number | null
+  price_share_pct: number | null
+  place_fixed_unit: string | null
+  company_fixed_amount: number | null
+  company_fixed_unit: string | null
+  company_share_pct: number | null
   place_type: string | null
   genres: string[] | null
   image_url: string | null
   latitude: number | null
   longitude: number | null
+}
+
+function feeText(p: Place): string {
+  const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
+  const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
+  if (fixed === 0 && pct === 0) return p.fee || '要相談'
+  const unit = p.place_fixed_unit === 'per_event' ? '期間' : '日'
+  const parts: string[] = []
+  if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + unit)
+  if (pct > 0) parts.push('売上の' + pct + '%')
+  return parts.join(' ＋ ')
 }
 
 export default function PlacesPage() {
@@ -36,7 +53,7 @@ const [showMap, setShowMap] = useState(false)
   const load = async () => {
     const { data } = await supabase
       .from('places')
-      .select('id, title, prefecture, address, fee, place_type, genres, image_url, latitude, longitude')
+      .select('id, title, prefecture, address, fee, place_type, genres, image_url, latitude, longitude, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct')
       .eq('status', 'published')
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
@@ -141,7 +158,7 @@ const [showMap, setShowMap] = useState(false)
               <div style={{padding:'20px'}}>
                 <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'8px'}}>{place.title}</div>
                 {place.prefecture && <div style={{fontSize:'13px',color:'#111',marginBottom:'6px'}}>📍 {place.prefecture}</div>}
-                <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{isSeller ? (place.fee || '要相談') : '🔒 ログイン後表示'}</div>
+                <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{isSeller ? feeText(place) : '🔒 ログイン後表示'}</div>
                 <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
                   <span style={{background:'#EBF6FD',color:'#1565C0',fontSize:'11px',padding:'3px 8px',borderRadius:'4px'}}>🏪 {place.place_type==='event'?'イベント':'常設'}</span>
                 </div>

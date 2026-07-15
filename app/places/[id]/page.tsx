@@ -14,12 +14,29 @@ type Place = {
   address: string | null
   place_type: string | null
   fee: string | null
+  price_fixed: number | null
+  price_share_pct: number | null
+  place_fixed_unit: string | null
+  company_fixed_amount: number | null
+  company_fixed_unit: string | null
+  company_share_pct: number | null
   map_url: string | null
   recruit: string | null
   schedule: { date: string, start: string, end: string }[] | null
   image_url: string | null
   latitude: number | null
   longitude: number | null
+}
+
+function feeText(p: Place): string {
+  const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
+  const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
+  if (fixed === 0 && pct === 0) return p.fee || '要相談'
+  const unit = p.place_fixed_unit === 'per_event' ? '期間' : '日'
+  const parts: string[] = []
+  if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + unit)
+  if (pct > 0) parts.push('売上の' + pct + '%')
+  return parts.join(' ＋ ')
 }
 
 export default function PlaceDetail() {
@@ -154,7 +171,7 @@ export default function PlaceDetail() {
                   {[
                     { label: '日程', value: scheduleText },
                     { label: 'アクセス', value: place.address || '要相談' },
-                    { label: '出店料', value: isSeller ? (place.fee || '要相談') : '🔒 出店者ログイン後に表示' },
+                    { label: '出店料', value: isSeller ? feeText(place) : '🔒 出店者ログイン後に表示' },
                     { label: '出店形態', value: tag },
                   ].map((row, i) => (
                     <tr key={row.label} style={{ borderBottom: i < 3 ? '1px solid #F3F4F6' : 'none' }}>
@@ -246,7 +263,7 @@ export default function PlaceDetail() {
               <h4 style={{ fontSize: '13px', fontWeight: '900', marginBottom: '10px', color: '#B45309' }}>📋 基本情報</h4>
               <div style={{ fontSize: '12px', color: '#666', lineHeight: 2 }}>
                 {place.prefecture && <div>📍 {place.prefecture}</div>}
-                <div>💴 {isSeller ? (place.fee || '要相談') : '🔒 ログイン後に表示'}</div>
+                <div>💴 {isSeller ? feeText(place) : '🔒 ログイン後に表示'}</div>
                 <div>🚚 {tag}</div>
               </div>
             </div>
