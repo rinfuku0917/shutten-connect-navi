@@ -16,7 +16,7 @@ type Post = {
   published_at: string | null
 }
 
-const PER_PAGE = 2
+const PER_PAGE = 10
 
 async function getPosts(page: number): Promise<{ posts: Post[]; total: number }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
