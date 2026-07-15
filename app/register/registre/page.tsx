@@ -1,177 +1,168 @@
 'use client'
 import Link from 'next/link'
 import { useState } from 'react'
+import { supabase } from '../lib/supabase'
+
+const AREA_GROUPS: { region: string, prefs: string[] }[] = [
+  { region: '関東', prefs: ['東京','神奈川','千葉','埼玉','茨城','群馬','栃木'] },
+  { region: '関西', prefs: ['大阪','兵庫','奈良','京都','滋賀','和歌山'] },
+  { region: '東海', prefs: ['愛知','静岡','三重','岐阜'] },
+  { region: '甲信越・北陸', prefs: ['山梨','長野','石川','新潟','富山','福井'] },
+  { region: '中国・四国', prefs: ['岡山','広島','島根','鳥取','山口','愛媛','香川','高知','徳島'] },
+  { region: '九州・沖縄', prefs: ['福岡','佐賀','長崎','熊本','大分','宮崎','鹿児島','沖縄'] },
+  { region: '北海道・東北', prefs: ['北海道','青森','岩手','秋田','宮城','山形','福島'] },
+]
 
 export default function RegisterPage() {
-  const [role, setRole] = useState<'seller' | 'host'>('seller')
-  const [step, setStep] = useState(1)
-  const [showPass, setShowPass] = useState(false)
+  const [role, setRole] = useState<'seller'|'host'>('seller')
+  const [name, setName] = useState('')
+  const [nameKana, setNameKana] = useState('')
+  const [company, setCompany] = useState('')
+  const [address, setAddress] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [areas, setAreas] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
+
+  const toggleArea = (pref: string) => {
+    setAreas(prev => prev.includes(pref) ? prev.filter(p => p !== pref) : [...prev, pref])
+  }
+
+  const handleRegister = async () => {
+    if(!name || !nameKana || !address || !email || !phone || !password) {
+      setError('必須項目をすべて入力してください'); return
+    }
+    if(password.length < 6) { setError('パスワードは6文字以上で入力してください'); return }
+    if(role === 'seller' && areas.length === 0) { setError('出店エリアを1つ以上選択してください'); return }
+    setLoading(true); setError('')
+    const metadata: Record<string, unknown> = {
+      name, role, name_kana: nameKana, address, phone,
+    }
+    if (company) metadata.shop_name = company
+    if (role === 'seller' && areas.length > 0) metadata.areas = areas
+    const { error: err } = await supabase.auth.signUp({
+      email, password,
+      options: { data: metadata }
+    })
+    if(err) { setError(err.message); setLoading(false); return }
+    // 管理者へ新規登録メール通知（失敗しても登録は成功させる）
+    try {
+      await fetch('/api/notify/new-seller', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role, name,
+          shop_name: company || null,
+          email, phone,
+          areas: role === 'seller' ? areas : null,
+        }),
+      })
+    } catch (e) {
+      console.error('メール通知に失敗しましたが登録は完了しました', e)
+    }
+    setDone(true)
+    setLoading(false)
+  }
+
+  if(done) return (
+    <div style={{minHeight:'100vh',background:'#FFF9E6',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
+      <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'48px 32px',maxWidth:'420px',textAlign:'center',boxShadow:'0 4px 16px rgba(0,0,0,0.08)'}}>
+        <div style={{fontSize:'clamp(28px, 6vw, 48px)',marginBottom:'16px'}}>📧</div>
+        <h2 style={{fontSize:'20px',fontWeight:'900',marginBottom:'12px',color:'#1a1a1a'}}>確認メールを送信しました</h2>
+        <p style={{fontSize:'14px',color:'#666',lineHeight:1.8,marginBottom:'24px'}}>{email} に確認メールを送りました。メール内のリンクをクリックして登録を完了してください。</p>
+        <Link href='/login' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'12px 32px',borderRadius:'8px',textDecoration:'none'}}>ログインへ</Link>
+      </div>
+    </div>
+  )
+
+  const inputStyle = {
+    width:'100%', border:'1px solid #E5D5A0', borderRadius:'8px',
+    padding:'10px 14px', fontSize:'14px', boxSizing:'border-box' as const,
+    outline:'none', background:'#fff', color:'#1a1a1a'
+  }
+  const labelStyle = { fontSize:'13px', fontWeight:'700', color:'#B45309', display:'block', marginBottom:'6px' }
+  const reqBadge = <span style={{background:'#F5A623',color:'#fff',fontSize:'10px',fontWeight:'700',padding:'2px 8px',borderRadius:'6px',marginLeft:'8px'}}>必須</span>
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FFF9E6' }}>
-      {/* ナビ */}
-      
+    <div style={{minHeight:'100vh',background:'#FFF9E6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif',display:'flex',flexDirection:'column'}}>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px'}}>
+        <div style={{background:'#fff',borderRadius:'16px',border:'2px solid #FFE0A0',boxShadow:'0 4px 20px rgba(245,166,35,0.15)',width:'100%',maxWidth:'520px',padding:'36px'}}>
+          <h1 style={{fontSize:'22px',fontWeight:'900',marginBottom:'24px',textAlign:'center',color:'#1a1a1a'}}>無料会員登録</h1>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'24px'}}>
+            {[
+              {val:'seller',label:'出店したい',icon:'🚚'},
+              {val:'host',label:'お店を呼びたい',icon:'📣'}
+            ].map(r=>(
+              <button key={r.val} onClick={()=>setRole(r.val as 'seller'|'host')} style={{border:role===r.val?'2px solid #F5A623':'1px solid #E5D5A0',borderRadius:'10px',padding:'16px 12px',background:role===r.val?'#FFF3C4':'#FFFBF0',cursor:'pointer',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
+                <span style={{height:'48px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'40px',lineHeight:1}}>{r.icon}</span>
+                <span style={{fontSize:'13px',fontWeight:'700',color:role===r.val?'#E08A00':'#555'}}>{r.label}</span>
+              </button>
+            ))}
+          </div>
+          {error && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:'8px',padding:'12px',fontSize:'13px',color:'#DC2626',marginBottom:'16px'}}>{error}</div>}
 
-      {/* オレンジバー */}
-      
-
-      <div style={{ maxWidth: '520px', margin: '48px auto', padding: '0 16px' }}>
-        {/* ステップインジケーター */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', gap: '8px' }}>
-          {[1, 2, 3].map((s) => (
-            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: '900', fontSize: '13px',
-                background: step >= s ? '#F5A623' : '#fff',
-                color: step >= s ? '#fff' : '#aaa',
-                border: step >= s ? '2px solid #F5A623' : '2px solid #E5E7EB',
-              }}>{s}</div>
-              {s < 3 && <div style={{ width: '40px', height: '2px', background: step > s ? '#F5A623' : '#E5E7EB' }}></div>}
-            </div>
-          ))}
-        </div>
-
-        <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', border: '1px solid #E5E7EB' }}>
-          <div style={{ background: '#FFF8E1', borderBottom: '1px solid #FFE0A0', padding: '20px 28px' }}>
-            <h1 style={{ fontSize: '18px', fontWeight: '900', color: '#B45309', marginBottom: '4px' }}>👤 新規会員登録（無料）</h1>
-            <p style={{ fontSize: '12px', color: '#888' }}>
-              {step === 1 ? '登録種別を選択してください' : step === 2 ? '基本情報を入力してください' : '登録完了'}
-            </p>
+          <div style={{marginBottom:'14px'}}>
+            <label style={labelStyle}>担当者名{reqBadge}</label>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder='例：田中太郎' style={inputStyle}/>
+          </div>
+          <div style={{marginBottom:'14px'}}>
+            <label style={labelStyle}>担当者名ふりがな{reqBadge}</label>
+            <input value={nameKana} onChange={e=>setNameKana(e.target.value)} placeholder='例：たなかたろう' style={inputStyle}/>
+          </div>
+          <div style={{marginBottom:'14px'}}>
+            <label style={labelStyle}>企業名</label>
+            <input value={company} onChange={e=>setCompany(e.target.value)} placeholder='例：株式会社○○ / たこ焼き大阪屋' style={inputStyle}/>
+          </div>
+          <div style={{marginBottom:'14px'}}>
+            <label style={labelStyle}>住所{reqBadge}</label>
+            <input value={address} onChange={e=>setAddress(e.target.value)} placeholder='例：東京都渋谷区○○1-2-3' style={inputStyle}/>
+          </div>
+          <div style={{marginBottom:'14px'}}>
+            <label style={labelStyle}>メールアドレス{reqBadge}</label>
+            <input value={email} onChange={e=>setEmail(e.target.value)} type='email' placeholder='example@email.com' style={inputStyle}/>
+          </div>
+          <div style={{marginBottom:'14px'}}>
+            <label style={labelStyle}>電話番号{reqBadge}</label>
+            <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder='例：090-1234-5678' style={inputStyle}/>
+          </div>
+          <div style={{marginBottom: role==='seller' ? '20px' : '24px'}}>
+            <label style={labelStyle}>パスワード{reqBadge}</label>
+            <input value={password} onChange={e=>setPassword(e.target.value)} type='password' placeholder='パスワードを入力' style={inputStyle}/>
+            <div style={{fontSize:'12px',color:'#999',marginTop:'4px'}}>半角英数字混合6〜20文字</div>
           </div>
 
-          <div style={{ padding: '28px' }}>
-            {step === 1 && (
-              <>
-                <p style={{ fontSize: '13px', fontWeight: '700', color: '#555', marginBottom: '12px' }}>どちらで登録しますか？</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                  {[
-                    { key: 'seller', icon: '🛒', title: '出店したい', desc: 'イベント・施設に出店' },
-                    { key: 'host', icon: '📣', title: 'お店を呼びたい', desc: '出店者を募集する' },
-                  ].map((r) => (
-                    <button
-                      key={r.key}
-                      onClick={() => setRole(r.key as 'seller' | 'host')}
-                      style={{
-                        padding: '16px 12px', borderRadius: '12px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-                        border: role === r.key ? '2px solid #F5A623' : '2px solid #E5E7EB',
-                        background: role === r.key ? '#FFF8E1' : '#fff',
-                      }}
-                    >
-                      <div style={{ fontSize: '28px', marginBottom: '6px' }}>{r.icon}</div>
-                      <div style={{ fontWeight: '900', fontSize: '13px', color: role === r.key ? '#B45309' : '#333', marginBottom: '3px' }}>{r.title}</div>
-                      <div style={{ fontSize: '11px', color: '#888' }}>{r.desc}</div>
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() => setStep(2)}
-                  style={{ width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '14px', fontSize: '15px', fontWeight: '900', cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  次へ →
-                </button>
-              </>
-            )}
-
-            {step === 2 && (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-                  {[{ label: '姓', placeholder: '山田' }, { label: '名', placeholder: '太郎' }].map((f) => (
-                    <div key={f.label}>
-                      <label style={{ fontSize: '12px', fontWeight: '700', color: '#555', display: 'block', marginBottom: '5px' }}>
-                        {f.label} <span style={{ color: '#E53E3E', background: '#FFF0F0', padding: '1px 5px', borderRadius: '3px', fontSize: '10px' }}>必須</span>
-                      </label>
-                      <input type="text" placeholder={f.placeholder} style={{ width: '100%', border: '1.5px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+          {role==='seller' && (
+            <div style={{marginBottom:'24px'}}>
+              <label style={labelStyle}>出店エリア{reqBadge}</label>
+              <div style={{border:'1px solid #E5D5A0',borderRadius:'8px',padding:'14px',background:'#FFFBF0'}}>
+                {AREA_GROUPS.map(g => (
+                  <div key={g.region} style={{marginBottom:'12px'}}>
+                    <div style={{fontSize:'13px',fontWeight:'700',color:'#1a1a1a',marginBottom:'6px'}}>{g.region}</div>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}}>
+                      {g.prefs.map(p => (
+                        <label key={p} style={{display:'inline-flex',alignItems:'center',gap:'4px',fontSize:'13px',color:'#333',cursor:'pointer',padding:'4px 10px',borderRadius:'999px',border: areas.includes(p) ? '1.5px solid #F5A623' : '1px solid #E5E7EB',background: areas.includes(p) ? '#FFF3C4' : '#fff'}}>
+                          <input type='checkbox' checked={areas.includes(p)} onChange={()=>toggleArea(p)} style={{accentColor:'#F5A623'}}/>
+                          {p}
+                        </label>
+                      ))}
                     </div>
-                  ))}
-                </div>
-
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '700', color: '#555', display: 'block', marginBottom: '5px' }}>
-                    メールアドレス <span style={{ color: '#E53E3E', background: '#FFF0F0', padding: '1px 5px', borderRadius: '3px', fontSize: '10px' }}>必須</span>
-                  </label>
-                  <input type="email" placeholder="example@email.com" style={{ width: '100%', border: '1.5px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '700', color: '#555', display: 'block', marginBottom: '5px' }}>
-                    電話番号 <span style={{ color: '#888', background: '#F0F0F0', padding: '1px 5px', borderRadius: '3px', fontSize: '10px' }}>任意</span>
-                  </label>
-                  <input type="tel" placeholder="090-0000-0000" style={{ width: '100%', border: '1.5px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '700', color: '#555', display: 'block', marginBottom: '5px' }}>
-                    パスワード <span style={{ color: '#E53E3E', background: '#FFF0F0', padding: '1px 5px', borderRadius: '3px', fontSize: '10px' }}>必須</span>
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <input type={showPass ? 'text' : 'password'} placeholder="8文字以上" style={{ width: '100%', border: '1.5px solid #E5E7EB', borderRadius: '8px', padding: '10px 40px 10px 12px', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-                    <button onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
-                      {showPass ? '🙈' : '👁️'}
-                    </button>
                   </div>
-                </div>
-
-                <p style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '16px', lineHeight: 1.7 }}>
-                  <a href="#" style={{ color: '#3A9BD5', textDecoration: 'none' }}>利用規約</a>・
-                  <a href="#" style={{ color: '#3A9BD5', textDecoration: 'none' }}>プライバシーポリシー</a>
-                  に同意の上、登録してください。<br />登録完了後、確認メールをお送りします。
-                </p>
-
-                <button
-                  onClick={() => setStep(3)}
-                  style={{ width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '14px', fontSize: '15px', fontWeight: '900', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '10px' }}
-                >
-                  無料で会員登録する →
-                </button>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <div style={{ flex: 1, height: '1px', background: '#E5E7EB' }}></div>
-                  <span style={{ fontSize: '12px', color: '#aaa' }}>または</span>
-                  <div style={{ flex: 1, height: '1px', background: '#E5E7EB' }}></div>
-                </div>
-
-                <button style={{ width: '100%', background: '#fff', color: '#333', border: '1.5px solid #E5E7EB', borderRadius: '8px', padding: '12px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  Googleで登録
-                </button>
-
-                <button onClick={() => setStep(1)} style={{ width: '100%', background: 'none', border: 'none', color: '#888', fontSize: '13px', cursor: 'pointer', marginTop: '12px', fontFamily: 'inherit' }}>← 戻る</button>
-              </>
-            )}
-
-            {step === 3 && (
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <div style={{ fontSize: '56px', marginBottom: '16px' }}>🎉</div>
-                <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#B45309', marginBottom: '10px' }}>登録完了！</h2>
-                <p style={{ fontSize: '13px', color: '#888', lineHeight: 1.8, marginBottom: '24px' }}>
-                  ご登録いただきありがとうございます。<br />
-                  確認メールをお送りしましたのでご確認ください。
-                </p>
-                <Link href="/" style={{ display: 'inline-block', background: '#F5A623', color: '#fff', borderRadius: '8px', padding: '12px 32px', fontWeight: '900', fontSize: '14px', textDecoration: 'none' }}>
-                  出店場所を探す
-                </Link>
+                ))}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
 
-        <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '13px', color: '#888' }}>
-          すでに会員の方は{' '}
-          <Link href="/login" style={{ color: '#B45309', fontWeight: '700', textDecoration: 'none' }}>ログイン</Link>
-          {' '}へ
+          <button onClick={handleRegister} disabled={loading} style={{width:'100%',background:loading?'#ccc':'#F5A623',color:'#fff',border:'none',borderRadius:'8px',padding:'14px',fontSize:'15px',fontWeight:'900',cursor:loading?'not-allowed':'pointer',marginBottom:'16px',boxShadow:'0 4px 12px rgba(245,166,35,0.3)'}}>
+            {loading?'登録中...':'この内容で無料登録する'}
+          </button>
+          <div style={{textAlign:'center',fontSize:'13px',color:'#888'}}>
+            すでにアカウントをお持ちの方は <Link href='/login' style={{color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>ログイン</Link>
+          </div>
         </div>
       </div>
-
-      <footer style={{ background: '#1E2A3B', color: '#fff', padding: '24px', textAlign: 'center', marginTop: '40px' }}>
-        <div style={{ fontWeight: '900', fontSize: '16px', marginBottom: '8px' }}>出店コネクトナビ</div>
-        <div style={{ fontSize: '12px', color: '#666' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
     </div>
   )
 }
