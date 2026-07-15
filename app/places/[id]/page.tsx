@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import Nav from '../../components/Nav'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
 type Place = {
@@ -138,6 +139,8 @@ export default function PlaceDetail() {
     : '要相談'
 
   return (
+    <>
+    <Nav />
     <div style={{ minHeight: '100vh', background: '#FFF9E6' }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
         <Link href="/places" style={{ color: '#3A9BD5', textDecoration: 'none', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginBottom: '20px' }}>
@@ -276,5 +279,6 @@ export default function PlaceDetail() {
         <div style={{ fontSize: '12px', color: '#666' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
       </footer>
     </div>
+    </>
   )
 }
