@@ -93,7 +93,7 @@ const [showMap, setShowMap] = useState(false)
     }
     return true
   }), [places, pref, genre, kw])
-  const PER_PAGE = 10
+  const PER_PAGE = 12
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const pageSafe = Math.min(Math.max(1, page), totalPages)
   const paged = filtered.slice((pageSafe - 1) * PER_PAGE, pageSafe * PER_PAGE)
