@@ -57,7 +57,7 @@ const [showMap, setShowMap] = useState(false)
       .select('id, title, prefecture, address, fee, place_type, genres, image_url, latitude, longitude, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct')
       .eq('status', 'published')
       .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
+      .order('posted_at', { ascending: false })
     setPlaces(data || [])
     setLoading(false)
     return data || []
