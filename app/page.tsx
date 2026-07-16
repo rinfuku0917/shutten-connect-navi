@@ -55,8 +55,9 @@ export default function Home() {
         .from('places')
         .select('id,title,prefecture,place_type,fee,image_url')
         .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .limit(6)
+        .order('pinned', { ascending: false })
+        .order('posted_at', { ascending: false })
+        .limit(10)
       setPlaces(data || [])
     }
     load()
