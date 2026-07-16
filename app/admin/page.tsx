@@ -392,14 +392,17 @@ export default function AdminPage() {
   // ===== レビュー審査（管理者）=====
   type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
   // ===== 案件一覧（管理者・実データ） =====
-  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, fee: string }
+  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, fee: string, genres: string[] }
   const [placesList, setPlacesList] = useState<AdminPlace[]>([])
   const [placesLoading, setPlacesLoading] = useState(false)
+  const [pKw, setPKw] = useState('')
+  const [pPref, setPPref] = useState('')
+  const [pGenre, setPGenre] = useState('')
   const loadPlacesList = async () => {
     setPlacesLoading(true)
     const { data } = await supabase
       .from('places')
-      .select('id, title, prefecture, place_type, status, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, fee, profiles(name), applications(count)')
+      .select('id, title, prefecture, place_type, status, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, fee, genres, profiles(name), applications(count)')
       .order('created_at', { ascending: false })
     const mapped: AdminPlace[] = (data || []).map((p: any) => ({
       id: p.id,
@@ -412,10 +415,17 @@ export default function AdminPage() {
       price_fixed: p.price_fixed ?? 0, price_share_pct: p.price_share_pct ?? 0, place_fixed_unit: p.place_fixed_unit || 'per_day',
       company_fixed_amount: p.company_fixed_amount ?? 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct ?? 0,
       fee: p.fee || '',
+      genres: p.genres || [],
     }))
     setPlacesList(mapped)
     setPlacesLoading(false)
   }
+  const placesFiltered = placesList.filter(x => {
+    if (pPref && x.area !== pPref) return false
+    if (pGenre && !(x.genres || []).includes(pGenre)) return false
+    if (pKw) { const hay=((x.title||'')+(x.area||'')+(x.host||'')).toLowerCase(); if(!hay.includes(pKw.toLowerCase())) return false }
+    return true
+  })
 
   // ===== 料金設定モーダル =====
   const [feePlace, setFeePlace] = useState<AdminPlace | null>(null)
@@ -822,6 +832,19 @@ const previewDoc = async (fileUrl: string) => {
                 </div>
               )}
 
+              <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center', marginBottom:'12px' }}>
+                <input value={pKw} onChange={e=>setPKw(e.target.value)} placeholder='案件名・オーナー・エリアで検索' style={{ flex:'1 1 220px', padding:'9px 12px', borderRadius:'8px', border:'1.5px solid #E2E8F0', fontSize:'13px' }} />
+                <select value={pPref} onChange={e=>setPPref(e.target.value)} style={{ padding:'9px 12px', borderRadius:'8px', border:'1.5px solid #E2E8F0', fontSize:'13px', minWidth:'130px' }}>
+                  <option value=''>都道府県（すべて）</option>
+                  {Array.from(new Set(placesList.map(x=>x.area).filter(a=>a&&a!=='-'))).map(a=><option key={a} value={a}>{a}</option>)}
+                </select>
+                <select value={pGenre} onChange={e=>setPGenre(e.target.value)} style={{ padding:'9px 12px', borderRadius:'8px', border:'1.5px solid #E2E8F0', fontSize:'13px', minWidth:'130px' }}>
+                  <option value=''>ジャンル（すべて）</option>
+                  {Array.from(new Set(placesList.flatMap(x=>x.genres||[]).filter(Boolean))).map(g=><option key={g} value={g}>{g}</option>)}
+                </select>
+                {(pKw||pPref||pGenre) && <button onClick={()=>{setPKw('');setPPref('');setPGenre('')}} style={{ padding:'9px 14px', borderRadius:'8px', border:'1.5px solid #E2E8F0', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#64748B' }}>クリア</button>}
+                <span style={{ fontSize:'12px', color:'#64748B' }}>{placesFiltered.length}件</span>
+              </div>
               <div className='admin-table-wrap' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
@@ -833,9 +856,9 @@ const previewDoc = async (fileUrl: string) => {
                   </thead>
                   <tbody>
                     {placesLoading && (<tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>)}
-                    {!placesLoading && placesList.length === 0 && (<tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>案件がありません。</td></tr>)}
-                    {placesList.map((place, i) => (
-                      <tr key={place.id} style={{ borderBottom: i < placesList.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                    {!placesLoading && placesFiltered.length === 0 && (<tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>案件がありません。</td></tr>)}
+                    {placesFiltered.map((place, i) => (
+                      <tr key={place.id} style={{ borderBottom: i < placesFiltered.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '12px 14px', fontWeight: '600' }}>{place.title}</td>
                         <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{place.host}</td>
                         <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{place.area}</td>
