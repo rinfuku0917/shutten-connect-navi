@@ -44,6 +44,7 @@ function feeText(p: Place): string {
 export default function PlacesPage() {
   const [places, setPlaces] = useState<Place[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
   const [isSeller, setIsSeller] = useState(false)
   const [kw, setKw] = useState('')
   const [pref, setPref] = useState('')
@@ -92,6 +93,10 @@ const [showMap, setShowMap] = useState(false)
     }
     return true
   }), [places, pref, genre, kw])
+  const PER_PAGE = 10
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+  const pageSafe = Math.min(Math.max(1, page), totalPages)
+  const paged = filtered.slice((pageSafe - 1) * PER_PAGE, pageSafe * PER_PAGE)
 
   // 地図用ピン（緯度経度ありのみ）
   const pins = useMemo(() => filtered
@@ -150,7 +155,7 @@ const [showMap, setShowMap] = useState(false)
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:'16px'}}>
           {loading && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>読み込み中...</div>}
           {!loading && filtered.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>条件に合う出店場所が見つかりませんでした。</div>}
-          {filtered.map(place => (
+          {paged.map(place => (
             <Link key={place.id} href={'/places/' + place.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',overflow:'hidden',color:'inherit'}}>
               <div style={{height:'170px',background:'#F5A623',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',backgroundImage:place.image_url?`url(${place.image_url})`:undefined,backgroundSize:'cover',backgroundPosition:'center'}}>
                 {!place.image_url && (place.place_type==='event'?'🎪':'🏪')}
@@ -166,6 +171,18 @@ const [showMap, setShowMap] = useState(false)
             </Link>
           ))}
         </div>
+        {totalPages > 1 && (
+          <div className="places-pagination" style={{display:'flex',justifyContent:'center',alignItems:'center',gap:'6px',flexWrap:'wrap',margin:'28px 0 8px'}}>
+            <button onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo({top:0,behavior:'smooth'}); }} disabled={pageSafe <= 1} style={{padding:'8px 12px',borderRadius:'8px',border:'1px solid #E2E8F0',background:'#fff',color:pageSafe<=1?'#ccc':'#1a1a1a',cursor:pageSafe<=1?'default':'pointer',fontWeight:'700'}}>←</button>
+            {Array.from({length: totalPages}, (_, i) => i + 1).filter(n => n === 1 || n === totalPages || Math.abs(n - pageSafe) <= 1).map((n, idx, arr) => (
+              <span key={n} style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                {idx > 0 && n - arr[idx-1] > 1 && <span style={{color:'#999'}}>…</span>}
+                <button onClick={() => { setPage(n); window.scrollTo({top:0,behavior:'smooth'}); }} style={{minWidth:'38px',padding:'8px 0',borderRadius:'8px',border:n===pageSafe?'none':'1px solid #E2E8F0',background:n===pageSafe?'#F5A623':'#fff',color:n===pageSafe?'#fff':'#1a1a1a',fontWeight:'700',cursor:'pointer'}}>{n}</button>
+              </span>
+            ))}
+            <button onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo({top:0,behavior:'smooth'}); }} disabled={pageSafe >= totalPages} style={{padding:'8px 12px',borderRadius:'8px',border:'1px solid #E2E8F0',background:'#fff',color:pageSafe>=totalPages?'#ccc':'#1a1a1a',cursor:pageSafe>=totalPages?'default':'pointer',fontWeight:'700'}}>→</button>
+          </div>
+        )}
       </div>
       <footer style={{background:'#F5A623',color:'#111',padding:'24px',textAlign:'center'}}>
         <Link href='/' style={{fontWeight:'900',fontSize:'16px',marginBottom:'8px',display:'block',color:'#111',textDecoration:'none'}}>出店コネクトナビ</Link>
