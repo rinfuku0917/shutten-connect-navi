@@ -137,3 +137,7 @@ img { max-width: 100%; height: auto; }
 .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
 @media (max-width: 900px) { .grid-5 { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 560px) { .grid-5 { grid-template-columns: repeat(2, 1fr); } }
+
+/* 新着カード: 高さを揃える */
+.grid-5 { align-items: stretch; }
+.grid-5 > a { display: block; height: 100%; }

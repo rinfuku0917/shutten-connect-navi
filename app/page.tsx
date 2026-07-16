@@ -128,17 +128,17 @@ export default function Home() {
           {places.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px'}}>掲載中の出店場所はまだありません。</div>}
           {places.map(p=>(
             <Link key={p.id} href={'/places/' + p.id} style={{textDecoration:'none'}}>
-            <div style={{background:'#fff',borderRadius:'12px',overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}>
+            <div style={{background:'#fff',borderRadius:'12px',overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,0.08)',height:'100%',display:'flex',flexDirection:'column'}}>
               <div style={{background:'#F5A623',height:'120px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',position:'relative',backgroundImage:p.image_url?`url(${p.image_url})`:undefined,backgroundSize:'cover',backgroundPosition:'center'}}>
                 {!p.image_url && (p.place_type==='event'?'🎪':'🏪')}
                 {p.prefecture && <span style={{position:'absolute',top:'8px',right:'8px',background:'rgba(0,0,0,0.5)',color:'#fff',fontSize:'10px',padding:'2px 6px',borderRadius:'4px'}}>📍{p.prefecture}</span>}
               </div>
-              <div style={{padding:'12px'}}>
+              <div style={{padding:'12px',flex:1,display:'flex',flexDirection:'column'}}>
                 <div style={{display:'flex',gap:'4px',marginBottom:'6px'}}>
                   <span style={{background:'#FFF3CD',color:'#111',fontSize:'10px',fontWeight:'700',padding:'2px 6px',borderRadius:'4px'}}>{p.place_type==='event'?'イベント':'常設'}</span>
                 </div>
-                <div style={{fontWeight:'700',fontSize:'13px',marginBottom:'4px',lineHeight:1.4,color:'#111'}}>{p.title}</div>
-                <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>{isSeller ? (p.fee || '要相談') : '🔒 ログイン後表示'}</div>
+                <div style={{fontWeight:'700',fontSize:'13px',marginBottom:'4px',lineHeight:1.4,color:'#111',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',minHeight:'2.8em'}}>{p.title}</div>
+                <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginTop:'auto'}}>{isSeller ? (p.fee || '要相談') : '🔒 ログイン後表示'}</div>
               </div>
             </div>
             </Link>
