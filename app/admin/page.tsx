@@ -883,6 +883,18 @@ const previewDoc = async (fileUrl: string) => {
                   </tbody>
                 </table>
               </div>
+              {placesTotalPages > 1 && (
+                <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:'6px', flexWrap:'wrap', marginTop:'16px' }}>
+                  <button onClick={() => setPlacesPage(p => Math.max(1, p - 1))} disabled={placesPageSafe <= 1} style={{ padding:'8px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', background:'#fff', color: placesPageSafe<=1?'#ccc':'#1a1a1a', cursor: placesPageSafe<=1?'default':'pointer', fontWeight:'700' }}>←</button>
+                  {Array.from({length: placesTotalPages}, (_, i) => i + 1).filter(n => n === 1 || n === placesTotalPages || Math.abs(n - placesPageSafe) <= 1).map((n, idx, arr) => (
+                    <span key={n} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                      {idx > 0 && n - arr[idx-1] > 1 && <span style={{ color:'#999' }}>…</span>}
+                      <button onClick={() => setPlacesPage(n)} style={{ minWidth:'38px', padding:'8px 0', borderRadius:'8px', border: n===placesPageSafe?'none':'1px solid #E2E8F0', background: n===placesPageSafe?'#F5A623':'#fff', color: n===placesPageSafe?'#fff':'#1a1a1a', fontWeight:'700', cursor:'pointer' }}>{n}</button>
+                    </span>
+                  ))}
+                  <button onClick={() => setPlacesPage(p => Math.min(placesTotalPages, p + 1))} disabled={placesPageSafe >= placesTotalPages} style={{ padding:'8px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', background:'#fff', color: placesPageSafe>=placesTotalPages?'#ccc':'#1a1a1a', cursor: placesPageSafe>=placesTotalPages?'default':'pointer', fontWeight:'700' }}>→</button>
+                </div>
+              )}
 
               {feePlace && (() => {
                 const ff = feeForm
