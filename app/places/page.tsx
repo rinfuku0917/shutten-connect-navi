@@ -147,7 +147,7 @@ const [showMap, setShowMap] = useState(false)
         </div>
 
         {/* カード一覧 */}
-        <div style={{display:'grid',gap:'16px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:'16px'}}>
           {loading && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>読み込み中...</div>}
           {!loading && filtered.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>条件に合う出店場所が見つかりませんでした。</div>}
           {filtered.map(place => (
