@@ -124,7 +124,7 @@ export default function Home() {
           <h2 style={{fontSize:'18px',fontWeight:'900',color:'#111'}}>新着の出店場所</h2>
           <Link href='/places' style={{color:'#111',fontWeight:'700',textDecoration:'none',fontSize:'14px'}}>もっと見る →</Link>
         </div>
-        <div className='grid-auto' style={{gap:'16px'}}>
+        <div className='grid-5' style={{gap:'16px'}}>
           {places.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px'}}>掲載中の出店場所はまだありません。</div>}
           {places.map(p=>(
             <Link key={p.id} href={'/places/' + p.id} style={{textDecoration:'none'}}>

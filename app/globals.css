@@ -132,3 +132,8 @@ img { max-width: 100%; height: auto; }
     appearance: none;
   }
 }
+
+/* トップの新着: PC5列固定・10件で2段に揃える */
+.grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+@media (max-width: 900px) { .grid-5 { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 560px) { .grid-5 { grid-template-columns: repeat(2, 1fr); } }
