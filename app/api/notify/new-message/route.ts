@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 
 const FROM_EMAIL = 'noreply@connect-navi.com'
 
+const recentSends = new Map();
+
 export async function POST(req: Request) {
   try {
     const { applicationId, senderId } = await req.json()
@@ -80,6 +82,16 @@ export async function POST(req: Request) {
     ].join('\n')
 
     const resend = new Resend(apiKey)
+    const dedupeKey = String(recipientId) + '|' + String(placeTitle);
+    const nowTs = Date.now();
+    const lastTs = recentSends.get(dedupeKey);
+    if (lastTs && nowTs - lastTs < 10000) {
+      return NextResponse.json({ ok: true, skipped: 'duplicate' });
+    }
+    recentSends.set(dedupeKey, nowTs);
+    if (recentSends.size > 500) {
+      for (const [k, t] of recentSends) { if (nowTs - t > 60000) recentSends.delete(k); }
+    }
     const { error } = await resend.emails.send({
       from: '出店コネクトナビ <' + FROM_EMAIL + '>',
       to: recipient.email,
