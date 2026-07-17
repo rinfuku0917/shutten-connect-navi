@@ -45,7 +45,7 @@ export default function RegisterPage() {
     if (role === 'seller' && areas.length > 0) metadata.areas = areas
     const { error: err } = await supabase.auth.signUp({
       email, password,
-      options: { data: metadata }
+      options: { data: metadata, emailRedirectTo: 'https://app.connect-navi.com/login' }
     })
     if(err) { setError(err.message); setLoading(false); return }
     // 管理者へ新規登録メール通知（失敗しても登録は成功させる）
