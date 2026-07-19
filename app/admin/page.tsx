@@ -537,6 +537,13 @@ export default function AdminPage() {
   const setAppStatus = async (id: string, status: string) => {
     const { error } = await supabase.from('applications').update({ status }).eq('id', id)
     if (error) { alert('更新失敗: ' + error.message); return }
+    try {
+      await fetch('/api/notify/application-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId: id, status }),
+      })
+    } catch {}
     loadPendingApps()
   }
 
