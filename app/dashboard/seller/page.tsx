@@ -284,7 +284,7 @@ export default function SellerDashboard() {
   }
 
   // ===== 売上（出店者） =====
-  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number }
+  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number }
   type SellerSale = { id: string, sale_date: string, placeTitle: string, revenue: number, fee: number }
   const [myApprovedApps, setMyApprovedApps] = useState<SellerApp[]>([])
   const [mySales, setMySales] = useState<SellerSale[]>([])
@@ -293,7 +293,15 @@ export default function SellerDashboard() {
   const [saleRevenue, setSaleRevenue] = useState('')
   const [saleSaving, setSaleSaving] = useState(false)
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
-  const calcFee = (revenue: number, priceFixed: number, pricePct: number) => Math.round(revenue * (pricePct/100) + (priceFixed||0))
+  const calcFee = (revenue: number, a: SellerApp) => {
+    const rate = a.share_tax_rate || 10
+    const base = a.share_tax_basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
+    const placeFixed = a.place_fixed_unit === 'per_event' ? 0 : (a.price_fixed || 0)
+    const companyFixed = a.company_fixed_unit === 'per_event' ? 0 : (a.company_fixed_amount || 0)
+    const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
+    const companyFee = Math.floor(companyFixed + base * (a.company_share_pct || 0) / 100)
+    return { placeFee, companyFee, total: placeFee + companyFee }
+  }
 
   // 自分の承認済み案件を読み込む
   const loadMyApprovedApps = async () => {
@@ -302,13 +310,16 @@ export default function SellerDashboard() {
     if (!uid) return
     const { data } = await supabase
       .from('applications')
-      .select('id, place_id, places(title, price_fixed, price_share_pct)')
+      .select('id, place_id, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate)')
       .eq('seller_id', uid).eq('status', 'approved')
       .order('created_at', { ascending: false })
     const mapped: SellerApp[] = (data || []).map((a: any) => ({
       application_id: a.id, place_id: a.place_id,
       placeTitle: a.places?.title || '(案件名なし)',
       price_fixed: a.places?.price_fixed || 0, price_share_pct: a.places?.price_share_pct || 0,
+      place_fixed_unit: a.places?.place_fixed_unit || 'per_day', company_fixed_amount: a.places?.company_fixed_amount || 0,
+      company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0,
+      share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 10,
     }))
     setMyApprovedApps(mapped)
   }
@@ -323,11 +334,11 @@ export default function SellerDashboard() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, sale_date, revenue, fee, places(title)')
+      .select('id, sale_date, revenue, fee, total_pay, places(title)')
       .eq('seller_id', uid).gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SellerSale[] = (data || []).map((s: any) => ({
-      id: s.id, sale_date: s.sale_date, revenue: s.revenue, fee: s.fee,
+      id: s.id, sale_date: s.sale_date, revenue: s.revenue, fee: s.total_pay ?? s.fee,
       placeTitle: s.places?.title || '(案件名なし)',
     }))
     setMySales(mapped)
@@ -341,12 +352,12 @@ export default function SellerDashboard() {
     const revenue = parseInt(saleRevenue, 10)
     if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
     setSaleSaving(true)
-    const fee = calcFee(revenue, app.price_fixed, app.price_share_pct)
+    const { placeFee, companyFee, total } = calcFee(revenue, app)
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     const { error } = await supabase.from('sales').insert({
       application_id: app.application_id, place_id: app.place_id, seller_id: uid,
-      sale_date: saleDate, revenue, fee
+      sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: total
     })
     if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
     setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleSaving(false)
@@ -1177,7 +1188,7 @@ export default function SellerDashboard() {
                   </div>
                   <button onClick={saveMySale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
-                {saleAppId && (() => { const a = myApprovedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a.price_fixed, a.price_share_pct); return (
+                {saleAppId && (() => { const a = myApprovedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a).total; return (
                   <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B' }}>売上{rev.toLocaleString()}円 − 出店料{fee.toLocaleString()}円（税別・出店コネクトナビへ）＝ あなたの利益 <strong style={{ color: '#16A34A' }}>{(rev - fee).toLocaleString()}円</strong></div>
                 ) })()}
               </div>
