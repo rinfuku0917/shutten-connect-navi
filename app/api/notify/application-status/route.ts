@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 
 const FROM_EMAIL = 'noreply@connect-navi.com'
 
+const recentStatusSends = new Map<string, number>()
+
 export async function POST(req: Request) {
   try {
     const { applicationId, status } = await req.json()
@@ -49,7 +51,7 @@ export async function POST(req: Request) {
           'ご申込いただいた「' + placeTitle + '」への出店が承認されました。',
           '',
           '担当者とメッセージでやり取りを進め、当日に向けてご準備ください。',
-          'https://shutten-connect-navi-bakv.vercel.app/dashboard/seller',
+          'https://app.connect-navi.com/dashboard/seller',
         ]
       : [
           sellerName + ' 様',
@@ -57,9 +59,16 @@ export async function POST(req: Request) {
           'ご申込いただいた「' + placeTitle + '」への出店は、今回は見送りとなりました。',
           '',
           'また他の案件へのご応募をお待ちしております。',
-          'https://shutten-connect-navi-bakv.vercel.app/places',
+          'https://app.connect-navi.com/places',
         ]
     const text = lines.join('\n')
+
+    const dedupeKey = applicationId + '|' + status
+    const prevSend = recentStatusSends.get(dedupeKey)
+    if (prevSend && Date.now() - prevSend < 10000) {
+      return NextResponse.json({ ok: true, deduped: true })
+    }
+    recentStatusSends.set(dedupeKey, Date.now())
 
     const resend = new Resend(apiKey)
     const { error } = await resend.emails.send({
