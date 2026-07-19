@@ -26,10 +26,15 @@ export async function POST(req: Request) {
 
     // 申込 → 出店者・案件を解決
     const { data: app, error: aErr } = await db
-      .from('applications').select('seller_id, place_id, apply_date').eq('id', applicationId).single()
+      .from('applications').select('seller_id, place_id, apply_date, status').eq('id', applicationId).single()
     if (aErr || !app) {
       return NextResponse.json({ error: '申込取得失敗' }, { status: 500 })
     }
+    // DB上の実際のステータスと一致する場合のみ送信（偽通知の防止）
+    if (app.status !== status) {
+      return NextResponse.json({ error: '申込の状態と一致しません' }, { status: 409 })
+    }
+
     const { data: seller, error: sErr } = await db
       .from('profiles').select('name, email').eq('id', app.seller_id).single()
     if (sErr || !seller || !seller.email) {

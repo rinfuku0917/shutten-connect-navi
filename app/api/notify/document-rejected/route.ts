@@ -6,7 +6,7 @@ const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
 export async function POST(req: Request) {
   try {
-    const { documentId, reason } = await req.json()
+    const { documentId } = await req.json()
     if (!documentId) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
@@ -23,9 +23,14 @@ export async function POST(req: Request) {
     })
 
     const { data: doc, error: dErr } = await db
-      .from('seller_documents').select('seller_id, doc_type').eq('id', documentId).single()
+      .from('seller_documents').select('seller_id, doc_type, status, reject_reason').eq('id', documentId).single()
     if (dErr || !doc) {
       return NextResponse.json({ error: '書類取得失敗' }, { status: 500 })
+    }
+
+    // DB上で差戻し済みの書類のみ送信（偽通知・本文注入の防止）
+    if (doc.status !== 'rejected') {
+      return NextResponse.json({ error: '書類の状態と一致しません' }, { status: 409 })
     }
 
     const { data: seller, error: sErr } = await db
@@ -34,9 +39,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '出店者取得失敗' }, { status: 500 })
     }
 
-    const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', other_permit: 'その他許可証' }
+    const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', other_permit: 'その他許可証', business_permit: '営業許可証', pl_insurance: 'PL保険証券', inspection_sample: '検体（検査結果）' }
     const docLabel = docTypeLabels[doc.doc_type] || doc.doc_type || '提出書類'
-    const reasonText = (reason && String(reason).trim()) ? String(reason).trim() : '記載なし'
+    const reasonText = (doc.reject_reason && String(doc.reject_reason).trim()) ? String(doc.reject_reason).trim() : '記載なし'
 
     const subject = '【出店コネクトナビ】提出書類について再提出のお願い'
     const text = [
@@ -49,7 +54,7 @@ export async function POST(req: Request) {
       reasonText,
       '',
       'お手数ですが、内容をご確認のうえ、再度ご提出をお願いいたします。',
-      'https://shutten-connect-navi-bakv.vercel.app/dashboard/seller',
+      'https://app.connect-navi.com/dashboard/seller',
     ].join('\n')
 
     const resend = new Resend(apiKey)
