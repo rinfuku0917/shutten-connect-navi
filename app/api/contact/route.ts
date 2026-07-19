@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
 
-const FROM_EMAIL = 'noreply@connect-navi.com'
+const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 const TO_EMAIL = 'info@connect-navi.com'
 
 export async function POST(req: Request) {

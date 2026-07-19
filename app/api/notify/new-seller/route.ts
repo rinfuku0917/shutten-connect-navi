@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 // 管理者の通知先（Resend登録アドレスなので onboarding@resend.dev から送れる）
 const ADMIN_EMAIL = 'info@connect-navi.com'
-const FROM_EMAIL = 'noreply@connect-navi.com'
+const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
 export async function POST(req: Request) {
   try {

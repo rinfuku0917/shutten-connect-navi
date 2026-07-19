@@ -2,7 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const FROM_EMAIL = 'noreply@connect-navi.com'
+const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
 const recentSends = new Map();
 
