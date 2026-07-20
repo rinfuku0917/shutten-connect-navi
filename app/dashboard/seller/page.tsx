@@ -284,7 +284,7 @@ export default function SellerDashboard() {
   }
 
   // ===== 売上（出店者） =====
-  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number }
+  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string }
   type SellerSale = { id: string, sale_date: string, placeTitle: string, revenue: number, fee: number }
   const [myApprovedApps, setMyApprovedApps] = useState<SellerApp[]>([])
   const [mySales, setMySales] = useState<SellerSale[]>([])
@@ -302,6 +302,7 @@ export default function SellerDashboard() {
     const companyFee = Math.floor(companyFixed + base * (a.company_share_pct || 0) / 100)
     return { placeFee, companyFee, total: placeFee + companyFee }
   }
+  const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
   // 自分の承認済み案件を読み込む
   const loadMyApprovedApps = async () => {
@@ -310,7 +311,7 @@ export default function SellerDashboard() {
     if (!uid) return
     const { data } = await supabase
       .from('applications')
-      .select('id, place_id, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate)')
+      .select('id, place_id, apply_date, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate)')
       .eq('seller_id', uid).eq('status', 'approved')
       .order('created_at', { ascending: false })
     const mapped: SellerApp[] = (data || []).map((a: any) => ({
@@ -320,6 +321,7 @@ export default function SellerDashboard() {
       place_fixed_unit: a.places?.place_fixed_unit || 'per_day', company_fixed_amount: a.places?.company_fixed_amount || 0,
       company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0,
       share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 10,
+      apply_date: a.apply_date || '',
     }))
     setMyApprovedApps(mapped)
   }
@@ -351,6 +353,10 @@ export default function SellerDashboard() {
     if (!app) { alert('案件が選択されていません'); return }
     const revenue = parseInt(saleRevenue, 10)
     if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
+    const td = todayStr()
+    if (app.apply_date && td < app.apply_date) { alert('この案件の出店日は ' + app.apply_date + ' です。出店日を過ぎてから売上を入力してください。'); return }
+    if (app.apply_date && saleDate < app.apply_date) { alert('売上日は出店日（' + app.apply_date + '）以降を指定してください。'); return }
+    if (saleDate > td) { alert('未来の日付では売上を記録できません。'); return }
     setSaleSaving(true)
     const { placeFee, companyFee, total } = calcFee(revenue, app)
     const { data: userData } = await supabase.auth.getUser()
@@ -1175,12 +1181,12 @@ export default function SellerDashboard() {
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>案件</div>
                     <select value={saleAppId} onChange={e => setSaleAppId(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', background: '#fff' }}>
                       <option value=''>選択してください</option>
-                      {myApprovedApps.map(a => (<option key={a.application_id} value={a.application_id}>{a.placeTitle}</option>))}
+                      {myApprovedApps.map(a => { const notYet = !!a.apply_date && todayStr() < a.apply_date; return (<option key={a.application_id} value={a.application_id} disabled={notYet}>{a.placeTitle}{a.apply_date ? '（出店日 ' + a.apply_date.slice(5).replace('-', '/') + '）' : ''}{notYet ? ' ※出店後に入力できます' : ''}</option>) })}
                     </select>
                   </div>
                   <div className='sale-field' style={{ flex: '0 1 160px' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上日</div>
-                    <input type='date' value={saleDate} onChange={e => setSaleDate(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
+                    <input type='date' value={saleDate} onChange={e => setSaleDate(e.target.value)} min={myApprovedApps.find(x => x.application_id === saleAppId)?.apply_date || undefined} max={todayStr()} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
                   </div>
                   <div className='sale-field' style={{ flex: '0 1 140px' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上金額（円）</div>
