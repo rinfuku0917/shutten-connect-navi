@@ -215,14 +215,15 @@ export default function AdminPage() {
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
 
   // 料金を計算（取引先分・弊社利益・お支払い総額を返す。per_event固定は日次では0扱い＝次フェーズ）
-  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number }) => {
-    const rate = a.share_tax_rate || 10
-    const base = a.share_tax_basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
+  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number }, ov: string = '') => {
+    const rate = ov === 'ex8' ? 8 : ov === 'ex10' ? 10 : (a.share_tax_rate || 10)
+    const basis = ov === 'ex8' || ov === 'ex10' ? 'tax_excluded' : ov === 'as_entered' ? 'as_entered' : (a.share_tax_basis || 'as_entered')
+    const base = basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
     const placeFixed = a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0)
     const companyFixed = a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0)
     const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
     const companyFee = Math.floor(companyFixed + base * (a.company_share_pct || 0) / 100)
-    return { placeFee, companyFee, totalPay: placeFee + companyFee }
+    return { placeFee, companyFee, totalPay: placeFee + companyFee, basis, rate }
   }
 
   // 承認済み申込を読み込む（売上を記録できる対象）
@@ -271,10 +272,11 @@ export default function AdminPage() {
     const revenue = parseInt(saleRevenue, 10)
     if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
     setSaleSaving(true)
-    const { placeFee, companyFee, totalPay } = calcFees(revenue, app)
+    const { placeFee, companyFee, totalPay, basis, rate } = calcFees(revenue, app, saleTaxOv)
     const { error } = await supabase.from('sales').insert({
       application_id: app.application_id, place_id: app.place_id, seller_id: app.seller_id,
-      sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: totalPay
+      sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: totalPay,
+      tax_basis: basis, tax_rate: rate
     })
     if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
     setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleSaving(false)
@@ -441,6 +443,7 @@ export default function AdminPage() {
   const [feePlace, setFeePlace] = useState<AdminPlace | null>(null)
   const [feeForm, setFeeForm] = useState({ price_fixed: 0, price_share_pct: 0, place_fixed_unit: 'per_day', company_fixed_amount: 0, company_fixed_unit: 'per_day', company_share_pct: 0, share_tax_basis: 'as_entered', share_tax_rate: 10 })
   const [feeSaving, setFeeSaving] = useState(false)
+  const [saleTaxOv, setSaleTaxOv] = useState('')
   const openFeeModal = (p: AdminPlace) => {
     setFeePlace(p)
     setFeeForm({ price_fixed: p.price_fixed || 0, price_share_pct: p.price_share_pct || 0, place_fixed_unit: p.place_fixed_unit || 'per_day', company_fixed_amount: p.company_fixed_amount || 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct || 0, share_tax_basis: p.share_tax_basis || 'as_entered', share_tax_rate: p.share_tax_rate || 10 })
@@ -1147,9 +1150,18 @@ const previewDoc = async (fileUrl: string) => {
                     <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>売上金額（円）</label>
                     <input type='number' value={saleRevenue} onChange={e => setSaleRevenue(e.target.value)} placeholder='50000' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                   </div>
+                  <div style={{ flex: '1 1 170px', minWidth: 0 }}>
+                    <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>手数料の計算元</label>
+                    <select value={saleTaxOv} onChange={e => setSaleTaxOv(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', background: '#fff' }}>
+                      <option value=''>案件の設定に従う</option>
+                      <option value='as_entered'>入力金額そのまま</option>
+                      <option value='ex8'>税抜に換算（8%）</option>
+                      <option value='ex10'>税抜に換算（10%）</option>
+                    </select>
+                  </div>
                   <button onClick={saveSale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
-                {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const { placeFee, companyFee, totalPay } = calcFees(rev, a); return (
+                {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const { placeFee, companyFee, totalPay } = calcFees(rev, a, saleTaxOv); return (
                   <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B', lineHeight: 1.9 }}>
                     <div>取引先分（税別）：<strong style={{ color: '#1a1a1a' }}>{placeFee.toLocaleString()}円</strong></div>
                     <div>弊社の利益（税別）：<strong style={{ color: '#3A9BD5' }}>{companyFee.toLocaleString()}円</strong></div>

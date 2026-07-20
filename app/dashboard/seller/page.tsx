@@ -292,10 +292,16 @@ export default function SellerDashboard() {
   const [saleDate, setSaleDate] = useState('')
   const [saleRevenue, setSaleRevenue] = useState('')
   const [saleSaving, setSaleSaving] = useState(false)
+  const [saleTaxOv, setSaleTaxOv] = useState('')
+  const taxOf = (a: { share_tax_basis: string, share_tax_rate: number }, ov: string) =>
+    ov === 'ex8' ? { basis: 'tax_excluded', rate: 8 }
+    : ov === 'ex10' ? { basis: 'tax_excluded', rate: 10 }
+    : ov === 'as_entered' ? { basis: 'as_entered', rate: 10 }
+    : { basis: a.share_tax_basis || 'as_entered', rate: a.share_tax_rate || 10 }
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
-  const calcFee = (revenue: number, a: SellerApp) => {
-    const rate = a.share_tax_rate || 10
-    const base = a.share_tax_basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
+  const calcFee = (revenue: number, a: SellerApp, ov: string = '') => {
+    const { basis, rate } = taxOf(a, ov)
+    const base = basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
     const placeFixed = a.place_fixed_unit === 'per_event' ? 0 : (a.price_fixed || 0)
     const companyFixed = a.company_fixed_unit === 'per_event' ? 0 : (a.company_fixed_amount || 0)
     const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
@@ -358,12 +364,14 @@ export default function SellerDashboard() {
     if (app.apply_date && saleDate < app.apply_date) { alert('売上日は出店日（' + app.apply_date + '）以降を指定してください。'); return }
     if (saleDate > td) { alert('未来の日付では売上を記録できません。'); return }
     setSaleSaving(true)
-    const { placeFee, companyFee, total } = calcFee(revenue, app)
+    const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv)
+    const applied = taxOf(app, saleTaxOv)
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     const { error } = await supabase.from('sales').insert({
       application_id: app.application_id, place_id: app.place_id, seller_id: uid,
-      sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: total
+      sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: total,
+      tax_basis: applied.basis, tax_rate: applied.rate
     })
     if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
     setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleSaving(false)
@@ -1192,9 +1200,18 @@ export default function SellerDashboard() {
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上金額（円）</div>
                     <input type='number' value={saleRevenue} onChange={e => setSaleRevenue(e.target.value)} placeholder='50000' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
                   </div>
+                  <div className='sale-field' style={{ flex: '0 1 190px' }}>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>手数料の計算元</div>
+                    <select value={saleTaxOv} onChange={e => setSaleTaxOv(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', background: '#fff' }}>
+                      <option value=''>案件の設定に従う</option>
+                      <option value='as_entered'>入力金額そのまま</option>
+                      <option value='ex8'>税抜に換算（8%）</option>
+                      <option value='ex10'>税抜に換算（10%）</option>
+                    </select>
+                  </div>
                   <button onClick={saveMySale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
-                {saleAppId && (() => { const a = myApprovedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a).total; return (
+                {saleAppId && (() => { const a = myApprovedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a, saleTaxOv).total; return (
                   <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B' }}>売上{rev.toLocaleString()}円 − 出店料{fee.toLocaleString()}円（税別・出店コネクトナビへ）＝ あなたの利益 <strong style={{ color: '#16A34A' }}>{(rev - fee).toLocaleString()}円</strong></div>
                 ) })()}
               </div>
