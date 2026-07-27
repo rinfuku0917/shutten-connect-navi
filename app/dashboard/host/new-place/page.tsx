@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { geocodeAddress } from '../../../lib/geocode'
+import { PLACE_CATEGORIES } from '../../../lib/categories'
 
 export default function NewPlacePage() {
   const [form, setForm] = useState({
@@ -15,6 +16,8 @@ export default function NewPlacePage() {
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
   })
   const [schedule, setSchedule] = useState([{date:'', start:'選択してください', end:'選択してください'}])
+  const [genres, setGenres] = useState<string[]>([])
+  const toggleGenre = (g:string) => setGenres(prev => prev.includes(g) ? prev.filter(x=>x!==g) : [...prev, g])
   const set = (k:string,v:string) => setForm(p=>({...p,[k]:v}))
   const setDay = (i:number,k:'date'|'start'|'end',v:string) => setSchedule(prev=>prev.map((d,idx)=>idx===i?{...d,[k]:v}:d))
   const addDay = () => setSchedule(prev=>prev.length<31 ? [...prev,{date:'',start:'選択してください',end:'選択してください'}] : prev)
@@ -62,6 +65,7 @@ export default function NewPlacePage() {
       map_url: form.mapUrl,
       recruit: form['募集内容'],
       schedule: schedule,
+      genres: genres,
       image_url: imageUrl,
       latitude: geo?.lat ?? null,
       longitude: geo?.lon ?? null,
@@ -94,6 +98,19 @@ export default function NewPlacePage() {
               <div style={{display:'flex',gap:'24px',marginTop:'10px'}}>
                 <Radio name='type' val='event' label='イベント'/>
                 <Radio name='type' val='regular' label='常設'/>
+              </div>
+            </div>
+
+            <div style={{marginBottom:'20px'}}>
+              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>カテゴリー</label>
+              <p style={{fontSize:'12px',color:'#B45309',margin:'4px 0 0'}}>当てはまるものを選んでください（複数選択可）。出店者の検索で使われます。</p>
+              <div style={{display:'flex',flexWrap:'wrap',gap:'10px',marginTop:'10px'}}>
+                {PLACE_CATEGORIES.map(g=>(
+                  <label key={g} style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'13px',border:'1px solid #E5C07B',borderRadius:'999px',padding:'6px 12px',background:genres.includes(g)?'#FFF3D6':'#fff',color:'#1a1a1a'}}>
+                    <input type='checkbox' checked={genres.includes(g)} onChange={()=>toggleGenre(g)} style={{accentColor:'#F5A623'}}/>
+                    {g}
+                  </label>
+                ))}
               </div>
             </div>
 

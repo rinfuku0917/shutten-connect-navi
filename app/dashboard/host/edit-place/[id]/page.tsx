@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { geocodeAddress } from '../../../../lib/geocode'
+import { PLACE_CATEGORIES } from '../../../../lib/categories'
 
 export default function EditPlacePage() {
   const params = useParams()
@@ -17,6 +18,8 @@ export default function EditPlacePage() {
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
   })
   const [schedule, setSchedule] = useState([{date:'', start:'選択してください', end:'選択してください'}])
+  const [genres, setGenres] = useState<string[]>([])
+  const toggleGenre = (g:string) => setGenres(prev => prev.includes(g) ? prev.filter(x=>x!==g) : [...prev, g])
   const [existingImage, setExistingImage] = useState('')
   const [loading, setLoading] = useState(true)
   const set = (k:string,v:string) => setForm(p=>({...p,[k]:v}))
@@ -50,6 +53,7 @@ export default function EditPlacePage() {
         reminderDays: data.reminder_days != null ? String(data.reminder_days) : '7',
       }))
       if(Array.isArray(data.schedule) && data.schedule.length>0) setSchedule(data.schedule)
+      if(Array.isArray(data.genres)) setGenres(data.genres)
       setExistingImage(data.image_url || '')
       setLoading(false)
     }
@@ -89,6 +93,7 @@ export default function EditPlacePage() {
       map_url: form.mapUrl,
       recruit: form['募集内容'],
       schedule: schedule,
+      genres: genres,
       image_url: imageUrl,
     }).eq('id', id)
     if(updErr) { setErrMsg('更新失敗: ' + updErr.message); setSaving(false); return }
@@ -120,6 +125,19 @@ export default function EditPlacePage() {
               <div style={{display:'flex',gap:'24px',marginTop:'10px'}}>
                 <Radio name='type' val='event' label='イベント'/>
                 <Radio name='type' val='regular' label='常設'/>
+              </div>
+            </div>
+
+            <div style={{marginBottom:'20px'}}>
+              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>カテゴリー</label>
+              <p style={{fontSize:'12px',color:'#B45309',margin:'4px 0 0'}}>当てはまるものを選んでください（複数選択可）。出店者の検索で使われます。</p>
+              <div style={{display:'flex',flexWrap:'wrap',gap:'10px',marginTop:'10px'}}>
+                {PLACE_CATEGORIES.map(g=>(
+                  <label key={g} style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'13px',border:'1px solid #E5C07B',borderRadius:'999px',padding:'6px 12px',background:genres.includes(g)?'#FFF3D6':'#fff',color:'#1a1a1a'}}>
+                    <input type='checkbox' checked={genres.includes(g)} onChange={()=>toggleGenre(g)} style={{accentColor:'#F5A623'}}/>
+                    {g}
+                  </label>
+                ))}
               </div>
             </div>
 

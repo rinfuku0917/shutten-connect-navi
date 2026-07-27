@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
+import { PLACE_CATEGORIES } from '../lib/categories'
 
 // ダミーデータ
 const dummySellers = [
@@ -860,8 +861,8 @@ const previewDoc = async (fileUrl: string) => {
                   {Array.from(new Set(placesList.map(x=>x.area).filter(a=>a&&a!=='-'))).map(a=><option key={a} value={a}>{a}</option>)}
                 </select>
                 <select value={pGenre} onChange={e=>setPGenre(e.target.value)} style={{ padding:'9px 12px', borderRadius:'8px', border:'1.5px solid #E2E8F0', fontSize:'13px', minWidth:'130px' }}>
-                  <option value=''>ジャンル（すべて）</option>
-                  {Array.from(new Set(placesList.flatMap(x=>x.genres||[]).filter(Boolean))).map(g=><option key={g} value={g}>{g}</option>)}
+                  <option value=''>カテゴリー（すべて）</option>
+                  {PLACE_CATEGORIES.map(g=><option key={g} value={g}>{g}</option>)}
                 </select>
                 {(pKw||pPref||pGenre) && <button onClick={()=>{setPKw('');setPPref('');setPGenre('')}} style={{ padding:'9px 14px', borderRadius:'8px', border:'1.5px solid #E2E8F0', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#64748B' }}>クリア</button>}
                 <span style={{ fontSize:'12px', color:'#64748B' }}>{placesFiltered.length}件</span>

@@ -4,6 +4,7 @@ import Nav from '../components/Nav'
 import dynamic from 'next/dynamic'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { PLACE_CATEGORIES } from '../lib/categories'
 
 // 地図はSSRでLeafletを読むと壊れるのでクライアントのみで読み込む
 const PlacesMap = dynamic(() => import('../components/PlacesMap'), {
@@ -81,7 +82,6 @@ const [showMap, setShowMap] = useState(false)
 
   // 都道府県・ジャンルの選択肢を物件から自動生成
   const prefList = useMemo(() => Array.from(new Set(places.map(p => p.prefecture).filter(Boolean))) as string[], [places])
-  const genreList = useMemo(() => Array.from(new Set(places.flatMap(p => p.genres || []).filter(Boolean))) as string[], [places])
 
   // 検索フィルタ適用
   const filtered = useMemo(() => places.filter(p => {
@@ -123,8 +123,8 @@ const [showMap, setShowMap] = useState(false)
             {prefList.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
           <select value={genre} onChange={e=>setGenre(e.target.value)} style={selectStyle}>
-            <option value=''>ジャンル（すべて）</option>
-            {genreList.map(g => <option key={g} value={g}>{g}</option>)}
+            <option value=''>カテゴリー（すべて）</option>
+            {PLACE_CATEGORIES.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
           {(kw || pref || genre) && (
             <button onClick={()=>{setKw('');setPref('');setGenre('')}} style={{ padding:'10px 14px', borderRadius:'8px', border:'1.5px solid #E2E8F0', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#64748B' }}>クリア</button>
