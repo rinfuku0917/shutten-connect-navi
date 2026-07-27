@@ -155,7 +155,7 @@ export default function HostDashboard() {
 
         {/* 届いた出店申込 */}
         <div style={{marginTop:'32px'}}>
-          <h2 style={{fontSize:'18px',fontWeight:'900',color:'#1a1a1a',marginBottom:'4px'}}>📋 届いた出店申込</h2>
+          <h2 style={{fontSize:'18px',fontWeight:'900',color:'#1a1a1a',marginBottom:'4px'}}>届いた出店申込</h2>
           <p style={{fontSize:'13px',color:'#888',marginBottom:'16px'}}>あなたの案件への出店申込を承認・否認できます</p>
           {apps.length === 0 ? (
             <div style={{textAlign:'center',color:'#999',padding:'32px',fontSize:'14px',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'8px'}}>まだ申込はありません。</div>
@@ -170,7 +170,7 @@ export default function HostDashboard() {
                     <div style={{fontSize:'15px',fontWeight:'700',color:'#1a1a1a',marginBottom:'4px'}}>{a.sellerName}</div>
                     <div style={{display:'flex',gap:'12px',fontSize:'12px',color:'#999',flexWrap:'wrap'}}>
                       <span>案件：{a.placeTitle}</span>
-                      <span>📅 {a.date}</span>
+                      <span>{a.date}</span>
                       <span>{a.format}</span>
                     </div>
                   </div>

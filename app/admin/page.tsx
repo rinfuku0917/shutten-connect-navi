@@ -77,12 +77,13 @@ export default function AdminPage() {
   const [pStatus, setPStatus] = useState('draft')
   const [pSaving, setPSaving] = useState(false)
   const [pMsg, setPMsg] = useState('')
+  const [pMsgOk, setPMsgOk] = useState(false)
   const [imgUploading, setImgUploading] = useState(false)
   const blogImgInputRef = useRef<HTMLInputElement>(null)
 
   const uploadBlogImage = async (file: File) => {
-    if (!adminUid) { setPMsg('認証情報がありません。再ログインしてください'); return }
-    setImgUploading(true); setPMsg('')
+    if (!adminUid) { setPMsg('認証情報がありません。再ログインしてください'); setPMsgOk(false); return }
+    setImgUploading(true); setPMsg(''); setPMsgOk(false)
     try {
       const fd = new FormData()
       fd.append('file', file)
@@ -92,7 +93,7 @@ export default function AdminPage() {
       if (!res.ok) { setPMsg('画像アップロード失敗: ' + (json.error || '')); setImgUploading(false); return }
       // 本文の末尾に画像記法を追加
       setPContent(prev => prev + (prev.endsWith('\n') || prev === '' ? '' : '\n\n') + '![画像](' + json.url + ')\n\n')
-      setPMsg('✅ 画像を挿入しました（本文の末尾に追加されました）')
+      setPMsg('画像を挿入しました（本文の末尾に追加されました）'); setPMsgOk(true)
     } catch {
       setPMsg('画像アップロードで通信エラーが発生しました')
     }
@@ -122,9 +123,9 @@ export default function AdminPage() {
   }
 
   const savePost = async (asStatus: string) => {
-    if (!pTitle.trim() || !pSlug.trim() || !pContent.trim()) { setPMsg('タイトル・URL・本文は必須です'); return }
-    if (!adminUid) { setPMsg('認証情報がありません。再ログインしてください'); return }
-    setPSaving(true); setPMsg('')
+    if (!pTitle.trim() || !pSlug.trim() || !pContent.trim()) { setPMsg('タイトル・URL・本文は必須です'); setPMsgOk(false); return }
+    if (!adminUid) { setPMsg('認証情報がありません。再ログインしてください'); setPMsgOk(false); return }
+    setPSaving(true); setPMsg(''); setPMsgOk(false)
     const payload = {
       requesterId: adminUid, id: editingPost?.id,
       slug: pSlug.trim(), title: pTitle.trim(), content: pContent,
@@ -139,7 +140,7 @@ export default function AdminPage() {
       })
       const json = await res.json()
       if (!res.ok) { setPMsg('エラー: ' + (json.error || '保存に失敗しました')); setPSaving(false); return }
-      setPMsg(asStatus === 'published' ? '✅ 公開しました' : '✅ 下書き保存しました')
+      setPMsg(asStatus === 'published' ? '公開しました' : '下書き保存しました'); setPMsgOk(true)
       resetPostForm(); loadPosts()
     } catch {
       setPMsg('通信エラーが発生しました')
@@ -637,13 +638,13 @@ const previewDoc = async (fileUrl: string) => {
     setRecentApps((apps || []).map((a: any) => ({ id: a.id, name: a.profiles?.name || '(出店者)', place: a.places?.title || '(案件名なし)', date: a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '', status: statusJa(a.status) })))
   }
   const stats = [
-    { label: '総出店者数', value: statCounts.sellers.toLocaleString(), icon: '👤', color: '#F5A623' },
-    { label: '総募集者数', value: statCounts.hosts.toLocaleString(), icon: '🏪', color: '#3A9BD5' },
-    { label: '掲載案件数', value: statCounts.places.toLocaleString(), icon: '📋', color: '#16A34A' },
-    { label: '今月の申込', value: statCounts.monthApps.toLocaleString(), icon: '📬', color: '#7C3AED' },
-    { label: '累計GMV', value: '¥' + statCounts.gmv.toLocaleString(), icon: '💰', color: '#DC2626' },
-    { label: '手数料収入', value: '¥' + statCounts.fee.toLocaleString(), icon: '🏦', color: '#0891B2' },
-    { label: '成約率', value: statCounts.totalApps > 0 ? Math.round(statCounts.approvedApps / statCounts.totalApps * 100) + '%' : '—', icon: '✅', color: '#65A30D' },
+    { label: '総出店者数', value: statCounts.sellers.toLocaleString(), color: '#F5A623' },
+    { label: '総募集者数', value: statCounts.hosts.toLocaleString(), color: '#3A9BD5' },
+    { label: '掲載案件数', value: statCounts.places.toLocaleString(), color: '#16A34A' },
+    { label: '今月の申込', value: statCounts.monthApps.toLocaleString(), color: '#7C3AED' },
+    { label: '累計GMV', value: '¥' + statCounts.gmv.toLocaleString(), color: '#DC2626' },
+    { label: '手数料収入', value: '¥' + statCounts.fee.toLocaleString(), color: '#0891B2' },
+    { label: '成約率', value: statCounts.totalApps > 0 ? Math.round(statCounts.approvedApps / statCounts.totalApps * 100) + '%' : '—', color: '#65A30D' },
   ]
 
   const handleCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -695,18 +696,18 @@ const previewDoc = async (fileUrl: string) => {
         </div>
         <nav className='admin-sidebar-nav' style={{ padding: '8px 0', flex: 1 }}>
           {[
-            { key: 'dashboard', icon: '📊', label: 'ダッシュボード' },
-            { key: 'places', icon: '📋', label: '案件管理' },
-            { key: 'sellers', icon: '👥', label: '出店者管理' },
-            { key: 'docs', icon: '📂', label: '書類審査' },
-            { key: 'sales', icon: '💰', label: '売上管理' },
-            { key: 'messages', icon: '💬', label: 'メッセージ' },
-            { key: 'reviews', icon: '⭐', label: 'レビュー審査' },
-            { key: 'applications', icon: '🎪', label: '出店承認' },
-            { key: 'publish', icon: '✅', label: '公開申請' },
-            { key: 'blog', icon: '📝', label: 'ブログ' },
-            { key: 'csv', icon: '📥', label: 'CSVインポート' },
-            { key: 'imported', icon: '📇', label: 'インポート名簿' },
+            { key: 'dashboard', label: 'ダッシュボード' },
+            { key: 'places', label: '案件管理' },
+            { key: 'sellers', label: '出店者管理' },
+            { key: 'docs', label: '書類審査' },
+            { key: 'sales', label: '売上管理' },
+            { key: 'messages', label: 'メッセージ' },
+            { key: 'reviews', label: 'レビュー審査' },
+            { key: 'applications', label: '出店承認' },
+            { key: 'publish', label: '公開申請' },
+            { key: 'blog', label: 'ブログ' },
+            { key: 'csv', label: 'CSVインポート' },
+            { key: 'imported', label: 'インポート名簿' },
           ].map((item) => (
             <div
               key={item.key}
@@ -719,7 +720,7 @@ const previewDoc = async (fileUrl: string) => {
                 fontSize: '13px', fontWeight: tab === item.key ? '700' : '400',
               }}
             >
-              <span>{item.icon}</span>{item.label}
+              <span>{item.label}</span>
             </div>
           ))}
         </nav>
@@ -759,9 +760,8 @@ const previewDoc = async (fileUrl: string) => {
               <div className='admin-stats' style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '20px' }}>
                 {stats.map(s => (
                   <div key={s.label} style={{ background: '#fff', borderRadius: '12px', padding: '18px', border: '1px solid #E2E8F0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <div style={{ marginBottom: '10px' }}>
                       <div style={{ fontSize: '12px', color: '#64748B' }}>{s.label}</div>
-                      <div style={{ fontSize: '20px' }}>{s.icon}</div>
                     </div>
                     <div style={{ fontSize: '28px', fontWeight: '900', color: s.color }}>{s.value}</div>
                   </div>
@@ -770,7 +770,7 @@ const previewDoc = async (fileUrl: string) => {
 
               <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-                  <div style={{ padding: '14px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '14px' }}>📬 最新の申込</div>
+                  <div style={{ padding: '14px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '14px' }}>最新の申込</div>
                   <div style={{ padding: '0' }}>
                     {recentApps.length === 0 && (<div style={{ padding: '20px 18px', color: '#999', fontSize: '13px' }}>申込はまだありません。</div>)}
                     {recentApps.map((a, i) => (
@@ -787,7 +787,7 @@ const previewDoc = async (fileUrl: string) => {
                 </div>
 
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-                  <div style={{ padding: '14px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '14px' }}>👤 最新の登録者</div>
+                  <div style={{ padding: '14px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '14px' }}>最新の登録者</div>
                   <div>
                     {sellers.slice(0, 4).map((s, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 18px', borderBottom: '1px solid #F1F5F9' }}>
@@ -810,7 +810,7 @@ const previewDoc = async (fileUrl: string) => {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
-                  <input type="text" placeholder="🔍 案件名・エリアで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
+                  <input type="text" placeholder="案件名・エリアで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
                   <select style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none' }}>
                     <option>すべてのステータス</option>
                     <option>公開中</option>
@@ -824,7 +824,7 @@ const previewDoc = async (fileUrl: string) => {
 
               {showNewPlace && (
                 <div style={{ background: '#fff', borderRadius: '12px', border: '2px solid #F5A623', padding: '20px', marginBottom: '16px' }}>
-                  <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '14px', color: '#B45309' }}>📋 新規案件作成</div>
+                  <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '14px', color: '#B45309' }}>新規案件作成</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                     {[
                       { label: '案件タイトル', placeholder: '例：渋谷ヒカリエ前 週末マルシェ', full: true },
@@ -889,9 +889,9 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '12px 14px' }}><span style={{ background: place.status === '公開中' ? '#ECFDF5' : '#F1F5F9', color: place.status === '公開中' ? '#16A34A' : '#64748B', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', fontSize: '11px' }}>{place.status}</span></td>
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <button onClick={() => openFeeModal(place)} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FDE68A', borderRadius: '6px', background: '#FFFBEB', cursor: 'pointer', color: '#B45309', fontWeight: '700' }}>💰 料金</button>
-                            <Link href={'/dashboard/host/edit-place/' + place.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', textDecoration: 'none' }}>✏️ 編集</Link>
-                            <button onClick={() => { if (window.confirm('この案件を削除しますか？')) deletePlaceAdmin(place.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>🗑️</button>
+                            <button onClick={() => openFeeModal(place)} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FDE68A', borderRadius: '6px', background: '#FFFBEB', cursor: 'pointer', color: '#B45309', fontWeight: '700' }}>料金</button>
+                            <Link href={'/dashboard/host/edit-place/' + place.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', textDecoration: 'none' }}>編集</Link>
+                            <button onClick={() => { if (window.confirm('この案件を削除しますか？')) deletePlaceAdmin(place.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>削除</button>
                           </div>
                         </td>
                       </tr>
@@ -924,7 +924,7 @@ const previewDoc = async (fileUrl: string) => {
                 return (
                 <div onClick={()=>setFeePlace(null)} style={{ position: 'fixed', inset:0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex:1000, padding: '20px' }}>
                   <div onClick={e=>e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '24px', width: '560px', maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-                    <div style={{ fontWeight:900, fontSize: '16px', marginBottom: '4px', color: '#1a1a1a' }}>💰 料金設定</div>
+                    <div style={{ fontWeight:900, fontSize: '16px', marginBottom: '4px', color: '#1a1a1a' }}>料金設定</div>
                     <div style={{ fontSize: '13px', color: '#64748B', marginBottom: '18px' }}>{feePlace.title}</div>
                     <div style={{ fontWeight:700, fontSize: '13px', color: '#B45309', marginBottom: '8px' }}>取引先の取り分（出店者には内訳を見せません）</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px' }}>
@@ -943,8 +943,8 @@ const previewDoc = async (fileUrl: string) => {
                       <div><label style={{fontSize: '11px',color: '#64748B'}}>計算元</label><select value={ff.share_tax_basis} onChange={e=>setFeeForm({...ff, share_tax_basis: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value='as_entered'>入力金額そのまま</option><option value='tax_excluded'>税抜に換算してから</option></select></div>
                       {ff.share_tax_basis === 'tax_excluded' && (<div><label style={{fontSize: '11px',color: '#64748B'}}>税率</label><select value={ff.share_tax_rate} onChange={e=>setFeeForm({...ff, share_tax_rate: parseInt(e.target.value)||10})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value={8}>8%（軽減税率）</option><option value={10}>10%</option></select></div>)}
                     </div>
-                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '13px' }}><div style={{fontWeight:700,color: '#16A34A',marginBottom: '4px'}}>👀 出店者に見える表示</div>出店料：{dispFixed.toLocaleString()}円/{unitLabel(ff.place_fixed_unit)}{dispPct>0? ' ＋ 売上の'+dispPct+ '%' : ''}</div>
-                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '18px', fontSize: '12px', color: '#64748B', lineHeight:1.8 }}><div style={{fontWeight:700,color: '#1a1a1a',marginBottom: '4px'}}>🔒 管理側の内訳（売上{ex.toLocaleString()}円/日の例）</div>取引先分：{Math.round(pf).toLocaleString()}円 ／ 弊社の利益：<strong style={{color: '#3A9BD5'}}>{Math.round(cf).toLocaleString()}円</strong> ／ 総額：<strong style={{color: '#16A34A'}}>{Math.round(pf+cf).toLocaleString()}円</strong></div>
+                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '13px' }}><div style={{fontWeight:700,color: '#16A34A',marginBottom: '4px'}}>出店者に見える表示</div>出店料：{dispFixed.toLocaleString()}円/{unitLabel(ff.place_fixed_unit)}{dispPct>0? ' ＋ 売上の'+dispPct+ '%' : ''}</div>
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '18px', fontSize: '12px', color: '#64748B', lineHeight:1.8 }}><div style={{fontWeight:700,color: '#1a1a1a',marginBottom: '4px'}}>管理側の内訳（売上{ex.toLocaleString()}円/日の例）</div>取引先分：{Math.round(pf).toLocaleString()}円 ／ 弊社の利益：<strong style={{color: '#3A9BD5'}}>{Math.round(cf).toLocaleString()}円</strong> ／ 総額：<strong style={{color: '#16A34A'}}>{Math.round(pf+cf).toLocaleString()}円</strong></div>
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                       <button onClick={()=>setFeePlace(null)} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>キャンセル</button>
                       <button onClick={saveFee} disabled={feeSaving} style={{ background: feeSaving? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 22px', fontSize: '13px', fontWeight:700, cursor:feeSaving? 'not-allowed' : 'pointer' }}>{feeSaving? '保存中...' : '保存する'}</button>
@@ -960,13 +960,13 @@ const previewDoc = async (fileUrl: string) => {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
-                  <input type="text" value={sellerKw} onChange={e => setSellerKw(e.target.value)} placeholder="🔍 出店者名・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
+                  <input type="text" value={sellerKw} onChange={e => setSellerKw(e.target.value)} placeholder="出店者名・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
                   <select style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none' }}>
                     <option>すべて</option><option>承認済</option><option>審査中</option>
                   </select>
                 </div>
                 <button onClick={() => setTab('csv')} style={{ background: '#3A9BD5', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 18px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  📥 CSVで一括インポート
+                  CSVで一括インポート
                 </button>
               </div>
 
@@ -1010,8 +1010,8 @@ const previewDoc = async (fileUrl: string) => {
                         </td>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ display: 'flex', gap: '4px' }}>
-                            <button onClick={() => window.open('/sellers/' + s.id, '_blank')} title="公開プロフィールを見る" style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #E2E8F0', borderRadius: '5px', background: '#fff', cursor: 'pointer' }}>👁️</button>
-                            <button onClick={() => { if (window.confirm(s.name + ' を削除しますか？この操作は取り消せません。')) deleteSellerAdmin(s.id) }} style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #FCA5A5', borderRadius: '5px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>🗑️</button>
+                            <button onClick={() => window.open('/sellers/' + s.id, '_blank')} title="公開プロフィールを見る" style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #E2E8F0', borderRadius: '5px', background: '#fff', cursor: 'pointer' }}>表示</button>
+                            <button onClick={() => { if (window.confirm(s.name + ' を削除しますか？この操作は取り消せません。')) deleteSellerAdmin(s.id) }} style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #FCA5A5', borderRadius: '5px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>削除</button>
                           </div>
                         </td>
                       </tr>
@@ -1029,7 +1029,7 @@ const previewDoc = async (fileUrl: string) => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', gap: '12px' }}>
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者が提出した書類を確認し、承認または否認します。</p>
-                <button onClick={loadDocReviews} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>🔄 更新</button>
+                <button onClick={loadDocReviews} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>更新</button>
               </div>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
                 {([{ key: 'all', label: 'すべて' }, { key: 'pending', label: '要対応' }, { key: 'expiring', label: '期限1ヶ月以内' }] as { key: 'all' | 'pending' | 'expiring', label: string }[]).map(btn => (
@@ -1105,9 +1105,9 @@ const previewDoc = async (fileUrl: string) => {
                                 <div key={d.id} style={{ borderBottom: '1px solid #F1F5F9', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                                   <div style={{ flex: '1 1 160px', minWidth: 0, fontWeight: '600', fontSize: '13px' }}>{docTypeLabels[d.doc_type] || d.doc_type}</div>
                                   <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: meta.bg, color: meta.color, flexShrink: 0 }}>{meta.label}</span>
-                                  <span style={{ fontSize: '11px', fontWeight: '600', padding: '3px 10px', borderRadius: '6px', background: exp.bg, color: exp.color, flexShrink: 0 }}>📅 {exp.text}</span>
+                                  <span style={{ fontSize: '11px', fontWeight: '600', padding: '3px 10px', borderRadius: '6px', background: exp.bg, color: exp.color, flexShrink: 0 }}>{exp.text}</span>
                                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
-                                    <button onClick={() => previewDoc(d.file_url)} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>👁️ 確認</button>
+                                    <button onClick={() => previewDoc(d.file_url)} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>確認</button>
                                     <button onClick={() => reviewDoc(d.id, 'approved')} style={{ background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
                                     <button onClick={async () => { const reason = window.prompt('否認理由を入力してください（出店者にメールで通知されます）'); if (reason === null) return; await reviewDoc(d.id, 'rejected', reason); try { await fetch('/api/notify/document-rejected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId: d.id, reason }) }) } catch (e) { console.error('否認通知に失敗', e) } }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>否認</button>
                                   </div>
@@ -1132,7 +1132,7 @@ const previewDoc = async (fileUrl: string) => {
               </div>
 
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '20px' }}>
-                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '14px', color: '#B45309' }}>💰 売上を記録</div>
+                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '14px', color: '#B45309' }}>売上を記録</div>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <div style={{ flex: '2 1 200px', minWidth: 0 }}>
                     <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>案件・出店者</label>
@@ -1291,7 +1291,7 @@ const previewDoc = async (fileUrl: string) => {
             return (
             <div>
               <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#1D4ED8', display: 'flex', gap: '8px' }}>
-                <span>🎪</span><span>出店者からの応募を承認すると、マッチングが成立します。却下すると取り消されます。</span>
+                <span>出店者からの応募を承認すると、マッチングが成立します。却下すると取り消されます。</span>
               </div>
               <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', margin: '0 0 10px' }}>承認待ち（{pendingApps.length}件）</h3>
               <div style={{ display: 'grid', gap: '12px' }}>
@@ -1305,7 +1305,7 @@ const previewDoc = async (fileUrl: string) => {
                     </div>
                     <div style={{ fontSize: '13px', color: '#444', marginBottom: '10px' }}>出店希望日：{a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP') : '—'}</div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <button onClick={() => setAppStatus(a.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>✅承認</button>
+                      <button onClick={() => setAppStatus(a.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
                       <button onClick={() => { if (window.confirm('この応募を却下しますか？')) setAppStatus(a.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>却下</button>
                     </div>
                   </div>
@@ -1322,7 +1322,7 @@ const previewDoc = async (fileUrl: string) => {
             return (
             <div>
               <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
-                <span>⭐</span><span>お客様から投稿されたレビューを承認すると、出店者紹介ページに公開されます。却下すると公開されません。</span>
+                <span>お客様から投稿されたレビューを承認すると、出店者紹介ページに公開されます。却下すると公開されません。</span>
               </div>
 
               <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', margin: '0 0 10px' }}>承認待ち（{pending.length}件）</h3>
@@ -1391,7 +1391,7 @@ const previewDoc = async (fileUrl: string) => {
                   {r.approval_status === 'rejected' && <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', background: '#FEE2E2', color: '#DC2626', flexShrink: 0 }}>非承認</span>}
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button onClick={() => window.open('/sellers/' + r.id, '_blank')} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>👁️ プレビュー</button>
+                  <button onClick={() => window.open('/sellers/' + r.id, '_blank')} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>プレビュー</button>
                   <button onClick={() => setApproval(r.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>承認して公開</button>
                   {r.approval_status === 'pending' && <button onClick={() => { if (window.confirm('この申請を非承認にしますか？')) setApproval(r.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>非承認</button>}
                 </div>
@@ -1400,7 +1400,7 @@ const previewDoc = async (fileUrl: string) => {
             return (
             <div>
               <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
-                <span>✅</span><span>出店者が「公開を申請」すると、ここに表示されます。承認すると出店者一覧（/sellers）に公開されます。</span>
+                <span>出店者が「公開を申請」すると、ここに表示されます。承認すると出店者一覧（/sellers）に公開されます。</span>
               </div>
               <h3 style={{ fontSize: '14px', fontWeight: 900, color: '#1a1a1a', margin: '0 0 10px' }}>承認待ち（{pending.length}件）</h3>
               <div style={{ display: 'grid', gap: '12px', marginBottom: '28px' }}>
@@ -1420,13 +1420,13 @@ const previewDoc = async (fileUrl: string) => {
           {tab === 'blog' && (
             <div>
               <div style={{ background: '#EBF6FD', border: '1px solid #93C5FD', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '13px', color: '#1D4ED8', display: 'flex', gap: '8px' }}>
-                <span>📝</span><span>ブログ記事を作成・公開できます。公開した記事は <b>/blog</b> に表示され、検索エンジンにも登録されます。本文はMarkdown（見出しは # ## 、箇条書きは - ）で書けます。</span>
+                <span>ブログ記事を作成・公開できます。公開した記事は <b>/blog</b> に表示され、検索エンジンにも登録されます。本文はMarkdown（見出しは # ## 、箇条書きは - ）で書けます。</span>
               </div>
 
               {/* 投稿フォーム */}
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '28px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: 900, color: '#1a1a1a', margin: 0 }}>{editingPost ? '✏️ 記事を編集' : '➕ 新規記事を作成'}</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: 900, color: '#1a1a1a', margin: 0 }}>{editingPost ? '記事を編集' : '新規記事を作成'}</h3>
                   {editingPost && <button onClick={resetPostForm} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>新規作成に戻る</button>}
                 </div>
                 <div style={{ display: 'grid', gap: '14px' }}>
@@ -1464,12 +1464,12 @@ const previewDoc = async (fileUrl: string) => {
                       <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>本文（Markdown） <span style={{ color: '#DC2626' }}>*</span></label>
                       <div>
                         <input ref={blogImgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadBlogImage(f); if (e.target) e.target.value = '' }} />
-                        <button type="button" disabled={imgUploading} onClick={() => blogImgInputRef.current?.click()} style={{ background: imgUploading ? '#F1F5F9' : '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: imgUploading ? 'default' : 'pointer' }}>{imgUploading ? '⏳ アップロード中...' : '🖼️ 画像を挿入'}</button>
+                        <button type="button" disabled={imgUploading} onClick={() => blogImgInputRef.current?.click()} style={{ background: imgUploading ? '#F1F5F9' : '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: imgUploading ? 'default' : 'pointer' }}>{imgUploading ? 'アップロード中...' : '画像を挿入'}</button>
                       </div>
                     </div>
                     <textarea value={pContent} onChange={e => setPContent(e.target.value)} rows={16} placeholder={'# 見出し1\n\n本文をここに書きます。\n\n## 見出し2\n\n- 箇条書き1\n- 箇条書き2'} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace', lineHeight: 1.7 }} />
                   </div>
-                  {pMsg && <div style={{ fontSize: '13px', fontWeight: 700, color: pMsg.startsWith('✅') ? '#16A34A' : '#DC2626', padding: '8px 0' }}>{pMsg}</div>}
+                  {pMsg && <div style={{ fontSize: '13px', fontWeight: 700, color: pMsgOk ? '#16A34A' : '#DC2626', padding: '8px 0' }}>{pMsg}</div>}
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button disabled={pSaving} onClick={() => savePost('published')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 700, cursor: pSaving ? 'default' : 'pointer', opacity: pSaving ? 0.6 : 1 }}>{pSaving ? '保存中...' : (editingPost ? '更新して公開' : '公開する')}</button>
                     <button disabled={pSaving} onClick={() => savePost('draft')} style={{ background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 700, cursor: pSaving ? 'default' : 'pointer', opacity: pSaving ? 0.6 : 1 }}>下書き保存</button>
@@ -1494,9 +1494,9 @@ const previewDoc = async (fileUrl: string) => {
                       <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px', fontFamily: 'monospace' }}>/blog/{p.slug}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
-                      {p.status === 'published' && <button onClick={() => window.open('/blog/' + p.slug, '_blank')} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>👁️ 見る</button>}
-                      <button onClick={() => startEditPost(p)} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ 編集</button>
-                      <button onClick={() => deletePost(p)} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🗑️ 削除</button>
+                      {p.status === 'published' && <button onClick={() => window.open('/blog/' + p.slug, '_blank')} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>見る</button>}
+                      <button onClick={() => startEditPost(p)} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>編集</button>
+                      <button onClick={() => deletePost(p)} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
                     </div>
                   </div>
                 ))}
@@ -1509,7 +1509,7 @@ const previewDoc = async (fileUrl: string) => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ fontSize: '13px', color: '#64748B' }}>全 <b style={{ color: '#1a1a1a' }}>{importedTotal.toLocaleString()}</b> 件のインポート名簿</div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input type="text" value={importedKw} onChange={e => setImportedKw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { setImportedPage(0); loadImported() } }} placeholder="🔍 店舗名・代表者・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', width: '260px', maxWidth: '60vw' }} />
+                  <input type="text" value={importedKw} onChange={e => setImportedKw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { setImportedPage(0); loadImported() } }} placeholder="店舗名・代表者・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', width: '260px', maxWidth: '60vw' }} />
                   <button onClick={() => { setImportedPage(0); loadImported() }} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>検索</button>
                 </div>
               </div>
@@ -1550,7 +1550,7 @@ const previewDoc = async (fileUrl: string) => {
           {tab === 'csv' && (
             <>
               <div style={{ background: '#EBF6FD', border: '1px solid #93C5FD', borderRadius: '10px', padding: '14px 18px', marginBottom: '20px', fontSize: '13px', color: '#1D4ED8', lineHeight: 1.8 }}>
-                <div style={{ fontWeight: '700', marginBottom: '6px' }}>📥 CSVフォーマットについて</div>
+                <div style={{ fontWeight: '700', marginBottom: '6px' }}>CSVフォーマットについて</div>
                 1行目はヘッダー行として扱われます。以下の順番でカラムを並べてください：<br />
                 <code style={{ background: 'rgba(255,255,255,0.6)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
                   出店者名, 店舗名, メール, 電話番号, ジャンル, エリア, SNS
@@ -1559,7 +1559,6 @@ const previewDoc = async (fileUrl: string) => {
 
               <div style={{ background: '#fff', borderRadius: '12px', border: '2px dashed #E2E8F0', padding: '40px', textAlign: 'center', marginBottom: '20px', cursor: 'pointer' }}
                 onClick={() => fileRef.current?.click()}>
-                <div style={{ fontSize: '40px', marginBottom: '12px' }}>📂</div>
                 <div style={{ fontWeight: '700', fontSize: '15px', marginBottom: '6px' }}>CSVファイルをクリックして選択</div>
                 <div style={{ fontSize: '12px', color: '#64748B' }}>UTF-8形式のCSVファイル（.csv）に対応</div>
                 <input ref={fileRef} type="file" accept=".csv" onChange={handleCSV} style={{ display: 'none' }} />
@@ -1580,7 +1579,7 @@ const previewDoc = async (fileUrl: string) => {
                   }}
                   style={{ background: '#fff', border: '1.5px solid #3A9BD5', color: '#1D4ED8', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  📄 出店者一覧をCSVでダウンロード
+                  出店者一覧をCSVでダウンロード
                 </button>
               </div>
 
@@ -1588,8 +1587,8 @@ const previewDoc = async (fileUrl: string) => {
                 <>
                   <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden', marginBottom: '16px' }}>
                     <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>📋 プレビュー（{csvPreview.length - 1}件）</span>
-                      {csvImported && <span style={{ color: '#16A34A', fontWeight: '700', fontSize: '12px' }}>✅ インポート完了！</span>}
+                      <span>プレビュー（{csvPreview.length - 1}件）</span>
+                      {csvImported && <span style={{ color: '#16A34A', fontWeight: '700', fontSize: '12px' }}>インポート完了！</span>}
                     </div>
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
@@ -1615,14 +1614,14 @@ const previewDoc = async (fileUrl: string) => {
                   {!csvImported && (
                     <div style={{ textAlign: 'center' }}>
                       <button onClick={importCSV} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 32px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
-                        📥 {csvPreview.length - 1}件をインポートする
+                        {csvPreview.length - 1}件をインポートする
                       </button>
                     </div>
                   )}
                   {csvImported && (
                     <div style={{ textAlign: 'center' }}>
                       <button onClick={() => setTab('sellers')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 32px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
-                        👥 出店者一覧を確認する
+                        出店者一覧を確認する
                       </button>
                     </div>
                   )}

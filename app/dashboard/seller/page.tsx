@@ -22,14 +22,14 @@ const messages = [
 const calDates: { date: string; status: string; place?: string; color: string; border: string; text: string }[] = []
 
 const docTypes = [
-  { key: 'license_front', name: '運転免許証（表面）', required: true, icon: '🪪' },
-  { key: 'license_back', name: '運転免許証（裏面）', required: true, icon: '🪪' },
-  { key: 'food_hygiene', name: '食品衛生責任者証', required: true, icon: '📄' },
-  { key: 'liability_insurance', name: '損害賠償保険証書', required: true, icon: '🛡️' },
-  { key: 'business_permit', name: '営業許可証', required: true, icon: '🏪' },
-  { key: 'pl_insurance', name: 'PL保険証券', required: true, icon: '🛡️' },
-  { key: 'inspection_sample', name: '検体（検査結果）', required: false, icon: '🧪' },
-  { key: 'other_permit', name: 'その他許可証', required: false, icon: '📋' },
+  { key: 'license_front', name: '運転免許証（表面）', required: true },
+  { key: 'license_back', name: '運転免許証（裏面）', required: true },
+  { key: 'food_hygiene', name: '食品衛生責任者証', required: true },
+  { key: 'liability_insurance', name: '損害賠償保険証書', required: true },
+  { key: 'business_permit', name: '営業許可証', required: true },
+  { key: 'pl_insurance', name: 'PL保険証券', required: true },
+  { key: 'inspection_sample', name: '検体（検査結果）', required: false },
+  { key: 'other_permit', name: 'その他許可証', required: false },
 ]
 
 const docStatusLabel = (s: string | undefined) =>
@@ -571,13 +571,13 @@ export default function SellerDashboard() {
   useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile() }, [])
 
   const navItems = [
-    { key: 'home', icon: '🏠', label: 'ホーム' },
-    { key: 'applies', icon: '📋', label: '申込一覧' },
-    { key: 'calendar', icon: '📅', label: 'カレンダー' },
-    { key: 'messages', icon: '💬', label: 'メッセージ', badge: unread > 0 ? unread : undefined },
-    { key: 'docs', icon: '📁', label: '書類管理' },
-    { key: 'sales', icon: '💰', label: '売上報告' },
-    { key: 'profile', icon: '👤', label: 'プロフィール' },
+    { key: 'home', label: 'ホーム' },
+    { key: 'applies', label: '申込一覧' },
+    { key: 'calendar', label: 'カレンダー' },
+    { key: 'messages', label: 'メッセージ', badge: unread > 0 ? unread : undefined },
+    { key: 'docs', label: '書類管理' },
+    { key: 'sales', label: '売上報告' },
+    { key: 'profile', label: 'プロフィール' },
   ]
 
   return (
@@ -602,7 +602,7 @@ export default function SellerDashboard() {
           {navItems.map(item => (
             <div key={item.key} onClick={() => setTab(item.key as typeof tab)}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', cursor: 'pointer', color: tab === item.key ? '#fff' : 'rgba(255,255,255,0.6)', background: tab === item.key ? 'rgba(255,255,255,0.1)' : 'transparent', borderLeft: tab === item.key ? '3px solid #F5A623' : '3px solid transparent', fontSize: '13px', position: 'relative' }}>
-              <span>{item.icon}</span>{item.label}
+              <span>{item.label}</span>
               {item.badge && <span style={{ marginLeft: 'auto', background: '#DC2626', color: '#fff', borderRadius: '10px', fontSize: '10px', fontWeight: '700', padding: '1px 6px' }}>{item.badge}</span>}
             </div>
           ))}
@@ -647,7 +647,6 @@ export default function SellerDashboard() {
                 return (
                   <div style={{ background: '#FFF8E1', border: '1.5px solid #FCD34D', borderRadius: '12px', padding: '16px 18px', marginBottom: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                      <span style={{ fontSize: '20px' }}>📅</span>
                       <span style={{ fontSize: '15px', fontWeight: '900', color: '#B45309' }}>もうすぐ出店日です</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -666,15 +665,14 @@ export default function SellerDashboard() {
               })()}
               <div className='admin-stats' style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
                 {[
-                  { label: '申込中', value: myApplies.filter(a => a.status === '審査中').length + '件', icon: '⏳', color: '#92400E', bg: '#FEF3C7' },
-                  { label: '承認済（今月）', value: myApplies.filter(a => a.status === '承認済').length + '件', icon: '✅', color: '#16A34A', bg: '#ECFDF5' },
-                  { label: '出店予定日', value: new Set(myApplies.filter(a => a.status === '承認済' && a.date && a.date !== '日付未定').map(a => a.date)).size + '日', icon: '📅', color: '#1D4ED8', bg: '#EBF6FD' },
-                  { label: '未読メッセージ', value: unread + '件', icon: '💬', color: '#DC2626', bg: '#FEE2E2' },
+                  { label: '申込中', value: myApplies.filter(a => a.status === '審査中').length + '件', color: '#92400E', bg: '#FEF3C7' },
+                  { label: '承認済（今月）', value: myApplies.filter(a => a.status === '承認済').length + '件', color: '#16A34A', bg: '#ECFDF5' },
+                  { label: '出店予定日', value: new Set(myApplies.filter(a => a.status === '承認済' && a.date && a.date !== '日付未定').map(a => a.date)).size + '日', color: '#1D4ED8', bg: '#EBF6FD' },
+                  { label: '未読メッセージ', value: unread + '件', color: '#DC2626', bg: '#FEE2E2' },
                 ].map(s => (
                   <div key={s.label} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px' }}>{s.label}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>{s.icon}</div>
                       <div style={{ fontSize: '24px', fontWeight: '900', color: s.color }}>{s.value}</div>
                     </div>
                   </div>
@@ -684,7 +682,7 @@ export default function SellerDashboard() {
               <div className='admin-two-col sales-input-grid' style={{ display: 'grid', gap: '16px' }}>
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                   <div style={{ padding: '13px 18px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: '700', fontSize: '13px' }}>📋 最近の申込</div>
+                    <div style={{ fontWeight: '700', fontSize: '13px' }}>最近の申込</div>
                     <button onClick={() => setTab('applies')} style={{ background: 'none', border: 'none', color: '#3A9BD5', fontSize: '12px', cursor: 'pointer' }}>すべて見る</button>
                   </div>
                   {myApplies.slice(0,3).map((a,i) => (
@@ -700,7 +698,7 @@ export default function SellerDashboard() {
 
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                   <div style={{ padding: '13px 18px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: '700', fontSize: '13px' }}>📁 書類提出状況</div>
+                    <div style={{ fontWeight: '700', fontSize: '13px' }}>書類提出状況</div>
                     <button onClick={() => setTab('docs')} style={{ background: 'none', border: 'none', color: '#3A9BD5', fontSize: '12px', cursor: 'pointer' }}>管理する</button>
                   </div>
                   <div style={{ padding: '14px 18px' }}>
@@ -713,7 +711,6 @@ export default function SellerDashboard() {
                       ))}
                     </div>
                     <div style={{ background: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#DC2626', display: 'flex', gap: '6px' }}>
-                      <span>⚠️</span>
                       <span>損害賠償保険証書が未提出です。出店前に提出してください。</span>
                     </div>
                   </div>
@@ -738,12 +735,12 @@ export default function SellerDashboard() {
                         <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', background: '#F1F5F9', color: '#64748B' }}>{a.type}</span>
                       </div>
                       <div style={{ fontSize: '14px', fontWeight: '700', marginBottom: '4px' }}>{a.place}</div>
-                      <div style={{ fontSize: '12px', color: '#64748B' }}>📅 {a.date}</div>
+                      <div style={{ fontSize: '12px', color: '#64748B' }}>{a.date}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: a.statusBg, color: a.statusColor }}>{a.status}</span>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button onClick={() => { setTab('messages'); openThread(a.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>💬 連絡</button>
+                        <button onClick={() => { setTab('messages'); openThread(a.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>連絡</button>
                         {a.status === '否認' && <button style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #F5A623', borderRadius: '6px', background: '#FFF8E1', color: '#B45309', cursor: 'pointer' }}>再申込</button>}
                       </div>
                     </div>
@@ -861,7 +858,7 @@ export default function SellerDashboard() {
           {tab === 'docs' && (
             <>
               <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
-                <span>📎</span><span>各書類のファイルを選んでアップロードしてください。提出後は「審査中」になります。</span>
+                <span>各書類のファイルを選んでアップロードしてください。提出後は「審査中」になります。</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {docTypes.map(doc => {
@@ -877,24 +874,23 @@ export default function SellerDashboard() {
                   return (
                     <div key={doc.key} style={{ background: '#fff', borderRadius: '12px', border: '1px solid ' + border, padding: '16px 20px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ fontSize: '28px' }}>{doc.icon}</div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>{doc.name} {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}</div>
                         </div>
                         <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: badgeBg, color: badgeColor, flexShrink: 0 }}>{status}</span>
                         <label style={{ background: isUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '700', cursor: isUploading ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
-                          {isUploading ? '送信中...' : (status === '未提出' ? '📎 アップロード' : '🔄 再提出')}
+                          {isUploading ? '送信中...' : (status === '未提出' ? 'アップロード' : '再提出')}
                           <input type='file' accept='image/*,application/pdf' style={{ display: 'none' }} disabled={isUploading}
                             onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDoc(doc.key, file); e.currentTarget.value = '' }} />
                         </label>
                       </div>
                       {showExpiry && (
                         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #E2E8F0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>📅 {expiryLabel}</span>
+                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>{expiryLabel}</span>
                           <input type='date' defaultValue={rec?.expiry_date || ''}
                             onChange={(e) => saveExpiry(doc.key, e.target.value)}
                             style={{ fontSize: '13px', padding: '6px 10px', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#1E2A3B' }} />
-                          {rec?.expiry_date && <span style={{ fontSize: '11px', color: '#16A34A', fontWeight: '600' }}>✓ 保存済み</span>}
+                          {rec?.expiry_date && <span style={{ fontSize: '11px', color: '#16A34A', fontWeight: '600' }}>保存済み</span>}
                         </div>
                       )}
                     </div>
@@ -932,7 +928,7 @@ export default function SellerDashboard() {
             })()}
             <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
-                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>👤 基本情報</div>
+                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>基本情報</div>
                 {!profileEdit ? (
                   <>
                     {[
@@ -983,7 +979,7 @@ export default function SellerDashboard() {
                         <div style={{ fontSize: '13px', color: '#1a1a1a', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{profile.menu}</div>
                       </div>
                     )}
-                    <button onClick={startProfileEdit} style={{ marginTop: '16px', width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>✏️ 編集する</button>
+                    <button onClick={startProfileEdit} style={{ marginTop: '16px', width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>編集する</button>
                   </>
                 ) : (
                   <>
@@ -1011,7 +1007,7 @@ export default function SellerDashboard() {
                         {photos.length < 8 && (
                           <label style={{ paddingTop: '100%', position: 'relative', borderRadius: '8px', border: '1.5px dashed #CBD5E1', cursor: photoUploading ? 'wait' : 'pointer', background: '#F8FAFC' }}>
                             <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '11px' }}>
-                              <span style={{ fontSize: '20px' }}>{photoUploading ? '⏳' : '＋'}</span>
+                              <span style={{ fontSize: '20px' }}>{photoUploading ? '…' : '＋'}</span>
                               <span>{photoUploading ? '追加中' : '写真追加'}</span>
                             </div>
                             <input type='file' accept='image/*' style={{ display: 'none' }} disabled={photoUploading} onChange={e => { const file = e.target.files?.[0]; if (file) uploadPhoto(file); e.target.value = '' }} />
@@ -1036,7 +1032,7 @@ export default function SellerDashboard() {
                                 </div>
                               ) : (
                                 <div style={{ width: '100%', paddingTop: '66%', position: 'relative', background: '#F1F5F9' }}>
-                                  <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>🍽️</div>
+                                  <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: '#94A3B8' }}>写真なし</div>
                                 </div>
                               )}
                               <button onClick={() => deleteMenu(m)} style={{ position: 'absolute', top: '6px', right: '6px', width: '22px', height: '22px', borderRadius: '11px', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '14px', lineHeight: '1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
@@ -1060,7 +1056,7 @@ export default function SellerDashboard() {
                             </div>
                           ) : (
                             <label style={{ width: '64px', height: '64px', borderRadius: '8px', border: '1.5px dashed #CBD5E1', cursor: menuPhotoUploading ? 'wait' : 'pointer', background: '#fff', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '10px' }}>
-                              <span style={{ fontSize: '18px' }}>{menuPhotoUploading ? '⏳' : '📷'}</span>
+                              <span style={{ fontSize: '18px' }}>{menuPhotoUploading ? '…' : '＋'}</span>
                               <span>{menuPhotoUploading ? '' : '写真'}</span>
                               <input type='file' accept='image/*' style={{ display: 'none' }} disabled={menuPhotoUploading} onChange={e => { const file = e.target.files?.[0]; if (file) uploadMenuPhoto(file); e.target.value = '' }} />
                             </label>
@@ -1141,16 +1137,15 @@ export default function SellerDashboard() {
                 )}
               </div>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
-                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>📱 SNS・メディア</div>
+                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>SNS・メディア</div>
                 {!profileEdit ? (
                   ([
-                    { label: 'Instagram', value: snsLinks.instagram, icon: '📸' },
-                    { label: 'X（Twitter）', value: snsLinks.twitter, icon: '🐦' },
-                    { label: 'YouTube', value: snsLinks.youtube, icon: '▶️' },
-                    { label: 'TikTok', value: snsLinks.tiktok, icon: '🎵' },
+                    { label: 'Instagram', value: snsLinks.instagram },
+                    { label: 'X（Twitter）', value: snsLinks.twitter },
+                    { label: 'YouTube', value: snsLinks.youtube },
+                    { label: 'TikTok', value: snsLinks.tiktok },
                   ]).map(s => (
                     <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
-                      <span style={{ fontSize: '18px' }}>{s.icon}</span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '11px', color: '#64748B' }}>{s.label}</div>
                         <div style={{ fontSize: '13px', fontWeight: '500', color: !s.value ? '#94A3B8' : '#1D4ED8' }}>{s.value || '未設定'}</div>
@@ -1159,13 +1154,13 @@ export default function SellerDashboard() {
                   ))
                 ) : (
                   ([
-                    { label: 'Instagram', key: 'instagram', icon: '📸', ph: '例：@hana_sweets' },
-                    { label: 'X（Twitter）', key: 'twitter', icon: '🐦', ph: '例：@hana_sweets_jp' },
-                    { label: 'YouTube', key: 'youtube', icon: '▶️', ph: 'チャンネル名やURL' },
-                    { label: 'TikTok', key: 'tiktok', icon: '🎵', ph: '例：@hana_sweets' },
+                    { label: 'Instagram', key: 'instagram', ph: '例：@hana_sweets' },
+                    { label: 'X（Twitter）', key: 'twitter', ph: '例：@hana_sweets_jp' },
+                    { label: 'YouTube', key: 'youtube', ph: 'チャンネル名やURL' },
+                    { label: 'TikTok', key: 'tiktok', ph: '例：@hana_sweets' },
                   ]).map(s => (
                     <div key={s.key} style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{s.icon} {s.label}</div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{s.label}</div>
                       <input value={(snsForm as any)[s.key]} onChange={e => setSnsForm({ ...snsForm, [s.key]: e.target.value })} placeholder={s.ph} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                     </div>
                   ))
@@ -1179,11 +1174,11 @@ export default function SellerDashboard() {
           {tab === 'sales' && (
             <>
               <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
-                <span>💰</span><span>承認された案件ごとに売上を入力すると、出店料（出店コネクトナビへのお支払い額）とあなたの利益（手取り）が自動計算されます。</span>
+                <span>承認された案件ごとに売上を入力すると、出店料（出店コネクトナビへのお支払い額）とあなたの利益（手取り）が自動計算されます。</span>
               </div>
 
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '16px' }}>
-                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>📝 売上を入力</div>
+                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>売上を入力</div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <div className='sale-field' style={{ flex: '1 1 200px' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>案件</div>

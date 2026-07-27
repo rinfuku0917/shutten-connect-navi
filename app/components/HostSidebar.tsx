@@ -5,9 +5,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const navItems = [
-  { href: '/dashboard/host', icon: '📋', label: '場所・案件管理' },
-  { href: '/dashboard/host/new-place', icon: '➕', label: '新規登録' },
-  { href: '/dashboard/host/messages', icon: '💬', label: 'メッセージ' },
+  { href: '/dashboard/host', label: '場所・案件管理' },
+  { href: '/dashboard/host/new-place', label: '新規登録' },
+  { href: '/dashboard/host/messages', label: 'メッセージ' },
 ]
 
 export default function HostSidebar() {
@@ -75,7 +75,7 @@ export default function HostSidebar() {
           const showBadge = item.href === '/dashboard/host/messages' && unread > 0
           return (
             <Link key={item.href} href={item.href} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', textDecoration: 'none', color: active ? '#fff' : 'rgba(255,255,255,0.6)', background: active ? 'rgba(255,255,255,0.1)' : 'transparent', borderLeft: active ? '3px solid #F5A623' : '3px solid transparent', fontSize: '13px' }}>
-              <span>{item.icon}</span>{item.label}
+              <span>{item.label}</span>
               {showBadge && <span style={{ marginLeft: 'auto', background: '#DC2626', color: '#fff', borderRadius: '10px', fontSize: '10px', fontWeight: '700', padding: '1px 6px' }}>{unread}</span>}
             </Link>
           )
