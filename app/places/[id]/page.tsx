@@ -68,6 +68,9 @@ export default function PlaceDetail() {
     setSelectedDates(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
   }
 
+  // 今日（YYYY-MM-DD）。自由入力日程の下限・過去日付チェックに使う
+  const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
+
   const submitEntry = async () => {
     setEntryErr('')
     if (!format) { setEntryErr('出店形式を選択してください'); return }
@@ -75,6 +78,11 @@ export default function PlaceDetail() {
     const hasSchedule = !!(place && place.schedule && place.schedule.filter(d => d.date).length > 0)
     const dates = hasSchedule ? selectedDates : (entryDate ? [entryDate] : [])
     if (hasSchedule && dates.length === 0) { setEntryErr('出店希望日を1日以上選択してください'); return }
+    // 日程未設定の案件（自由入力）は、日付必須＋過去日付を禁止して誤エントリーを防ぐ
+    if (!hasSchedule) {
+      if (!entryDate) { setEntryErr('出店希望日を選択してください'); return }
+      if (entryDate < todayStr()) { setEntryErr('過去の日付は選択できません'); return }
+    }
     setSubmitting(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setEntryErr('ログインが必要です'); setSubmitting(false); return }
@@ -248,7 +256,10 @@ export default function PlaceDetail() {
                         ))}
                       </div>
                     ) : (
-                      <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} style={{ width: '100%', border: '1px solid #E5C07B', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', marginBottom: '16px', boxSizing: 'border-box', color: '#1a1a1a', background: '#fff' }} />
+                      <div style={{ marginBottom: '16px' }}>
+                        <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>この案件は出店日が未設定です。ご希望の日付を入力してください（過去の日付は選べません）。</div>
+                        <input type="date" value={entryDate} min={todayStr()} onChange={e => setEntryDate(e.target.value)} style={{ width: '100%', border: '1px solid #E5C07B', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box', color: '#1a1a1a', background: '#fff' }} />
+                      </div>
                     )}
                     {entryErr && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px', fontSize: '13px', color: '#DC2626', marginBottom: '12px' }}>{entryErr}</div>}
                     <button onClick={submitEntry} disabled={submitting} style={{ width: '100%', background: submitting ? '#ccc' : '#3A9BD5', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', marginBottom: '8px' }}>
