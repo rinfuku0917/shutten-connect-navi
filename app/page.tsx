@@ -111,13 +111,11 @@ export default function Home() {
 
       {/* HEADER */}
       <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid ' + C.line }}>
-        <div style={{ maxWidth: '1160px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
-          <Link href='/' className={maru.className} style={{ display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 900, fontSize: '19px', color: C.ink, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-            <span style={{ display: 'inline-grid', placeItems: 'center', width: '25px', height: '25px', borderRadius: '6px', color: '#fff', fontSize: '14px', transform: 'rotate(-3deg)', background: C.gold }}>出</span>
-            <span style={{ display: 'inline-grid', placeItems: 'center', width: '25px', height: '25px', borderRadius: '6px', color: '#fff', fontSize: '14px', transform: 'rotate(-3deg)', background: C.navy }}>店</span>
-            <span style={{ marginLeft: '5px' }}>コネクトナビ</span>
+        <div style={{ maxWidth: '1160px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', height: '64px' }}>
+          <Link href='/' style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }}>
+            <img src='/logo.svg' alt='出店コネクトナビ' style={{ height: '34px', width: 'auto', display: 'block' }} />
           </Link>
-          <nav className='top3-gnav' style={{ display: 'flex', alignItems: 'center', gap: '22px' }}>
+          <nav className='top3-gnav' style={{ display: 'flex', alignItems: 'center', gap: '18px', minWidth: 0 }}>
             <Link href='/space' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>出店したい方へ</Link>
             <Link href='/vendor' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>お店を呼びたい方へ</Link>
             <a href='#works' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>実績紹介</a>
