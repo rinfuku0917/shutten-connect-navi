@@ -177,7 +177,7 @@ export default function Home() {
       </div>
       <div style={{padding:'0 16px 24px',maxWidth:'1200px',margin:'0 auto'}}>
         <div className='top-2card-grid' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',alignItems:'stretch'}}>
-          <Link href='/vendor' style={{textDecoration:'none'}}>
+          <Link href='/space' style={{textDecoration:'none'}}>
             <div style={{background:'#F5A623',borderRadius:'12px',padding:'20px',minHeight:'200px',boxSizing:'border-box',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
               <div style={{fontSize:'32px',marginBottom:'8px'}}>🚚</div>
               <div style={{fontWeight:'900',fontSize:'14px',color:'#fff',marginBottom:'4px'}}>出店したい方へ</div>
@@ -185,7 +185,7 @@ export default function Home() {
               <div style={{fontSize:'12px',color:'#fff',fontWeight:'700'}}>詳しく見る →</div>
             </div>
           </Link>
-          <Link href='/space' style={{textDecoration:'none'}}>
+          <Link href='/vendor' style={{textDecoration:'none'}}>
             <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'2px solid #F5A623',minHeight:'200px',boxSizing:'border-box',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
               <div style={{fontSize:'32px',marginBottom:'8px'}}>📣</div>
               <div style={{fontWeight:'900',fontSize:'14px',color:'#111',marginBottom:'4px'}}>お店を呼びたい方へ</div>

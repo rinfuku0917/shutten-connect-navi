@@ -5,8 +5,8 @@ import { useState, useEffect } from 'react'
 
 const navItems = [
   { label: 'ホーム',        href: '/' },
-  { label: '出店したい',    href: '/vendor' },
-  { label: 'お店を呼びたい',href: '/space' },
+  { label: '出店したい',    href: '/space' },
+  { label: 'お店を呼びたい',href: '/vendor' },
   { label: '出店者を探す',  href: '/sellers' },
   { label: '出店場所を探す',href: '/places' },
   { label: '車両を売りたい',href: '/sell' },
