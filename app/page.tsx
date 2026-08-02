@@ -275,19 +275,26 @@ export default function Home() {
           <div className='top3-fb'>
             <div>
               <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900, marginBottom: '20px' }}>よくある質問</h2>
-              {[
+              {([
                 { q: '登録に費用はかかりますか？', a: '会員登録・案件の閲覧・応募はすべて無料です。出店が決定した際の手数料については、案件ごとにご案内しています。', open: true },
                 { q: '出店までの流れを教えてください', a: '会員登録 → 案件を探して応募 → 主催者とのマッチング・調整 → 出店当日、という流れです。詳しくは「ご利用の流れ」をご覧ください。' },
+                { q: 'キッチンカーを呼びたいのですが、どうすればいいですか？', a: '施設や敷地の情報（場所・希望日・想定人数など）をお問い合わせフォームからお送りいただくだけでOKです。出店者の募集から選定・当日の調整まで、運営がまとめてサポートします。掲載やご相談は無料です。', cta: { href: '/vendor', label: 'キッチンカーを呼びたい方はこちら' } },
+                { q: 'イベントを開催したいのですが、何から始めればいいですか？', a: '「まだ企画段階」という状態からでもご相談いただけます。開催日・場所・規模の目安をお知らせいただければ、キッチンカーの台数やジャンルの選定、募集スケジュールまで一緒に組み立てます。', cta: { href: '/contact', label: 'まずは相談してみる' } },
                 { q: 'どのエリアに対応していますか？', a: '現在、全国のイベント・施設に対応しており、順次エリアを拡大しています。お近くの案件はサイト内で検索できます。' },
                 { q: 'キャンセルは可能ですか？', a: 'やむを得ない事情でのキャンセルにも対応しています。詳細な条件は案件ごとにご確認いただけます。' },
-              ].map(f => (
+              ] as { q: string; a: string; open?: boolean; cta?: { href: string; label: string } }[]).map(f => (
                 <details key={f.q} className='top3-faq' open={f.open} style={{ background: '#fff', border: '1px solid ' + C.line, borderRadius: '10px', marginBottom: '10px' }}>
                   <summary style={{ cursor: 'pointer', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, fontSize: '14.5px' }}>
                     <span style={{ width: '24px', height: '24px', flexShrink: 0, borderRadius: '6px', background: C.gold, color: '#fff', fontWeight: 900, display: 'grid', placeItems: 'center', fontSize: '13px' }}>Q</span>
                     {f.q}
                     <span className='top3-pl' style={{ marginLeft: 'auto', fontSize: '20px', color: C.muted }}>+</span>
                   </summary>
-                  <div style={{ padding: '0 16px 16px 52px', fontSize: '13.5px', color: C.muted }}>{f.a}</div>
+                  <div style={{ padding: '0 16px 16px 52px', fontSize: '13.5px', color: C.muted }}>
+                    {f.a}
+                    {f.cta && (
+                      <Link href={f.cta.href} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '10px', color: C.navy, fontWeight: 700, fontSize: '13px', textDecoration: 'none', borderBottom: '2px solid ' + C.gold, paddingBottom: '1px' }}>{f.cta.label} →</Link>
+                    )}
+                  </div>
                 </details>
               ))}
               <Link href='/contact' style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: C.navy, textDecoration: 'none', fontWeight: 700, fontSize: '13.5px', marginTop: '6px' }}>その他のご質問はお問い合わせへ →</Link>
