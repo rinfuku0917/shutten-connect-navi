@@ -185,14 +185,16 @@ export default function Home() {
       {/* STATS */}
       <div style={{ ...wrap, padding: '36px 20px' }}>
         <div className='top3-stats'>
-          {[
-            { ic: '👥', num: '3,000+', label: '登録出店者' },
-            { ic: '📍', num: '200+', label: '出店場所' },
-            { ic: '💬', num: '1,600+', label: 'LINE登録' },
-            { ic: '🌐', num: '全国対応', label: '対応エリア拡大中', small: true },
-          ].map(s => (
+          {([
+            { img: '/stat-sellers.jpg', num: '3,000+', label: '登録出店者' },
+            { img: '/stat-places.jpg', num: '200+', label: '出店場所' },
+            { img: '/stat-line.jpg', num: '1,600+', label: 'LINE登録' },
+            { img: '/stat-area.jpg', num: '全国対応', label: '対応エリア拡大中', small: true },
+          ] as { ic?: string; img?: string; num: string; label: string; small?: boolean }[]).map(s => (
             <div key={s.label} className='top3-stat'>
-              <div style={{ fontSize: '26px', marginBottom: '6px' }}>{s.ic}</div>
+              {s.img
+                ? <img src={s.img} alt='' style={{ height: '36px', width: '36px', objectFit: 'contain', display: 'block', margin: '0 auto 6px' }} />
+                : <div style={{ fontSize: '26px', marginBottom: '6px' }}>{s.ic}</div>}
               <div className={maru.className} style={{ fontSize: s.small ? 'clamp(20px,2.8vw,27px)' : 'clamp(26px,3.6vw,34px)', fontWeight: 900, color: C.navy, lineHeight: 1 }}>{s.num}</div>
               <div style={{ fontSize: '12.5px', color: C.muted, fontWeight: 700, marginTop: '6px' }}>{s.label}</div>
             </div>
