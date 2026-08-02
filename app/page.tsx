@@ -36,6 +36,30 @@ type NewPlace = {
 type WorkPlace = { id: string; title: string; image_url: string | null }
 type BlogPost = { id: string; slug: string; title: string; category: string | null; cover_emoji: string | null; published_at: string | null }
 
+// ヒーロー下2入口カード用の線画アイコン（見本デザイン準拠）
+const TruckIcon = ({ color }: { color: string }) => (
+  <svg viewBox='0 0 72 52' width='68' height='50' fill='none' stroke={color} strokeWidth='3' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+    <path d='M8 12 h34' />
+    <path d='M10 12 q2 5 5 0 q3 5 6 0 q3 5 6 0 q3 5 6 0 q3 5 5 0' strokeWidth='2.5' />
+    <rect x='8' y='16' width='34' height='22' rx='3' />
+    <rect x='14' y='22' width='13' height='8' rx='1.5' strokeWidth='2.5' />
+    <path d='M42 20 h12 l8 8 v10 h-20' />
+    <circle cx='20' cy='42' r='5' />
+    <circle cx='54' cy='42' r='5' />
+    <path d='M25 42 h24' strokeWidth='2.5' />
+  </svg>
+)
+const BuildingIcon = ({ color }: { color: string }) => (
+  <svg viewBox='0 0 64 52' width='60' height='50' fill='none' stroke={color} strokeWidth='3' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+    <rect x='12' y='6' width='26' height='40' rx='2' />
+    <rect x='38' y='20' width='14' height='26' rx='2' />
+    <path d='M18 14 h4 M28 14 h4 M18 22 h4 M28 22 h4 M18 30 h4 M28 30 h4' strokeWidth='2.5' />
+    <path d='M42 27 h6 M42 34 h6' strokeWidth='2.5' />
+    <path d='M22 46 v-7 h6 v7' strokeWidth='2.5' />
+    <path d='M8 46 h48' />
+  </svg>
+)
+
 const wrap: React.CSSProperties = { maxWidth: '1080px', margin: '0 auto', padding: '0 20px' }
 const secHead: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '26px', gap: '16px', flexWrap: 'wrap' }
 const h2Style: React.CSSProperties = { fontSize: 'clamp(22px,3.2vw,29px)', fontWeight: 900, lineHeight: 1.3 }
@@ -136,9 +160,25 @@ export default function Home() {
             <img src='/hero-full.jpg' alt='「どこへ行く？」が「ここに来る！」に。最高の人を最適な場所へナビゲート。キッチンカーと出店者、お客さんのイラスト' style={{ width: '100%', height: 'auto', display: 'block', borderRadius: '18px' }} />
           </picture>
         </div>
-        <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '22px 20px 30px', display: 'flex', gap: '14px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Link href='/space' className={maru.className + ' top3-herobtn'} style={{ textDecoration: 'none', fontWeight: 900, fontSize: '16px', padding: '16px 34px', borderRadius: '10px', background: C.navy, color: '#fff' }}>出店場所を探したい方</Link>
-          <Link href='/vendor' className={maru.className + ' top3-herobtn'} style={{ textDecoration: 'none', fontWeight: 900, fontSize: '16px', padding: '16px 34px', borderRadius: '10px', background: C.gold, color: '#fff' }}>キッチンカーを呼びたい方</Link>
+        <div className='top3-gates2'>
+          {([
+            { key: 'seller', color: C.gold, deep: C.goldDeep, href: '/space', icon: <TruckIcon color={C.gold} />, t1: '出店場所を', t2: '探したい方', d1: 'キッチンカーとして', d2: '出店したい方はこちら' },
+            { key: 'host', color: C.navy, deep: C.navy, href: '/vendor', icon: <BuildingIcon color={C.navy} />, t1: 'キッチンカーを', t2: '呼びたい方', d1: 'イベントや施設に', d2: '出店を呼びたい方はこちら' },
+          ]).map(b => (
+            <div key={b.key} className='top3-gate2' style={{ background: '#fff', borderRadius: '18px', border: '2px solid ' + b.color, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ padding: '22px 14px 0' }}>
+                <div className='top3-gate2-head' style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', marginBottom: '12px' }}>
+                  {b.icon}
+                  <div className={maru.className + ' top3-gate2-title'} style={{ fontWeight: 900, color: b.deep, textAlign: 'left', lineHeight: 1.35 }}>{b.t1}<br />{b.t2}</div>
+                </div>
+                <div className='top3-gate2-desc' style={{ color: C.ink, lineHeight: 1.7, textAlign: 'center', marginBottom: '16px' }}>{b.d1}<br />{b.d2}</div>
+              </div>
+              <Link href={b.href} className={maru.className + ' top3-gate2-btn'} style={{ marginTop: 'auto', position: 'relative', display: 'block', textAlign: 'center', textDecoration: 'none', color: '#fff', fontWeight: 900, background: b.color, borderRadius: '14px 14px 15px 15px' }}>
+                詳しく見る
+                <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', width: '24px', height: '24px', borderRadius: '50%', background: '#fff', color: b.color, display: 'grid', placeItems: 'center', fontSize: '13px', fontWeight: 900 }}>→</span>
+              </Link>
+            </div>
+          ))}
         </div>
       </header>
 
