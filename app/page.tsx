@@ -188,7 +188,7 @@ export default function Home() {
           {([
             { img: '/stat-sellers.jpg', num: '3,000+', label: '登録出店者' },
             { img: '/stat-places.jpg', num: '200+', label: '出店場所' },
-            { img: '/stat-line.jpg', num: '1,600+', label: 'LINE登録' },
+            { img: '/stat-line.jpg', num: '2,000+', label: 'LINE登録' },
             { img: '/stat-area.jpg', num: '全国対応', label: '対応エリア拡大中', small: true },
           ] as { ic?: string; img?: string; num: string; label: string; small?: boolean }[]).map(s => (
             <div key={s.label} className='top3-stat'>
