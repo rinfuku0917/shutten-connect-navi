@@ -242,7 +242,7 @@ export default function Home() {
           <div className='top3-which'>
             <div className='top3-wbox-seller' style={{ background: '#fff', borderRadius: '16px', padding: '28px 26px', border: '1px solid ' + C.line }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
-                <div style={{ width: '64px', height: '64px', flexShrink: 0, borderRadius: '14px', display: 'grid', placeItems: 'center', fontSize: '32px', background: C.cream2 }}>🚚</div>
+                <img src='/which-seller.jpg' alt='' style={{ width: '64px', height: '64px', flexShrink: 0, borderRadius: '14px', objectFit: 'contain' }} />
                 <div>
                   <div className={maru.className} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.goldDeep }}>出店場所を探したい方</div>
                   <div style={{ fontSize: '13px', color: C.muted }}>キッチンカーとして出店したい方はこちら</div>
@@ -255,7 +255,7 @@ export default function Home() {
             </div>
             <div className='top3-wbox-host' style={{ background: '#fff', borderRadius: '16px', padding: '28px 26px', border: '1px solid ' + C.line }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
-                <div style={{ width: '64px', height: '64px', flexShrink: 0, borderRadius: '14px', display: 'grid', placeItems: 'center', fontSize: '32px', background: C.sky }}>🏢</div>
+                <img src='/which-host.jpg' alt='' style={{ width: '64px', height: '64px', flexShrink: 0, borderRadius: '14px', objectFit: 'contain' }} />
                 <div>
                   <div className={maru.className} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.navy }}>キッチンカーを呼びたい方</div>
                   <div style={{ fontSize: '13px', color: C.muted }}>イベントや施設に出店を呼びたい方はこちら</div>
@@ -276,14 +276,14 @@ export default function Home() {
           <h2 className={maru.className} style={{ ...h2Style, textAlign: 'center', marginBottom: '30px' }}>ご利用の流れ</h2>
           <div className='top3-flow'>
             {[
-              { n: '1', ic: '👤', h: '会員登録', p: '無料で簡単登録' },
-              { n: '2', ic: '🔍', h: '案件を探す・応募', p: '条件を絞って検索' },
-              { n: '3', ic: '🤝', h: 'マッチング・決定', p: '主催者と内容を調整' },
-              { n: '4', ic: '🎪', h: '出店・開催', p: '当日は思いっきり営業！' },
+              { n: '1', img: '/flow-1.jpg', h: '会員登録', p: '無料で簡単登録' },
+              { n: '2', img: '/flow-2.jpg', h: '案件を探す・応募', p: '条件を絞って検索' },
+              { n: '3', img: '/flow-3.jpg', h: 'マッチング・決定', p: '主催者と内容を調整' },
+              { n: '4', img: '/flow-4.jpg', h: '出店・開催', p: '当日は思いっきり営業！' },
             ].map(s => (
               <div key={s.n} className='top3-fstep'>
                 <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#fff', border: '2px solid ' + C.gold, color: C.goldDeep, fontWeight: 900, display: 'grid', placeItems: 'center', margin: '0 auto 12px', fontSize: '14px' }}>{s.n}</div>
-                <div style={{ fontSize: '36px', marginBottom: '12px' }}>{s.ic}</div>
+                <img src={s.img} alt='' style={{ width: '52px', height: '52px', objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
                 <h3 className={maru.className} style={{ fontSize: '16px', fontWeight: 900, marginBottom: '6px', lineHeight: 1.3 }}>{s.h}</h3>
                 <p style={{ fontSize: '12px', color: C.muted }}>{s.p}</p>
               </div>
