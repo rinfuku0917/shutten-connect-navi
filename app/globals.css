@@ -234,3 +234,9 @@ img { max-width: 100%; height: auto; }
 /* フッターの Instagram リンク */
 .top3-sns { transition: color .15s; }
 .top3-sns:hover { color: #2f5f43; }
+
+/* 会員登録バナーのイラスト */
+.top3-signup-img { width: 260px; height: auto; }
+@media (max-width: 680px) {
+  .top3-signup-img { width: 100%; max-width: 340px; }
+}

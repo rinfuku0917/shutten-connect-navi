@@ -369,6 +369,7 @@ export default function Home() {
         <div style={wrap}>
           <div className='top3-signup' style={{ background: `linear-gradient(135deg,${C.cream2},#ffe9bd)`, borderRadius: '20px', padding: '28px 30px' }}>
             <div className='top3-signup-l'>
+              <img src='/signup-banner.jpg' alt='' className='top3-signup-img' style={{ borderRadius: '12px', display: 'block', flexShrink: 0 }} />
               <div>
                 <h3 className={maru.className} style={{ fontSize: '22px', fontWeight: 900, marginBottom: '4px', lineHeight: 1.3 }}>まずは無料で会員登録</h3>
                 <p style={{ fontSize: '13px', color: C.muted }}>案件の閲覧・応募には会員登録が必要です</p>
