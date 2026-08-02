@@ -229,8 +229,8 @@ img { max-width: 100%; height: auto; }
 .top3-cta { transition: transform .15s ease; }
 .top3-cta:hover { transform: translateY(-2px); }
 .top3-footcol a { transition: color .15s; }
-.top3-footcol a:hover { color: #fff; }
+.top3-footcol a:hover { color: #2f5f43; }
 
 /* フッターの Instagram リンク */
 .top3-sns { transition: color .15s; }
-.top3-sns:hover { color: #fff; }
+.top3-sns:hover { color: #2f5f43; }

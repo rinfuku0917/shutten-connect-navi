@@ -384,13 +384,13 @@ export default function Home() {
       </div>
 
       {/* FOOTER */}
-      <footer style={{ background: C.navy, color: '#cfdae6', padding: '44px 0 30px' }}>
+      <footer style={{ background: '#e7f2ea', color: '#3d5a4a', padding: '44px 0 30px' }}>
         <div style={wrap}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', flexWrap: 'wrap', marginBottom: '26px' }}>
             <div>
-              <div className={maru.className} style={{ color: '#fff', fontWeight: 900, fontSize: '19px', marginBottom: '10px' }}>出店コネクトナビ</div>
-              <p style={{ fontSize: '13px', color: '#8fa6bd' }}>キッチンカーと、場所をつなぐ。</p>
-              <a href='https://www.instagram.com/connect.navi/' target='_blank' rel='noopener noreferrer' aria-label='Instagram' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '14px', color: '#cfdae6', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
+              <div className={maru.className} style={{ color: '#2f5f43', fontWeight: 900, fontSize: '19px', marginBottom: '10px' }}>出店コネクトナビ</div>
+              <p style={{ fontSize: '13px', color: '#6f8a7b' }}>キッチンカーと、場所をつなぐ。</p>
+              <a href='https://www.instagram.com/connect.navi/' target='_blank' rel='noopener noreferrer' aria-label='Instagram' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '14px', color: '#3d5a4a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
                 <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
                   <rect x='2' y='2' width='20' height='20' rx='5' />
                   <circle cx='12' cy='12' r='4.5' />
@@ -401,27 +401,27 @@ export default function Home() {
             </div>
             <div style={{ display: 'flex', gap: '44px', flexWrap: 'wrap' }}>
               <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#8fa6bd', fontWeight: 700, marginBottom: '12px' }}>メニュー</h4>
-                <Link href='/space' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>出店したい方へ</Link>
-                <Link href='/vendor' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お店を呼びたい方へ</Link>
-                <a href='#works' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>実績紹介</a>
-                <Link href='/blog' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ブログ</Link>
+                <h4 style={{ fontSize: '12px', color: '#6f8a7b', fontWeight: 700, marginBottom: '12px' }}>メニュー</h4>
+                <Link href='/space' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>出店したい方へ</Link>
+                <Link href='/vendor' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お店を呼びたい方へ</Link>
+                <a href='#works' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>実績紹介</a>
+                <Link href='/blog' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ブログ</Link>
               </div>
               <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#8fa6bd', fontWeight: 700, marginBottom: '12px' }}>サポート</h4>
-                <a href='#faq' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>よくある質問</a>
-                <Link href='/contact' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お問い合わせ</Link>
-                <Link href='/login' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ログイン</Link>
+                <h4 style={{ fontSize: '12px', color: '#6f8a7b', fontWeight: 700, marginBottom: '12px' }}>サポート</h4>
+                <a href='#faq' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>よくある質問</a>
+                <Link href='/contact' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お問い合わせ</Link>
+                <Link href='/login' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ログイン</Link>
               </div>
               <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#8fa6bd', fontWeight: 700, marginBottom: '12px' }}>会社情報</h4>
-                <Link href='/company' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>運営会社</Link>
-                <Link href='/terms' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>利用規約</Link>
-                <Link href='/privacy' style={{ display: 'block', color: '#cfdae6', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>プライバシーポリシー</Link>
+                <h4 style={{ fontSize: '12px', color: '#6f8a7b', fontWeight: 700, marginBottom: '12px' }}>会社情報</h4>
+                <Link href='/company' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>運営会社</Link>
+                <Link href='/terms' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>利用規約</Link>
+                <Link href='/privacy' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>プライバシーポリシー</Link>
               </div>
             </div>
           </div>
-          <div style={{ borderTop: '1px solid rgba(255,255,255,.12)', paddingTop: '18px', fontSize: '12px', color: '#8fa6bd', textAlign: 'center' }}>© 2026 出店コネクトナビ</div>
+          <div style={{ borderTop: '1px solid rgba(47,95,67,.2)', paddingTop: '18px', fontSize: '12px', color: '#6f8a7b', textAlign: 'center' }}>© 2026 出店コネクトナビ</div>
         </div>
       </footer>
     </div>
