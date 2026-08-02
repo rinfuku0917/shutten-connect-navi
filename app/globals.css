@@ -230,3 +230,7 @@ img { max-width: 100%; height: auto; }
 .top3-cta:hover { transform: translateY(-2px); }
 .top3-footcol a { transition: color .15s; }
 .top3-footcol a:hover { color: #fff; }
+
+/* フッターの Instagram リンク */
+.top3-sns { transition: color .15s; }
+.top3-sns:hover { color: #fff; }

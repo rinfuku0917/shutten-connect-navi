@@ -375,7 +375,7 @@ export default function Home() {
                 <p style={{ fontSize: '13px', color: C.muted }}>案件の閲覧・応募には会員登録が必要です</p>
               </div>
             </div>
-            <Link href='/register' className={maru.className + ' top3-cta'} style={{ background: C.navy, color: '#fff', textDecoration: 'none', fontWeight: 900, fontSize: '17px', padding: '16px 32px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '12px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <Link href='/register' className={maru.className + ' top3-cta'} style={{ background: C.gold, color: '#fff', textDecoration: 'none', fontWeight: 900, fontSize: '17px', padding: '16px 32px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '12px', whiteSpace: 'nowrap', flexShrink: 0 }}>
               無料で会員登録する
               <span style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'grid', placeItems: 'center', fontSize: '14px' }}>→</span>
             </Link>
@@ -390,6 +390,14 @@ export default function Home() {
             <div>
               <div className={maru.className} style={{ color: '#fff', fontWeight: 900, fontSize: '19px', marginBottom: '10px' }}>出店コネクトナビ</div>
               <p style={{ fontSize: '13px', color: '#8fa6bd' }}>キッチンカーと、場所をつなぐ。</p>
+              <a href='https://www.instagram.com/connect.navi/' target='_blank' rel='noopener noreferrer' aria-label='Instagram' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '14px', color: '#cfdae6', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
+                <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+                  <rect x='2' y='2' width='20' height='20' rx='5' />
+                  <circle cx='12' cy='12' r='4.5' />
+                  <circle cx='17.5' cy='6.5' r='1.3' fill='currentColor' stroke='none' />
+                </svg>
+                Instagram
+              </a>
             </div>
             <div style={{ display: 'flex', gap: '44px', flexWrap: 'wrap' }}>
               <div className='top3-footcol'>
