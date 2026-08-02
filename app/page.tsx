@@ -390,14 +390,22 @@ export default function Home() {
             <div>
               <div className={maru.className} style={{ color: '#2f5f43', fontWeight: 900, fontSize: '19px', marginBottom: '10px' }}>出店コネクトナビ</div>
               <p style={{ fontSize: '13px', color: '#6f8a7b' }}>キッチンカーと、場所をつなぐ。</p>
-              <a href='https://www.instagram.com/connect.navi/' target='_blank' rel='noopener noreferrer' aria-label='Instagram' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '14px', color: '#3d5a4a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
-                <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
-                  <rect x='2' y='2' width='20' height='20' rx='5' />
-                  <circle cx='12' cy='12' r='4.5' />
-                  <circle cx='17.5' cy='6.5' r='1.3' fill='currentColor' stroke='none' />
-                </svg>
-                Instagram
-              </a>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap', marginTop: '14px' }}>
+                <a href='https://www.instagram.com/connect.navi/' target='_blank' rel='noopener noreferrer' aria-label='Instagram' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#3d5a4a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
+                  <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+                    <rect x='2' y='2' width='20' height='20' rx='5' />
+                    <circle cx='12' cy='12' r='4.5' />
+                    <circle cx='17.5' cy='6.5' r='1.3' fill='currentColor' stroke='none' />
+                  </svg>
+                  Instagram
+                </a>
+                <a href='https://lin.ee/Z0ddEjT' target='_blank' rel='noopener noreferrer' aria-label='公式LINEでお問い合わせ' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#3d5a4a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
+                  <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+                    <path d='M12 3.8c-5.1 0-9.2 3.2-9.2 7.2 0 3.6 3.3 6.6 7.7 7.1.3.1.6.2.7.4.1.2.1.5 0 .8l-.3 1.6c-.1.4.2.7.6.5 2.6-1.1 5-2.7 7-4.8 1.7-1.7 2.7-3.5 2.7-5.6 0-4-4.1-7.2-9.2-7.2z' />
+                  </svg>
+                  公式LINE
+                </a>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '44px', flexWrap: 'wrap' }}>
               <div className='top3-footcol'>
