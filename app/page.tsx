@@ -33,6 +33,7 @@ type NewPlace = {
   image_url: string | null
   posted_at: string | null
   schedule: { date: string }[] | null
+  open_days: string[] | null
   applications: { count: number }[]
 }
 type WorkPlace = { id: string; title: string; image_url: string | null }
@@ -67,12 +68,16 @@ const secHead: React.CSSProperties = { display: 'flex', alignItems: 'center', ju
 const h2Style: React.CSSProperties = { fontSize: 'clamp(22px,3.2vw,29px)', fontWeight: 900, lineHeight: 1.3 }
 const moreStyle: React.CSSProperties = { color: '#1b3a5c', textDecoration: 'none', fontWeight: 700, fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }
 
-// schedule から表示用日付を作る（日付なしは「日程調整中」）
-function scheduleText(s: { date: string }[] | null): string {
+// 表示用の日程。schedule（構造化）が無ければ旧サイトから移行した
+// open_days のテキストを使い、それも無ければ「日程調整中」。
+function scheduleText(s: { date: string }[] | null, openDays?: string[] | null): string {
   const dates = (Array.isArray(s) ? s : []).map(d => d?.date).filter(Boolean).sort()
-  if (dates.length === 0) return '日程調整中'
-  const fmt = (d: string) => d.replaceAll('-', '/')
-  return dates.length === 1 ? fmt(dates[0]) : fmt(dates[0]) + ' ほか' + (dates.length - 1) + '日程'
+  if (dates.length > 0) {
+    const fmt = (d: string) => d.replaceAll('-', '/')
+    return dates.length === 1 ? fmt(dates[0]) : fmt(dates[0]) + ' ほか' + (dates.length - 1) + '日程'
+  }
+  const text = (openDays || []).map(x => (x || '').trim()).filter(Boolean)[0]
+  return text || '日程調整中'
 }
 
 // バッジ: 急募(開催7日以内) > 人気(応募5件以上) > 新着(掲載14日以内)
@@ -103,7 +108,7 @@ export default function Home() {
     const loadNew = async () => {
       const { data } = await supabase
         .from('places')
-        .select('id,title,prefecture,image_url,posted_at,schedule,applications(count)')
+        .select('id,title,prefecture,image_url,posted_at,schedule,open_days,applications(count)')
         .eq('status', 'published')
         .order('pinned', { ascending: false })
         .order('posted_at', { ascending: false })
@@ -209,7 +214,7 @@ export default function Home() {
                   <div style={{ padding: '12px 14px' }}>
                     <div className={maru.className} style={{ fontSize: '15px', fontWeight: 900, lineHeight: 1.4, marginBottom: '8px', minHeight: '42px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</div>
                     <div style={{ fontSize: '12px', color: C.muted, marginBottom: '3px' }}>📍 {p.prefecture || 'エリア未設定'}</div>
-                    <div style={{ fontSize: '12px', color: C.muted, marginBottom: '12px' }}>{scheduleText(p.schedule)}</div>
+                    <div style={{ fontSize: '12px', color: C.muted, marginBottom: '12px' }}>{scheduleText(p.schedule, p.open_days)}</div>
                     <Link href={'/places/' + p.id} className='top3-cardbtn' style={{ display: 'block', textAlign: 'center', border: '1.5px solid ' + C.navy, color: C.navy, textDecoration: 'none', fontWeight: 700, fontSize: '13px', padding: '8px', borderRadius: '8px' }}>詳細を見る →</Link>
                   </div>
                 </div>

@@ -25,6 +25,7 @@ type Place = {
   map_url: string | null
   recruit: string | null
   schedule: { date: string, start: string, end: string }[] | null
+  open_days: string[] | null
   image_url: string | null
   latitude: number | null
   longitude: number | null
@@ -143,9 +144,10 @@ export default function PlaceDetail() {
   }
 
   const tag = place.place_type === 'event' ? 'イベント' : '常設'
-  const scheduleText = place.schedule && place.schedule.length > 0
+  // 構造化された日程が無い案件は、旧サイトから移行した日程テキストを表示する
+  const scheduleText = place.schedule && place.schedule.filter(d => d.date).length > 0
     ? place.schedule.filter(d => d.date).map(d => d.date + ' ' + d.start + '〜' + d.end).join(' / ')
-    : '要相談'
+    : ((place.open_days || []).map(x => (x || '').trim()).filter(Boolean)[0] || '要相談')
 
   return (
     <>
