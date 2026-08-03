@@ -222,7 +222,7 @@ export default function Home() {
       <div style={{ ...wrap, padding: '36px 20px' }}>
         <div className='top3-stats'>
           {([
-            { img: '/ic-member.png', num: '3,000+', label: '登録出店者' },
+            { img: '/ic-chef.png', num: '3,000+', label: '登録出店者' },
             { img: '/ic-pin.png', num: '200+', label: '出店場所' },
             { img: '/ic-phone.png', num: '2,000+', label: 'LINE登録' },
             { img: '/ic-globe.png', num: '全国対応', label: '対応エリア拡大中', small: true },
@@ -354,7 +354,7 @@ export default function Home() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
                 <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900 }}>よくある質問</h2>
-                <img src='/ic-member.png' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
+                <img src='/ic-mikan.png' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
               </div>
               {([
                 { q: '登録に費用はかかりますか？', a: '会員登録・案件の閲覧・応募はすべて無料です。出店が決定した際の手数料については、案件ごとにご案内しています。', open: true },
