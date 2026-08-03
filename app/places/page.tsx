@@ -47,7 +47,8 @@ export default function PlacesPage() {
   const [places, setPlaces] = useState<Place[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [isSeller, setIsSeller] = useState(false)
+  // 料金はログイン済みなら表示する（出店者・募集者・管理者いずれも）
+  const [canSeeFee, setCanSeeFee] = useState(false)
   const [kw, setKw] = useState('')
   const [pref, setPref] = useState('')
   const [genre, setGenre] = useState('')
@@ -67,10 +68,7 @@ const [showMap, setShowMap] = useState(false)
 
   const checkSeller = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (prof?.role === 'seller') setIsSeller(true)
-    }
+    if (user) setCanSeeFee(true)
   }
 
   useEffect(() => {
@@ -164,7 +162,7 @@ const [showMap, setShowMap] = useState(false)
               <div style={{padding:'20px'}}>
                 <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'8px'}}>{place.title}</div>
                 {place.prefecture && <div style={{fontSize:'13px',color:'#111',marginBottom:'6px'}}>📍 {place.prefecture}</div>}
-                <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{isSeller ? feeText(place) : '🔒 ログイン後表示'}</div>
+                <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{canSeeFee ? feeText(place) : '🔒 ログイン後表示'}</div>
                 <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
                   <span style={{background:'#EBF6FD',color:'#1565C0',fontSize:'11px',padding:'3px 8px',borderRadius:'4px'}}>🏪 {place.place_type==='event'?'イベント':'常設'}</span>
                 </div>
