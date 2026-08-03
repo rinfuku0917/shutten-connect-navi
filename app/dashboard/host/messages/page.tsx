@@ -3,38 +3,88 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 type DbMessage = { id: string, application_id: string, sender_id: string | null, body: string, sent_at: string, file_url?: string | null }
+// 申込1件＝やり取り1スレッド。どの案件・どの出店者かが分かるようにまとめて持つ
+type Thread = { applicationId: string, placeTitle: string, sellerName: string, applyDate: string | null, status: string, lastBody: string, lastAt: string | null }
+
+const STATUS_LABEL: Record<string, { label: string, color: string, bg: string }> = {
+  pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' },
+  approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' },
+  rejected: { label: '否認', color: '#DC2626', bg: '#FEE2E2' },
+}
 
 export default function HostMessages() {
+  const [threads, setThreads] = useState<Thread[]>([])
   const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
-  const [myId, setMyId] = useState<string|null>(null)
-  const [appId, setAppId] = useState<string|null>(null)
+  const [myId, setMyId] = useState<string | null>(null)
+  const [appId, setAppId] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
-  const [chatOpen, setChatOpen] = useState(false)
   const [msgFile, setMsgFile] = useState<File | null>(null)
   const [msgUploading, setMsgUploading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  const loadMessages = async () => {
+  // 自分が募集している案件への申込を、すべてスレッドとして読み込む
+  const loadThreads = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setLoading(false); return }
     setMyId(user.id)
-    const { data: places } = await supabase
-      .from('places').select('id').eq('host_id', user.id)
+
+    const { data: places } = await supabase.from('places').select('id, title').eq('host_id', user.id)
     const placeIds = (places || []).map(p => p.id)
-    if (placeIds.length === 0) { setDbMessages([]); setAppId(null); return }
+    if (placeIds.length === 0) { setThreads([]); setLoading(false); return }
+    const titleOf = new Map((places || []).map(p => [p.id, p.title as string]))
+
     const { data: apps } = await supabase
-      .from('applications').select('id')
+      .from('applications')
+      .select('id, place_id, seller_id, apply_date, status')
       .in('place_id', placeIds)
-      .order('apply_date', { ascending: false }).limit(1)
-    const firstAppId = apps && apps[0] ? apps[0].id : null
-    setAppId(firstAppId)
-    if (!firstAppId) { setDbMessages([]); return }
-    const { data: messages } = await supabase
-      .from('messages').select('id, application_id, sender_id, body, sent_at, file_url')
-      .eq('application_id', firstAppId).order('sent_at', { ascending: true })
-    setDbMessages(messages || [])
+      .order('apply_date', { ascending: false })
+    if (!apps || apps.length === 0) { setThreads([]); setLoading(false); return }
+
+    // 出店者名をまとめて引く
+    const sellerIds = Array.from(new Set(apps.map(a => a.seller_id).filter(Boolean)))
+    const nameOf = new Map<string, string>()
+    if (sellerIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('id, shop_name, name').in('id', sellerIds)
+      for (const p of profs || []) nameOf.set(p.id, p.shop_name || p.name || '（名称未設定）')
+    }
+
+    // 各スレッドの最新メッセージ
+    const appIds = apps.map(a => a.id)
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('id, application_id, sender_id, body, sent_at, file_url')
+      .in('application_id', appIds)
+      .order('sent_at', { ascending: true })
+    const lastOf = new Map<string, DbMessage>()
+    for (const m of (msgs || []) as DbMessage[]) lastOf.set(m.application_id, m)
+
+    const built: Thread[] = apps.map(a => {
+      const last = lastOf.get(a.id)
+      return {
+        applicationId: a.id,
+        placeTitle: titleOf.get(a.place_id) || '(案件名なし)',
+        sellerName: nameOf.get(a.seller_id) || '出店者',
+        applyDate: a.apply_date || null,
+        status: a.status,
+        lastBody: last ? (last.body || '📎 添付ファイル') : 'メッセージはまだありません',
+        lastAt: last ? last.sent_at : null,
+      }
+    })
+    // やり取りがあるスレッドを上に、その中でも新しい順に並べる
+    built.sort((x, y) => (y.lastAt || '').localeCompare(x.lastAt || ''))
+    setThreads(built)
+    setLoading(false)
   }
 
-  useEffect(() => { loadMessages(); setChatOpen(true) }, [])
+  const openThread = async (id: string) => {
+    setAppId(id)
+    const { data } = await supabase
+      .from('messages').select('id, application_id, sender_id, body, sent_at, file_url')
+      .eq('application_id', id).order('sent_at', { ascending: true })
+    setDbMessages((data || []) as DbMessage[])
+  }
+
+  useEffect(() => { loadThreads() }, [])
 
   // 添付ファイルを表示する（画像はインライン、それ以外はリンク）
   const renderAttachment = (filePath: string, isMine: boolean) => {
@@ -55,7 +105,10 @@ export default function HostMessages() {
 
   const sendMessage = async () => {
     const text = msg.trim()
-    if ((!text && !msgFile) || !appId || !myId) return
+    if (!text && !msgFile) return
+    // 送り先が決まっていないまま押されたときは、黙って何もしないのではなく理由を伝える
+    if (!appId) { alert('先に左のリストからやり取りする案件を選んでください。'); return }
+    if (!myId) { alert('ログイン情報を確認できませんでした。再度ログインしてください。'); return }
     setMsgUploading(true)
     let fileUrl: string | null = null
     if (msgFile) {
@@ -82,29 +135,51 @@ export default function HostMessages() {
     setMsg('')
     setMsgFile(null)
     setMsgUploading(false)
-    loadMessages()
+    openThread(appId)
+    loadThreads()
   }
+
+  const current = threads.find(t => t.applicationId === appId) || null
 
   return (
     <div style={{ padding: '20px 24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a1a', margin: 0 }}>メッセージ</h1>
       </div>
-      <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', minHeight: '520px', overflow: 'hidden' }}>
-        <div style={{ width: '260px', borderRight: '1px solid #E2E8F0', flexShrink: 0 }}>
-          <div style={{ padding: '12px 14px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', color: '#F5A623', background: '#FFF8E1' }}>メッセージ</div>
-          <div onClick={() => setChatOpen(true)}
-            style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: chatOpen ? '#FFF8E1' : '#fff', borderLeft: chatOpen ? '3px solid #F5A623' : '3px solid transparent' }}>
-            <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a1a1a' }}>出店者とのやり取り</div>
-            <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {dbMessages.length > 0 ? dbMessages[dbMessages.length - 1].body : 'メッセージはまだありません'}
+      <div className='admin-two-col' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'grid', gridTemplateColumns: '280px 1fr', minHeight: '520px', overflow: 'hidden' }}>
+        <div style={{ borderRight: '1px solid #E2E8F0', minWidth: 0 }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', color: '#F5A623', background: '#FFF8E1' }}>申込一覧</div>
+          {loading ? (
+            <div style={{ padding: '24px 14px', textAlign: 'center', color: '#999', fontSize: '12px' }}>読み込み中...</div>
+          ) : threads.length === 0 ? (
+            <div style={{ padding: '24px 14px', textAlign: 'center', color: '#999', fontSize: '12px', lineHeight: 1.8 }}>
+              まだ申込がありません。<br />出店者から申込が入ると、ここでやり取りできます。
             </div>
-          </div>
+          ) : threads.map(t => {
+            const st = STATUS_LABEL[t.status] || { label: t.status, color: '#64748B', bg: '#F1F5F9' }
+            const on = appId === t.applicationId
+            return (
+              <div key={t.applicationId} onClick={() => openThread(t.applicationId)}
+                style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: on ? '#FFF8E1' : '#fff', borderLeft: on ? '3px solid #F5A623' : '3px solid transparent' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.sellerName}</span>
+                  <span style={{ background: st.bg, color: st.color, borderRadius: '4px', padding: '1px 6px', fontSize: '10px', fontWeight: '700', flexShrink: 0 }}>{st.label}</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {t.placeTitle}{t.applyDate ? '（' + t.applyDate.slice(5).replace('-', '/') + '）' : ''}
+                </div>
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.lastBody}</div>
+              </div>
+            )
+          })}
         </div>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          {chatOpen ? (
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          {current ? (
             <>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', color: '#1a1a1a' }}>出店者とのやり取り</div>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', color: '#1a1a1a' }}>
+                {current.sellerName}
+                <span style={{ fontSize: '11px', fontWeight: '400', color: '#64748B', marginLeft: '8px' }}>{current.placeTitle}</span>
+              </div>
               <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {dbMessages.length === 0 ? (
                   <div style={{ color: '#94A3B8', textAlign: 'center', marginTop: '40px' }}>まだメッセージがありません</div>
@@ -134,7 +209,9 @@ export default function HostMessages() {
               </div>
             </>
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>メッセージを選択してください</div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '13px', padding: '24px', textAlign: 'center' }}>
+              {threads.length === 0 ? '申込が入るとここに表示されます' : '左のリストから案件を選んでください'}
+            </div>
           )}
         </div>
       </div>

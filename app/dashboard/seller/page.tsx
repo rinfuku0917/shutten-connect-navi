@@ -600,7 +600,10 @@ export default function SellerDashboard() {
   // メッセージを送信する
   const sendMessage = async () => {
     const text = msg.trim()
-    if ((!text && !msgFile) || !appId || !myId) return
+    if (!text && !msgFile) return
+    // 送り先が決まっていないまま押されたときは、黙って何もしないのではなく理由を伝える
+    if (!appId) { alert('先に左のリストからやり取りする案件を選んでください。'); return }
+    if (!myId) { alert('ログイン情報を確認できませんでした。再度ログインしてください。'); return }
     setMsgUploading(true)
     let fileUrl = null
     if (msgFile) {

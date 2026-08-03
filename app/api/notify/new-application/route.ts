@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       '希望日程: ' + dateList,
       '',
       'ダッシュボードで詳細を確認し、ご対応ください。',
-      'https://shutten-connect-navi-bakv.vercel.app/dashboard/host',
+      'https://app.connect-navi.com/dashboard/host',
     ].join('\n')
 
     const resend = new Resend(apiKey)

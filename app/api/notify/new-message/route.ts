@@ -68,8 +68,8 @@ export async function POST(req: Request) {
     }
 
     const dashUrl = recipientIsHost
-      ? 'https://shutten-connect-navi-bakv.vercel.app/dashboard/host/messages'
-      : 'https://shutten-connect-navi-bakv.vercel.app/dashboard/seller'
+      ? 'https://app.connect-navi.com/dashboard/host/messages'
+      : 'https://app.connect-navi.com/dashboard/seller'
 
     const subject = '【出店コネクトナビ】「' + placeTitle + '」に新しいメッセージが届きました'
     const text = [
