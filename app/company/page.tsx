@@ -23,7 +23,7 @@ export default function CompanyPage() {
     <div style={{ minHeight: '100vh', background: '#FFF9E6', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
       <SiteHeader />
 
-      <div style={{ background: 'linear-gradient(135deg, #F5A623, #E8820C)', padding: '48px 16px', textAlign: 'center' }}>
+      <div style={{ background: 'linear-gradient(rgba(20,41,63,.55), rgba(20,41,63,.55)), url(/hero-company.jpg) center/cover no-repeat', padding: '72px 16px', textAlign: 'center' }}>
         <h1 style={{ fontSize: 'clamp(24px,5vw,36px)', fontWeight: 900, color: '#fff', margin: 0, textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>会社概要</h1>
         <p style={{ fontSize: '14px', color: '#fff', marginTop: '10px', opacity: 0.95 }}>出店コネクトナビの運営会社情報</p>
       </div>

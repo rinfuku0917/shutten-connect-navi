@@ -64,7 +64,7 @@ export default async function SellersPage() {
             {errorMessage ? '読み込みに失敗しました' : `全 ${sellers.length.toLocaleString()} 店舗から探す`}
           </p>
           </div>
-          <img src="/ic-truck.png" alt="" className="hidden h-24 w-24 shrink-0 object-contain sm:block" />
+          <img src="/ic2-truck.png" alt="" className="hidden h-24 w-auto shrink-0 object-contain sm:block" />
         </header>
 
         {errorMessage ? (

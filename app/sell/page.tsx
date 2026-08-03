@@ -5,10 +5,10 @@ import SiteFooter from '../components/SiteFooter'
 
 export default function SellPage() {
   const features = [
-    {icon:'🚗',title:'無料で掲載',desc:'車両の掲載は完全無料です'},
-    {icon:'📸',title:'写真で魅力を伝える',desc:'複数枚の写真を掲載できます'},
-    {icon:'💬',title:'直接交渉',desc:'買い手と直接メッセージでやり取り'},
-    {icon:'✅',title:'安心取引',desc:'本人確認済みユーザーのみ'},
+    {img:'/ic2-truck.png',title:'無料で掲載',desc:'車両の掲載は完全無料です'},
+    {img:'/ic2-camera.png',title:'写真で魅力を伝える',desc:'複数枚の写真を掲載できます'},
+    {img:'/ic2-message.png',title:'直接交渉',desc:'買い手と直接メッセージでやり取り'},
+    {img:'/ic2-deal.png',title:'安心取引',desc:'本人確認済みユーザーのみ'},
   ]
   return (
     <div>
@@ -26,7 +26,7 @@ export default function SellPage() {
           <div className='grid-auto' style={{gap:'20px',marginTop:'32px'}}>
             {features.map(f => (
               <div key={f.title} style={{background:'#FFF9F0',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px',textAlign:'center'}}>
-                <div style={{fontSize:'36px',marginBottom:'10px'}}>{f.icon}</div>
+                <img src={f.img} alt='' style={{height:'80px',width:'auto',maxWidth:'100%',objectFit:'contain',margin:'0 auto 12px',display:'block'}} />
                 <div style={{fontWeight:'900',fontSize:'15px',marginBottom:'8px',color:'#1a1a1a'}}>{f.title}</div>
                 <div style={{fontSize:'12px',color:'#111',lineHeight:1.7}}>{f.desc}</div>
               </div>
