@@ -73,9 +73,14 @@ export default function SiteHeader() {
             {menuItems.map(m => (
               <Link key={m.href} href={m.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>{m.label}</Link>
             ))}
-            {authChecked && role
-              ? <Link href={myPage} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.goldDeep, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>マイページ</Link>
-              : <Link href='/register' onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.goldDeep, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>無料で会員登録</Link>}
+            {authChecked && role ? (
+              <Link href={myPage} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.goldDeep, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>マイページ</Link>
+            ) : (
+              <>
+                <Link href='/login' onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>ログイン</Link>
+                <Link href='/register' onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.goldDeep, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>無料で会員登録</Link>
+              </>
+            )}
           </div>
         </div>
       )}
