@@ -497,11 +497,21 @@ export default function AdminPage() {
     setPubReqs((data || []) as PubReq[])
     setPubLoading(false)
   }
+  // profiles には管理者用の UPDATE ポリシーが無く、クライアントから直接更新すると
+  // RLS に無言で弾かれる（エラーも出ず0件更新になる）ため、サービスロールのAPI経由で更新する
   const setApproval = async (id: string, status: 'approved' | 'rejected') => {
-    const patch: { approval_status: string, approved_at?: string | null } = { approval_status: status }
-    if (status === 'approved') patch.approved_at = new Date().toISOString()
-    const { error } = await supabase.from('profiles').update(patch).eq('id', id)
-    if (error) { alert('更新失敗: ' + error.message); return }
+    if (!adminUid) { alert('認証情報がありません。再ログインしてください'); return }
+    try {
+      const res = await fetch('/api/admin/set-approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId: adminUid, targetId: id, status }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { alert('更新失敗: ' + (json.error || res.status)); return }
+    } catch (e) {
+      alert('通信エラーが発生しました'); return
+    }
     loadPubReqs()
   }
 
@@ -1391,7 +1401,7 @@ const previewDoc = async (fileUrl: string) => {
                   {r.approval_status === 'rejected' && <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', background: '#FEE2E2', color: '#DC2626', flexShrink: 0 }}>非承認</span>}
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button onClick={() => window.open('/sellers/' + r.id, '_blank')} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>プレビュー</button>
+                  <a href={'/sellers/' + r.id} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>プレビュー</a>
                   <button onClick={() => setApproval(r.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>承認して公開</button>
                   {r.approval_status === 'pending' && <button onClick={() => { if (window.confirm('この申請を非承認にしますか？')) setApproval(r.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>非承認</button>}
                 </div>
