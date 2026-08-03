@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
@@ -24,7 +26,9 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FFF8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div style={{ minHeight: '100vh', background: '#FFF8F0', display: 'flex', flexDirection: 'column' }}>
+      <SiteHeader />
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px' }}>
       <div style={{ background: '#fff', borderRadius: '16px', padding: '32px 24px', maxWidth: '420px', width: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
         <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#B45309', marginBottom: '8px', textAlign: 'center' }}>パスワードの再設定</h1>
 
@@ -64,6 +68,8 @@ export default function ResetPasswordPage() {
           </>
         )}
       </div>
+      </div>
+      <SiteFooter />
     </div>
   )
 }

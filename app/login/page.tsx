@@ -82,7 +82,7 @@ export default function LoginPage() {
               <Link href='/register' style={{color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>新規会員登録はこちら</Link>
             </div>
             <div style={{textAlign:'center',fontSize:'12px'}}>
-              <a href='#' style={{color:'#999',textDecoration:'none'}}>パスワードをお忘れの方</a>
+              <Link href='/reset-password' style={{color:'#999',textDecoration:'none'}}>パスワードをお忘れの方</Link>
             </div>
           </div>
         </div>
