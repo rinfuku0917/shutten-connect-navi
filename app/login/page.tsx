@@ -2,6 +2,8 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
@@ -45,6 +47,7 @@ export default function LoginPage() {
 
   return (
     <div style={{minHeight:'100vh',width:'100%',maxWidth:'100vw',overflowX:'hidden',background:'#f6f6f6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif',display:'flex',flexDirection:'column'}}>
+      <SiteHeader />
       
       <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px',overflowY:'auto'}}>
         <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #e0e0e0',boxShadow:'0 4px 16px rgba(0,0,0,0.08)',width:'100%',maxWidth:'420px',overflow:'hidden'}}>
@@ -84,6 +87,7 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   )
 }

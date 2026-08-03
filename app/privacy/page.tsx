@@ -68,7 +68,6 @@ export default function PrivacyPage() {
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '32px' }}>
-          <Link href="/" style={{ display: 'inline-block', padding: '12px 28px', borderRadius: '10px', background: '#F5A623', color: '#fff', fontSize: '14px', fontWeight: 700, textDecoration: 'none' }}>トップへ戻る</Link>
         </div>
       </div>
 

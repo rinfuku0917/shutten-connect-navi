@@ -57,7 +57,6 @@ export default function ContactPage() {
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
             <h2 style={{ fontSize: '20px', fontWeight: 900, color: '#1a1a1a', marginBottom: '12px' }}>送信が完了しました</h2>
             <p style={{ fontSize: '14px', color: '#555', lineHeight: 1.8, marginBottom: '24px' }}>お問い合わせありがとうございます。<br />内容を確認のうえ、担当者よりご連絡いたします。</p>
-            <Link href="/" style={{ display: 'inline-block', padding: '12px 28px', borderRadius: '10px', background: '#F5A623', color: '#fff', fontSize: '14px', fontWeight: 700, textDecoration: 'none' }}>トップへ戻る</Link>
           </div>
         ) : (
           <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', padding: '32px 24px' }}>

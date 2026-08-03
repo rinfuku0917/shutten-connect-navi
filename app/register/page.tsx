@@ -2,6 +2,8 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 const AREA_GROUPS: { region: string, prefs: string[] }[] = [
   { region: '関東', prefs: ['東京','神奈川','千葉','埼玉','茨城','群馬','栃木'] },
@@ -88,6 +90,7 @@ export default function RegisterPage() {
 
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif',display:'flex',flexDirection:'column'}}>
+      <SiteHeader />
       <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px'}}>
         <div style={{background:'#fff',borderRadius:'16px',border:'2px solid #FFE0A0',boxShadow:'0 4px 20px rgba(245,166,35,0.15)',width:'100%',maxWidth:'520px',padding:'36px'}}>
           <h1 style={{fontSize:'22px',fontWeight:'900',marginBottom:'24px',textAlign:'center',color:'#1a1a1a'}}>無料会員登録</h1>
@@ -161,11 +164,9 @@ export default function RegisterPage() {
           <div style={{textAlign:'center',fontSize:'13px',color:'#888'}}>
             すでにアカウントをお持ちの方は <Link href='/login' style={{color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>ログイン</Link>
           </div>
-          <div style={{textAlign:'center',marginTop:'20px'}}>
-            <Link href='/' style={{display:'inline-flex',alignItems:'center',gap:'8px',border:'1.5px solid #E5E7EB',color:'#555',borderRadius:'999px',padding:'10px 22px',fontSize:'13px',fontWeight:700,textDecoration:'none'}}>↑ トップページに戻る</Link>
-          </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   )
 }
