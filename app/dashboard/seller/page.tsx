@@ -43,8 +43,6 @@ const messages = [
   { id: '3', from: 'イオンモール富谷', msg: '今回はご応募いただきありがとうございました。', time: '2日前', unread: false },
 ]
 
-const calDates: { date: string; status: string; place?: string; color: string; border: string; text: string }[] = []
-
 const docTypes = [
   { key: 'license_front', name: '運転免許証（表面）', required: true },
   { key: 'license_back', name: '運転免許証（裏面）', required: true },
@@ -74,6 +72,8 @@ export default function SellerDashboard() {
   const [unread, setUnread] = useState(0)
   type MyApply = { id: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
+  // カレンダーの表示月。今月を初期値にし、‹ › で前後の月に移動できる
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   type DocRow = { id: string, doc_type: string, file_url: string, status: string, expiry_date: string | null }
   const [myDocs, setMyDocs] = useState<DocRow[]>([])
   const [uploadingType, setUploadingType] = useState<string | null>(null)
@@ -808,7 +808,7 @@ export default function SellerDashboard() {
           {tab === 'calendar' && (
             <>
               <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                {[{ label: '承認済', color: '#16A34A', bg: '#ECFDF5' }, { label: '審査中', color: '#92400E', bg: '#FEF3C7' }, { label: '否認', color: '#DC2626', bg: '#FEE2E2' }, { label: '申込可', color: '#92400E', bg: '#FFF8E1' }].map(l => (
+                {[{ label: '承認済', color: '#16A34A', bg: '#ECFDF5' }, { label: '審査中', color: '#92400E', bg: '#FEF3C7' }, { label: '否認', color: '#DC2626', bg: '#FEE2E2' }].map(l => (
                   <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: l.bg, border: `1px solid ${l.color}` }}></div>
                     {l.label}
@@ -816,28 +816,66 @@ export default function SellerDashboard() {
                 ))}
               </div>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <button style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>‹</button>
-                  <div style={{ fontWeight: '700', fontSize: '16px' }}>2026年6月</div>
-                  <button style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>›</button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '6px' }}>
-                  {['日','月','火','水','木','金','土'].map((d,i) => (
-                    <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: '700', color: i===0?'#DC2626':i===6?'#1D4ED8':'#64748B', padding: '6px 0' }}>{d}</div>
-                  ))}
-                  {Array.from({length:6}).map((_,i) => <div key={i} style={{ minHeight: '60px' }}></div>)}
-                  {Array.from({length:30}).map((_,i) => {
-                    const d = i+1
-                    const found = calDates.find(c => parseInt(c.date.split('/')[1]) === d)
-                    const dow = (i+6)%7
-                    return (
-                      <div key={d} style={{ minHeight: '60px', borderRadius: '8px', border: `1px solid ${found ? found.border : '#E2E8F0'}`, background: found ? found.color : '#fff', padding: '5px', cursor: found?.status === '申込可' ? 'pointer' : 'default' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', color: dow===0?'#DC2626':dow===6?'#1D4ED8':'#333', marginBottom: '3px' }}>{d}</div>
-                        {found && <div style={{ fontSize: '9px', fontWeight: '700', color: found.text, lineHeight: 1.3 }}>{found.status}{found.place && <><br/>{found.place}</>}</div>}
+                {(() => {
+                  const { y, m } = calMonth
+                  const shift = (n: number) => { const d = new Date(y, m + n, 1); setCalMonth({ y: d.getFullYear(), m: d.getMonth() }) }
+                  const firstDow = new Date(y, m, 1).getDay()
+                  const daysInMonth = new Date(y, m + 1, 0).getDate()
+                  const pad = (n: number) => String(n).padStart(2, '0')
+                  const keyOf = (d: number) => `${y}-${pad(m + 1)}-${pad(d)}`
+                  const today = todayStr()
+
+                  // 申込を日付ごとにまとめる。同じ日に複数件あればすべて表示する
+                  const byDate = new Map<string, MyApply[]>()
+                  for (const a of myApplies) {
+                    if (!a.rawDate) continue
+                    const list = byDate.get(a.rawDate)
+                    if (list) list.push(a); else byDate.set(a.rawDate, [a])
+                  }
+                  const monthCount = myApplies.filter(a => a.rawDate && a.rawDate.startsWith(`${y}-${pad(m + 1)}`)).length
+
+                  return (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <button onClick={() => shift(-1)} aria-label='前の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>‹</button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ fontWeight: '700', fontSize: '16px' }}>{y}年{m + 1}月</div>
+                          <button onClick={() => { const d = new Date(); setCalMonth({ y: d.getFullYear(), m: d.getMonth() }) }} style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '3px 10px', background: '#fff', cursor: 'pointer', fontSize: '11px', color: '#64748B' }}>今月</button>
+                        </div>
+                        <button onClick={() => shift(1)} aria-label='次の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>›</button>
                       </div>
-                    )
-                  })}
-                </div>
+                      <div style={{ textAlign: 'center', fontSize: '11px', color: '#64748B', marginBottom: '12px' }}>
+                        {monthCount > 0 ? `この月の申込 ${monthCount}件` : 'この月の申込はありません'}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '6px' }}>
+                        {['日','月','火','水','木','金','土'].map((d, i) => (
+                          <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: '700', color: i === 0 ? '#DC2626' : i === 6 ? '#1D4ED8' : '#64748B', padding: '6px 0' }}>{d}</div>
+                        ))}
+                        {Array.from({ length: firstDow }).map((_, i) => <div key={'pad' + i} style={{ minHeight: '60px' }}></div>)}
+                        {Array.from({ length: daysInMonth }).map((_, i) => {
+                          const d = i + 1
+                          const ds = keyOf(d)
+                          const items = byDate.get(ds) || []
+                          const main = items.find(a => a.status === '承認済') || items[0]
+                          const dow = (firstDow + i) % 7
+                          const isToday = ds === today
+                          return (
+                            <div key={d} title={items.map(a => `${a.status}：${a.place}`).join('\n')}
+                              style={{ minHeight: '60px', borderRadius: '8px', border: isToday ? '2px solid #F5A623' : `1px solid ${main ? main.statusColor : '#E2E8F0'}`, background: main ? main.statusBg : '#fff', padding: '5px', overflow: 'hidden' }}>
+                              <div style={{ fontSize: '12px', fontWeight: isToday ? '800' : '600', color: dow === 0 ? '#DC2626' : dow === 6 ? '#1D4ED8' : '#333', marginBottom: '3px' }}>{d}</div>
+                              {items.slice(0, 2).map(a => (
+                                <div key={a.id} style={{ fontSize: '9px', fontWeight: '700', color: a.statusColor, lineHeight: 1.3, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {a.status}<br />{a.place}
+                                </div>
+                              ))}
+                              {items.length > 2 && <div style={{ fontSize: '9px', color: '#64748B' }}>ほか{items.length - 2}件</div>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
               <div style={{ textAlign: 'center' }}>
                 <button onClick={() => window.location.href='/places'} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 28px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>＋ 新しい出店日を申込む</button>
