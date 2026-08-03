@@ -49,9 +49,9 @@ export default async function SellersPage() {
     <div style={{ background: '#FBF7F1', minHeight: '100vh' }}>
       <SiteHeader />
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-        <header className="mb-10 flex items-start justify-between gap-4">
+        <header className="mb-10 flex flex-col items-center justify-center gap-4 text-center sm:flex-row">
           <div>
-          <div className="flex items-center gap-2 text-amber-600">
+          <div className="flex items-center justify-center gap-2 text-amber-600">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z" />
               <circle cx="7" cy="18" r="1.6" />
