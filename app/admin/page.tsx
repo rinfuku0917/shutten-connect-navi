@@ -6,6 +6,18 @@ import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
 
 // ダミーデータ
+// profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
+// そのまま出すと記号ごと画面に出てしまう。表示用に「食事・スイーツ」へ整形する。
+function genreText(v: string[] | string | null): string {
+  if (!v) return ''
+  if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(Boolean).join('・')
+  const t = String(v).trim()
+  if (t.startsWith('[')) {
+    try { const j = JSON.parse(t); if (Array.isArray(j)) return j.map(x => String(x).trim()).filter(Boolean).join('・') } catch { /* 旧い自由入力 */ }
+  }
+  return t
+}
+
 const dummySellers = [
   { id: '1', name: '山田 花子', shop: 'Hana\'s Sweets', email: 'hanako@example.com', phone: '090-1234-5678', genre: '焼き菓子・スイーツ', area: '東京都', sns: '@hana_sweets', status: '承認済', docs: '提出済' },
   { id: '2', name: '田中 健太', shop: 'クラフト工房', email: 'kenta@example.com', phone: '080-2345-6789', genre: 'ハンドメイド雑貨', area: '大阪府', sns: '@craft_kenta', status: '承認済', docs: '提出済' },
@@ -40,7 +52,7 @@ export default function AdminPage() {
       shop: p.shop_name || '',
       email: p.email || '',
       phone: p.phone || '',
-      genre: p.genre || '—',
+      genre: genreText(p.genre) || '—',
       area: Array.isArray(p.areas) && p.areas.length > 0 ? p.areas.join('・') : '—',
       sns: '',
       status: '登録済',
@@ -1395,7 +1407,7 @@ const previewDoc = async (fileUrl: string) => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a1a1a' }}>{r.shop_name || '（店名未登録）'}</div>
-                    <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>{r.genre || 'ジャンル未設定'}{toArr(r.areas).length > 0 ? ' ／ ' + toArr(r.areas).join('・') : ''}</div>
+                    <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>{genreText(r.genre) || 'ジャンル未設定'}{toArr(r.areas).length > 0 ? ' ／ ' + toArr(r.areas).join('・') : ''}</div>
                     <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>申請日時：{r.submitted_at ? new Date(r.submitted_at).toLocaleString('ja-JP') : '—'}</div>
                   </div>
                   {r.approval_status === 'rejected' && <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', background: '#FEE2E2', color: '#DC2626', flexShrink: 0 }}>非承認</span>}

@@ -3,8 +3,32 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import DashboardFooter from '../../components/DashboardFooter'
 
 type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, file_url?: string | null }
+
+// ジャンル＝「何を売るか」。旧サイトから移行した1,300件超が使っている5分類に揃える。
+// profiles.genre は text 型で ["食事","スイーツ"] のようなJSON文字列を保持しており、
+// 出店者一覧の絞り込みもこの値で行うため、保存形式を既存データと合わせること。
+const SELLER_GENRES: { value: string, label: string }[] = [
+  { value: '食事', label: '食事（フード・軽食）' },
+  { value: 'スイーツ', label: 'スイーツ（菓子・デザート）' },
+  { value: 'ドリンク', label: 'ドリンク（カフェ・飲料）' },
+  { value: '物販', label: '物販（雑貨・ハンドメイドなど）' },
+  { value: 'サービス', label: 'サービス（体験・ワークショップなど）' },
+]
+
+// 販売形態＝「どう売るか」。ジャンルとは別の軸なので sales_type に持たせる。
+const SELLER_SALES_TYPES = ['キッチンカー', '店頭出店（実店舗）', 'テント・ブース', '移動販売車', 'その他']
+
+function parseGenres(v: string): string[] {
+  const t = (v || '').trim()
+  if (!t) return []
+  if (t.startsWith('[')) {
+    try { const j = JSON.parse(t); if (Array.isArray(j)) return j.map(x => String(x).trim()).filter(Boolean) } catch { /* 旧い自由入力はカンマ区切りとして扱う */ }
+  }
+  return t.split(/[,、，]/).map(x => x.trim()).filter(Boolean)
+}
 
 const applies = [
   { id: '1', place: '日本体育大学医療専門学校', area: '東京', date: '6月3日（水）', time: '11:00〜16:00', type: 'キッチンカー', plan: '日額固定 5,000円', status: '承認済', statusColor: '#16A34A', statusBg: '#ECFDF5' },
@@ -966,7 +990,7 @@ export default function SellerDashboard() {
                       { label: '店舗名', value: profile.shop_name || '未設定' },
                       { label: 'メール', value: profile.email || '未設定' },
                       { label: '電話番号', value: profile.phone || '未設定' },
-                      { label: 'ジャンル', value: profile.genre || '未設定' },
+                      { label: 'ジャンル', value: parseGenres(profile.genre).join('・') || '未設定' },
                       { label: '活動エリア', value: profile.areas.length > 0 ? profile.areas.join('・') : '未設定' },
                     ].map(fld => (
                       <div key={fld.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
@@ -1110,7 +1134,12 @@ export default function SellerDashboard() {
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>販売形態</div>
-                        <input value={profileForm.sales_type} onChange={e => setProfileForm({ ...profileForm, sales_type: e.target.value })} placeholder='例：キッチンカー' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                        <select value={profileForm.sales_type} onChange={e => setProfileForm({ ...profileForm, sales_type: e.target.value })} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }}>
+                          <option value=''>選択してください</option>
+                          {/* 選択肢に無い既存の値は消えないように先頭に残す */}
+                          {profileForm.sales_type && !SELLER_SALES_TYPES.includes(profileForm.sales_type) && <option value={profileForm.sales_type}>{profileForm.sales_type}</option>}
+                          {SELLER_SALES_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>車種</div>
@@ -1138,22 +1167,28 @@ export default function SellerDashboard() {
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>ジャンル</div>
-                      <select value={profileForm.genre} onChange={e => setProfileForm({ ...profileForm, genre: e.target.value })} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }}>
-                        <option value=''>選択してください</option>
-                        <optgroup label='飲食'>
-                          {['キッチンカー', '移動販売', '菓子・スイーツ', 'ドリンク', '農産物・加工品'].map(g => <option key={g} value={g}>{g}</option>)}
-                        </optgroup>
-                        <optgroup label='物販'>
-                          {['雑貨', 'ハンドメイド', 'アクセサリー', 'アパレル・古着', 'ペット関連'].map(g => <option key={g} value={g}>{g}</option>)}
-                        </optgroup>
-                        <optgroup label='体験'>
-                          {['ワークショップ', '体験型ブース', '占い・セラピー'].map(g => <option key={g} value={g}>{g}</option>)}
-                        </optgroup>
-                        <optgroup label='表現'>
-                          {['パフォーマー', 'アーティスト', 'ライブペイント', '音楽・ライブ'].map(g => <option key={g} value={g}>{g}</option>)}
-                        </optgroup>
-                      </select>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>ジャンル（複数選択できます）</div>
+                      {(() => {
+                        const selected = parseGenres(profileForm.genre)
+                        const toggle = (v: string) => {
+                          const next = selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]
+                          // 既存データと同じ形式（JSON文字列）で保存する
+                          setProfileForm({ ...profileForm, genre: next.length ? JSON.stringify(next) : '' })
+                        }
+                        return (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {SELLER_GENRES.map(g => {
+                              const on = selected.includes(g.value)
+                              return (
+                                <label key={g.value} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', border: on ? '1.5px solid #F5A623' : '1.5px solid #E2E8F0', background: on ? '#FFF8EC' : '#fff', borderRadius: '999px', padding: '6px 12px', fontSize: '12px', color: '#1a1a1a', cursor: 'pointer' }}>
+                                  <input type='checkbox' checked={on} onChange={() => toggle(g.value)} style={{ accentColor: '#F5A623', cursor: 'pointer' }} />
+                                  {g.label}
+                                </label>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div style={{ marginBottom: '12px' }}>
                       <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>活動エリア（「・」や「,」区切りで複数可）</div>
@@ -1225,20 +1260,38 @@ export default function SellerDashboard() {
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上金額（円）</div>
                     <input type='number' value={saleRevenue} onChange={e => setSaleRevenue(e.target.value)} placeholder='50000' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
                   </div>
-                  <div className='sale-field' style={{ flex: '0 1 190px' }}>
-                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>手数料の計算元</div>
+                  <div className='sale-field' style={{ flex: '1 1 230px' }}>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>消費税の扱い（通常は変更不要）</div>
                     <select value={saleTaxOv} onChange={e => setSaleTaxOv(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', background: '#fff' }}>
-                      <option value=''>案件の設定に従う</option>
-                      <option value='as_entered'>入力金額そのまま</option>
-                      <option value='ex8'>税抜に換算（8%）</option>
-                      <option value='ex10'>税抜に換算（10%）</option>
+                      <option value=''>案件の設定どおりに計算する（推奨）</option>
+                      <option value='as_entered'>入力した金額をそのまま使う</option>
+                      <option value='ex8'>入力額は税込。消費税8%を差し引いて計算する</option>
+                      <option value='ex10'>入力額は税込。消費税10%を差し引いて計算する</option>
                     </select>
                   </div>
                   <button onClick={saveMySale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
-                {saleAppId && (() => { const a = myApprovedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const fee = calcFee(rev, a, saleTaxOv).total; return (
-                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B' }}>売上{rev.toLocaleString()}円 − 出店料{fee.toLocaleString()}円（税別・出店コネクトナビへ）＝ あなたの利益 <strong style={{ color: '#16A34A' }}>{(rev - fee).toLocaleString()}円</strong></div>
-                ) })()}
+                <div style={{ marginTop: '8px', fontSize: '11px', color: '#94A3B8', lineHeight: 1.7 }}>
+                  売上金額は、レジの合計（お客様からお預かりした金額）をそのまま入力してください。消費税をどう扱うかは案件ごとに決まっているため、通常は「案件の設定どおりに計算する」のままで問題ありません。
+                </div>
+                {saleAppId && (() => {
+                  const a = myApprovedApps.find(x => x.application_id === saleAppId); if (!a) return null
+                  const rev = parseInt(saleRevenue || '0', 10) || 0
+                  const fee = calcFee(rev, a, saleTaxOv).total
+                  // 出店料が何を元に計算されたかを明示する（計算自体は calcFee に任せる）
+                  const { basis, rate } = taxOf(a, saleTaxOv)
+                  const exTax = basis === 'tax_excluded'
+                  const base = exTax ? Math.floor(rev / (1 + rate / 100)) : rev
+                  return (
+                    <div style={{ marginTop: '12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px', fontSize: '12px', color: '#475569', lineHeight: 1.9 }}>
+                      <div>入力した売上：<strong>{rev.toLocaleString()}円</strong></div>
+                      {exTax && <div>出店料の計算元：<strong>{base.toLocaleString()}円</strong>（税込{rev.toLocaleString()}円から消費税{rate}%分を差し引いた税抜金額）</div>}
+                      {!exTax && <div>出店料の計算元：<strong>{base.toLocaleString()}円</strong>（入力した金額をそのまま使用）</div>}
+                      <div>出店料（出店コネクトナビへのお支払い・税別）：<strong>{fee.toLocaleString()}円</strong></div>
+                      <div style={{ borderTop: '1px solid #E2E8F0', marginTop: '6px', paddingTop: '6px' }}>あなたの利益（手取り）：<strong style={{ color: '#16A34A', fontSize: '14px' }}>{(rev - fee).toLocaleString()}円</strong></div>
+                    </div>
+                  )
+                })()}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '14px', marginBottom: '20px' }}>
@@ -1289,6 +1342,8 @@ export default function SellerDashboard() {
             </>
           )}
         </div>
+
+        <DashboardFooter />
       </div>
     </div>
   )

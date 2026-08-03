@@ -40,6 +40,30 @@ export default function RegisterPage() {
     if(password.length < 6) { setError('パスワードは6文字以上で入力してください'); return }
     if(role === 'seller' && areas.length === 0) { setError('出店エリアを1つ以上選択してください'); return }
     setLoading(true); setError('')
+
+    // Supabase の signUp は既存アドレスでもエラーを返さないため、先に重複を確認する。
+    // （確認できなかった場合は登録処理をそのまま続行する）
+    try {
+      const res = await fetch('/api/auth/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const j = await res.json()
+      if (j?.exists) {
+        const roleLabel = j.role === 'seller' ? '出店者' : j.role === 'host' ? '募集者' : null
+        setError(
+          'このメールアドレスは既に登録されています。'
+          + (roleLabel ? '（' + roleLabel + 'として登録済みです）' : '')
+          + ' ログインするか、別のメールアドレスをご利用ください。'
+        )
+        setLoading(false)
+        return
+      }
+    } catch (e) {
+      console.error('メールアドレスの重複確認に失敗しました', e)
+    }
+
     const metadata: Record<string, unknown> = {
       name, role, name_kana: nameKana, address, phone,
     }

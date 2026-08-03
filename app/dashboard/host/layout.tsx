@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import HostSidebar from '../../components/HostSidebar'
+import DashboardFooter from '../../components/DashboardFooter'
 
 export default function HostLayout({ children }: { children: ReactNode }) {
   return (
@@ -7,6 +8,7 @@ export default function HostLayout({ children }: { children: ReactNode }) {
       <HostSidebar />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         {children}
+        <DashboardFooter />
       </div>
     </div>
   )
