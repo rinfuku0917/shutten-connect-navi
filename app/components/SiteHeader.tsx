@@ -12,7 +12,9 @@ const menuItems: { href: string; label: string }[] = [
   { href: '/places', label: '出店場所を探す' },
   { href: '/sellers', label: '出店者を探す' },
   { href: '/sell', label: '車両を売りたい' },
+  { href: '/#works', label: '実績紹介' },
   { href: '/blog', label: 'ブログ' },
+  { href: '/#faq', label: 'よくある質問' },
   { href: '/company', label: '運営会社' },
   { href: '/contact', label: 'お問い合わせ' },
 ]

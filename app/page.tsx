@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
+import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
 
@@ -96,22 +97,7 @@ export default function Home() {
   const [newPlaces, setNewPlaces] = useState<NewPlace[]>([])
   const [works, setWorks] = useState<WorkPlace[]>([])
   const [posts, setPosts] = useState<BlogPost[]>([])
-  const [menuOpen, setMenuOpen] = useState(false)
 
-  // メニュー内のリンク（PCのグローバルナビと同じ並び）
-  const menuItems: { href: string; label: string }[] = [
-    { href: '/space', label: '出店したい方へ' },
-    { href: '/vendor', label: 'お店を呼びたい方へ' },
-    { href: '/places', label: '出店場所を探す' },
-    { href: '/sellers', label: '出店者を探す' },
-    { href: '#works', label: '実績紹介' },
-    { href: '/blog', label: 'ブログ' },
-    { href: '#faq', label: 'よくある質問' },
-    { href: '/company', label: '運営会社' },
-    { href: '/contact', label: 'お問い合わせ' },
-    { href: '/login', label: 'ログイン' },
-    { href: '/register', label: '無料で会員登録' },
-  ]
 
   useEffect(() => {
     const loadNew = async () => {
@@ -151,42 +137,7 @@ export default function Home() {
     <div className={kaku.className} style={{ background: '#fff', color: C.ink, lineHeight: 1.7, overflowX: 'hidden', minHeight: '100vh' }}>
 
       {/* HEADER */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid ' + C.line }}>
-        <div style={{ maxWidth: '1160px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', height: '64px' }}>
-          <Link href='/' style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }}>
-            <img src='/logo.svg' alt='出店コネクトナビ' style={{ height: '34px', width: 'auto', display: 'block' }} />
-          </Link>
-          <nav className='top3-gnav' style={{ display: 'flex', alignItems: 'center', gap: '18px', minWidth: 0 }}>
-            <Link href='/space' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>出店したい方へ</Link>
-            <Link href='/vendor' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>お店を呼びたい方へ</Link>
-            <a href='#works' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>実績紹介</a>
-            <Link href='/blog' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>ブログ</Link>
-            <a href='#faq' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>よくある質問</a>
-            <Link href='/company' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>運営会社</Link>
-            <Link href='/login' className='top3-login' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap', border: '1.5px solid ' + C.line, padding: '8px 16px', borderRadius: '8px' }}>ログイン</Link>
-            <Link href='/contact' className='top3-contact' style={{ background: C.navy, color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap', padding: '9px 18px', borderRadius: '8px' }}>お問い合わせ</Link>
-            <button onClick={() => setMenuOpen(v => !v)} aria-label='メニュー' aria-expanded={menuOpen} className='top3-burger' style={{ background: '#fff', border: '1.5px solid ' + C.line, borderRadius: '8px', padding: '8px 10px', cursor: 'pointer', alignItems: 'center', gap: '7px', color: C.ink, fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
-              <span style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ width: '18px', height: '2px', background: C.ink, borderRadius: '2px' }} />
-                <span style={{ width: '18px', height: '2px', background: C.ink, borderRadius: '2px' }} />
-                <span style={{ width: '18px', height: '2px', background: C.ink, borderRadius: '2px' }} />
-              </span>
-              メニュー
-            </button>
-          </nav>
-        </div>
-        {menuOpen && (
-          <div style={{ borderTop: '1px solid ' + C.line, background: '#fff', maxHeight: '70vh', overflowY: 'auto' }}>
-            <div style={{ maxWidth: '1160px', margin: '0 auto', padding: '10px 20px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '4px 16px' }}>
-              {menuItems.map(m => (
-                m.href.startsWith('#')
-                  ? <a key={m.label} href={m.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>{m.label}</a>
-                  : <Link key={m.label} href={m.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>{m.label}</Link>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <SiteHeader />
 
       {/* HERO: イラスト画像1枚敷き（PC=横 / スマホ=縦を picture で出し分け） */}
       <header style={{ background: C.cream }}>
