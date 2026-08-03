@@ -258,10 +258,7 @@ export default function Home() {
                   <div style={{ padding: '12px 14px' }}>
                     <div className={maru.className} style={{ fontSize: '15px', fontWeight: 900, lineHeight: 1.4, marginBottom: '8px', minHeight: '42px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</div>
                     <div style={{ fontSize: '12px', color: C.muted, marginBottom: '3px' }}>📍 {p.prefecture || 'エリア未設定'}</div>
-                    <div style={{ fontSize: '12px', color: C.muted, marginBottom: '10px' }}>{scheduleText(p.schedule)}</div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '12px', marginBottom: '12px' }}>
-                      <span style={{ color: C.muted }}>応募 <b style={{ color: C.ink, fontWeight: 900 }}>{p.applications?.[0]?.count || 0}</b>件</span>
-                    </div>
+                    <div style={{ fontSize: '12px', color: C.muted, marginBottom: '12px' }}>{scheduleText(p.schedule)}</div>
                     <Link href={'/places/' + p.id} className='top3-cardbtn' style={{ display: 'block', textAlign: 'center', border: '1.5px solid ' + C.navy, color: C.navy, textDecoration: 'none', fontWeight: 700, fontSize: '13px', padding: '8px', borderRadius: '8px' }}>詳細を見る →</Link>
                   </div>
                 </div>
