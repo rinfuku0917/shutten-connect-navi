@@ -3,7 +3,8 @@ import { marked } from 'marked'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import Nav from '../../components/Nav'
+import SiteHeader from '../../components/SiteHeader'
+import SiteFooter from '../../components/SiteFooter'
 
 export const revalidate = 60
 
@@ -62,7 +63,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
   return (
     <div style={{ background: '#FFF8F0', minHeight: '100vh' }}>
-      <Nav />
+      <SiteHeader />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <article style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 20px 60px' }}>
@@ -86,10 +87,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         </div>
       </article>
 
-      <footer style={{ background: '#F5A623', color: '#111', padding: '24px', textAlign: 'center' }}>
-        <Link href="/" style={{ fontWeight: 900, fontSize: '16px', marginBottom: '8px', display: 'block', color: '#111', textDecoration: 'none' }}>出店コネクトナビ</Link>
-        <div style={{ fontSize: '12px', color: '#111' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
+      <SiteFooter />
 
       <style>{`
         .post-body { font-size: 16px; line-height: 1.9; color: #333; }

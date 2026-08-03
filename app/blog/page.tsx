@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import Nav from '../components/Nav'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 export const revalidate = 60
 
@@ -37,7 +38,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
 
   return (
     <div style={{ background: '#FFF8F0', minHeight: '100vh' }}>
-      <Nav />
+      <SiteHeader />
       <div style={{ background: 'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-blog.png) center/cover no-repeat', padding: '80px 24px', textAlign: 'center', minHeight: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <h1 style={{ fontSize: 'clamp(28px,4vw,44px)', fontWeight: 900, color: '#fff', marginBottom: '8px', textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>お役立ち情報</h1>
         <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)' }}>出店に役立つ記事・ガイドをお届けします</p>
@@ -83,10 +84,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
           </div>
         )}
       </div>
-      <footer style={{ background: '#F5A623', color: '#111', padding: '24px', textAlign: 'center' }}>
-        <Link href="/" style={{ fontWeight: 900, fontSize: '16px', marginBottom: '8px', display: 'block', color: '#111', textDecoration: 'none' }}>出店コネクトナビ</Link>
-        <div style={{ fontSize: '12px', color: '#111' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

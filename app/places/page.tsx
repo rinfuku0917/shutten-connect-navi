@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import Nav from '../components/Nav'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 import dynamic from 'next/dynamic'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
@@ -108,7 +109,7 @@ const [showMap, setShowMap] = useState(false)
 
   return (
     <div style={{background:'#FFF8F0',minHeight:'100vh'}}>
-      <Nav />
+      <SiteHeader />
       <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-places.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'280px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
         <h1 style={{fontSize:'clamp(28px,4vw,44px)',fontWeight:'900',color:'#fff',marginBottom:'8px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>出店場所を探す</h1>
         <p style={{fontSize:'14px',color:'rgba(255,255,255,0.9)'}}>全国の出店スペースから理想の場所を見つけよう</p>
@@ -184,10 +185,7 @@ const [showMap, setShowMap] = useState(false)
           </div>
         )}
       </div>
-      <footer style={{background:'#F5A623',color:'#111',padding:'24px',textAlign:'center'}}>
-        <Link href='/' style={{fontWeight:'900',fontSize:'16px',marginBottom:'8px',display:'block',color:'#111',textDecoration:'none'}}>出店コネクトナビ</Link>
-        <div style={{fontSize:'12px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

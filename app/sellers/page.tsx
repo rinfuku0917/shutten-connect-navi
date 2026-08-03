@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import Nav from '../components/Nav'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
 import SellersBrowser, { type Seller } from './SellersBrowser'
 
@@ -46,7 +47,7 @@ export default async function SellersPage() {
 
   return (
     <div style={{ background: '#FBF7F1', minHeight: '100vh' }}>
-      <Nav />
+      <SiteHeader />
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
         <header className="mb-10 flex items-start justify-between gap-4">
           <div>
@@ -76,10 +77,7 @@ export default async function SellersPage() {
         )}
       </div>
 
-      <footer style={{ background: '#F5A623', color: '#111', padding: '24px 16px', textAlign: 'center', marginTop: '40px' }}>
-        <Link href='/' style={{ fontWeight: 700, fontSize: '16px', marginBottom: '8px', display: 'block', color: '#111', textDecoration: 'none' }}>出店コネクトナビ</Link>
-        <div style={{ fontSize: '11px', color: '#111' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

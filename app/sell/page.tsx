@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import Nav from '../components/Nav'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 export default function SellPage() {
   const features = [
@@ -11,7 +12,7 @@ export default function SellPage() {
   ]
   return (
     <div>
-      <Nav />
+      <SiteHeader />
       <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-sell.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'280px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
         <h1 style={{fontSize:'clamp(28px,4vw,44px)',fontWeight:'900',color:'#fff',marginBottom:'16px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>車両を売りたい方へ</h1>
         <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>キッチンカー・移動販売車を高値で売却しよう</p>
@@ -33,10 +34,7 @@ export default function SellPage() {
           </div>
         </div>
       </div>
-      <footer style={{background:'#1E2A3B',color:'#111',padding:'24px',textAlign:'center'}}>
-        <Link href='/' style={{fontWeight:'900',fontSize:'16px',marginBottom:'8px',display:'block',color:'#111',textDecoration:'none'}}>出店コネクトナビ</Link>
-        <div style={{fontSize:'12px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

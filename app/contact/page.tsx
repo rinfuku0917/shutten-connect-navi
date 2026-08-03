@@ -1,5 +1,6 @@
 'use client'
-import Nav from '../components/Nav'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
 import { useState } from 'react'
 
@@ -43,7 +44,7 @@ export default function ContactPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#FFF9E6', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
-      <Nav />
+      <SiteHeader />
 
       <div style={{ background: 'linear-gradient(rgba(245,166,35,0.78), rgba(232,130,12,0.88)), url(/hero-top.png) center/cover no-repeat', padding: '72px 16px', textAlign: 'center' }}>
         <h1 style={{ fontSize: 'clamp(24px,5vw,36px)', fontWeight: 900, color: '#fff', margin: 0, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>お問い合わせ</h1>
@@ -88,10 +89,7 @@ export default function ContactPage() {
         )}
       </div>
 
-      <div style={{ background: '#F5A623', padding: '20px', textAlign: 'center', marginTop: '40px' }}>
-        <Link href='/' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fff', color: '#111', borderRadius: '999px', padding: '10px 22px', fontSize: '13px', fontWeight: 700, textDecoration: 'none', marginBottom: '12px' }}>↑ トップページに戻る</Link>
-        <div style={{ fontSize: '12px', color: '#fff' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </div>
+      <SiteFooter />
     </div>
   )
 }

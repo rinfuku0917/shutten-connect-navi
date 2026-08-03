@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import Nav from '../components/Nav'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 export default function VendorPage() {
   const steps = [
@@ -12,7 +13,7 @@ export default function VendorPage() {
 
   return (
     <div>
-      <Nav />
+      <SiteHeader />
       <div style={{background:'linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.35)),url(/hero-bg.png) center/cover no-repeat',padding:'64px 24px',textAlign:'center'}}>
         <h1 style={{fontSize:'32px',fontWeight:'900',color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.5)',marginBottom:'16px'}}>お店を呼びたい方へ</h1>
         <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>あなたのスペースに最適な出店者を見つけよう</p>
@@ -35,10 +36,7 @@ export default function VendorPage() {
           </div>
         </div>
       </div>
-      <footer style={{background:'#F5A623',color:'#111',padding:'24px',textAlign:'center'}}>
-        <Link href='/' style={{fontWeight:'900',fontSize:'16px',marginBottom:'8px',display:'block',color:'#111',textDecoration:'none'}}>出店コネクトナビ</Link>
-        <div style={{fontSize:'12px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

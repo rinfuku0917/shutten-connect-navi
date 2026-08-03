@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import Nav from '../components/Nav'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 export default function SpacePage() {
   const merits = [
@@ -12,7 +13,7 @@ export default function SpacePage() {
 
   return (
     <div style={{width:'100%',maxWidth:'100vw',overflowX:'hidden'}}>
-      <Nav />
+      <SiteHeader />
       <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-top.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'300px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',width:'100%'}}>
         <h1 style={{color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.5)',fontSize:'clamp(26px,4vw,44px)',fontWeight:'900',marginBottom:'12px'}}>出店したい方へ</h1>
         <p style={{color:'#fff',textShadow:'0 1px 4px rgba(0,0,0,0.5)',fontSize:'16px',marginBottom:'32px'}}>全国の出店スペースを検索して、理想の場所を見つけよう</p>
@@ -35,11 +36,7 @@ export default function SpacePage() {
           </div>
         </div>
       </div>
-      <footer style={{background:'#F5A623',color:'#111',padding:'24px',textAlign:'center'}}>
-        <Link href='/' style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#fff',color:'#111',border:'none',borderRadius:'999px',padding:'10px 22px',fontSize:'13px',fontWeight:700,textDecoration:'none',marginBottom:'14px'}}>↑ トップページに戻る</Link>
-        <Link href='/' style={{fontWeight:'900',fontSize:'16px',marginBottom:'8px',display:'block',color:'#111',textDecoration:'none'}}>出店コネクトナビ</Link>
-        <div style={{fontSize:'12px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

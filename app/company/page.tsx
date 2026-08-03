@@ -1,5 +1,6 @@
 'use client'
-import Nav from '../components/Nav'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
 
 export default function CompanyPage() {
@@ -20,7 +21,7 @@ export default function CompanyPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#FFF9E6', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
-      <Nav />
+      <SiteHeader />
 
       <div style={{ background: 'linear-gradient(135deg, #F5A623, #E8820C)', padding: '48px 16px', textAlign: 'center' }}>
         <h1 style={{ fontSize: 'clamp(24px,5vw,36px)', fontWeight: 900, color: '#fff', margin: 0, textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>会社概要</h1>
@@ -42,9 +43,7 @@ export default function CompanyPage() {
         </div>
       </div>
 
-      <div style={{ background: '#F5A623', padding: '20px', textAlign: 'center', marginTop: '40px' }}>
-        <div style={{ fontSize: '12px', color: '#fff' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </div>
+      <SiteFooter />
     </div>
   )
 }

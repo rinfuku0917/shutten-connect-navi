@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import Nav from '../../components/Nav'
+import SiteHeader from '../../components/SiteHeader'
+import SiteFooter from '../../components/SiteFooter'
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
@@ -105,8 +106,8 @@ export default function SellerDetailPage() {
     setRname(''); setRrating(0); setRcomment('')
   }
 
-  if (loading) return (<div style={{ background: '#FBF7F1', minHeight: '100vh' }}><Nav /><div style={{ textAlign: 'center', padding: '80px 20px', color: '#A8A29E' }}>読み込み中...</div></div>)
-  if (!seller) return (<div style={{ background: '#FBF7F1', minHeight: '100vh' }}><Nav /><div style={{ textAlign: 'center', padding: '80px 20px', color: '#A8A29E' }}>出店者が見つかりませんでした。<br /><Link href='/sellers' style={{ color: BRAND, fontWeight: 700 }}>一覧に戻る</Link></div></div>)
+  if (loading) return (<div style={{ background: '#FBF7F1', minHeight: '100vh' }}><SiteHeader /><div style={{ textAlign: 'center', padding: '80px 20px', color: '#A8A29E' }}>読み込み中...</div></div>)
+  if (!seller) return (<div style={{ background: '#FBF7F1', minHeight: '100vh' }}><SiteHeader /><div style={{ textAlign: 'center', padding: '80px 20px', color: '#A8A29E' }}>出店者が見つかりませんでした。<br /><Link href='/sellers' style={{ color: BRAND, fontWeight: 700 }}>一覧に戻る</Link></div></div>)
 
   const shopName = displayShopName(seller)
   const genres = toArray(seller.genre)
@@ -122,7 +123,7 @@ export default function SellerDetailPage() {
 
   return (
     <div style={{ background: '#FBF7F1', minHeight: '100vh' }}>
-      <Nav />
+      <SiteHeader />
       <div style={{ maxWidth: '780px', margin: '0 auto', padding: '24px 16px' }}>
         <Link href='/sellers' style={{ fontSize: '13px', color: '#78716C', textDecoration: 'none' }}>← 出店者一覧に戻る</Link>
 
@@ -213,10 +214,7 @@ export default function SellerDetailPage() {
         </div>
       </div>
 
-      <footer style={{ background: BRAND, color: '#111', padding: '24px', textAlign: 'center', marginTop: '40px' }}>
-        <Link href='/' style={{ fontWeight: 700, fontSize: '16px', marginBottom: '8px', display: 'block', color: '#111', textDecoration: 'none' }}>出店コネクトナビ</Link>
-        <div style={{ fontSize: '12px', color: '#111' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
