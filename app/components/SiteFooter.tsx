@@ -3,18 +3,18 @@ import Link from 'next/link'
 import { C, maru } from './siteTheme'
 
 // トップページと同じ淡いパステルグリーンのフッター。全公開ページで共有する。
+// トップページのフッターと同じ構成（実績紹介・よくある質問はトップ内アンカー）
 const cols: { head: string; items: { href: string; label: string }[] }[] = [
   { head: 'メニュー', items: [
     { href: '/space', label: '出店したい方へ' },
     { href: '/vendor', label: 'お店を呼びたい方へ' },
-    { href: '/places', label: '出店場所を探す' },
-    { href: '/sellers', label: '出店者を探す' },
+    { href: '/#works', label: '実績紹介' },
+    { href: '/blog', label: 'ブログ' },
   ] },
   { head: 'サポート', items: [
-    { href: '/blog', label: 'ブログ' },
+    { href: '/#faq', label: 'よくある質問' },
     { href: '/contact', label: 'お問い合わせ' },
     { href: '/login', label: 'ログイン' },
-    { href: '/register', label: '無料で会員登録' },
   ] },
   { head: '会社情報', items: [
     { href: '/company', label: '運営会社' },

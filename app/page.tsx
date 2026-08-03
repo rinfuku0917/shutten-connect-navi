@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
+import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
 
 // デザイン見本(top-v3)指定フォント: 見出し=丸ゴシック / 本文=角ゴシック
@@ -425,62 +426,7 @@ export default function Home() {
       </div>
 
       {/* FOOTER */}
-      <footer style={{ background: '#e7f2ea', color: '#22402f', padding: '44px 0 30px' }}>
-        <div style={wrap}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', flexWrap: 'wrap', marginBottom: '26px' }}>
-            <div>
-              <div className={maru.className} style={{ color: '#173d29', fontWeight: 900, fontSize: '19px', marginBottom: '10px' }}>出店コネクトナビ</div>
-              <p style={{ fontSize: '13px', color: '#456254' }}>キッチンカーと、場所をつなぐ。</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap', marginTop: '14px' }}>
-                <a href='https://www.instagram.com/connect.navi/' target='_blank' rel='noopener noreferrer' aria-label='Instagram' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#22402f', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
-                  <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
-                    <rect x='2' y='2' width='20' height='20' rx='5' />
-                    <circle cx='12' cy='12' r='4.5' />
-                    <circle cx='17.5' cy='6.5' r='1.3' fill='currentColor' stroke='none' />
-                  </svg>
-                  Instagram
-                </a>
-                <a href='https://lin.ee/Z0ddEjT' target='_blank' rel='noopener noreferrer' aria-label='公式LINEでお問い合わせ' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#22402f', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
-                  <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
-                    <path d='M12 3.8c-5.1 0-9.2 3.2-9.2 7.2 0 3.6 3.3 6.6 7.7 7.1.3.1.6.2.7.4.1.2.1.5 0 .8l-.3 1.6c-.1.4.2.7.6.5 2.6-1.1 5-2.7 7-4.8 1.7-1.7 2.7-3.5 2.7-5.6 0-4-4.1-7.2-9.2-7.2z' />
-                  </svg>
-                  公式LINE
-                </a>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '44px', flexWrap: 'wrap' }}>
-              <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#456254', fontWeight: 700, marginBottom: '12px' }}>メニュー</h4>
-                <Link href='/space' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>出店したい方へ</Link>
-                <Link href='/vendor' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お店を呼びたい方へ</Link>
-                <a href='#works' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>実績紹介</a>
-                <Link href='/blog' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ブログ</Link>
-              </div>
-              <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#456254', fontWeight: 700, marginBottom: '12px' }}>サポート</h4>
-                <a href='#faq' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>よくある質問</a>
-                <Link href='/contact' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お問い合わせ</Link>
-                <Link href='/login' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ログイン</Link>
-              </div>
-              <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#456254', fontWeight: 700, marginBottom: '12px' }}>会社情報</h4>
-                <Link href='/company' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>運営会社</Link>
-                <Link href='/terms' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>利用規約</Link>
-                <Link href='/privacy' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>プライバシーポリシー</Link>
-              </div>
-            </div>
-          </div>
-          <div style={{ borderTop: '1px solid rgba(47,95,67,.2)', paddingTop: '18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-            <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label='ページ最上部に戻る' className='top3-totop' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fff', border: '1.5px solid #22402f', color: '#22402f', borderRadius: '999px', padding: '10px 22px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-              <svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
-                <path d='M12 19V5' /><path d='M5 12l7-7 7 7' />
-              </svg>
-              トップに戻る
-            </button>
-            <div style={{ fontSize: '12px', color: '#456254', textAlign: 'center' }}>© 2026 出店コネクトナビ</div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
