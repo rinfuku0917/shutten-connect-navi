@@ -4,10 +4,10 @@ import Nav from '../components/Nav'
 
 export default function SpacePage() {
   const merits = [
-    {icon:'📍',title:'好立地の場所を簡単発見',desc:'駅前・商業施設・イベントスペースなど多数掲載'},
-    {icon:'💰',title:'費用を比較して選べる',desc:'日額・月額・売上歩合など多様なプランを比較'},
-    {icon:'🤝',title:'安心のマッチング',desc:'実績・口コミ付きの信頼できる場所オーナーと繋がれる'},
-    {icon:'📱',title:'スマホで完結',desc:'申込から契約まで全てオンラインで完結します'},
+    {img:'/ic-pin.png',title:'好立地の場所を簡単発見',desc:'駅前・商業施設・イベントスペースなど多数掲載'},
+    {img:'/ic-money.png',title:'費用を比較して選べる',desc:'日額・月額・売上歩合など多様なプランを比較'},
+    {img:'/ic-handshake.png',title:'安心のマッチング',desc:'実績・口コミ付きの信頼できる場所オーナーと繋がれる'},
+    {img:'/ic-phone.png',title:'スマホで完結',desc:'申込から契約まで全てオンラインで完結します'},
   ]
 
   return (
@@ -27,7 +27,7 @@ export default function SpacePage() {
           <div className='grid-4 space-merit-grid' style={{gap:'16px',maxWidth:'960px',margin:'0 auto',textAlign:'center',alignItems:'stretch'}}>
             {merits.map(m => (
               <div key={m.title} style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px 16px',textAlign:'center',height:'100%',display:'flex',flexDirection:'column',alignItems:'center'}}>
-                <div style={{fontSize:'36px',marginBottom:'10px'}}>{m.icon}</div>
+                <img src={m.img} alt='' style={{width:'72px',height:'72px',objectFit:'contain',marginBottom:'10px'}} />
                 <div style={{fontWeight:'900',fontSize:'15px',marginBottom:'8px',color:'#1a1a1a',minHeight:'2.4em',display:'flex',alignItems:'center',justifyContent:'center',wordBreak:'keep-all',lineHeight:1.2}}>{m.title}</div>
                 <div style={{fontSize:'12px',color:'#111',lineHeight:1.7}}>{m.desc}</div>
               </div>
@@ -36,6 +36,7 @@ export default function SpacePage() {
         </div>
       </div>
       <footer style={{background:'#F5A623',color:'#111',padding:'24px',textAlign:'center'}}>
+        <Link href='/' style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#fff',color:'#111',border:'none',borderRadius:'999px',padding:'10px 22px',fontSize:'13px',fontWeight:700,textDecoration:'none',marginBottom:'14px'}}>↑ トップページに戻る</Link>
         <Link href='/' style={{fontWeight:'900',fontSize:'16px',marginBottom:'8px',display:'block',color:'#111',textDecoration:'none'}}>出店コネクトナビ</Link>
         <div style={{fontSize:'12px',color:'#111'}}>© 2026 出店コネクトナビ All Rights Reserved.</div>
       </footer>

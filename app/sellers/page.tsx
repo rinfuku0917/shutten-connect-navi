@@ -48,7 +48,8 @@ export default async function SellersPage() {
     <div style={{ background: '#FBF7F1', minHeight: '100vh' }}>
       <Nav />
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-        <header className="mb-10">
+        <header className="mb-10 flex items-start justify-between gap-4">
+          <div>
           <div className="flex items-center gap-2 text-amber-600">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z" />
@@ -61,6 +62,8 @@ export default async function SellersPage() {
           <p className="mt-2 text-stone-500">
             {errorMessage ? '読み込みに失敗しました' : `全 ${sellers.length.toLocaleString()} 店舗から探す`}
           </p>
+          </div>
+          <img src="/ic-truck.png" alt="" className="hidden h-24 w-24 shrink-0 object-contain sm:block" />
         </header>
 
         {errorMessage ? (

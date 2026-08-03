@@ -146,10 +146,11 @@ img { max-width: 100%; height: auto; }
 .top3-gnav a { transition: color .15s; }
 .top3-gnav a:not(.top3-login):not(.top3-contact):hover { color: #e08e0b; }
 .top3-gnav .top3-contact:hover { background: #14293f !important; }
-@media (max-width: 900px) { .top3-gnav a:not(.top3-login):not(.top3-contact) { display: none; } }
-@media (max-width: 520px) {
+@media (max-width: 1120px) { .top3-gnav a:not(.top3-login):not(.top3-contact) { display: none; } }
+@media (max-width: 560px) {
   .top3-gnav .top3-login { display: none; }
   .top3-gnav .top3-contact { padding: 8px 12px !important; font-size: 13px !important; }
+  .top3-burger { padding: 8px !important; font-size: 0 !important; gap: 0 !important; }
 }
 
 .top3-herobtn { transition: transform .15s ease; }
@@ -240,3 +241,9 @@ img { max-width: 100%; height: auto; }
 @media (max-width: 680px) {
   .top3-signup-img { width: 100%; max-width: 340px; }
 }
+
+/* トップ: メニュー(ハンバーガー)ボタン・トップに戻るボタン */
+.top3-burger { display: inline-flex; }
+.top3-burger:hover { background: #fff8ec !important; }
+.top3-totop { transition: background .15s, color .15s; }
+.top3-totop:hover { background: #22402f !important; color: #fff !important; }

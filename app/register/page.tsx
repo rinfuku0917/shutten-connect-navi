@@ -161,6 +161,9 @@ export default function RegisterPage() {
           <div style={{textAlign:'center',fontSize:'13px',color:'#888'}}>
             すでにアカウントをお持ちの方は <Link href='/login' style={{color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>ログイン</Link>
           </div>
+          <div style={{textAlign:'center',marginTop:'20px'}}>
+            <Link href='/' style={{display:'inline-flex',alignItems:'center',gap:'8px',border:'1.5px solid #E5E7EB',color:'#555',borderRadius:'999px',padding:'10px 22px',fontSize:'13px',fontWeight:700,textDecoration:'none'}}>↑ トップページに戻る</Link>
+          </div>
         </div>
       </div>
     </div>

@@ -95,6 +95,22 @@ export default function Home() {
   const [newPlaces, setNewPlaces] = useState<NewPlace[]>([])
   const [works, setWorks] = useState<WorkPlace[]>([])
   const [posts, setPosts] = useState<BlogPost[]>([])
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // メニュー内のリンク（PCのグローバルナビと同じ並び）
+  const menuItems: { href: string; label: string }[] = [
+    { href: '/space', label: '出店したい方へ' },
+    { href: '/vendor', label: 'お店を呼びたい方へ' },
+    { href: '/places', label: '出店場所を探す' },
+    { href: '/sellers', label: '出店者を探す' },
+    { href: '#works', label: '実績紹介' },
+    { href: '/blog', label: 'ブログ' },
+    { href: '#faq', label: 'よくある質問' },
+    { href: '/company', label: '運営会社' },
+    { href: '/contact', label: 'お問い合わせ' },
+    { href: '/login', label: 'ログイン' },
+    { href: '/register', label: '無料で会員登録' },
+  ]
 
   useEffect(() => {
     const loadNew = async () => {
@@ -148,8 +164,27 @@ export default function Home() {
             <Link href='/company' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>運営会社</Link>
             <Link href='/login' className='top3-login' style={{ color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap', border: '1.5px solid ' + C.line, padding: '8px 16px', borderRadius: '8px' }}>ログイン</Link>
             <Link href='/contact' className='top3-contact' style={{ background: C.navy, color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap', padding: '9px 18px', borderRadius: '8px' }}>お問い合わせ</Link>
+            <button onClick={() => setMenuOpen(v => !v)} aria-label='メニュー' aria-expanded={menuOpen} className='top3-burger' style={{ background: '#fff', border: '1.5px solid ' + C.line, borderRadius: '8px', padding: '8px 10px', cursor: 'pointer', alignItems: 'center', gap: '7px', color: C.ink, fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
+              <span style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ width: '18px', height: '2px', background: C.ink, borderRadius: '2px' }} />
+                <span style={{ width: '18px', height: '2px', background: C.ink, borderRadius: '2px' }} />
+                <span style={{ width: '18px', height: '2px', background: C.ink, borderRadius: '2px' }} />
+              </span>
+              メニュー
+            </button>
           </nav>
         </div>
+        {menuOpen && (
+          <div style={{ borderTop: '1px solid ' + C.line, background: '#fff', maxHeight: '70vh', overflowY: 'auto' }}>
+            <div style={{ maxWidth: '1160px', margin: '0 auto', padding: '10px 20px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '4px 16px' }}>
+              {menuItems.map(m => (
+                m.href.startsWith('#')
+                  ? <a key={m.label} href={m.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>{m.label}</a>
+                  : <Link key={m.label} href={m.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 6px', color: C.ink, textDecoration: 'none', fontSize: '14px', fontWeight: 700, borderBottom: '1px solid ' + C.line }}>{m.label}</Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* HERO: イラスト画像1枚敷き（PC=横 / スマホ=縦を picture で出し分け） */}
@@ -186,14 +221,14 @@ export default function Home() {
       <div style={{ ...wrap, padding: '36px 20px' }}>
         <div className='top3-stats'>
           {([
-            { img: '/stat-sellers.jpg', num: '3,000+', label: '登録出店者' },
-            { img: '/stat-places.jpg', num: '200+', label: '出店場所' },
-            { img: '/stat-line.jpg', num: '2,000+', label: 'LINE登録' },
-            { img: '/stat-area.jpg', num: '全国対応', label: '対応エリア拡大中', small: true },
+            { img: '/ic-member.png', num: '3,000+', label: '登録出店者' },
+            { img: '/ic-pin.png', num: '200+', label: '出店場所' },
+            { img: '/ic-phone.png', num: '2,000+', label: 'LINE登録' },
+            { img: '/ic-globe.png', num: '全国対応', label: '対応エリア拡大中', small: true },
           ] as { ic?: string; img?: string; num: string; label: string; small?: boolean }[]).map(s => (
             <div key={s.label} className='top3-stat'>
               {s.img
-                ? <img src={s.img} alt='' style={{ height: '36px', width: '36px', objectFit: 'contain', display: 'block', margin: '0 auto 6px' }} />
+                ? <img src={s.img} alt='' style={{ height: '52px', width: '52px', objectFit: 'contain', display: 'block', margin: '0 auto 8px' }} />
                 : <div style={{ fontSize: '26px', marginBottom: '6px' }}>{s.ic}</div>}
               <div className={maru.className} style={{ fontSize: s.small ? 'clamp(20px,2.8vw,27px)' : 'clamp(26px,3.6vw,34px)', fontWeight: 900, color: C.navy, lineHeight: 1 }}>{s.num}</div>
               <div style={{ fontSize: '12.5px', color: C.muted, fontWeight: 700, marginTop: '6px' }}>{s.label}</div>
@@ -242,7 +277,7 @@ export default function Home() {
           <div className='top3-which'>
             <div className='top3-wbox-seller' style={{ background: '#fff', borderRadius: '16px', padding: '28px 26px', border: '1px solid ' + C.line }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
-                <img src='/which-seller.jpg' alt='' style={{ width: '64px', height: '64px', flexShrink: 0, borderRadius: '14px', objectFit: 'contain' }} />
+                <img src='/ic-truck.png' alt='' style={{ width: '80px', height: '80px', flexShrink: 0, objectFit: 'contain' }} />
                 <div>
                   <div className={maru.className} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.goldDeep }}>出店場所を探したい方</div>
                   <div style={{ fontSize: '13px', color: C.muted }}>キッチンカーとして出店したい方はこちら</div>
@@ -255,7 +290,7 @@ export default function Home() {
             </div>
             <div className='top3-wbox-host' style={{ background: '#fff', borderRadius: '16px', padding: '28px 26px', border: '1px solid ' + C.line }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
-                <img src='/which-host.jpg' alt='' style={{ width: '64px', height: '64px', flexShrink: 0, borderRadius: '14px', objectFit: 'contain' }} />
+                <img src='/ic-tent.png' alt='' style={{ width: '80px', height: '80px', flexShrink: 0, objectFit: 'contain' }} />
                 <div>
                   <div className={maru.className} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.navy }}>キッチンカーを呼びたい方</div>
                   <div style={{ fontSize: '13px', color: C.muted }}>イベントや施設に出店を呼びたい方はこちら</div>
@@ -276,14 +311,14 @@ export default function Home() {
           <h2 className={maru.className} style={{ ...h2Style, textAlign: 'center', marginBottom: '30px' }}>ご利用の流れ</h2>
           <div className='top3-flow'>
             {[
-              { n: '1', img: '/flow-1.jpg', h: '会員登録', p: '無料で簡単登録' },
-              { n: '2', img: '/flow-2.jpg', h: '案件を探す・応募', p: '条件を絞って検索' },
-              { n: '3', img: '/flow-3.jpg', h: 'マッチング・決定', p: '主催者と内容を調整' },
-              { n: '4', img: '/flow-4.jpg', h: '出店・開催', p: '当日は思いっきり営業！' },
+              { n: '1', img: '/ic-member.png', h: '会員登録', p: '無料で簡単登録' },
+              { n: '2', img: '/ic-search.png', h: '案件を探す・応募', p: '条件を絞って検索' },
+              { n: '3', img: '/ic-match.png', h: 'マッチング・決定', p: '主催者と内容を調整' },
+              { n: '4', img: '/ic-balloon.png', h: '出店・開催', p: '当日は思いっきり営業！' },
             ].map(s => (
               <div key={s.n} className='top3-fstep'>
                 <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#fff', border: '2px solid ' + C.gold, color: C.goldDeep, fontWeight: 900, display: 'grid', placeItems: 'center', margin: '0 auto 12px', fontSize: '14px' }}>{s.n}</div>
-                <img src={s.img} alt='' style={{ width: '52px', height: '52px', objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
+                <img src={s.img} alt='' style={{ width: '70px', height: '70px', objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
                 <h3 className={maru.className} style={{ fontSize: '16px', fontWeight: 900, marginBottom: '6px', lineHeight: 1.3 }}>{s.h}</h3>
                 <p style={{ fontSize: '12px', color: C.muted }}>{s.p}</p>
               </div>
@@ -316,7 +351,10 @@ export default function Home() {
         <div style={wrap}>
           <div className='top3-fb'>
             <div>
-              <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900, marginBottom: '20px' }}>よくある質問</h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
+                <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900 }}>よくある質問</h2>
+                <img src='/ic-member.png' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
+              </div>
               {([
                 { q: '登録に費用はかかりますか？', a: '会員登録・案件の閲覧・応募はすべて無料です。出店が決定した際の手数料については、案件ごとにご案内しています。', open: true },
                 { q: '出店までの流れを教えてください', a: '会員登録 → 案件を探して応募 → 主催者とのマッチング・調整 → 出店当日、という流れです。詳しくは「ご利用の流れ」をご覧ください。' },
@@ -342,7 +380,10 @@ export default function Home() {
               <Link href='/contact' style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: C.navy, textDecoration: 'none', fontWeight: 700, fontSize: '13.5px', marginTop: '6px' }}>その他のご質問はお問い合わせへ →</Link>
             </div>
             <div>
-              <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900, marginBottom: '20px' }}>最新記事</h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
+                <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900 }}>最新記事</h2>
+                <img src='/ic-camera.png' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
+              </div>
               {posts.length === 0 && <div style={{ color: C.muted, fontSize: '13px', padding: '8px 0' }}>記事は準備中です。</div>}
               {posts.map(b => (
                 <Link key={b.id} href={'/blog/' + b.slug} className='top3-blogitem' style={{ display: 'block', background: '#fff', border: '1px solid ' + C.line, borderRadius: '10px', overflow: 'hidden', marginBottom: '12px', textDecoration: 'none', color: C.ink }}>
@@ -384,14 +425,14 @@ export default function Home() {
       </div>
 
       {/* FOOTER */}
-      <footer style={{ background: '#e7f2ea', color: '#3d5a4a', padding: '44px 0 30px' }}>
+      <footer style={{ background: '#e7f2ea', color: '#22402f', padding: '44px 0 30px' }}>
         <div style={wrap}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', flexWrap: 'wrap', marginBottom: '26px' }}>
             <div>
-              <div className={maru.className} style={{ color: '#2f5f43', fontWeight: 900, fontSize: '19px', marginBottom: '10px' }}>出店コネクトナビ</div>
-              <p style={{ fontSize: '13px', color: '#6f8a7b' }}>キッチンカーと、場所をつなぐ。</p>
+              <div className={maru.className} style={{ color: '#173d29', fontWeight: 900, fontSize: '19px', marginBottom: '10px' }}>出店コネクトナビ</div>
+              <p style={{ fontSize: '13px', color: '#456254' }}>キッチンカーと、場所をつなぐ。</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap', marginTop: '14px' }}>
-                <a href='https://www.instagram.com/connect.navi/' target='_blank' rel='noopener noreferrer' aria-label='Instagram' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#3d5a4a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
+                <a href='https://www.instagram.com/connect.navi/' target='_blank' rel='noopener noreferrer' aria-label='Instagram' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#22402f', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
                   <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
                     <rect x='2' y='2' width='20' height='20' rx='5' />
                     <circle cx='12' cy='12' r='4.5' />
@@ -399,7 +440,7 @@ export default function Home() {
                   </svg>
                   Instagram
                 </a>
-                <a href='https://lin.ee/Z0ddEjT' target='_blank' rel='noopener noreferrer' aria-label='公式LINEでお問い合わせ' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#3d5a4a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
+                <a href='https://lin.ee/Z0ddEjT' target='_blank' rel='noopener noreferrer' aria-label='公式LINEでお問い合わせ' className='top3-sns' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#22402f', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
                   <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
                     <path d='M12 3.8c-5.1 0-9.2 3.2-9.2 7.2 0 3.6 3.3 6.6 7.7 7.1.3.1.6.2.7.4.1.2.1.5 0 .8l-.3 1.6c-.1.4.2.7.6.5 2.6-1.1 5-2.7 7-4.8 1.7-1.7 2.7-3.5 2.7-5.6 0-4-4.1-7.2-9.2-7.2z' />
                   </svg>
@@ -409,27 +450,35 @@ export default function Home() {
             </div>
             <div style={{ display: 'flex', gap: '44px', flexWrap: 'wrap' }}>
               <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#6f8a7b', fontWeight: 700, marginBottom: '12px' }}>メニュー</h4>
-                <Link href='/space' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>出店したい方へ</Link>
-                <Link href='/vendor' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お店を呼びたい方へ</Link>
-                <a href='#works' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>実績紹介</a>
-                <Link href='/blog' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ブログ</Link>
+                <h4 style={{ fontSize: '12px', color: '#456254', fontWeight: 700, marginBottom: '12px' }}>メニュー</h4>
+                <Link href='/space' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>出店したい方へ</Link>
+                <Link href='/vendor' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お店を呼びたい方へ</Link>
+                <a href='#works' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>実績紹介</a>
+                <Link href='/blog' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ブログ</Link>
               </div>
               <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#6f8a7b', fontWeight: 700, marginBottom: '12px' }}>サポート</h4>
-                <a href='#faq' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>よくある質問</a>
-                <Link href='/contact' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お問い合わせ</Link>
-                <Link href='/login' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ログイン</Link>
+                <h4 style={{ fontSize: '12px', color: '#456254', fontWeight: 700, marginBottom: '12px' }}>サポート</h4>
+                <a href='#faq' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>よくある質問</a>
+                <Link href='/contact' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>お問い合わせ</Link>
+                <Link href='/login' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>ログイン</Link>
               </div>
               <div className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: '#6f8a7b', fontWeight: 700, marginBottom: '12px' }}>会社情報</h4>
-                <Link href='/company' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>運営会社</Link>
-                <Link href='/terms' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>利用規約</Link>
-                <Link href='/privacy' style={{ display: 'block', color: '#3d5a4a', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>プライバシーポリシー</Link>
+                <h4 style={{ fontSize: '12px', color: '#456254', fontWeight: 700, marginBottom: '12px' }}>会社情報</h4>
+                <Link href='/company' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>運営会社</Link>
+                <Link href='/terms' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>利用規約</Link>
+                <Link href='/privacy' style={{ display: 'block', color: '#22402f', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px' }}>プライバシーポリシー</Link>
               </div>
             </div>
           </div>
-          <div style={{ borderTop: '1px solid rgba(47,95,67,.2)', paddingTop: '18px', fontSize: '12px', color: '#6f8a7b', textAlign: 'center' }}>© 2026 出店コネクトナビ</div>
+          <div style={{ borderTop: '1px solid rgba(47,95,67,.2)', paddingTop: '18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+            <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label='ページ最上部に戻る' className='top3-totop' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fff', border: '1.5px solid #22402f', color: '#22402f', borderRadius: '999px', padding: '10px 22px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+              <svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+                <path d='M12 19V5' /><path d='M5 12l7-7 7 7' />
+              </svg>
+              トップに戻る
+            </button>
+            <div style={{ fontSize: '12px', color: '#456254', textAlign: 'center' }}>© 2026 出店コネクトナビ</div>
+          </div>
         </div>
       </footer>
     </div>

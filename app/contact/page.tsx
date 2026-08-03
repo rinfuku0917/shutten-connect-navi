@@ -89,6 +89,7 @@ export default function ContactPage() {
       </div>
 
       <div style={{ background: '#F5A623', padding: '20px', textAlign: 'center', marginTop: '40px' }}>
+        <Link href='/' style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fff', color: '#111', borderRadius: '999px', padding: '10px 22px', fontSize: '13px', fontWeight: 700, textDecoration: 'none', marginBottom: '12px' }}>↑ トップページに戻る</Link>
         <div style={{ fontSize: '12px', color: '#fff' }}>© 2026 出店コネクトナビ All Rights Reserved.</div>
       </div>
     </div>
