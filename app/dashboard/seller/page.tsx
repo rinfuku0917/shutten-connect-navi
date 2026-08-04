@@ -406,9 +406,12 @@ export default function SellerDashboard() {
     const row: Record<string, unknown> = {
       application_id: app.application_id, place_id: app.place_id, seller_id: uid,
       sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: total,
-      tax_basis: saleSplit ? 'mixed' : applied.basis, tax_rate: saleSplit ? null : applied.rate,
+      // 税率ごとに分けた場合も税抜換算の一種として記録する。
+      // tax_basis は許可値が決まっており 'mixed' は入らないため、
+      // 分割かどうかは下の revenue_reduced / revenue_standard の有無で判別する。
+      tax_basis: saleSplit ? 'tax_excluded' : applied.basis, tax_rate: saleSplit ? 8 : applied.rate,
     }
-    // 内訳は分けて入力したときだけ渡す（tax_rate は1つしか持てないため mixed として記録する）
+    // 内訳は分けて入力したときだけ渡す
     if (saleSplit) { row.revenue_reduced = rev8; row.revenue_standard = rev10 }
     const { error } = await supabase.from('sales').insert(row)
     if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
