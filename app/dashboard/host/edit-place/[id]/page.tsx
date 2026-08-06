@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { geocodeAddress } from '../../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../../lib/categories'
@@ -9,6 +9,11 @@ import { PLACE_CATEGORIES } from '../../../../lib/categories'
 export default function EditPlacePage() {
   const params = useParams()
   const id = params.id as string
+  // 管理画面から開いた場合は、保存後も「戻る」も管理画面へ返す。
+  // 管理者は募集者ダッシュボードに自分の案件を持たないため、
+  // そちらへ飛ばすと空の画面に着いてしまう。
+  const searchParams = useSearchParams()
+  const backTo = searchParams.get('from') === 'admin' ? '/admin' : '/dashboard/host'
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
@@ -97,7 +102,7 @@ export default function EditPlacePage() {
       image_url: imageUrl,
     }).eq('id', id)
     if(updErr) { setErrMsg('更新失敗: ' + updErr.message); setSaving(false); return }
-    router.push('/dashboard/host')
+    router.push(backTo)
   }
 
   const Radio = ({name,val,label}:{name:string,val:string,label:string}) => (
@@ -353,7 +358,7 @@ export default function EditPlacePage() {
 
           {errMsg && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:'8px',padding:'12px',fontSize:'13px',color:'#DC2626',textAlign:'center'}}>{errMsg}</div>}
           <div style={{display:'flex',gap:'16px',justifyContent:'center',paddingBottom:'40px',flexWrap:'wrap'}}>
-            <Link href='/dashboard/host' style={{border:'2px solid #E5E7EB',color:'#555',borderRadius:'999px',padding:'14px 40px',fontSize:'15px',fontWeight:'700',textDecoration:'none'}}>戻る</Link>
+            <Link href={backTo} style={{border:'2px solid #E5E7EB',color:'#555',borderRadius:'999px',padding:'14px 40px',fontSize:'15px',fontWeight:'700',textDecoration:'none'}}>戻る</Link>
             <button onClick={handleSubmit} disabled={saving} style={{background:saving?'#ccc':'#F5A623',color:'#fff',border:'none',borderRadius:'999px',padding:'14px 48px',fontSize:'15px',fontWeight:'900',cursor:saving?'not-allowed':'pointer',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>{saving?'保存中...':'変更を保存'}</button>
           </div>
         </div>
