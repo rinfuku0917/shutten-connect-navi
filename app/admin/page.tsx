@@ -418,6 +418,7 @@ export default function AdminPage() {
   const [pKw, setPKw] = useState('')
   const [pPref, setPPref] = useState('')
   const [pGenre, setPGenre] = useState('')
+  const [placeStatusFilter, setPlaceStatusFilter] = useState('')
   const [placesPage, setPlacesPage] = useState(1)
   const loadPlacesList = async () => {
     setPlacesLoading(true)
@@ -445,6 +446,7 @@ export default function AdminPage() {
   const placesFiltered = placesList.filter(x => {
     if (pPref && x.area !== pPref) return false
     if (pGenre && !(x.genres || []).includes(pGenre)) return false
+    if (placeStatusFilter && x.status !== placeStatusFilter) return false
     if (pKw) { const hay=((x.title||'')+(x.area||'')+(x.host||'')).toLowerCase(); if(!hay.includes(pKw.toLowerCase())) return false }
     return true
   })
@@ -452,7 +454,7 @@ export default function AdminPage() {
   const placesTotalPages = Math.max(1, Math.ceil(placesFiltered.length / PLACES_PER_PAGE))
   const placesPageSafe = Math.min(Math.max(1, placesPage), placesTotalPages)
   const placesPaged = placesFiltered.slice((placesPageSafe - 1) * PLACES_PER_PAGE, placesPageSafe * PLACES_PER_PAGE)
-  useEffect(() => { setPlacesPage(1) }, [pKw, pPref, pGenre])
+  useEffect(() => { setPlacesPage(1) }, [pKw, pPref, pGenre, placeStatusFilter])
 
   // ===== 料金設定モーダル =====
   const [feePlace, setFeePlace] = useState<AdminPlace | null>(null)
@@ -482,6 +484,20 @@ export default function AdminPage() {
   // ===== 新規案件の登録 =====
   // places への INSERT はRLSで弾かれるおそれがあるため、承認処理と同じく
   // サービスロールのAPI経由で登録する。
+  // 案件の公開／下書きを切り替える（RLS回避のためAPI経由）
+  const setPlaceStatus = async (placeId: string, status: 'published' | 'draft') => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { alert('ログインが必要です'); return }
+    const res = await fetch('/api/admin/set-place-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requesterId: user.id, placeId, status }),
+    })
+    const result = await res.json()
+    if (!res.ok) { alert('変更に失敗しました: ' + (result.error || '不明なエラー')); return }
+    loadPlacesList()
+  }
+
   const npLabel: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '4px' }
   const npInput: React.CSSProperties = { width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: '#1a1a1a' }
   const emptyNewPlace = {
@@ -1013,7 +1029,12 @@ const previewDoc = async (fileUrl: string) => {
                   <option value=''>カテゴリー（すべて）</option>
                   {PLACE_CATEGORIES.map(g=><option key={g} value={g}>{g}</option>)}
                 </select>
-                {(pKw||pPref||pGenre) && <button onClick={()=>{setPKw('');setPPref('');setPGenre('')}} style={{ padding:'9px 14px', borderRadius:'8px', border:'1.5px solid #E2E8F0', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#64748B' }}>クリア</button>}
+                <select value={placeStatusFilter} onChange={e=>setPlaceStatusFilter(e.target.value)} style={{ padding:'9px 12px', borderRadius:'8px', border:'1.5px solid #E2E8F0', fontSize:'13px', minWidth:'120px' }}>
+                  <option value=''>状態（すべて）</option>
+                  <option value='公開中'>公開中</option>
+                  <option value='下書き'>下書き</option>
+                </select>
+                {(pKw||pPref||pGenre||placeStatusFilter) && <button onClick={()=>{setPKw('');setPPref('');setPGenre('');setPlaceStatusFilter('')}} style={{ padding:'9px 14px', borderRadius:'8px', border:'1.5px solid #E2E8F0', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#64748B' }}>クリア</button>}
                 <span style={{ fontSize:'12px', color:'#64748B' }}>{placesFiltered.length}件</span>
               </div>
               <div className='admin-table-wrap' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
@@ -1038,6 +1059,11 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '12px 14px' }}><span style={{ background: place.status === '公開中' ? '#ECFDF5' : '#F1F5F9', color: place.status === '公開中' ? '#16A34A' : '#64748B', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', fontSize: '11px' }}>{place.status}</span></td>
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
+                            {place.status === '公開中' ? (
+                              <button onClick={() => { if (window.confirm('この案件を下書きに戻しますか？（サイトに表示されなくなります）')) setPlaceStatus(place.id, 'draft') }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', fontWeight: '700' }}>下書きに戻す</button>
+                            ) : (
+                              <button onClick={() => setPlaceStatus(place.id, 'published')} style={{ fontSize: '11px', padding: '4px 10px', border: 'none', borderRadius: '6px', background: '#16A34A', cursor: 'pointer', color: '#fff', fontWeight: '700' }}>公開する</button>
+                            )}
                             <button onClick={() => openFeeModal(place)} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FDE68A', borderRadius: '6px', background: '#FFFBEB', cursor: 'pointer', color: '#B45309', fontWeight: '700' }}>料金</button>
                             <Link href={'/dashboard/host/edit-place/' + place.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', textDecoration: 'none' }}>編集</Link>
                             <button onClick={() => { if (window.confirm('この案件を削除しますか？')) deletePlaceAdmin(place.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>削除</button>
