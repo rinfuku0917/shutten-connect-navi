@@ -41,6 +41,7 @@ img { max-width: 100%; height: auto; }
 /* 管理画面のモバイル対応 */
 @media (max-width: 768px) {
   .admin-shell { flex-direction: column !important; }
+  .admin-newplace-grid { grid-template-columns: 1fr !important; }
   .admin-sidebar { width: 100% !important; flex-direction: row !important; align-items: center; overflow-x: auto; }
   .admin-sidebar-head { display: none !important; }
   .admin-sidebar-nav { display: flex !important; flex-direction: row !important; flex: 1 !important; padding: 0 !important; }

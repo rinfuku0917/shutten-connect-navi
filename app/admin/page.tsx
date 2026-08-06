@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
+import { geocodeAddress } from '../lib/geocode'
 
 // ダミーデータ
 // profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
@@ -478,6 +479,79 @@ export default function AdminPage() {
     if (error) { alert('削除失敗: ' + error.message); return }
     loadPlacesList()
   }
+  // ===== 新規案件の登録 =====
+  // places への INSERT はRLSで弾かれるおそれがあるため、承認処理と同じく
+  // サービスロールのAPI経由で登録する。
+  const npLabel: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '4px' }
+  const npInput: React.CSSProperties = { width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: '#1a1a1a' }
+  const emptyNewPlace = {
+    title: '', host_id: '', prefecture: '', address: '', place_type: 'event',
+    open_days: '', open_time: '', close_time: '', fee: '', max_slots: '',
+    description: '', genres: [] as string[],
+  }
+  const [npForm, setNpForm] = useState(emptyNewPlace)
+  const [npFile, setNpFile] = useState<File | null>(null)
+  const [npSaving, setNpSaving] = useState(false)
+  const [hostOptions, setHostOptions] = useState<{ id: string, label: string }[]>([])
+
+  const loadHostOptions = async () => {
+    const { data } = await supabase.from('profiles').select('id, name, shop_name').eq('role', 'host').order('shop_name')
+    setHostOptions((data || []).map(h => ({ id: h.id, label: h.shop_name || h.name || '(名称未設定)' })))
+  }
+  useEffect(() => { loadHostOptions() }, [])
+
+  const toggleNpGenre = (g: string) => {
+    setNpForm(f => ({ ...f, genres: f.genres.includes(g) ? f.genres.filter(x => x !== g) : [...f.genres, g] }))
+  }
+
+  const saveNewPlace = async (status: 'published' | 'draft') => {
+    if (!npForm.title.trim()) { alert('案件タイトルを入力してください'); return }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { alert('ログインが必要です'); return }
+    setNpSaving(true)
+
+    // 画像は先にストレージへ上げてURLを作る
+    let imageUrl: string | null = null
+    if (npFile) {
+      const rawExt = (npFile.name.split('.').pop() || '').toLowerCase()
+      const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : 'jpg'
+      const path = 'admin/' + Date.now() + '.' + ext
+      const up = await supabase.storage.from('place-images').upload(path, npFile, { upsert: true })
+      if (up.error) { alert('画像のアップロードに失敗しました: ' + up.error.message); setNpSaving(false); return }
+      imageUrl = supabase.storage.from('place-images').getPublicUrl(path).data.publicUrl
+    }
+
+    // 地図に出すため住所から座標を取る（取れなくても登録は続行する）
+    let latitude: number | null = null, longitude: number | null = null
+    if (npForm.prefecture || npForm.address) {
+      try {
+        const geo = await geocodeAddress((npForm.prefecture || '') + (npForm.address || ''))
+        if (geo) { latitude = geo.lat; longitude = geo.lon }
+      } catch (e) { console.error('座標の取得に失敗しました', e) }
+    }
+
+    const res = await fetch('/api/admin/create-place', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requesterId: user.id,
+        place: {
+          ...npForm,
+          host_id: npForm.host_id || null,
+          max_slots: npForm.max_slots,
+          open_days: npForm.open_days.trim() ? [npForm.open_days.trim()] : [],
+          image_url: imageUrl, latitude, longitude, status,
+        },
+      }),
+    })
+    const result = await res.json()
+    setNpSaving(false)
+    if (!res.ok) { alert('登録に失敗しました: ' + (result.error || '不明なエラー')); return }
+    alert(status === 'published' ? '案件を公開しました' : '下書きとして保存しました')
+    setNpForm(emptyNewPlace); setNpFile(null); setShowNewPlace(false)
+    loadPlacesList()
+  }
+
   const deleteSellerAdmin = async (id: string) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { alert('ログインが必要です'); return }
@@ -847,31 +921,84 @@ const previewDoc = async (fileUrl: string) => {
               {showNewPlace && (
                 <div style={{ background: '#fff', borderRadius: '12px', border: '2px solid #F5A623', padding: '20px', marginBottom: '16px' }}>
                   <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '14px', color: '#B45309' }}>新規案件作成</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                    {[
-                      { label: '案件タイトル', placeholder: '例：渋谷ヒカリエ前 週末マルシェ', full: true },
-                      { label: '募集者名（オーナー）', placeholder: '例：渋谷マルシェ実行委員会' },
-                      { label: 'エリア', placeholder: '例：東京都渋谷区' },
-                      { label: '出店形態', placeholder: '例：キッチンカー' },
-                      { label: '日程', placeholder: '例：毎週土日' },
-                      { label: '時間', placeholder: '例：10:00〜17:00' },
-                      { label: '出店料', placeholder: '例：5,000円/日' },
-                      { label: '最大枠数', placeholder: '例：5' },
-                    ].map((f, i) => (
-                      <div key={i} style={f.full ? { gridColumn: '1 / -1' } : {}}>
-                        <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '4px' }}>{f.label}</label>
-                        <input type="text" placeholder={f.placeholder} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-                      </div>
-                    ))}
+                  <div className='admin-newplace-grid' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '4px' }}>募集内容・詳細</label>
-                      <textarea style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }} placeholder="募集内容を詳しく入力してください" />
+                      <label style={npLabel}>案件タイトル <span style={{ color: '#DC2626' }}>*</span></label>
+                      <input value={npForm.title} onChange={e => setNpForm({ ...npForm, title: e.target.value })} placeholder='例：美食EXPO in 熊本' style={npInput} />
+                    </div>
+                    <div>
+                      <label style={npLabel}>募集者（オーナー）</label>
+                      <select value={npForm.host_id} onChange={e => setNpForm({ ...npForm, host_id: e.target.value })} style={{ ...npInput, background: '#fff' }}>
+                        <option value=''>指定しない（運営が直接募集）</option>
+                        {hostOptions.map(h => <option key={h.id} value={h.id}>{h.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={npLabel}>種別</label>
+                      <select value={npForm.place_type} onChange={e => setNpForm({ ...npForm, place_type: e.target.value })} style={{ ...npInput, background: '#fff' }}>
+                        <option value='event'>イベント</option>
+                        <option value='regular'>常設</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={npLabel}>都道府県</label>
+                      <input value={npForm.prefecture} onChange={e => setNpForm({ ...npForm, prefecture: e.target.value })} placeholder='例：熊本県' style={npInput} />
+                    </div>
+                    <div>
+                      <label style={npLabel}>住所（地図に使います）</label>
+                      <input value={npForm.address} onChange={e => setNpForm({ ...npForm, address: e.target.value })} placeholder='例：熊本市中央区花畑町1-1' style={npInput} />
+                    </div>
+                    <div>
+                      <label style={npLabel}>日程</label>
+                      <input value={npForm.open_days} onChange={e => setNpForm({ ...npForm, open_days: e.target.value })} placeholder='例：9/12（金）〜9/14（日）' style={npInput} />
+                    </div>
+                    <div>
+                      <label style={npLabel}>時間</label>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <input value={npForm.open_time} onChange={e => setNpForm({ ...npForm, open_time: e.target.value })} placeholder='10:00' style={npInput} />
+                        <span style={{ color: '#64748B' }}>〜</span>
+                        <input value={npForm.close_time} onChange={e => setNpForm({ ...npForm, close_time: e.target.value })} placeholder='17:00' style={npInput} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={npLabel}>出店料（表示用の文言）</label>
+                      <input value={npForm.fee} onChange={e => setNpForm({ ...npForm, fee: e.target.value })} placeholder='例：3日間で6万円（税込66,000円）' style={npInput} />
+                    </div>
+                    <div>
+                      <label style={npLabel}>最大枠数</label>
+                      <input type='number' value={npForm.max_slots} onChange={e => setNpForm({ ...npForm, max_slots: e.target.value })} placeholder='例：5' style={npInput} />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={npLabel}>カテゴリー（複数選択できます）</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {PLACE_CATEGORIES.map(g => {
+                          const on = npForm.genres.includes(g)
+                          return (
+                            <label key={g} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', border: on ? '1.5px solid #F5A623' : '1.5px solid #E2E8F0', background: on ? '#FFF8EC' : '#fff', borderRadius: '999px', padding: '5px 11px', fontSize: '12px', cursor: 'pointer', color: '#1a1a1a' }}>
+                              <input type='checkbox' checked={on} onChange={() => toggleNpGenre(g)} style={{ accentColor: '#F5A623', cursor: 'pointer' }} />
+                              {g}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={npLabel}>募集内容・詳細</label>
+                      <textarea value={npForm.description} onChange={e => setNpForm({ ...npForm, description: e.target.value })} style={{ ...npInput, resize: 'vertical', minHeight: '80px', fontFamily: 'inherit' }} placeholder='募集内容を詳しく入力してください' />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={npLabel}>案件画像</label>
+                      <input type='file' accept='image/*' onChange={e => setNpFile(e.target.files?.[0] || null)} style={{ fontSize: '13px' }} />
+                      {npFile && <span style={{ fontSize: '12px', color: '#B45309', marginLeft: '8px' }}>{npFile.name}</span>}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                    <button onClick={() => setShowNewPlace(false)} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>キャンセル</button>
-                    <button style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }} onClick={() => { setShowNewPlace(false); alert('案件を作成しました（Supabase接続後に保存されます）') }}>下書き保存</button>
-                    <button style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }} onClick={() => { setShowNewPlace(false); alert('案件を公開しました') }}>公開する</button>
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '10px', lineHeight: 1.7 }}>
+                    手数料（日額固定・売上歩合）は登録後、一覧の「手数料設定」から設定してください。消費税は税抜換算8%が既定です。
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    <button disabled={npSaving} onClick={() => { setNpForm(emptyNewPlace); setNpFile(null); setShowNewPlace(false) }} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>キャンセル</button>
+                    <button disabled={npSaving} onClick={() => saveNewPlace('draft')} style={{ background: npSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '700', cursor: npSaving ? 'not-allowed' : 'pointer' }}>{npSaving ? '保存中...' : '下書き保存'}</button>
+                    <button disabled={npSaving} onClick={() => saveNewPlace('published')} style={{ background: npSaving ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: '700', cursor: npSaving ? 'not-allowed' : 'pointer' }}>{npSaving ? '保存中...' : '公開する'}</button>
                   </div>
                 </div>
               )}
