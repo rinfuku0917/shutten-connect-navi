@@ -6,6 +6,19 @@ import { supabase } from '../../../../lib/supabase'
 import { geocodeAddress } from '../../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../../lib/categories'
 
+
+// 案件フォームのうち、専用の列を持たない詳細項目。
+// places.details（JSON）にまとめて保存し、読み込み時に復元する。
+// これが無いと保存のたびに初期値へ戻ってしまう。
+const DETAIL_KEYS = ['deadline', 'format', 'visitors', 'loadIn', 'loadOut', 'menuWant', 'menuNG', 'menuOther', 'power', 'gas', 'water', 'trash', 'eatSpace', 'location', 'heightLimit', 'heightValue', 'rain', 'rainNote', 'history', 'parking', 'brand', 'notes'] as const
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function pickDetails(form: any) {
+  const out: Record<string, unknown> = {}
+  for (const k of DETAIL_KEYS) out[k] = form[k] ?? ''
+  return out
+}
+
 export default function EditPlacePage() {
   const params = useParams()
   const id = params.id as string
@@ -57,6 +70,17 @@ export default function EditPlacePage() {
         fee: data.fee || '',
         reminderDays: data.reminder_days != null ? String(data.reminder_days) : '7',
       }))
+      // 詳細項目を復元する（未保存の案件は初期値のまま）
+      if(data.details && typeof data.details === 'object') {
+        setForm(p => {
+          const next = {...p}
+          for(const k of DETAIL_KEYS) {
+            const v = (data.details as Record<string, unknown>)[k]
+            if(v !== undefined && v !== null && v !== '') (next as Record<string, unknown>)[k] = v
+          }
+          return next
+        })
+      }
       if(Array.isArray(data.schedule) && data.schedule.length>0) setSchedule(data.schedule)
       if(Array.isArray(data.genres)) setGenres(data.genres)
       setExistingImage(data.image_url || '')
@@ -100,6 +124,7 @@ export default function EditPlacePage() {
       schedule: schedule,
       genres: genres,
       image_url: imageUrl,
+      details: pickDetails(form),
     }).eq('id', id)
     if(updErr) { setErrMsg('更新失敗: ' + updErr.message); setSaving(false); return }
     router.push(backTo)

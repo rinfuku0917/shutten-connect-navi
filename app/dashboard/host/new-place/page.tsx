@@ -1,12 +1,30 @@
 'use client'
 import Link from 'next/link'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { geocodeAddress } from '../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../lib/categories'
 
+
+// 案件フォームのうち、専用の列を持たない詳細項目。
+// places.details（JSON）にまとめて保存し、読み込み時に復元する。
+// これが無いと保存のたびに初期値へ戻ってしまう。
+const DETAIL_KEYS = ['deadline', 'format', 'visitors', 'loadIn', 'loadOut', 'menuWant', 'menuNG', 'menuOther', 'power', 'gas', 'water', 'trash', 'eatSpace', 'location', 'heightLimit', 'heightValue', 'rain', 'rainNote', 'history', 'parking', 'brand', 'notes'] as const
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function pickDetails(form: any) {
+  const out: Record<string, unknown> = {}
+  for (const k of DETAIL_KEYS) out[k] = form[k] ?? ''
+  return out
+}
+
 export default function NewPlacePage() {
+  // 管理画面から開いた場合は管理画面へ返す。
+  // 管理者は募集者ダッシュボードに自分の案件を持たないため、空の画面に着いてしまう。
+  const searchParams = useSearchParams()
+  const backTo = searchParams.get('from') === 'admin' ? '/admin' : '/dashboard/host'
+
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
@@ -70,9 +88,10 @@ export default function NewPlacePage() {
       latitude: geo?.lat ?? null,
       longitude: geo?.lon ?? null,
       status: 'published',
+      details: pickDetails(form),
     })
     if(insErr) { setErrMsg('登録失敗: ' + insErr.message); setSaving(false); return }
-    router.push('/dashboard/host')
+    router.push(backTo)
   }
 
   const Radio = ({name,val,label}:{name:string,val:string,label:string}) => (
@@ -325,7 +344,7 @@ export default function NewPlacePage() {
 
           {errMsg && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:'8px',padding:'12px',fontSize:'13px',color:'#DC2626',textAlign:'center'}}>{errMsg}</div>}
           <div style={{display:'flex',gap:'16px',justifyContent:'center',paddingBottom:'40px',flexWrap:'wrap'}}>
-            <Link href='/dashboard/host' style={{border:'2px solid #E5E7EB',color:'#555',borderRadius:'999px',padding:'14px 40px',fontSize:'15px',fontWeight:'700',textDecoration:'none'}}>戻る</Link>
+            <Link href={backTo} style={{border:'2px solid #E5E7EB',color:'#555',borderRadius:'999px',padding:'14px 40px',fontSize:'15px',fontWeight:'700',textDecoration:'none'}}>戻る</Link>
             <button onClick={handleSubmit} disabled={saving} style={{background:saving?'#ccc':'#F5A623',color:'#fff',border:'none',borderRadius:'999px',padding:'14px 48px',fontSize:'15px',fontWeight:'900',cursor:saving?'not-allowed':'pointer',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>{saving?'登録中...':'この内容で登録'}</button>
           </div>
         </div>
