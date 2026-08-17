@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { geocodeAddress } from '../../../lib/geocode'
@@ -19,7 +19,7 @@ function pickDetails(form: any) {
   return out
 }
 
-export default function NewPlacePage() {
+function NewPlacePageInner() {
   // 管理画面から開いた場合は管理画面へ返す。
   // 管理者は募集者ダッシュボードに自分の案件を持たないため、空の画面に着いてしまう。
   const searchParams = useSearchParams()
@@ -350,5 +350,14 @@ export default function NewPlacePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// useSearchParams を使うページは Suspense で包まないと本番ビルドが失敗する
+export default function NewPlacePage() {
+  return (
+    <Suspense fallback={<div style={{minHeight:'100vh',background:'#FFF9E6',display:'flex',alignItems:'center',justifyContent:'center',color:'#B45309',fontWeight:'700'}}>読み込み中...</div>}>
+      <NewPlacePageInner />
+    </Suspense>
   )
 }

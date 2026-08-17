@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { geocodeAddress } from '../../../../lib/geocode'
@@ -19,7 +19,7 @@ function pickDetails(form: any) {
   return out
 }
 
-export default function EditPlacePage() {
+function EditPlacePageInner() {
   const params = useParams()
   const id = params.id as string
   // 管理画面から開いた場合は、保存後も「戻る」も管理画面へ返す。
@@ -389,5 +389,14 @@ export default function EditPlacePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// useSearchParams を使うページは Suspense で包まないと本番ビルドが失敗する
+export default function EditPlacePage() {
+  return (
+    <Suspense fallback={<div style={{minHeight:'100vh',background:'#FFF9E6',display:'flex',alignItems:'center',justifyContent:'center',color:'#B45309',fontWeight:'700'}}>読み込み中...</div>}>
+      <EditPlacePageInner />
+    </Suspense>
   )
 }
