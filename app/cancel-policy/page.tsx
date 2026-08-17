@@ -80,7 +80,6 @@ export default function CancelPolicyPage() {
           <div style={sec}>
             <h2 style={h2}>第4条（募集者・当社都合による中止）</h2>
             <p style={p}>募集者または当社の都合により出店が中止となった場合、出店者へのキャンセル料の請求は行いません。すでにお支払いいただいた出店料がある場合は、返金します。</p>
-            <p style={p}>中止に伴い出店者に生じた仕入れ・準備等の費用について、当社および募集者は補償の責任を負いません。</p>
           </div>
 
           <div style={sec}>
