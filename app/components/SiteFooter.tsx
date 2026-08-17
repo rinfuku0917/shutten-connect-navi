@@ -19,6 +19,7 @@ const cols: { head: string; items: { href: string; label: string }[] }[] = [
   { head: '会社情報', items: [
     { href: '/company', label: '運営会社' },
     { href: '/terms', label: '利用規約' },
+    { href: '/cancel-policy', label: 'キャンセルポリシー' },
     { href: '/privacy', label: 'プライバシーポリシー' },
   ] },
 ]
