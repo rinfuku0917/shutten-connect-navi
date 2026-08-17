@@ -15,13 +15,6 @@ const sellerRows: { period: string; fee: string; note?: string }[] = [
   { period: '無断キャンセル（連絡なし）', fee: '出店料の100%', note: 'あわせて3ヶ月間の利用停止' },
 ]
 
-const hostRows: { period: string; action: string }[] = [
-  { period: '出店日の15日前まで', action: '補償はありません（無償で解除できます）' },
-  { period: '出店日の14日前 〜 8日前', action: '原則補償はありません（発生済みの実費がある場合は個別にご相談ください）' },
-  { period: '出店日の7日前 〜 前日', action: '仕入れ等の実費を補償します（領収書等の確認に基づく・上限あり）' },
-  { period: '出店日当日（現地到着後の中止を含む）', action: '出店料相当額を補償します' },
-]
-
 const freeReasons = [
   '地震・台風・大雪などの天災、および気象警報の発表により出店が困難な場合',
   '公共交通機関の運休・幹線道路の通行止め等により会場への到達が困難な場合',
@@ -86,21 +79,8 @@ export default function CancelPolicyPage() {
 
           <div style={sec}>
             <h2 style={h2}>第4条（募集者・当社都合による中止）</h2>
-            <p style={p}>募集者または当社の都合により出店が中止となった場合、出店者へのキャンセル料の請求は行いません。あわせて、中止のご連絡日に応じて以下のとおり対応します。</p>
-            <div style={{ overflowX: 'auto', margin: '12px 0' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '480px' }}>
-                <thead><tr><th style={th}>中止のご連絡日</th><th style={th}>出店者への対応</th></tr></thead>
-                <tbody>
-                  {hostRows.map(r => (
-                    <tr key={r.period}>
-                      <td style={td}>{r.period}</td>
-                      <td style={td}>{r.action}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p style={p}>すでにお支払いいただいた出店料がある場合は、全額返金します。</p>
+            <p style={p}>募集者または当社の都合により出店が中止となった場合、出店者へのキャンセル料の請求は行いません。すでにお支払いいただいた出店料がある場合は、返金します。</p>
+            <p style={p}>中止に伴い出店者に生じた仕入れ・準備等の費用について、当社および募集者は補償の責任を負いません。</p>
           </div>
 
           <div style={sec}>
