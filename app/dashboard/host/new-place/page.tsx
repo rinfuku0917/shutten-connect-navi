@@ -13,6 +13,28 @@ import { PLACE_CATEGORIES } from '../../../lib/categories'
 const DETAIL_KEYS = ['deadline', 'format', 'visitors', 'loadIn', 'loadOut', 'menuWant', 'menuNG', 'menuOther', 'power', 'gas', 'water', 'trash', 'eatSpace', 'location', 'heightLimit', 'heightValue', 'rain', 'rainNote', 'history', 'parking', 'brand', 'notes'] as const
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// 募集者が入力した金額を、そのまま計算用の設定として保存する。
+// 出店料の文章だけを書いて計算設定が空のままだと、売上を報告しても
+// 出店料が0円になってしまうため、入力欄と計算設定を必ず一致させる。
+function buildFeeColumns(form: { feeFixed?: string; feePct?: string; feeUnit?: string; fee?: string }) {
+  const fixed = parseInt((form.feeFixed || '').replace(/[^0-9]/g, ''), 10) || 0
+  const pct = parseFloat((form.feePct || '').replace(/[^0-9.]/g, '')) || 0
+  const unit = form.feeUnit === 'per_event' ? 'per_event' : 'per_day'
+  // 表示用の文章は入力から自動で作る（自由記述があればそちらを優先）
+  const parts: string[] = []
+  if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + (unit === 'per_event' ? '期間' : '日'))
+  if (pct > 0) parts.push('売上の' + pct + '%')
+  const auto = parts.join(' ＋ ')
+  return {
+    // 取引先（会場）の取り分として登録する。弊社の取り分は管理画面の「料金」で設定する
+    price_fixed: fixed,
+    price_share_pct: pct,
+    place_fixed_unit: unit,
+    fee: (form.fee || '').trim() || auto || null,
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function pickDetails(form: any) {
   const out: Record<string, unknown> = {}
   for (const k of DETAIL_KEYS) out[k] = form[k] ?? ''
@@ -28,7 +50,7 @@ function NewPlacePageInner() {
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
-    fee:'', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
+    fee:'', feeFixed:'', feePct:'', feeUnit:'per_day', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
     menuWant:'', menuNG:'', menuOther:'', power:'yes', gas:'yes', water:'yes',
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
@@ -78,7 +100,7 @@ function NewPlacePageInner() {
       prefecture: form.prefecture,
       address: form.address,
       place_type: form.type,
-      fee: form.fee,
+      ...buildFeeColumns(form),
       reminder_days: parseInt(form.reminderDays, 10) || 7,
       map_url: form.mapUrl,
       recruit: form['募集内容'],
@@ -221,13 +243,47 @@ function NewPlacePageInner() {
 
             <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
               <div>
-                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店料{req}</label>
-                <input value={form.fee} onChange={e=>set('fee',e.target.value)} placeholder='例：1日10,000円' style={inputStyle}/>
+                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店料の表示文（任意）</label>
+                <input value={form.fee} onChange={e=>set('fee',e.target.value)} placeholder='未入力なら下の金額から自動で作ります' style={inputStyle}/>
               </div>
               <div>
                 <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>動員目標</label>
                 <input value={form.visitors} onChange={e=>set('visitors',e.target.value)} placeholder='例：200名' style={inputStyle}/>
               </div>
+
+            <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'8px'}}>
+              <div>
+                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店料（1日あたりの固定額）</label>
+                <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  <input type='number' value={form.feeFixed} onChange={e=>set('feeFixed',e.target.value)} placeholder='例：10000' style={inputStyle}/>
+                  <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>円</span>
+                </div>
+              </div>
+              <div>
+                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>売上歩合</label>
+                <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  <input type='number' value={form.feePct} onChange={e=>set('feePct',e.target.value)} placeholder='例：15' style={inputStyle}/>
+                  <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>%</span>
+                </div>
+              </div>
+            </div>
+            <div style={{marginBottom:'8px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'inline-flex',alignItems:'center',gap:'6px',cursor:'pointer'}}>
+                <input type='checkbox' checked={form.feeUnit==='per_event'} onChange={e=>set('feeUnit', e.target.checked ? 'per_event' : 'per_day')} style={{accentColor:'#F5A623'}}/>
+                固定額は1日ごとではなく、期間で1回のみ
+              </label>
+            </div>
+            <div style={{background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:'8px',padding:'10px 14px',fontSize:'12px',color:'#B45309',lineHeight:1.8,marginBottom:'20px'}}>
+              ここで入力した金額が、出店者の売上報告の計算にそのまま使われます。<br/>
+              {(() => {
+                const fx = parseInt((form.feeFixed||'').replace(/[^0-9]/g,''),10)||0
+                const pc = parseFloat((form.feePct||'').replace(/[^0-9.]/g,''))||0
+                if (fx===0 && pc===0) return '※ 未入力のままだと、売上を報告しても出店料が0円になります。'
+                const base = Math.floor(30000/1.08)
+                const total = fx + Math.floor(base*pc/100)
+                return '例：売上30,000円のとき、出店料は約' + total.toLocaleString() + '円になります（税抜換算8%）。'
+              })()}
+            </div>
             </div>
 
             <div style={{marginBottom:'20px'}}>
