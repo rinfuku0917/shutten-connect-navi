@@ -108,7 +108,7 @@ function InvoiceInner() {
   const right: React.CSSProperties = { ...cell, textAlign: 'right' }
 
   return (
-    <div style={{ background: '#F1F5F9', minHeight: '100vh', padding: '20px 12px' }}>
+    <div className='invoice-page' style={{ background: '#F1F5F9', minHeight: '100vh', padding: '20px 12px' }}>
       {/* 操作パネル（印刷には出さない） */}
       <div className='no-print' style={{ maxWidth: '596pt', margin: '0 auto 12px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
         <Link href='/admin' style={{ fontSize: '13px', color: '#64748B', textDecoration: 'none' }}>← 管理画面</Link>
@@ -238,19 +238,6 @@ function InvoiceInner() {
         <div style={{ fontSize: '8pt', marginTop: '13pt' }}>【備考】{ISSUER.note}</div>
       </div>
 
-      <style jsx global>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background: #fff !important; }
-          .invoice-sheet {
-            box-shadow: none !important;
-            margin: 0 !important;
-            min-height: auto !important;
-          }
-          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
-        @page { size: A4; margin: 0; }
-      `}</style>
     </div>
   )
 }

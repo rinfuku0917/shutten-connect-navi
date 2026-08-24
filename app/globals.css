@@ -252,3 +252,37 @@ img { max-width: 100%; height: auto; }
 /* 出店者一覧の見出し横のキッチンカー（スマホでは小さく） */
 .sellers-hero-icon { height: 84px; width: auto; }
 @media (max-width: 640px) { .sellers-hero-icon { height: 52px; } }
+
+/* ===== 請求書の印刷 =====
+   用紙の余白は @page 側で持たせ、紙面は幅100%で流し込む。
+   固定幅(596pt)＋余白0だと環境によって印刷領域から外れ、
+   白紙で出力されることがあるため。 */
+@page { size: A4; margin: 16.9mm; }
+
+@media print {
+  html, body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .no-print { display: none !important; }
+  .invoice-page {
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+  }
+  .invoice-sheet {
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .invoice-sheet table { page-break-inside: auto; }
+  .invoice-sheet tr { page-break-inside: avoid; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
