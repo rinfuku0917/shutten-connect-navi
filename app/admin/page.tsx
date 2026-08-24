@@ -232,7 +232,7 @@ export default function AdminPage() {
   // 料金を計算（取引先分・弊社利益・お支払い総額を返す。per_event固定は日次では0扱い＝次フェーズ）
   const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number }, ov: string = '') => {
     const rate = ov === 'ex8' ? 8 : ov === 'ex10' ? 10 : (a.share_tax_rate || 8)
-    const basis = ov === 'ex8' || ov === 'ex10' ? 'tax_excluded' : ov === 'as_entered' ? 'as_entered' : (a.share_tax_basis || 'tax_excluded')
+    const basis = ov === 'ex8' || ov === 'ex10' ? 'tax_excluded' : ov === 'as_entered' ? 'as_entered' : (a.share_tax_basis || 'as_entered')
     const base = basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
     const placeFixed = a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0)
     const companyFixed = a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0)
@@ -254,7 +254,7 @@ export default function AdminPage() {
       price_fixed: a.places?.price_fixed || 0, price_share_pct: a.places?.price_share_pct || 0,
       place_fixed_unit: a.places?.place_fixed_unit || 'per_day', company_fixed_amount: a.places?.company_fixed_amount || 0,
       company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0,
-      share_tax_basis: a.places?.share_tax_basis || 'tax_excluded', share_tax_rate: a.places?.share_tax_rate || 8
+      share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 8
     }))
     setApprovedApps(mapped)
   }
@@ -435,7 +435,7 @@ export default function AdminPage() {
       applies: p.applications?.[0]?.count ?? 0,
       status: p.status === 'published' ? '公開中' : '下書き',
       price_fixed: p.price_fixed ?? 0, price_share_pct: p.price_share_pct ?? 0, place_fixed_unit: p.place_fixed_unit || 'per_day',
-      share_tax_basis: p.share_tax_basis || 'tax_excluded', share_tax_rate: p.share_tax_rate ?? 8,
+      share_tax_basis: p.share_tax_basis || 'as_entered', share_tax_rate: p.share_tax_rate ?? 8,
       company_fixed_amount: p.company_fixed_amount ?? 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct ?? 0,
       fee: p.fee || '',
       genres: p.genres || [],
@@ -458,12 +458,12 @@ export default function AdminPage() {
 
   // ===== 料金設定モーダル =====
   const [feePlace, setFeePlace] = useState<AdminPlace | null>(null)
-  const [feeForm, setFeeForm] = useState({ price_fixed: 0, price_share_pct: 0, place_fixed_unit: 'per_day', company_fixed_amount: 0, company_fixed_unit: 'per_day', company_share_pct: 0, share_tax_basis: 'tax_excluded', share_tax_rate: 8 })
+  const [feeForm, setFeeForm] = useState({ price_fixed: 0, price_share_pct: 0, place_fixed_unit: 'per_day', company_fixed_amount: 0, company_fixed_unit: 'per_day', company_share_pct: 0, share_tax_basis: 'as_entered', share_tax_rate: 8 })
   const [feeSaving, setFeeSaving] = useState(false)
   const [saleTaxOv, setSaleTaxOv] = useState('')
   const openFeeModal = (p: AdminPlace) => {
     setFeePlace(p)
-    setFeeForm({ price_fixed: p.price_fixed || 0, price_share_pct: p.price_share_pct || 0, place_fixed_unit: p.place_fixed_unit || 'per_day', company_fixed_amount: p.company_fixed_amount || 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct || 0, share_tax_basis: p.share_tax_basis || 'tax_excluded', share_tax_rate: p.share_tax_rate || 8 })
+    setFeeForm({ price_fixed: p.price_fixed || 0, price_share_pct: p.price_share_pct || 0, place_fixed_unit: p.place_fixed_unit || 'per_day', company_fixed_amount: p.company_fixed_amount || 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct || 0, share_tax_basis: p.share_tax_basis || 'as_entered', share_tax_rate: p.share_tax_rate || 8 })
   }
   const saveFee = async () => {
     if (!feePlace) return

@@ -334,7 +334,7 @@ export default function SellerDashboard() {
     ov === 'ex8' ? { basis: 'tax_excluded', rate: 8 }
     : ov === 'ex10' ? { basis: 'tax_excluded', rate: 10 }
     : ov === 'as_entered' ? { basis: 'as_entered', rate: 10 }
-    : { basis: a.share_tax_basis || 'tax_excluded', rate: a.share_tax_rate || 8 }
+    : { basis: a.share_tax_basis || 'as_entered', rate: a.share_tax_rate || 8 }
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
   // 税率ごとに分けて入力したときの計算元（それぞれ税抜に直してから合算する）
   const splitBase = (r8: number, r10: number) => Math.floor(r8 / 1.08) + Math.floor(r10 / 1.1)
@@ -366,7 +366,7 @@ export default function SellerDashboard() {
       price_fixed: a.places?.price_fixed || 0, price_share_pct: a.places?.price_share_pct || 0,
       place_fixed_unit: a.places?.place_fixed_unit || 'per_day', company_fixed_amount: a.places?.company_fixed_amount || 0,
       company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0,
-      share_tax_basis: a.places?.share_tax_basis || 'tax_excluded', share_tax_rate: a.places?.share_tax_rate || 8,
+      share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 8,
       apply_date: a.apply_date || '',
     }))
     setMyApprovedApps(mapped)

@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       status: place.status,
       posted_at: new Date().toISOString(),
       // 手数料まわりは既定値のみ入れ、細かい設定は既存の「手数料設定」から行う
-      share_tax_basis: 'tax_excluded',
+      share_tax_basis: 'as_entered',
       share_tax_rate: 8,
     }
 
