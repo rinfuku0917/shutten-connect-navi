@@ -468,17 +468,23 @@ export default function AdminPage() {
   const saveFee = async () => {
     if (!feePlace) return
     setFeeSaving(true)
-    const { error } = await supabase.from('places').update({
+    // 権限で弾かれた場合、エラーは出ず0件更新になる。保存できたと誤解しないよう件数を確認する
+    const { data: updated, error } = await supabase.from('places').update({
       price_fixed: feeForm.price_fixed, price_share_pct: feeForm.price_share_pct, place_fixed_unit: feeForm.place_fixed_unit,
       company_fixed_amount: feeForm.company_fixed_amount, company_fixed_unit: feeForm.company_fixed_unit, company_share_pct: feeForm.company_share_pct,
       share_tax_basis: feeForm.share_tax_basis, share_tax_rate: feeForm.share_tax_rate
-    }).eq('id', feePlace.id)
+    }).eq('id', feePlace.id).select('id')
     if (error) { alert('保存失敗: ' + error.message); setFeeSaving(false); return }
+    if (!updated || updated.length === 0) {
+      alert('保存できませんでした（更新権限をご確認ください）。金額は反映されていません。')
+      setFeeSaving(false); return
+    }
     setFeeSaving(false); setFeePlace(null); loadPlacesList()
   }
   const deletePlaceAdmin = async (id: string) => {
-    const { error } = await supabase.from('places').delete().eq('id', id)
+    const { data: removed, error } = await supabase.from('places').delete().eq('id', id).select('id')
     if (error) { alert('削除失敗: ' + error.message); return }
+    if (!removed || removed.length === 0) { alert('削除できませんでした（権限をご確認ください）'); return }
     loadPlacesList()
   }
   // ===== 新規案件の登録 =====
