@@ -73,6 +73,9 @@ export default function SellerDashboard() {
   type MyApply = { id: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
   const [appliesError, setAppliesError] = useState('')
+  // この画面を見ているアカウントの種別（seller / host / admin / none）
+  const [viewerRole, setViewerRole] = useState<string>('')
+  const [viewerName, setViewerName] = useState('')
   // カレンダーの表示月。今月を初期値にし、‹ › で前後の月に移動できる
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   type DocRow = { id: string, doc_type: string, file_url: string, status: string, expiry_date: string | null }
@@ -109,11 +112,15 @@ export default function SellerDashboard() {
   const loadProfile = async () => {
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
-    if (!uid) return
+    // 出店者以外がこの画面を開くと、申込もメッセージも空になり
+    // 「反映されない」ように見えてしまうため、誰でログインしているかを判定する
+    if (!uid) { setViewerRole('none'); return }
     const { data: p } = await supabase
       .from('profiles')
-      .select('name, shop_name, email, phone, genre, address, areas, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, photos, approval_status')
+      .select('name, shop_name, email, phone, genre, address, areas, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, photos, approval_status, role')
       .eq('id', uid).single()
+    setViewerRole(p?.role === 'seller' ? 'seller' : (p?.role || 'unknown'))
+    setViewerName(p?.shop_name || p?.name || p?.email || '')
     if (p) {
       const pd: ProfileData = {
         name: p.name || '', shop_name: p.shop_name || '', email: p.email || '',
@@ -696,6 +703,31 @@ export default function SellerDashboard() {
     { key: 'sales', label: '売上報告' },
     { key: 'profile', label: 'プロフィール' },
   ]
+
+  // 出店者以外がこの画面を開いた場合は、空の画面ではなく理由を伝える
+  if (viewerRole && viewerRole !== 'seller') {
+    const label = viewerRole === 'host' ? '募集者' : viewerRole === 'admin' ? '管理者' : null
+    return (
+      <div style={{ minHeight: '100vh', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '28px 24px', maxWidth: '420px', textAlign: 'center' }}>
+          <div style={{ fontSize: '15px', fontWeight: 800, color: '#1a1a1a', marginBottom: '10px' }}>ここは出店者用の画面です</div>
+          <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.9, marginBottom: '18px' }}>
+            {viewerRole === 'none'
+              ? 'ログインしていないため、申込やメッセージを表示できません。'
+              : `現在${label ? label + 'の' : ''}「${viewerName || 'ほかのアカウント'}」でログインしています。出店者としての申込・メッセージは、出店者アカウントでログインするとご覧いただけます。`}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {viewerRole === 'host' && <Link href='/dashboard/host' style={{ background: '#F5A623', color: '#fff', borderRadius: '8px', padding: '11px', fontSize: '13px', fontWeight: 700, textDecoration: 'none' }}>募集者の画面へ</Link>}
+            {viewerRole === 'admin' && <Link href='/admin' style={{ background: '#F5A623', color: '#fff', borderRadius: '8px', padding: '11px', fontSize: '13px', fontWeight: 700, textDecoration: 'none' }}>管理画面へ</Link>}
+            <button onClick={async () => { await supabase.auth.signOut(); router.push('/login') }} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '11px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+              ログアウトして出店者でログイン
+            </button>
+            <Link href='/' style={{ fontSize: '12px', color: '#94A3B8', textDecoration: 'none', marginTop: '4px' }}>トップページに戻る</Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className='admin-shell' style={{ minHeight: '100vh', background: '#F1F5F9', display: 'flex' }}>
@@ -1414,8 +1446,6 @@ export default function SellerDashboard() {
                     <select value={saleTaxOv} onChange={e => setSaleTaxOv(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', background: '#fff' }}>
                       <option value=''>案件の設定どおりに計算する（推奨）</option>
                       <option value='as_entered'>入力した金額をそのまま使う</option>
-                      <option value='ex8'>入力額は税込。消費税8%を差し引いて計算する</option>
-                      <option value='ex10'>入力額は税込。消費税10%を差し引いて計算する</option>
                     </select>
                   </div>
                   <button onClick={saveMySale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{saleSaving ? '保存中...' : '記録する'}</button>
