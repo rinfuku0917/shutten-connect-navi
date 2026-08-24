@@ -30,7 +30,7 @@ function feeLabel(place: any): string {
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, sellerId, period, action } = await req.json()
+    const { requesterId, sellerId, period, action, dueOn } = await req.json()
     if (!requesterId || !sellerId || !period) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
@@ -117,10 +117,14 @@ export async function POST(req: Request) {
     if (action !== 'issue') {
       // 既に発行済みなら、その番号もあわせて返す
       const { data: exist } = await admin
-        .from('invoices').select('invoice_no, issued_on')
+        .from('invoices').select('invoice_no, issued_on, due_on')
         .eq('seller_id', sellerId).eq('period', period)
         .order('created_at', { ascending: false })
-      return NextResponse.json({ ...payload, invoiceNo: null, alreadyIssued: exist || [] })
+      return NextResponse.json({
+        ...payload, invoiceNo: null,
+        dueOn: exist && exist.length > 0 ? exist[0].due_on : null,
+        alreadyIssued: exist || [],
+      })
     }
 
     // ===== 正式発行: 番号を採番して記録する =====
@@ -135,15 +139,17 @@ export async function POST(req: Request) {
     const seq = Math.max(lastSeq + 1, startFrom)
     const invoiceNo = `${year}-${String(seq).padStart(4, '0')}`
 
+    const due = typeof dueOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueOn) ? dueOn : null
     const { error: iErr } = await admin.from('invoices').insert({
       invoice_no: invoiceNo, seller_id: sellerId, period,
       subtotal, tax, total, item_count: items.length,
       sale_ids: items.map(i => i.saleId),
+      due_on: due,
     })
     if (iErr) {
       return NextResponse.json({ error: '請求書の記録に失敗しました: ' + iErr.message }, { status: 500 })
     }
-    return NextResponse.json({ ...payload, invoiceNo })
+    return NextResponse.json({ ...payload, invoiceNo, dueOn: due })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '不明なエラー'
     return NextResponse.json({ error: msg }, { status: 500 })
