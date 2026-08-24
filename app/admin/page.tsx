@@ -1313,6 +1313,47 @@ const previewDoc = async (fileUrl: string) => {
                 <input type='month' value={saleMonth} onChange={e => setSaleMonth(e.target.value)} style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', flexShrink: 0 }} />
               </div>
 
+              {/* 出店者ごとにまとめて、その月の請求書を作れるようにする */}
+              {(() => {
+                const byS = new Map<string, { name: string, count: number, amount: number }>()
+                for (const r of sales) {
+                  const cur = byS.get(r.seller_id) || { name: r.sellerName, count: 0, amount: 0 }
+                  cur.count += 1; cur.amount += r.total_pay
+                  byS.set(r.seller_id, cur)
+                }
+                if (byS.size === 0) return null
+                return (
+                  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '20px' }}>
+                    <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '4px', color: '#B45309' }}>請求書の作成</div>
+                    <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '12px' }}>出店者ごとに{saleMonth.replace('-', '年')}月分をまとめて請求書にします。</div>
+                    <div className='admin-table-wrap'>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                          <tr style={{ background: '#F8FAFC' }}>
+                            {['出店者', '件数', '出店料（税抜）', '税込', ''].map(h => (
+                              <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...byS.entries()].map(([sid, v]) => (
+                            <tr key={sid}>
+                              <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9' }}>{v.name}</td>
+                              <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', whiteSpace: 'nowrap' }}>{v.count}件</td>
+                              <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', whiteSpace: 'nowrap' }}>¥{v.amount.toLocaleString()}</td>
+                              <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', whiteSpace: 'nowrap', fontWeight: 700 }}>¥{(v.amount + Math.floor(v.amount * 0.1)).toLocaleString()}</td>
+                              <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9' }}>
+                                <a href={'/admin/invoice?seller=' + sid + '&period=' + saleMonth} target='_blank' rel='noopener noreferrer' style={{ background: '#1E2A3B', color: '#fff', borderRadius: '6px', padding: '6px 12px', fontSize: '11px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>請求書を作成</a>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '20px' }}>
                 <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '14px', color: '#B45309' }}>売上を記録</div>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
