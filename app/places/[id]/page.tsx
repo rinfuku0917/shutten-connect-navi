@@ -29,6 +29,31 @@ type Place = {
   image_url: string | null
   latitude: number | null
   longitude: number | null
+  open_time: string | null
+  close_time: string | null
+  max_slots: number | null
+  details: Record<string, string> | null
+}
+
+// 案件フォームで選んだ値を、画面に出す日本語に直す
+const CHOICE: Record<string, Record<string, string>> = {
+  power: { yes: '有り', no: '無し' },
+  gas: { yes: '有り', no: '無し' },
+  water: { yes: '有り', no: '無し' },
+  eatSpace: { yes: '有り', no: '無し' },
+  trash: { self: '各自', host: '主催者処理' },
+  location: { outdoor: '屋外', outdoor_roof: '屋外（屋根あり）', indoor: '屋内' },
+  heightLimit: { no: '制限なし', yes: '制限あり' },
+  rain: { go: '雨天決行', cancel: '中止', other: 'その他' },
+  history: { yes: '有り', no: '無し' },
+  parking: { yes: '可', no: '不可' },
+  format: { kitchen: 'キッチンカー', tent: 'テント', both: 'キッチンカー・テント' },
+}
+
+function detailText(key: string, raw: string | undefined): string {
+  const v = (raw ?? '').trim()
+  if (!v) return ''
+  return CHOICE[key]?.[v] ?? v
 }
 
 function feeText(p: Place): string {
@@ -198,6 +223,61 @@ export default function PlaceDetail() {
             {place.latitude != null && place.longitude != null && (
               <div style={{ marginBottom: '20px' }}>
                 <PlacesMap pins={[{ id: place.id, title: place.title, prefecture: place.prefecture, fee: place.fee, latitude: place.latitude, longitude: place.longitude }]} />
+              </div>
+            )}
+
+            {(() => {
+              const d = place.details || {}
+              const val = (k: string) => detailText(k, d[k])
+              // 高さ制限・雨天時の対応は補足を添えて1項目にまとめる
+              const height = val('heightLimit') + (d.heightValue ? '（' + d.heightValue + '）' : '')
+              const rain = val('rain') + (d.rainNote ? '（' + d.rainNote + '）' : '')
+              const time = place.open_time || place.close_time
+                ? [place.open_time, place.close_time].filter(Boolean).join(' 〜 ') : ''
+              const rows: { label: string, value: string }[] = [
+                { label: '開催時間', value: time },
+                { label: '搬入時間', value: d.loadIn || '' },
+                { label: '搬出時間', value: d.loadOut || '' },
+                { label: '応募締切', value: d.deadline ? d.deadline.replaceAll('-', '/') : '' },
+                { label: '想定来場者数', value: d.visitors || '' },
+                { label: '募集台数', value: place.max_slots != null ? place.max_slots + '台' : '' },
+                { label: '屋内 / 屋外', value: val('location') },
+                { label: '電源', value: val('power') },
+                { label: 'ガス機器', value: val('gas') },
+                { label: '水道設備', value: val('water') },
+                { label: '飲食スペース', value: val('eatSpace') },
+                { label: 'ゴミの処理', value: val('trash') },
+                { label: '高さ制限', value: height },
+                { label: '雨天時の対応', value: rain },
+                { label: '車両の留め置き', value: val('parking') },
+                { label: '過去の開催実績', value: val('history') },
+                { label: '希望メニュー', value: d.menuWant || '' },
+                { label: 'NGメニュー', value: d.menuNG || '' },
+                { label: '他の出店予定メニュー', value: d.menuOther || '' },
+                { label: '販売禁止・ブランド制限', value: d.brand || '' },
+              ].filter(r => r.value)
+              if (rows.length === 0) return null
+              return (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', overflow: 'hidden', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: '900', padding: '16px 20px 0', color: '#1a1a1a' }}>出店条件</h3>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+                    <tbody>
+                      {rows.map((row, i) => (
+                        <tr key={row.label} style={{ borderBottom: i < rows.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+                          <td style={{ padding: '12px 20px', background: '#FFFBEB', fontWeight: '700', fontSize: '13px', color: '#B45309', width: '160px', verticalAlign: 'top' }}>{row.label}</td>
+                          <td style={{ padding: '12px 20px', fontSize: '14px', color: '#1a1a1a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{row.value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
+
+            {place.details?.notes && (
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', padding: '20px', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '900', marginBottom: '10px', color: '#1a1a1a' }}>備考・ご案内</h3>
+                <p style={{ fontSize: '14px', color: '#555', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{place.details.notes}</p>
               </div>
             )}
 
