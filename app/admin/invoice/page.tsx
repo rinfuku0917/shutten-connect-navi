@@ -164,7 +164,6 @@ function InvoiceInner() {
             {inv.seller.personName && <div style={{ fontSize: '12pt', marginTop: '5pt' }}>{inv.seller.personName} 様</div>}
           </div>
           <div style={{ fontSize: '9pt', lineHeight: 1.75, textAlign: 'right', whiteSpace: 'nowrap' }}>
-            <img src='/logo.svg' alt='出店コネクトナビ' className='invoice-logo' style={{ height: '26pt', width: 'auto', display: 'inline-block', marginBottom: '4pt' }} />
             <div>{ISSUER.name}</div>
             <div>{ISSUER.zip} {ISSUER.address}</div>
             <div>{ISSUER.mail}</div>

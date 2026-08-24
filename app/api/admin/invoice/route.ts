@@ -89,7 +89,9 @@ export async function POST(req: Request) {
       const p = placeOf.get(s.place_id)
       const amount = s.total_pay ?? s.fee ?? 0
       const cond = feeLabel(p)
-      const md = s.sale_date.slice(5).replace('-', '/').replace(/^0/, '')
+      // 元の請求書と同じ「7/1」形式にする（月・日とも先頭のゼロを外す）
+      const [mm, dd] = s.sale_date.slice(5).split('-')
+      const md = `${parseInt(mm, 10)}/${parseInt(dd, 10)}`
       return {
         no: i + 1,
         saleId: s.id,
