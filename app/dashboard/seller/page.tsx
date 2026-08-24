@@ -1426,7 +1426,7 @@ export default function SellerDashboard() {
           {tab === 'sales' && (
             <>
               <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
-                <span>承認された案件ごとに売上を入力すると、出店料（出店コネクトナビへのお支払い額）とあなたの利益（手取り）が自動計算されます。</span>
+                <span>承認された案件ごとに売上を入力すると、出店料（出店コネクトナビへのお支払い額）とあなたの利益（手取り）が自動計算されます。<br /><strong>出店料の請求は税別となります。</strong>ご請求時に消費税10%を加算した金額をご請求します。</span>
               </div>
 
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '16px' }}>
@@ -1475,8 +1475,8 @@ export default function SellerDashboard() {
                 </label>
                 <div style={{ marginTop: '8px', fontSize: '11px', color: '#94A3B8', lineHeight: 1.7 }}>
                   {saleSplit
-                    ? '軽減税率8%の商品（フードやドリンクの持ち帰りなど）と、10%の商品（お酒・物販・その場でのご飲食など）に分けて入力してください。合計が売上金額になります。'
-                    : '売上金額は、レジの合計（お客様からお預かりした金額）をそのまま入力してください。お酒や物販など税率が混ざる場合は、上の「税率ごとに分けて入力する」にチェックを入れると正確に計算できます。'}
+                    ? 'ご自身の商品の税率で分けて入力してください。軽減税率8%の商品（フードやドリンクの持ち帰りなど）と、10%の商品（お酒・物販・その場でのご飲食など）に分けると、税抜の売上をもとに出店料を計算します。合計が売上金額になります。'
+                    : '売上金額は、レジの合計（お客様からお預かりした金額）をそのまま入力してください。通常はこのままで問題ありません。ご自身の商品の税率で分けて計算したい場合のみ、上のチェックをご利用ください。'}
                 </div>
                 {saleAppId && (() => {
                   const a = myApprovedApps.find(x => x.application_id === saleAppId); if (!a) return null
@@ -1505,7 +1505,9 @@ export default function SellerDashboard() {
                           {!exTax && <div>出店料の計算元：<strong>{base.toLocaleString()}円</strong>（入力した金額をそのまま使用）</div>}
                         </>
                       )}
-                      <div>出店料（出店コネクトナビへのお支払い・税別）：<strong>{fee.toLocaleString()}円</strong></div>
+                      <div>出店料（税別）：<strong>{fee.toLocaleString()}円</strong></div>
+                      <div>消費税（10%）：<strong>{Math.floor(fee * 0.1).toLocaleString()}円</strong></div>
+                      <div>ご請求額（税込）：<strong>{(fee + Math.floor(fee * 0.1)).toLocaleString()}円</strong></div>
                       <div style={{ borderTop: '1px solid #E2E8F0', marginTop: '6px', paddingTop: '6px' }}>あなたの利益（手取り）：<strong style={{ color: '#16A34A', fontSize: '14px' }}>{(rev - fee).toLocaleString()}円</strong></div>
                     </div>
                   )
