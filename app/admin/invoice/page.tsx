@@ -134,6 +134,8 @@ function InvoiceInner() {
             {inv.seller.personName && <div style={{ fontSize: '12.5px' }}>{inv.seller.personName} 様</div>}
           </div>
           <div style={{ fontSize: '11px', lineHeight: 1.9, textAlign: 'right', whiteSpace: 'nowrap' }}>
+            {/* 印刷でも消えないよう、背景画像ではなく img で置く */}
+            <img src='/logo.svg' alt='出店コネクトナビ' className='invoice-logo' style={{ height: '34px', width: 'auto', marginBottom: '6px', display: 'inline-block' }} />
             <div style={{ fontSize: '13px', fontWeight: 700 }}>{ISSUER.name}</div>
             <div>{ISSUER.zip} {ISSUER.address}</div>
             <div>{ISSUER.mail}</div>
@@ -195,6 +197,9 @@ function InvoiceInner() {
           .no-print { display: none !important; }
           body { background: #fff !important; }
           .invoice-sheet { box-shadow: none !important; max-width: none !important; padding: 0 !important; }
+          /* 印刷時に画像や色が飛ばないようにする */
+          .invoice-logo { height: 34px !important; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
         @page { size: A4; margin: 16mm; }
       `}</style>
