@@ -72,6 +72,7 @@ export default function SellerDashboard() {
   const [unread, setUnread] = useState(0)
   type MyApply = { id: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
+  const [appliesError, setAppliesError] = useState('')
   // カレンダーの表示月。今月を初期値にし、‹ › で前後の月に移動できる
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   type DocRow = { id: string, doc_type: string, file_url: string, status: string, expiry_date: string | null }
@@ -430,11 +431,14 @@ export default function SellerDashboard() {
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     if (!uid) return
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('applications')
       .select('id, apply_date, format, status, places(title, reminder_days)')
       .eq('seller_id', uid)
       .order('created_at', { ascending: false })
+    // 読み込みに失敗したときに、申込が無いのと同じ見た目にならないようにする
+    if (error) { setAppliesError('申込の読み込みに失敗しました: ' + error.message); return }
+    setAppliesError('')
     if (!data) return
     const mapped: MyApply[] = data.map((a: any) => {
       const s = statusMap[a.status] || { label: a.status, color: '#555', bg: '#F3F4F6' }
@@ -614,6 +618,23 @@ export default function SellerDashboard() {
     )
   }
 
+
+  // 自分が送ったメッセージを取り消す（打ち間違いの取り消し用）
+  const retractMessage = async (messageId: string) => {
+    if (!window.confirm('このメッセージを取り消しますか？\n相手の画面からも削除されます。')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { alert('ログインが必要です'); return }
+    const res = await fetch('/api/messages/retract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId, requesterId: user.id }),
+    })
+    const result = await res.json()
+    if (!res.ok) { alert('取り消せませんでした: ' + (result.error || '不明なエラー')); return }
+    if (appId) openThread(appId)
+    loadMessages()
+  }
+
   // メッセージを送信する
   const sendMessage = async () => {
     const text = msg.trim()
@@ -642,6 +663,29 @@ export default function SellerDashboard() {
   }
 
   useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile() }, [])
+
+  // 別のタブで申込や承認をしたあとに戻ってきたとき、古い表示のままにならないよう読み直す。
+  // 画面を開いたときに一度読むだけだと「承認したのに反映されない」ように見えてしまう。
+  useEffect(() => {
+    const reload = () => {
+      if (document.visibilityState !== 'visible') return
+      loadApplies(); loadMessages(); loadDocs()
+    }
+    document.addEventListener('visibilitychange', reload)
+    window.addEventListener('focus', reload)
+    return () => {
+      document.removeEventListener('visibilitychange', reload)
+      window.removeEventListener('focus', reload)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // タブを切り替えたときも最新にする
+  useEffect(() => {
+    if (tab === 'calendar' || tab === 'applies') loadApplies()
+    if (tab === 'messages') loadMessages()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   const navItems = [
     { key: 'home', label: 'ホーム' },
@@ -697,7 +741,13 @@ export default function SellerDashboard() {
             {tab === 'sales' && '売上報告'}
             {tab === 'profile' && 'プロフィール'}
           </div>
-          <Link href="/places" style={{ background: '#F5A623', color: '#fff', borderRadius: '8px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>＋ 新しい案件を探す</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            {/* スマホではサイドバーのアカウント表示が隠れるため、ここにも出す */}
+            <span style={{ fontSize: '11px', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>
+              {profile.shop_name || profile.name || profile.email || ''}
+            </span>
+            <Link href="/places" style={{ background: '#F5A623', color: '#fff', borderRadius: '8px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>＋ 新しい案件を探す</Link>
+          </div>
         </div>
 
         <div style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
@@ -867,6 +917,31 @@ export default function SellerDashboard() {
                       <div style={{ textAlign: 'center', fontSize: '11px', color: '#64748B', marginBottom: '12px' }}>
                         {monthCount > 0 ? `この月の申込 ${monthCount}件` : 'この月の申込はありません'}
                       </div>
+                      {monthCount === 0 && (() => {
+                        // 表示中の月に無くても他の月にあるなら、その月へ移動できるようにする
+                        const others = myApplies.map(a => a.rawDate).filter(Boolean).sort() as string[]
+                        if (others.length === 0) {
+                          return appliesError ? null : (
+                            <div style={{ textAlign: 'center', fontSize: '11px', color: '#94A3B8', marginBottom: '12px' }}>
+                              このアカウントにはまだ申込がありません。
+                            </div>
+                          )
+                        }
+                        const cur = `${y}-${pad(m + 1)}`
+                        const next = others.find(d => d.slice(0, 7) > cur) || others[others.length - 1]
+                        const [ny, nm] = next.split('-')
+                        return (
+                          <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+                            <button onClick={() => setCalMonth({ y: parseInt(ny, 10), m: parseInt(nm, 10) - 1 })}
+                              style={{ border: '1px solid #FDE68A', background: '#FFFBEB', color: '#B45309', borderRadius: '999px', padding: '5px 14px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
+                              他の月に{others.length}件の申込があります（{parseInt(ny, 10)}年{parseInt(nm, 10)}月へ移動）
+                            </button>
+                          </div>
+                        )
+                      })()}
+                      {appliesError && (
+                        <div style={{ textAlign: 'center', fontSize: '11px', color: '#DC2626', marginBottom: '12px' }}>{appliesError}</div>
+                      )}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '6px' }}>
                         {['日','月','火','水','木','金','土'].map((d, i) => (
                           <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: '700', color: i === 0 ? '#DC2626' : i === 6 ? '#1D4ED8' : '#64748B', padding: '6px 0' }}>{d}</div>
@@ -934,6 +1009,9 @@ export default function SellerDashboard() {
                             <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>
                               {m.body && <div>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, true)}
+                            </div>
+                            <div style={{ textAlign: 'right', marginTop: '3px' }}>
+                              <button onClick={() => retractMessage(m.id)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline' }}>送信を取り消す</button>
                             </div>
                           </div>
                         ) : (

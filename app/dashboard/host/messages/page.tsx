@@ -86,6 +86,18 @@ export default function HostMessages() {
 
   useEffect(() => { loadThreads() }, [])
 
+  // 別のタブで申込や承認があったときに備え、画面に戻ったら読み直す
+  useEffect(() => {
+    const reload = () => { if (document.visibilityState === 'visible') loadThreads() }
+    document.addEventListener('visibilitychange', reload)
+    window.addEventListener('focus', reload)
+    return () => {
+      document.removeEventListener('visibilitychange', reload)
+      window.removeEventListener('focus', reload)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // 添付ファイルを表示する（画像はインライン、それ以外はリンク）
   const renderAttachment = (filePath: string, isMine: boolean) => {
     const { data } = supabase.storage.from('message-attachments').getPublicUrl(filePath)
@@ -101,6 +113,23 @@ export default function HostMessages() {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '6px', fontSize: '12px', textDecoration: 'underline', color: isMine ? '#fff' : '#2563EB' }}>📎 ファイルを開く</a>
     )
+  }
+
+
+  // 自分が送ったメッセージを取り消す（打ち間違いの取り消し用）
+  const retractMessage = async (messageId: string) => {
+    if (!window.confirm('このメッセージを取り消しますか？\n相手の画面からも削除されます。')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { alert('ログインが必要です'); return }
+    const res = await fetch('/api/messages/retract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId, requesterId: user.id }),
+    })
+    const result = await res.json()
+    if (!res.ok) { alert('取り消せませんでした: ' + (result.error || '不明なエラー')); return }
+    if (appId) openThread(appId)
+    loadThreads()
   }
 
   const sendMessage = async () => {
@@ -191,6 +220,11 @@ export default function HostMessages() {
                         {m.body && <div>{m.body}</div>}
                         {m.file_url && renderAttachment(m.file_url, mine)}
                       </div>
+                      {mine && (
+                        <div style={{ textAlign: 'right', marginTop: '3px' }}>
+                          <button onClick={() => retractMessage(m.id)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline' }}>送信を取り消す</button>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
