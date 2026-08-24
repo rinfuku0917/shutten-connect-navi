@@ -336,8 +336,8 @@ export default function SellerDashboard() {
     : ov === 'as_entered' ? { basis: 'as_entered', rate: 10 }
     : { basis: a.share_tax_basis || 'as_entered', rate: a.share_tax_rate || 8 }
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
-  // 税率ごとに分けて入力したときの計算元（それぞれ税抜に直してから合算する）
-  const splitBase = (r8: number, r10: number) => Math.floor(r8 / 1.08) + Math.floor(r10 / 1.1)
+  // 税率ごとに分けて入力した場合も、出店料は売上の合計額から計算する。
+  // 分けた内訳は記録用に保存するだけで、金額は分けても分けなくても同じになる。
 
   const calcFee = (revenue: number, a: SellerApp, ov: string = '', baseOverride: number | null = null) => {
     const { basis, rate } = taxOf(a, ov)
@@ -407,18 +407,15 @@ export default function SellerDashboard() {
     if (app.apply_date && saleDate < app.apply_date) { alert('売上日は出店日（' + app.apply_date + '）以降を指定してください。'); return }
     if (saleDate > td) { alert('未来の日付では売上を記録できません。'); return }
     setSaleSaving(true)
-    const base = saleSplit ? splitBase(rev8, rev10) : null
-    const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv, base)
+    const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv)
     const applied = taxOf(app, saleTaxOv)
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     const row: Record<string, unknown> = {
       application_id: app.application_id, place_id: app.place_id, seller_id: uid,
       sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: total,
-      // 税率ごとに分けた場合も税抜換算の一種として記録する。
-      // tax_basis は許可値が決まっており 'mixed' は入らないため、
-      // 分割かどうかは下の revenue_reduced / revenue_standard の有無で判別する。
-      tax_basis: saleSplit ? 'tax_excluded' : applied.basis, tax_rate: saleSplit ? 8 : applied.rate,
+      // 分割したかどうかは revenue_reduced / revenue_standard の有無で判別する
+      tax_basis: applied.basis, tax_rate: applied.rate,
     }
     // 内訳は分けて入力したときだけ渡す
     if (saleSplit) { row.revenue_reduced = rev8; row.revenue_standard = rev10 }
@@ -1475,7 +1472,7 @@ export default function SellerDashboard() {
                 </label>
                 <div style={{ marginTop: '8px', fontSize: '11px', color: '#94A3B8', lineHeight: 1.7 }}>
                   {saleSplit
-                    ? 'ご自身の商品の税率で分けて入力してください。軽減税率8%の商品（フードやドリンクの持ち帰りなど）と、10%の商品（お酒・物販・その場でのご飲食など）に分けると、税抜の売上をもとに出店料を計算します。合計が売上金額になります。'
+                    ? 'ご自身の商品の税率で分けて入力してください。軽減税率8%の商品（フードやドリンクの持ち帰りなど）と、10%の商品（お酒・物販・その場でのご飲食など）の内訳を記録できます。出店料は合計額から計算するため、分けても金額は変わりません。'
                     : '売上金額は、レジの合計（お客様からお預かりした金額）をそのまま入力してください。通常はこのままで問題ありません。ご自身の商品の税率で分けて計算したい場合のみ、上のチェックをご利用ください。'}
                 </div>
                 {saleAppId && (() => {
@@ -1483,20 +1480,19 @@ export default function SellerDashboard() {
                   const r8 = parseInt(saleRev8 || '0', 10) || 0
                   const r10 = parseInt(saleRev10 || '0', 10) || 0
                   const rev = saleSplit ? r8 + r10 : (parseInt(saleRevenue || '0', 10) || 0)
-                  const override = saleSplit ? splitBase(r8, r10) : null
-                  const fee = calcFee(rev, a, saleTaxOv, override).total
+                  const fee = calcFee(rev, a, saleTaxOv).total
                   // 出店料が何を元に計算されたかを明示する（計算自体は calcFee に任せる）
                   const { basis, rate } = taxOf(a, saleTaxOv)
                   const exTax = basis === 'tax_excluded'
-                  const base = override != null ? override : (exTax ? Math.floor(rev / (1 + rate / 100)) : rev)
+                  const base = exTax ? Math.floor(rev / (1 + rate / 100)) : rev
                   return (
                     <div style={{ marginTop: '12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px', fontSize: '12px', color: '#475569', lineHeight: 1.9 }}>
                       {saleSplit ? (
                         <>
-                          <div>8%対象：<strong>{r8.toLocaleString()}円</strong>（税抜 {Math.floor(r8 / 1.08).toLocaleString()}円）</div>
-                          <div>10%対象：<strong>{r10.toLocaleString()}円</strong>（税抜 {Math.floor(r10 / 1.1).toLocaleString()}円）</div>
+                          <div>8%対象：<strong>{r8.toLocaleString()}円</strong></div>
+                          <div>10%対象：<strong>{r10.toLocaleString()}円</strong></div>
                           <div>売上の合計：<strong>{rev.toLocaleString()}円</strong></div>
-                          <div>出店料の計算元：<strong>{base.toLocaleString()}円</strong>（税抜の合計）</div>
+                          <div>出店料の計算元：<strong>{base.toLocaleString()}円</strong>{exTax ? '（消費税' + rate + '%分を差し引いた税抜金額）' : '（売上の合計をそのまま使用）'}</div>
                         </>
                       ) : (
                         <>
