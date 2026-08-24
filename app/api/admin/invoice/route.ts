@@ -75,7 +75,17 @@ export async function POST(req: Request) {
       .in('id', placeIds)
     const placeOf = new Map((places || []).map(p => [p.id, p]))
 
-    const items = sales.map((s, i) => {
+    // 出店料が0円の売上は明細に載せない（案件の料金設定が未入力のケース）。
+    // ただし件数は返して、管理画面で気づけるようにする。
+    const zero = sales.filter(s => (s.total_pay ?? s.fee ?? 0) <= 0)
+    const billable = sales.filter(s => (s.total_pay ?? s.fee ?? 0) > 0)
+    if (billable.length === 0) {
+      return NextResponse.json({
+        error: 'この月の請求対象がありません。出店料が0円の売上が' + zero.length + '件あります。案件の料金設定をご確認ください。',
+      }, { status: 404 })
+    }
+
+    const items = billable.map((s, i) => {
       const p = placeOf.get(s.place_id)
       const amount = s.total_pay ?? s.fee ?? 0
       const cond = feeLabel(p)
@@ -101,6 +111,7 @@ export async function POST(req: Request) {
       items,
       subtotal, tax, total,
       itemCount: items.length,
+      zeroCount: zero.length,
     }
 
     if (action !== 'issue') {

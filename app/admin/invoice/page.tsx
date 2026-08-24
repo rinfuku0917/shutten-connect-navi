@@ -27,6 +27,7 @@ type Invoice = {
   tax: number
   total: number
   itemCount: number
+  zeroCount?: number
   invoiceNo: string | null
   alreadyIssued?: { invoice_no: string; issued_on: string }[]
 }
@@ -103,6 +104,11 @@ function InvoiceInner() {
       {!inv.invoiceNo && (inv.alreadyIssued?.length ?? 0) > 0 && (
         <div className='no-print' style={{ maxWidth: '760px', margin: '0 auto 16px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#92400E' }}>
           この出店者・対象月の請求書は既に発行されています（{inv.alreadyIssued?.map(x => x.invoice_no).join('、')}）。重複しないようご注意ください。
+        </div>
+      )}
+      {(inv.zeroCount ?? 0) > 0 && (
+        <div className='no-print' style={{ maxWidth: '760px', margin: '0 auto 16px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#DC2626' }}>
+          出店料が0円の売上が{inv.zeroCount}件あるため、明細に含めていません。案件の料金設定（歩合・固定額）をご確認ください。
         </div>
       )}
       {!inv.invoiceNo && (
