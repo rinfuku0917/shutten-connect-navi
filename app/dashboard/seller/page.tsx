@@ -76,6 +76,7 @@ export default function SellerDashboard() {
   // この画面を見ているアカウントの種別（seller / host / admin / none）
   const [viewerRole, setViewerRole] = useState<string>('')
   const [viewerName, setViewerName] = useState('')
+  const [msgError, setMsgError] = useState('')
   // カレンダーの表示月。今月を初期値にし、‹ › で前後の月に移動できる
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   type DocRow = { id: string, doc_type: string, file_url: string, status: string, expiry_date: string | null }
@@ -574,12 +575,17 @@ export default function SellerDashboard() {
   const openThread = async (aid: string) => {
     setAppId(aid)
     setChatOpen(aid)
-    const uid = myId
-    const { data: msgs } = await supabase
+    // myId はまだ入っていないことがあるため、その場で取り直す
+    const { data: ud } = await supabase.auth.getUser()
+    const uid = ud.user?.id || myId
+    if (uid && uid !== myId) setMyId(uid)
+    const { data: msgs, error } = await supabase
       .from('messages')
       .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
       .eq('application_id', aid)
       .order('sent_at', { ascending: true })
+    if (error) { setMsgError('メッセージを読み込めませんでした: ' + error.message); return }
+    setMsgError('')
     if (msgs) setDbMessages(msgs as DbMessage[])
     if (uid) {
       await supabase.from('messages').update({ read_at: new Date().toISOString() })
@@ -693,6 +699,19 @@ export default function SellerDashboard() {
     if (tab === 'messages') loadMessages()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
+
+  // メッセージ画面を開いている間は、相手からの新着が自動で入るようにする。
+  // 画面を開いたままだと届いたメッセージに気づけないため。
+  useEffect(() => {
+    if (tab !== 'messages') return
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      loadMessages()
+      if (appId) openThread(appId)
+    }, 15000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, appId])
 
   const navItems = [
     { key: 'home', label: 'ホーム' },
@@ -1034,7 +1053,7 @@ export default function SellerDashboard() {
                     <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>{threads.find(t => t.application_id === appId)?.placeTitle || '案件'}｜運営とのやり取り</div>
                     <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC' }}>
                       {dbMessages.length === 0 ? (
-                        <div style={{ color: '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>まだメッセージがありません</div>
+                        <div style={{ color: msgError ? '#DC2626' : '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>{msgError || 'まだメッセージがありません'}</div>
                       ) : dbMessages.map(m => (
                         m.sender_id === myId ? (
                           <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>

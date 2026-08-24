@@ -86,6 +86,17 @@ export default function HostMessages() {
 
   useEffect(() => { loadThreads() }, [])
 
+  // 開いている間、相手からの新着を自動で取りに行く
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      loadThreads()
+      if (appId) openThread(appId)
+    }, 15000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appId])
+
   // 別のタブで申込や承認があったときに備え、画面に戻ったら読み直す
   useEffect(() => {
     const reload = () => { if (document.visibilityState === 'visible') loadThreads() }
