@@ -53,6 +53,7 @@ function InvoiceInner() {
   const params = useSearchParams()
   const sellerId = params.get('seller') || ''
   const period = params.get('period') || ''
+  const dueParam = params.get('due') || ''
   const [inv, setInv] = useState<Invoice | null>(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
@@ -80,7 +81,7 @@ function InvoiceInner() {
     if (!sellerId || !period) { setErr('出店者と対象月が指定されていません'); setLoading(false); return }
     const d = new Date()
     setIssuedOn(`${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`)
-    setDueOn(defaultDue(period))
+    setDueOn(/^\d{4}-\d{2}-\d{2}$/.test(dueParam) ? dueParam : defaultDue(period))
     call('preview')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sellerId, period])
@@ -148,14 +149,18 @@ function InvoiceInner() {
         fontFamily: '"Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif',
         boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
       }}>
-        {/* 右上：請求書番号・発行日・振込期限 */}
-        <div style={{ textAlign: 'right', fontSize: '9pt', lineHeight: 1.55 }}>
-          <div>請求書番号:{inv.invoiceNo || '（未発行）'}</div>
-          <div>発行日:{issuedOn}</div>
-          {dueOn && <div>お支払期限:{jpDate(dueOn)}</div>}
+        {/* 上段：左にロゴ、右に請求書番号・発行日・振込期限（元のPDFと同じ配置） */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <img src='/logo.svg' alt='出店コネクトナビ' className='invoice-logo'
+            style={{ height: '24pt', width: 'auto', marginLeft: '6.8pt', display: 'block' }} />
+          <div style={{ textAlign: 'right', fontSize: '9pt', lineHeight: 1.55 }}>
+            <div>請求書番号:{inv.invoiceNo || '（未発行）'}</div>
+            <div>発行日:{issuedOn}</div>
+            {dueOn && <div>お支払期限:{jpDate(dueOn)}</div>}
+          </div>
         </div>
 
-        <h1 style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 400, letterSpacing: '0.28em', margin: '28pt 0 0', textIndent: '0.28em' }}>請求書</h1>
+        <h1 style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 400, letterSpacing: '0.28em', margin: '20pt 0 0', textIndent: '0.28em' }}>請求書</h1>
 
         {/* 宛先と差出人 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '24pt' }}>

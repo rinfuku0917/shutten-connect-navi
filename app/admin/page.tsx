@@ -419,6 +419,8 @@ export default function AdminPage() {
   const [pPref, setPPref] = useState('')
   const [pGenre, setPGenre] = useState('')
   const [placeStatusFilter, setPlaceStatusFilter] = useState('')
+  // 請求書の振込期限。既定は対象月の翌月末日で、請求書を開くときに引き渡す
+  const [invoiceDue, setInvoiceDue] = useState('')
   const [placesPage, setPlacesPage] = useState(1)
   const loadPlacesList = async () => {
     setPlacesLoading(true)
@@ -709,6 +711,12 @@ export default function AdminPage() {
   // salesタブを開いたら読み込む
   useEffect(() => { if (tab === 'sales' && authChecked) { loadApprovedApps(); loadSales() } }, [tab, authChecked])
   useEffect(() => { if (tab === 'sales' && authChecked) loadSales() }, [saleMonth])
+  useEffect(() => {
+    if (!/^\d{4}-\d{2}$/.test(saleMonth)) return
+    const [y, m] = saleMonth.split('-').map(Number)
+    const d = new Date(y, m + 1, 0)   // 翌月末日
+    setInvoiceDue(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+  }, [saleMonth])
 
   // 書類プレビュー用モーダルの状態（横向き画像対応）
   const [previewImg, setPreviewImg] = useState<string | null>(null);
@@ -1325,7 +1333,13 @@ const previewDoc = async (fileUrl: string) => {
                 return (
                   <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '20px' }}>
                     <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '4px', color: '#B45309' }}>請求書の作成</div>
-                    <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '12px' }}>出店者ごとに{saleMonth.replace('-', '年')}月分をまとめて請求書にします。</div>
+                    <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '10px' }}>出店者ごとに{saleMonth.replace('-', '年')}月分をまとめて請求書にします。</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>振込期限</span>
+                      <input type='date' value={invoiceDue} onChange={e => setInvoiceDue(e.target.value)}
+                        style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '7px 10px', fontSize: '13px' }} />
+                      <span style={{ fontSize: '11px', color: '#94A3B8' }}>ここで設定した期限が請求書に印字されます（既定は翌月末日）。</span>
+                    </div>
                     <div className='admin-table-wrap'>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                         <thead>
@@ -1343,7 +1357,7 @@ const previewDoc = async (fileUrl: string) => {
                               <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', whiteSpace: 'nowrap' }}>¥{v.amount.toLocaleString()}</td>
                               <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', whiteSpace: 'nowrap', fontWeight: 700 }}>¥{(v.amount + Math.floor(v.amount * 0.1)).toLocaleString()}</td>
                               <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9' }}>
-                                <a href={'/admin/invoice?seller=' + sid + '&period=' + saleMonth} target='_blank' rel='noopener noreferrer' style={{ background: '#1E2A3B', color: '#fff', borderRadius: '6px', padding: '6px 12px', fontSize: '11px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>請求書を作成</a>
+                                <a href={'/admin/invoice?seller=' + sid + '&period=' + saleMonth + (invoiceDue ? '&due=' + invoiceDue : '')} target='_blank' rel='noopener noreferrer' style={{ background: '#1E2A3B', color: '#fff', borderRadius: '6px', padding: '6px 12px', fontSize: '11px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>請求書を作成</a>
                               </td>
                             </tr>
                           ))}
