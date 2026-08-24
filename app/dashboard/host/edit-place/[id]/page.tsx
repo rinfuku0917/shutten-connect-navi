@@ -26,10 +26,11 @@ function buildFeeColumns(form: { feeFixed?: string; feePct?: string; feeUnit?: s
   if (pct > 0) parts.push('売上の' + pct + '%')
   const auto = parts.join(' ＋ ')
   return {
-    // 取引先（会場）の取り分として登録する。弊社の取り分は管理画面の「料金」で設定する
-    price_fixed: fixed,
-    price_share_pct: pct,
-    place_fixed_unit: unit,
+    // 募集時に決めた歩合は「弊社の利益」として登録する。
+    // 施設提供者に渡す分（取引先の取り分）は、管理画面の「料金」から別途設定する。
+    company_fixed_amount: fixed,
+    company_share_pct: pct,
+    company_fixed_unit: unit,
     fee: (form.fee || '').trim() || auto || null,
   }
 }
@@ -90,9 +91,9 @@ function EditPlacePageInner() {
         mapUrl: data.map_url || '',
         '募集内容': data.recruit || '',
         fee: data.fee || '',
-        feeFixed: data.price_fixed ? String(data.price_fixed) : '',
-        feePct: data.price_share_pct ? String(data.price_share_pct) : '',
-        feeUnit: data.place_fixed_unit === 'per_event' ? 'per_event' : 'per_day',
+        feeFixed: data.company_fixed_amount ? String(data.company_fixed_amount) : '',
+        feePct: data.company_share_pct ? String(data.company_share_pct) : '',
+        feeUnit: data.company_fixed_unit === 'per_event' ? 'per_event' : 'per_day',
         reminderDays: data.reminder_days != null ? String(data.reminder_days) : '7',
       }))
       // 詳細項目を復元する（未保存の案件は初期値のまま）
@@ -323,7 +324,7 @@ function EditPlacePageInner() {
                 if (fx===0 && pc===0) return '※ 未入力のままだと、売上を報告しても出店料が0円になります。'
                 const base = Math.floor(30000/1.08)
                 const total = fx + Math.floor(base*pc/100)
-                return '例：売上30,000円のとき、出店料は約' + total.toLocaleString() + '円になります（税抜換算8%）。'
+                return '例：売上30,000円のとき、この設定分は約' + total.toLocaleString() + '円です（税抜換算8%）。施設提供者へお渡しする分がある場合は、運営が別途加算します。'
               })()}
             </div>
             </div>

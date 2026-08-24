@@ -26,10 +26,11 @@ function buildFeeColumns(form: { feeFixed?: string; feePct?: string; feeUnit?: s
   if (pct > 0) parts.push('売上の' + pct + '%')
   const auto = parts.join(' ＋ ')
   return {
-    // 取引先（会場）の取り分として登録する。弊社の取り分は管理画面の「料金」で設定する
-    price_fixed: fixed,
-    price_share_pct: pct,
-    place_fixed_unit: unit,
+    // 募集時に決めた歩合は「弊社の利益」として登録する。
+    // 施設提供者に渡す分（取引先の取り分）は、管理画面の「料金」から別途設定する。
+    company_fixed_amount: fixed,
+    company_share_pct: pct,
+    company_fixed_unit: unit,
     fee: (form.fee || '').trim() || auto || null,
   }
 }
@@ -50,7 +51,7 @@ function NewPlacePageInner() {
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
-    fee:'', feeFixed:'', feePct:'', feeUnit:'per_day', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
+    fee:'', feeFixed:'', feePct:'10', feeUnit:'per_day', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
     menuWant:'', menuNG:'', menuOther:'', power:'yes', gas:'yes', water:'yes',
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
@@ -281,7 +282,7 @@ function NewPlacePageInner() {
                 if (fx===0 && pc===0) return '※ 未入力のままだと、売上を報告しても出店料が0円になります。'
                 const base = Math.floor(30000/1.08)
                 const total = fx + Math.floor(base*pc/100)
-                return '例：売上30,000円のとき、出店料は約' + total.toLocaleString() + '円になります（税抜換算8%）。'
+                return '例：売上30,000円のとき、この設定分は約' + total.toLocaleString() + '円です（税抜換算8%）。施設提供者へお渡しする分がある場合は、運営が別途加算します。'
               })()}
             </div>
             </div>
