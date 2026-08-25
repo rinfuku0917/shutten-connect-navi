@@ -209,7 +209,7 @@ function InvoiceInner() {
           </div>
         </div>
 
-        <h1 style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 400, letterSpacing: '0.28em', margin: '20pt 0 0', textIndent: '0.28em', color: ACCENT }}>請求書</h1>
+        <h1 style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 400, letterSpacing: '0.28em', margin: '20pt 0 0', textIndent: '0.28em' }}>請求書</h1>
 
         {/* 宛先と差出人 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '24pt' }}>
@@ -235,7 +235,7 @@ function InvoiceInner() {
           <span style={{ fontSize: '16pt' }}>{yen(inv.total)}(税込)</span>
         </div>
 
-        <div style={{ fontSize: '10pt', margin: '18pt 0 4pt', color: ACCENT, fontWeight: 700 }}>【明細】</div>
+        <div style={{ fontSize: '10pt', margin: '18pt 0 4pt' }}>【明細】</div>
         <table style={{ width: '500pt', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '32pt' }} />
@@ -276,13 +276,13 @@ function InvoiceInner() {
             <tr>
               <td style={cell}>&nbsp;</td>
               <td style={cell}>&nbsp;</td>
-              <td style={{ ...sumLabel, fontSize: '11pt', color: ACCENT, fontWeight: 700 }}>税込合計</td>
-              <td style={{ ...sumValue, fontSize: '11pt', color: ACCENT, fontWeight: 700 }}>{yen(inv.total)}</td>
+              <td style={{ ...sumLabel, fontSize: '11pt', fontWeight: 700 }}>税込合計</td>
+              <td style={{ ...sumValue, fontSize: '11pt', fontWeight: 700 }}>{yen(inv.total)}</td>
             </tr>
           </tbody>
         </table>
 
-        <div style={{ fontSize: '10pt', margin: '22pt 0 3pt', color: ACCENT, fontWeight: 700 }}>【振込先】</div>
+        <div style={{ fontSize: '10pt', margin: '22pt 0 3pt' }}>【振込先】</div>
         <div style={{ fontSize: '9pt', lineHeight: 1.65 }}>
           {ISSUER.bank.map(b => <div key={b}>{b}</div>)}
           {dueOn && <div style={{ marginTop: '4pt' }}>お支払期限:{jpDate(dueOn)}</div>}
