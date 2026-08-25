@@ -526,6 +526,21 @@ export default function AdminPage() {
     if (!res.ok) { alert('更新できませんでした: ' + (j.error || '')); return }
     loadMeetings()
   }
+  // 完了した相談を削除する（溜まってきたときの整理用）
+  const deleteMeetings = async (ids: string[], label: string) => {
+    if (ids.length === 0) return
+    if (!window.confirm(label + '\nこの操作は取り消せません。よろしいですか？')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const res = await fetch('/api/meeting-request', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', requesterId: user.id, ids }),
+    })
+    const j = await res.json()
+    if (!res.ok) { alert('削除できませんでした: ' + (j.error || '')); return }
+    loadMeetings()
+  }
+
   useEffect(() => { if (tab === 'meetings' && authChecked) loadMeetings() }, [tab, authChecked])
 
   // ===== 新規案件の登録 =====
@@ -1739,18 +1754,27 @@ const previewDoc = async (fileUrl: string) => {
           {tab === 'meetings' && (
             <div>
               <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#1D4ED8' }}>
-                掲載を検討している施設・企業さまからの打ち合わせ希望です。ご希望の方法（Zoom／対面）に合わせてご連絡ください。
+                掲載を検討している施設・企業さまからの打ち合わせ希望です。ご希望の方法（Zoom／対面）に合わせてご連絡ください。<br />
+                対応が済んだものは「完了にする」を押すと削除できるようになります。
               </div>
               {(() => {
                 const counts = { new: 0, in_progress: 0, done: 0 } as Record<string, number>
                 for (const m of meetings) counts[m.status] = (counts[m.status] || 0) + 1
+                const doneIds = meetings.filter(m => m.status === 'done').map(m => m.id)
                 return (
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {Object.entries(MEET_STATUS).map(([k, v]) => (
                       <span key={k} style={{ background: v.bg, color: v.color, borderRadius: '999px', padding: '5px 14px', fontSize: '12px', fontWeight: 700 }}>
                         {v.label} {counts[k] || 0}件
                       </span>
                     ))}
+                    <div style={{ flex: 1 }} />
+                    {doneIds.length > 0 && (
+                      <button onClick={() => deleteMeetings(doneIds, `完了した相談 ${doneIds.length}件をまとめて削除します。`)}
+                        style={{ background: '#fff', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                        完了分をまとめて削除（{doneIds.length}件）
+                      </button>
+                    )}
                   </div>
                 )
               })()}
@@ -1791,6 +1815,10 @@ const previewDoc = async (fileUrl: string) => {
                         {m.status !== 'in_progress' && <button onClick={() => setMeetingStatus(m.id, 'in_progress')} style={{ background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>対応中にする</button>}
                         {m.status !== 'done' && <button onClick={() => setMeetingStatus(m.id, 'done')} style={{ background: '#ECFDF5', color: '#16A34A', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>完了にする</button>}
                         {m.status !== 'new' && <button onClick={() => setMeetingStatus(m.id, 'new')} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>未対応に戻す</button>}
+                        {m.status === 'done' && (
+                          <button onClick={() => deleteMeetings([m.id], `「${m.company || m.name}」の相談を削除します。`)}
+                            style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>削除</button>
+                        )}
                       </div>
                     </div>
                   )

@@ -59,6 +59,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true })
     }
 
+    // ===== 管理者：削除 =====
+    // ヒアリングが済んだ相談が溜まっていくため、不要になったものを消せるようにする。
+    // 誤操作を防ぐため、対応が終わっていないものは削除できないようにしている。
+    if (body.action === 'delete') {
+      if (!(await verifyAdmin(admin, body.requesterId))) {
+        return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
+      }
+      const ids: string[] = Array.isArray(body.ids) ? body.ids : (body.id ? [body.id] : [])
+      if (ids.length === 0) return NextResponse.json({ error: '削除する対象がありません' }, { status: 400 })
+
+      const { data: targets, error: tErr } = await admin
+        .from('meeting_requests').select('id, status').in('id', ids)
+      if (tErr) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })
+      const notDone = (targets || []).filter(t => t.status !== 'done')
+      if (notDone.length > 0) {
+        return NextResponse.json(
+          { error: '完了していない相談は削除できません（' + notDone.length + '件）。先に「完了にする」を押してください。' },
+          { status: 400 },
+        )
+      }
+
+      const { data: removed, error: dErr } = await admin
+        .from('meeting_requests').delete().in('id', ids).select('id')
+      if (dErr) return NextResponse.json({ error: '削除に失敗しました: ' + dErr.message }, { status: 500 })
+      return NextResponse.json({ success: true, deleted: removed?.length ?? 0 })
+    }
+
     // ===== 募集者：申し込みの登録 =====
     const { hostId, name, company, email, phone, method, preferredDates, message } = body
     if (!name || !String(name).trim()) {
