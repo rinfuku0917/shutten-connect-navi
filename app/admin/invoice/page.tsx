@@ -140,10 +140,18 @@ function InvoiceInner() {
   )
   if (!inv) return null
 
-  // 明細表の共通スタイル（罫線つきのグリッド）
-  const cell: React.CSSProperties = { border: '0.5pt solid #000', padding: '3pt 5pt', fontSize: '9pt', lineHeight: 1.5 }
-  const head: React.CSSProperties = { ...cell, textAlign: 'center' }
+  // 明細表の配色。実際に発行している請求書のPDFから読み取った色に合わせている。
+  //   濃い青 #1A56B0 … ご請求金額の枠
+  //   薄い青 #B7C8E8 … 明細表の罫線
+  //   淡い青 #E8F0FE … 見出し行と合計欄の塗り
+  const LINE = '#B7C8E8'
+  const ACCENT = '#1A56B0'
+  const TINT = '#E8F0FE'
+  const cell: React.CSSProperties = { border: `0.5pt solid ${LINE}`, padding: '3pt 5pt', fontSize: '9pt', lineHeight: 1.5 }
+  const head: React.CSSProperties = { ...cell, textAlign: 'center', background: TINT }
   const right: React.CSSProperties = { ...cell, textAlign: 'right' }
+  const sumLabel: React.CSSProperties = { ...cell, textAlign: 'right', background: TINT }
+  const sumValue: React.CSSProperties = { ...right, background: TINT }
 
   return (
     <div className='invoice-page' style={{ background: '#F1F5F9', minHeight: '100vh', padding: '20px 12px' }}>
@@ -201,12 +209,12 @@ function InvoiceInner() {
           </div>
         </div>
 
-        <h1 style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 400, letterSpacing: '0.28em', margin: '20pt 0 0', textIndent: '0.28em' }}>請求書</h1>
+        <h1 style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 400, letterSpacing: '0.28em', margin: '20pt 0 0', textIndent: '0.28em', color: ACCENT }}>請求書</h1>
 
         {/* 宛先と差出人 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '24pt' }}>
           <div style={{ minWidth: 0, paddingTop: '2pt' }}>
-            <div style={{ fontSize: '15pt', lineHeight: 1.3 }}>{inv.seller.shopName || '（店名未登録）'}</div>
+            <div style={{ fontSize: '15pt', lineHeight: 1.3, borderBottom: `0.5pt solid ${LINE}`, paddingBottom: '3pt', display: 'inline-block', minWidth: '150pt' }}>{inv.seller.shopName || '（店名未登録）'}</div>
             {inv.seller.personName && <div style={{ fontSize: '12pt', marginTop: '5pt' }}>{inv.seller.personName} 様</div>}
           </div>
           <div style={{ fontSize: '9pt', lineHeight: 1.75, textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -222,12 +230,12 @@ function InvoiceInner() {
         </p>
 
         {/* ご請求金額（枠つき） */}
-        <div style={{ border: '0.5pt solid #000', marginTop: '20pt', height: '29pt', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14pt' }}>
+        <div style={{ border: `0.5pt solid ${ACCENT}`, background: TINT, marginTop: '20pt', height: '29pt', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14pt' }}>
           <span style={{ fontSize: '16pt' }}>ご請求金額({inv.periodLabel})</span>
           <span style={{ fontSize: '16pt' }}>{yen(inv.total)}(税込)</span>
         </div>
 
-        <div style={{ fontSize: '10pt', margin: '18pt 0 4pt' }}>【明細】</div>
+        <div style={{ fontSize: '10pt', margin: '18pt 0 4pt', color: ACCENT, fontWeight: 700 }}>【明細】</div>
         <table style={{ width: '500pt', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '32pt' }} />
@@ -254,24 +262,27 @@ function InvoiceInner() {
             ))}
             {/* 合計欄も同じ表の中に置く（元のPDFと同じ体裁） */}
             <tr>
-              <td style={cell} colSpan={2}>&nbsp;</td>
-              <td style={{ ...cell, textAlign: 'right' }}>小計(税抜)</td>
-              <td style={right}>{yen(inv.subtotal)}</td>
+              <td style={cell}>&nbsp;</td>
+              <td style={cell}>&nbsp;</td>
+              <td style={sumLabel}>小計(税抜)</td>
+              <td style={sumValue}>{yen(inv.subtotal)}</td>
             </tr>
             <tr>
-              <td style={cell} colSpan={2}>&nbsp;</td>
-              <td style={{ ...cell, textAlign: 'right' }}>消費税(10%)</td>
-              <td style={right}>{yen(inv.tax)}</td>
+              <td style={cell}>&nbsp;</td>
+              <td style={cell}>&nbsp;</td>
+              <td style={sumLabel}>消費税(10%)</td>
+              <td style={sumValue}>{yen(inv.tax)}</td>
             </tr>
             <tr>
-              <td style={cell} colSpan={2}>&nbsp;</td>
-              <td style={{ ...cell, textAlign: 'right', fontSize: '11pt' }}>税込合計</td>
-              <td style={{ ...right, fontSize: '11pt' }}>{yen(inv.total)}</td>
+              <td style={cell}>&nbsp;</td>
+              <td style={cell}>&nbsp;</td>
+              <td style={{ ...sumLabel, fontSize: '11pt', color: ACCENT, fontWeight: 700 }}>税込合計</td>
+              <td style={{ ...sumValue, fontSize: '11pt', color: ACCENT, fontWeight: 700 }}>{yen(inv.total)}</td>
             </tr>
           </tbody>
         </table>
 
-        <div style={{ fontSize: '10pt', margin: '22pt 0 3pt' }}>【振込先】</div>
+        <div style={{ fontSize: '10pt', margin: '22pt 0 3pt', color: ACCENT, fontWeight: 700 }}>【振込先】</div>
         <div style={{ fontSize: '9pt', lineHeight: 1.65 }}>
           {ISSUER.bank.map(b => <div key={b}>{b}</div>)}
           {dueOn && <div style={{ marginTop: '4pt' }}>お支払期限:{jpDate(dueOn)}</div>}
