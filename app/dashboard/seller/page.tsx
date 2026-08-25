@@ -70,7 +70,7 @@ export default function SellerDashboard() {
   type MsgThread = { application_id: string, placeTitle: string, lastBody: string, unread: number }
   const [threads, setThreads] = useState<MsgThread[]>([])
   const [unread, setUnread] = useState(0)
-  type MyApply = { id: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
+  type MyApply = { id: string, placeId: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
   const [appliesError, setAppliesError] = useState('')
   // この画面を見ているアカウントの種別（seller / host / admin / none）
@@ -79,6 +79,8 @@ export default function SellerDashboard() {
   const [msgError, setMsgError] = useState('')
   // カレンダーの表示月。今月を初期値にし、‹ › で前後の月に移動できる
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
+  // カレンダーで選んだ日。その日の申込内容を下に表示する
+  const [calPicked, setCalPicked] = useState<string | null>(null)
   type DocRow = { id: string, doc_type: string, file_url: string, status: string, expiry_date: string | null }
   const [myDocs, setMyDocs] = useState<DocRow[]>([])
   const [uploadingType, setUploadingType] = useState<string | null>(null)
@@ -438,7 +440,7 @@ export default function SellerDashboard() {
     if (!uid) return
     const { data, error } = await supabase
       .from('applications')
-      .select('id, apply_date, format, status, places(title, reminder_days)')
+      .select('id, place_id, apply_date, format, status, places(title, reminder_days)')
       .eq('seller_id', uid)
       .order('created_at', { ascending: false })
     // 読み込みに失敗したときに、申込が無いのと同じ見た目にならないようにする
@@ -449,6 +451,7 @@ export default function SellerDashboard() {
       const s = statusMap[a.status] || { label: a.status, color: '#555', bg: '#F3F4F6' }
       return {
         id: a.id,
+        placeId: a.place_id || '',
         place: a.places?.title || '(案件名なし)',
         date: a.apply_date || '日付未定',
         rawDate: a.apply_date || null,
@@ -963,7 +966,7 @@ export default function SellerDashboard() {
                         <button onClick={() => shift(1)} aria-label='次の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>›</button>
                       </div>
                       <div style={{ textAlign: 'center', fontSize: '11px', color: '#64748B', marginBottom: '12px' }}>
-                        {monthCount > 0 ? `この月の申込 ${monthCount}件` : 'この月の申込はありません'}
+                        {monthCount > 0 ? `この月の申込 ${monthCount}件（日付をクリックすると内容を確認できます）` : 'この月の申込はありません'}
                       </div>
                       {monthCount === 0 && (() => {
                         // 表示中の月に無くても他の月にあるなら、その月へ移動できるようにする
@@ -1003,8 +1006,9 @@ export default function SellerDashboard() {
                           const dow = (firstDow + i) % 7
                           const isToday = ds === today
                           return (
-                            <div key={d} title={items.map(a => `${a.status}：${a.place}`).join('\n')}
-                              style={{ minHeight: '60px', borderRadius: '8px', border: isToday ? '2px solid #F5A623' : `1px solid ${main ? main.statusColor : '#E2E8F0'}`, background: main ? main.statusBg : '#fff', padding: '5px', overflow: 'hidden' }}>
+                            <div key={d} title={items.length ? items.map(a => `${a.status}：${a.place}`).join('\n') : undefined}
+                              onClick={() => { if (items.length) setCalPicked(calPicked === ds ? null : ds) }}
+                              style={{ minHeight: '60px', borderRadius: '8px', border: calPicked === ds ? '2px solid #1D4ED8' : (isToday ? '2px solid #F5A623' : `1px solid ${main ? main.statusColor : '#E2E8F0'}`), background: main ? main.statusBg : '#fff', padding: '5px', overflow: 'hidden', cursor: items.length ? 'pointer' : 'default' }}>
                               <div style={{ fontSize: '12px', fontWeight: isToday ? '800' : '600', color: dow === 0 ? '#DC2626' : dow === 6 ? '#1D4ED8' : '#333', marginBottom: '3px' }}>{d}</div>
                               {items.slice(0, 2).map(a => (
                                 <div key={a.id} style={{ fontSize: '9px', fontWeight: '700', color: a.statusColor, lineHeight: 1.3, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1020,6 +1024,43 @@ export default function SellerDashboard() {
                   )
                 })()}
               </div>
+              {/* 選んだ日の申込内容 */}
+              {calPicked && (() => {
+                const items = myApplies.filter(a => a.rawDate === calPicked)
+                if (items.length === 0) return null
+                const [yy, mm, dd] = calPicked.split('-')
+                return (
+                  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #BFDBFE', padding: '16px 18px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <div style={{ fontWeight: '700', fontSize: '14px', color: '#1D4ED8' }}>
+                        {parseInt(yy, 10)}年{parseInt(mm, 10)}月{parseInt(dd, 10)}日の申込（{items.length}件）
+                      </div>
+                      <button onClick={() => setCalPicked(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '13px', cursor: 'pointer' }}>閉じる ✕</button>
+                    </div>
+                    <div style={{ display: 'grid', gap: '10px' }}>
+                      {items.map(a => (
+                        <div key={a.id} style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                            <span style={{ background: a.statusBg, color: a.statusColor, borderRadius: '4px', padding: '2px 8px', fontSize: '11px', fontWeight: '700' }}>{a.status}</span>
+                            <span style={{ fontSize: '14px', fontWeight: '700', color: '#1a1a1a' }}>{a.place}</span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '10px' }}>出店形態：{a.type || '未設定'}</div>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {a.placeId && (
+                              <a href={'/places/' + a.placeId} target='_blank' rel='noopener noreferrer' style={{ background: '#F5A623', color: '#fff', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>案件の詳細を見る</a>
+                            )}
+                            {a.status === '承認済' && (
+                              <button onClick={() => { setTab('messages'); openThread(a.id) }} style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>メッセージを見る</button>
+                            )}
+                            <button onClick={() => setTab('applies')} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>申込一覧で見る</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div style={{ textAlign: 'center' }}>
                 <button onClick={() => window.location.href='/places'} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 28px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>＋ 新しい出店日を申込む</button>
               </div>
