@@ -646,24 +646,94 @@ export default function AdminPage() {
     loadReviewList()
   }
 
-  type PendingApp = { id: string; apply_date: string | null; format: string | null; sellerName: string; placeTitle: string }
+  // 施設側に渡す情報も含めて出店者の内容を持つ
+  type PendingApp = {
+    id: string; apply_date: string | null; format: string | null
+    sellerName: string; placeTitle: string; placeId: string
+    repName: string; email: string; phone: string; address: string
+    genre: string; areas: string; salesType: string; vehicleType: string
+    size: string; equipment: string; menu: string; bio: string
+    docsOk: number; docsTotal: number
+  }
   const [pendingApps, setPendingApps] = useState<PendingApp[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
   const loadPendingApps = async () => {
     setPendingLoading(true)
     const { data } = await supabase
       .from('applications')
-      .select('id, apply_date, format, status, profiles!applications_seller_id_fkey(name, shop_name), places(title)')
+      .select('id, apply_date, format, status, seller_id, place_id, profiles!applications_seller_id_fkey(name, shop_name, email, phone, address, genre, areas, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, bio), places(title)')
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
-    const mapped: PendingApp[] = (data || []).map((a: any) => ({
-      id: a.id, apply_date: a.apply_date, format: a.format,
-      sellerName: a.profiles?.shop_name || a.profiles?.name || '(出店者)',
-      placeTitle: a.places?.title || '(案件)'
-    }))
+
+    // 書類の提出状況（承認済みが何件か）もあわせて出す
+    const sellerIds = Array.from(new Set((data || []).map((a: any) => a.seller_id).filter(Boolean)))
+    const docCount = new Map<string, { ok: number, total: number }>()
+    if (sellerIds.length > 0) {
+      const { data: docs } = await supabase
+        .from('seller_documents').select('seller_id, status').in('seller_id', sellerIds)
+      for (const d of docs || []) {
+        const cur = docCount.get(d.seller_id) || { ok: 0, total: 0 }
+        cur.total += 1
+        if (d.status === 'approved') cur.ok += 1
+        docCount.set(d.seller_id, cur)
+      }
+    }
+
+    const mapped: PendingApp[] = (data || []).map((a: any) => {
+      const p = a.profiles || {}
+      const size = [p.size_length, p.size_width, p.size_height].filter(Boolean).join(' × ')
+      const dc = docCount.get(a.seller_id) || { ok: 0, total: 0 }
+      return {
+        id: a.id, apply_date: a.apply_date, format: a.format,
+        sellerName: p.shop_name || p.name || '(出店者)',
+        placeTitle: a.places?.title || '(案件)',
+        placeId: a.place_id || '',
+        repName: p.name || '', email: p.email || '', phone: p.phone || '', address: p.address || '',
+        genre: genreText(p.genre), areas: Array.isArray(p.areas) ? p.areas.join('・') : (p.areas || ''),
+        salesType: p.sales_type || '', vehicleType: p.vehicle_type || '',
+        size, equipment: p.equipment || '', menu: p.menu || '', bio: p.bio || '',
+        docsOk: dc.ok, docsTotal: dc.total,
+      }
+    })
     setPendingApps(mapped)
     setPendingLoading(false)
   }
+  // 施設側に渡すための一覧をExcelで開ける形（CSV・Shift-JIS互換のBOM付きUTF-8）で書き出す
+  const exportPendingCsv = (rows: PendingApp[], label: string) => {
+    if (rows.length === 0) { alert('出力する応募がありません'); return }
+    const cols: [string, (a: PendingApp) => string][] = [
+      ['案件名', a => a.placeTitle],
+      ['出店希望日', a => a.apply_date || ''],
+      ['出店形態', a => a.format || ''],
+      ['店舗名', a => a.sellerName],
+      ['代表者名', a => a.repName],
+      ['メールアドレス', a => a.email],
+      ['電話番号', a => a.phone],
+      ['住所', a => a.address],
+      ['ジャンル', a => a.genre],
+      ['活動エリア', a => a.areas],
+      ['販売形態', a => a.salesType],
+      ['車種', a => a.vehicleType],
+      ['サイズ(長×幅×高)', a => a.size],
+      ['設備', a => a.equipment],
+      ['メニュー', a => a.menu],
+      ['紹介文', a => a.bio],
+      ['書類提出状況', a => a.docsTotal > 0 ? `${a.docsOk}/${a.docsTotal}件 承認済` : '未提出'],
+    ]
+    const esc = (v: string) => '"' + String(v ?? '').replace(/"/g, '""') + '"'
+    const csv = [cols.map(c => esc(c[0])).join(',')]
+      .concat(rows.map(r => cols.map(c => esc(c[1](r))).join(',')))
+      .join('\r\n')
+    // Excelで開いたときに日本語が化けないようBOMを付ける
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `出店申込一覧_${label}_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const setAppStatus = async (id: string, status: string) => {
     const { error } = await supabase.from('applications').update({ status }).eq('id', id)
     if (error) { alert('更新失敗: ' + error.message); return }
@@ -1530,7 +1600,35 @@ const previewDoc = async (fileUrl: string) => {
               <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#1D4ED8', display: 'flex', gap: '8px' }}>
                 <span>出店者からの応募を承認すると、マッチングが成立します。却下すると取り消されます。</span>
               </div>
-              <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', margin: '0 0 10px' }}>承認待ち（{pendingApps.length}件）</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', margin: '0 0 10px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', margin: 0 }}>承認待ち（{pendingApps.length}件）</h3>
+                {pendingApps.length > 0 && (
+                  <button onClick={() => exportPendingCsv(pendingApps, '全案件')} style={{ background: '#1E2A3B', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                    Excel出力（全{pendingApps.length}件）
+                  </button>
+                )}
+              </div>
+              {/* 案件ごとにまとめて出力できるようにする（施設側に渡す用） */}
+              {(() => {
+                const byPlace = new Map<string, PendingApp[]>()
+                for (const a of pendingApps) {
+                  const k = a.placeTitle
+                  const cur = byPlace.get(k); if (cur) cur.push(a); else byPlace.set(k, [a])
+                }
+                if (byPlace.size === 0) return null
+                return (
+                  <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginBottom: '8px' }}>案件ごとに出力（施設・企業さまへの共有用）</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {[...byPlace.entries()].map(([title, rows]) => (
+                        <button key={title} onClick={() => exportPendingCsv(rows, title)} style={{ background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                          {title}（{rows.length}件）
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
               <div style={{ display: 'grid', gap: '12px' }}>
                 {pendingLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
                 {!pendingLoading && pendingApps.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>承認待ちの応募はありません。</div>}
@@ -1541,9 +1639,34 @@ const previewDoc = async (fileUrl: string) => {
                       <span style={{ fontSize: '11px', color: '#94A3B8' }}>{a.format || '形態未設定'}</span>
                     </div>
                     <div style={{ fontSize: '13px', color: '#444', marginBottom: '10px' }}>出店希望日：{a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP') : '—'}</div>
+                    {/* 承認の判断に必要な出店者の情報 */}
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', marginBottom: '10px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                        <tbody>
+                          {[
+                            ['代表者', a.repName],
+                            ['連絡先', [a.email, a.phone].filter(Boolean).join(' ／ ')],
+                            ['住所', a.address],
+                            ['ジャンル', a.genre],
+                            ['販売形態・車種', [a.salesType, a.vehicleType].filter(Boolean).join(' ／ ')],
+                            ['サイズ', a.size],
+                            ['設備', a.equipment],
+                            ['メニュー', a.menu],
+                            ['書類', a.docsTotal > 0 ? `${a.docsOk}/${a.docsTotal}件 承認済` : '未提出'],
+                          ].filter(r => r[1]).map(([label, val]) => (
+                            <tr key={label as string}>
+                              <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top', width: '112px' }}>{label}</td>
+                              <td style={{ padding: '3px 0', color: '#1a1a1a', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{val}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {a.bio && <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0', fontSize: '12px', color: '#475569', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{a.bio}</div>}
+                    </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <button onClick={() => setAppStatus(a.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
                       <button onClick={() => { if (window.confirm('この応募を却下しますか？')) setAppStatus(a.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>却下</button>
+                      <button onClick={() => exportPendingCsv([a], a.sellerName)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>Excel出力</button>
                     </div>
                   </div>
                 ))}
