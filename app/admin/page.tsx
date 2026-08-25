@@ -649,7 +649,7 @@ export default function AdminPage() {
   // 施設側に渡す情報も含めて出店者の内容を持つ
   type PendingApp = {
     id: string; apply_date: string | null; format: string | null
-    sellerName: string; placeTitle: string; placeId: string
+    sellerName: string; placeTitle: string; placeId: string; sellerId: string
     repName: string; email: string; phone: string; address: string
     genre: string; areas: string; salesType: string; vehicleType: string
     size: string; equipment: string; menu: string; bio: string
@@ -688,6 +688,7 @@ export default function AdminPage() {
         sellerName: p.shop_name || p.name || '(出店者)',
         placeTitle: a.places?.title || '(案件)',
         placeId: a.place_id || '',
+        sellerId: a.seller_id || '',
         repName: p.name || '', email: p.email || '', phone: p.phone || '', address: p.address || '',
         genre: genreText(p.genre), areas: Array.isArray(p.areas) ? p.areas.join('・') : (p.areas || ''),
         salesType: p.sales_type || '', vehicleType: p.vehicle_type || '',
@@ -1643,29 +1644,48 @@ const previewDoc = async (fileUrl: string) => {
                     <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', marginBottom: '10px' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                         <tbody>
-                          {[
+                          {([
                             ['代表者', a.repName],
                             ['連絡先', [a.email, a.phone].filter(Boolean).join(' ／ ')],
                             ['住所', a.address],
+                            ['活動エリア', a.areas],
                             ['ジャンル', a.genre],
                             ['販売形態・車種', [a.salesType, a.vehicleType].filter(Boolean).join(' ／ ')],
                             ['サイズ', a.size],
                             ['設備', a.equipment],
                             ['メニュー', a.menu],
                             ['書類', a.docsTotal > 0 ? `${a.docsOk}/${a.docsTotal}件 承認済` : '未提出'],
-                          ].filter(r => r[1]).map(([label, val]) => (
-                            <tr key={label as string}>
+                          ] as [string, string][]).map(([label, val]) => (
+                            <tr key={label}>
                               <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top', width: '112px' }}>{label}</td>
-                              <td style={{ padding: '3px 0', color: '#1a1a1a', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{val}</td>
+                              {/* 未入力も「未登録」と出して、情報が足りないことが分かるようにする */}
+                              <td style={{ padding: '3px 0', color: val ? '#1a1a1a' : '#DC2626', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{val || '未登録'}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                       {a.bio && <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0', fontSize: '12px', color: '#475569', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{a.bio}</div>}
+                      {(() => {
+                        // 承認の判断に必要な情報がどれだけ埋まっているかを出す
+                        const missing = [
+                          !a.genre && 'ジャンル', !a.salesType && '販売形態', !a.size && 'サイズ',
+                          !a.equipment && '設備', !a.menu && 'メニュー', a.docsTotal === 0 && '書類',
+                        ].filter(Boolean) as string[]
+                        if (missing.length === 0) return null
+                        return (
+                          <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0', fontSize: '11px', color: '#DC2626', lineHeight: 1.7 }}>
+                            この出店者は次の項目が未登録です：{missing.join('・')}
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <button onClick={() => setAppStatus(a.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
                       <button onClick={() => { if (window.confirm('この応募を却下しますか？')) setAppStatus(a.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>却下</button>
+                      {a.sellerId && (
+                        <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>プロフィールを見る</a>
+                      )}
+                      <button onClick={() => setTab('docs')} style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>書類を確認</button>
                       <button onClick={() => exportPendingCsv([a], a.sellerName)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>Excel出力</button>
                     </div>
                   </div>
