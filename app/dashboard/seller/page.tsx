@@ -1054,7 +1054,7 @@ export default function SellerDashboard() {
                       ) : dbMessages.map(m => (
                         m.sender_id === myId ? (
                           <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
-                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>
+                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, width: 'fit-content', marginLeft: 'auto', whiteSpace: 'pre-wrap' }}>
                               {m.body && <div>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, true)}
                             </div>
@@ -1064,7 +1064,7 @@ export default function SellerDashboard() {
                           </div>
                         ) : (
                           <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
-                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a' }}>
+                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a', width: 'fit-content', whiteSpace: 'pre-wrap' }}>
                               {m.body && <div>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, false)}
                             </div>

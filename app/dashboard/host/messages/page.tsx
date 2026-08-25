@@ -227,7 +227,7 @@ export default function HostMessages() {
                   const mine = m.sender_id === myId
                   return (
                     <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '70%' }}>
-                      <div style={{ background: mine ? '#F5A623' : '#F1F5F9', color: mine ? '#fff' : '#1a1a1a', padding: '9px 14px', borderRadius: '12px', fontSize: '13px' }}>
+                      <div style={{ background: mine ? '#F5A623' : '#F1F5F9', color: mine ? '#fff' : '#1a1a1a', padding: '9px 14px', borderRadius: '12px', fontSize: '13px', width: 'fit-content', marginLeft: mine ? 'auto' : undefined, whiteSpace: 'pre-wrap' }}>
                         {m.body && <div>{m.body}</div>}
                         {m.file_url && renderAttachment(m.file_url, mine)}
                       </div>
