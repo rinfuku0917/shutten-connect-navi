@@ -86,6 +86,44 @@ function InvoiceInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sellerId, period])
 
+  // ブラウザの印刷機能では白紙になる環境があるため、
+  // 請求書の見た目をそのまま画像化してPDFファイルとして保存する。
+  const [pdfMaking, setPdfMaking] = useState(false)
+  const savePdf = async () => {
+    const sheet = document.getElementById('invoice-sheet')
+    if (!sheet) return
+    setPdfMaking(true)
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+      const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+      const pdf = new jsPDF({ unit: 'pt', format: 'a4' })
+      const pw = pdf.internal.pageSize.getWidth()
+      const ph = pdf.internal.pageSize.getHeight()
+      // A4の幅に合わせ、縦が収まらない場合はページを分ける
+      const imgH = (canvas.height * pw) / canvas.width
+      const img = canvas.toDataURL('image/jpeg', 0.95)
+      let left = imgH
+      let pos = 0
+      pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
+      left -= ph
+      while (left > 0) {
+        pos -= ph
+        pdf.addPage()
+        pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
+        left -= ph
+      }
+      const name = `請求書_${inv?.seller.shopName || ''}_${inv?.periodLabel || ''}.pdf`
+      pdf.save(name)
+    } catch (e) {
+      console.error('PDFの作成に失敗しました', e)
+      alert('PDFの作成に失敗しました。お手数ですが「印刷」からお試しください。')
+    }
+    setPdfMaking(false)
+  }
+
   const issue = async () => {
     if (!window.confirm('請求書番号を採番して発行します。よろしいですか？')) return
     setIssuing(true)
@@ -123,7 +161,10 @@ function InvoiceInner() {
             {issuing ? '発行中...' : '発行して番号を確定'}
           </button>
         )}
-        <button onClick={() => window.print()} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>印刷 / PDF保存</button>
+        <button onClick={savePdf} disabled={pdfMaking} style={{ background: pdfMaking ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, cursor: pdfMaking ? 'not-allowed' : 'pointer' }}>
+          {pdfMaking ? '作成中...' : 'PDFをダウンロード'}
+        </button>
+        <button onClick={() => window.print()} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>印刷</button>
       </div>
 
       {!inv.invoiceNo && (inv.alreadyIssued?.length ?? 0) > 0 && (
@@ -143,7 +184,7 @@ function InvoiceInner() {
       )}
 
       {/* ===== 請求書本体（A4・余白48pt） ===== */}
-      <div className='invoice-sheet' style={{
+      <div id='invoice-sheet' className='invoice-sheet' style={{
         width: '596pt', minHeight: '842pt', margin: '0 auto', background: '#fff',
         padding: '48pt', boxSizing: 'border-box', color: '#000',
         fontFamily: '"Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif',
