@@ -33,6 +33,7 @@ type Invoice = {
   zeroCount?: number
   invoiceNo: string | null
   dueOn?: string | null
+  note?: string | null
   alreadyIssued?: { invoice_no: string; issued_on: string }[]
 }
 
@@ -67,7 +68,7 @@ function InvoiceInner() {
     const res = await fetch('/api/admin/invoice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requesterId: user.id, sellerId, period, action, dueOn: due }),
+      body: JSON.stringify({ requesterId: user.id, sellerId, period, action, dueOn: due, edited: action === 'issue' ? editedPayload() : undefined }),
     })
     const j = await res.json()
     if (!res.ok) { setErr(j.error || '請求書を作成できませんでした'); setLoading(false); return }
@@ -85,6 +86,56 @@ function InvoiceInner() {
     call('preview')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sellerId, period])
+
+  // ===== 管理画面での修正 =====
+  // 明細の文言・金額・宛先・備考を直せるようにする。合計は自動で計算し直す。
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [items, setItems] = useState<Item[]>([])
+  const [toName, setToName] = useState('')
+  const [toPerson, setToPerson] = useState('')
+  const [note, setNote] = useState('')
+
+  // 取得した内容を編集用に取り込む
+  useEffect(() => {
+    if (!inv) return
+    setItems(inv.items)
+    setToName(inv.seller.shopName)
+    setToPerson(inv.seller.personName)
+    setNote(inv.note || '')
+  }, [inv])
+
+  const subtotal = items.reduce((t, i) => t + (Number(i.amount) || 0), 0)
+  const tax = Math.floor(subtotal * 0.1)
+  const total = subtotal + tax
+
+  const setItem = (idx: number, patch: Partial<Item>) =>
+    setItems(list => list.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+  const addItem = () =>
+    setItems(list => [...list, { no: list.length + 1, date: '', title: '', amount: 0 }])
+  const removeItem = (idx: number) =>
+    setItems(list => list.filter((_, i) => i !== idx).map((it, i) => ({ ...it, no: i + 1 })))
+
+  const editedPayload = () => ({
+    items: items.map((it, i) => ({ ...it, no: i + 1, amount: Number(it.amount) || 0 })),
+    toName, toPerson, note, dueOn,
+  })
+
+  // 発行済みの請求書の修正を保存する
+  const saveEdits = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { alert('ログインが必要です'); return }
+    setSaving(true)
+    const res = await fetch('/api/admin/invoice', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requesterId: user.id, sellerId, period, action: 'save', edited: editedPayload() }),
+    })
+    const j = await res.json()
+    setSaving(false)
+    if (!res.ok) { alert('保存できませんでした: ' + (j.error || '不明なエラー')); return }
+    setEditing(false)
+    alert('修正内容を保存しました')
+  }
 
   // ブラウザの印刷機能では白紙になる環境があるため、
   // 請求書の見た目をそのまま画像化してPDFファイルとして保存する。
@@ -152,6 +203,14 @@ function InvoiceInner() {
   const right: React.CSSProperties = { ...cell, textAlign: 'right' }
   const sumLabel: React.CSSProperties = { ...cell, textAlign: 'right', background: TINT }
   const sumValue: React.CSSProperties = { ...right, background: TINT }
+  // 編集中だけ入力できることが分かるようにする（印刷・PDFには枠を出さない）
+  const editBox: React.CSSProperties = editing
+    ? { background: '#FFFDF5', outline: '1pt dashed #F5A623', borderRadius: '2pt' }
+    : {}
+  const inputStyle: React.CSSProperties = {
+    border: 'none', outline: 'none', background: 'transparent', font: 'inherit',
+    color: 'inherit', padding: 0, margin: 0, width: '100%',
+  }
 
   return (
     <div className='invoice-page' style={{ background: '#F1F5F9', minHeight: '100vh', padding: '20px 12px' }}>
@@ -164,6 +223,17 @@ function InvoiceInner() {
             style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px' }} />
         </div>
         <div style={{ flex: 1 }} />
+        <button onClick={() => setEditing(v => !v)} style={{ background: editing ? '#1D4ED8' : '#fff', color: editing ? '#fff' : '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+          {editing ? '編集を終える' : '内容を修正'}
+        </button>
+        {editing && (
+          <button onClick={addItem} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 14px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>＋ 明細を追加</button>
+        )}
+        {inv.invoiceNo && (
+          <button onClick={saveEdits} disabled={saving} style={{ background: saving ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? '保存中...' : '修正を保存'}
+          </button>
+        )}
         {!inv.invoiceNo && (
           <button onClick={issue} disabled={issuing} style={{ background: issuing ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, cursor: issuing ? 'not-allowed' : 'pointer' }}>
             {issuing ? '発行中...' : '発行して番号を確定'}
@@ -183,6 +253,12 @@ function InvoiceInner() {
       {(inv.zeroCount ?? 0) > 0 && (
         <div className='no-print' style={{ maxWidth: '596pt', margin: '0 auto 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#DC2626' }}>
           出店料が0円の売上が{inv.zeroCount}件あるため、明細に含めていません。案件の料金設定（歩合・固定額）をご確認ください。
+        </div>
+      )}
+      {editing && (
+        <div className='no-print' style={{ maxWidth: '596pt', margin: '0 auto 12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#B45309', lineHeight: 1.8 }}>
+          薄い枠の部分をクリックすると直せます（宛先・実施日・請求件名・金額・備考）。小計と消費税は自動で計算し直します。
+          {inv.invoiceNo ? '　修正したら「修正を保存」を押してください。' : '　内容が決まったら「発行して番号を確定」を押してください。'}
         </div>
       )}
       {!inv.invoiceNo && (
@@ -214,8 +290,21 @@ function InvoiceInner() {
         {/* 宛先と差出人 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '24pt' }}>
           <div style={{ minWidth: 0, paddingTop: '2pt' }}>
-            <div style={{ fontSize: '15pt', lineHeight: 1.3, borderBottom: `0.5pt solid ${LINE}`, paddingBottom: '3pt', display: 'inline-block', minWidth: '150pt' }}>{inv.seller.shopName || '（店名未登録）'}</div>
-            {inv.seller.personName && <div style={{ fontSize: '12pt', marginTop: '5pt' }}>{inv.seller.personName} 様</div>}
+            <div style={{ fontSize: '15pt', lineHeight: 1.3, borderBottom: `0.5pt solid ${LINE}`, paddingBottom: '3pt', display: 'block', minWidth: '150pt', ...editBox }}>
+              {editing
+                ? <input value={toName} onChange={e => setToName(e.target.value)} style={inputStyle} placeholder='店舗名' />
+                : (toName || '（店名未登録）')}
+            </div>
+            {(editing || toPerson) && (
+              <div style={{ fontSize: '12pt', marginTop: '5pt', display: 'flex', alignItems: 'baseline', gap: '2pt' }}>
+                <span style={{ minWidth: '80pt', ...editBox }}>
+                  {editing
+                    ? <input value={toPerson} onChange={e => setToPerson(e.target.value)} style={inputStyle} placeholder='担当者名' />
+                    : toPerson}
+                </span>
+                <span>様</span>
+              </div>
+            )}
           </div>
           <div style={{ fontSize: '9pt', lineHeight: 1.75, textAlign: 'right', whiteSpace: 'nowrap' }}>
             <div>{ISSUER.name}</div>
@@ -226,13 +315,13 @@ function InvoiceInner() {
         </div>
 
         <p style={{ fontSize: '9pt', margin: '10pt 0 0' }}>
-          {inv.periodLabel}({inv.itemCount}件)を下記のとおりご請求申し上げます。
+          {inv.periodLabel}({items.length}件)を下記のとおりご請求申し上げます。
         </p>
 
         {/* ご請求金額（枠つき） */}
         <div style={{ border: `0.5pt solid ${ACCENT}`, background: TINT, marginTop: '20pt', height: '29pt', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14pt' }}>
           <span style={{ fontSize: '16pt' }}>ご請求金額({inv.periodLabel})</span>
-          <span style={{ fontSize: '16pt' }}>{yen(inv.total)}(税込)</span>
+          <span style={{ fontSize: '16pt' }}>{yen(total)}(税込)</span>
         </div>
 
         <div style={{ fontSize: '10pt', margin: '18pt 0 4pt' }}>【明細】</div>
@@ -252,12 +341,27 @@ function InvoiceInner() {
             </tr>
           </thead>
           <tbody>
-            {inv.items.map(it => (
-              <tr key={it.no}>
-                <td style={{ ...cell, textAlign: 'center' }}>{it.no}</td>
-                <td style={{ ...cell, textAlign: 'center' }}>{it.date}</td>
-                <td style={cell}>{it.title}</td>
-                <td style={right}>{yen(it.amount)}</td>
+            {items.map((it, idx) => (
+              <tr key={idx}>
+                <td style={{ ...cell, textAlign: 'center' }}>{idx + 1}</td>
+                <td style={{ ...cell, textAlign: 'center', ...editBox }}>
+                  {editing
+                    ? <input value={it.date} onChange={e => setItem(idx, { date: e.target.value })} style={{ ...inputStyle, textAlign: 'center' }} placeholder='7/1' />
+                    : it.date}
+                </td>
+                <td style={{ ...cell, ...editBox }}>
+                  {editing
+                    ? <input value={it.title} onChange={e => setItem(idx, { title: e.target.value })} style={inputStyle} placeholder='請求件名' />
+                    : it.title}
+                </td>
+                <td style={{ ...right, ...editBox, position: 'relative' }}>
+                  {editing ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4pt' }}>
+                      <input type='number' value={it.amount} onChange={e => setItem(idx, { amount: parseInt(e.target.value, 10) || 0 })} style={{ ...inputStyle, textAlign: 'right' }} />
+                      <button className='no-print' onClick={() => removeItem(idx)} title='この行を削除' style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontSize: '10pt', padding: 0 }}>✕</button>
+                    </span>
+                  ) : yen(it.amount)}
+                </td>
               </tr>
             ))}
             {/* 合計欄も同じ表の中に置く（元のPDFと同じ体裁） */}
@@ -265,19 +369,19 @@ function InvoiceInner() {
               <td style={cell}>&nbsp;</td>
               <td style={cell}>&nbsp;</td>
               <td style={sumLabel}>小計(税抜)</td>
-              <td style={sumValue}>{yen(inv.subtotal)}</td>
+              <td style={sumValue}>{yen(subtotal)}</td>
             </tr>
             <tr>
               <td style={cell}>&nbsp;</td>
               <td style={cell}>&nbsp;</td>
               <td style={sumLabel}>消費税(10%)</td>
-              <td style={sumValue}>{yen(inv.tax)}</td>
+              <td style={sumValue}>{yen(tax)}</td>
             </tr>
             <tr>
               <td style={cell}>&nbsp;</td>
               <td style={cell}>&nbsp;</td>
               <td style={{ ...sumLabel, fontSize: '11pt', fontWeight: 700 }}>税込合計</td>
-              <td style={{ ...sumValue, fontSize: '11pt', fontWeight: 700 }}>{yen(inv.total)}</td>
+              <td style={{ ...sumValue, fontSize: '11pt', fontWeight: 700 }}>{yen(total)}</td>
             </tr>
           </tbody>
         </table>
@@ -287,7 +391,12 @@ function InvoiceInner() {
           {ISSUER.bank.map(b => <div key={b}>{b}</div>)}
           {dueOn && <div style={{ marginTop: '4pt' }}>お支払期限:{jpDate(dueOn)}</div>}
         </div>
-        <div style={{ fontSize: '8pt', marginTop: '13pt' }}>【備考】{ISSUER.note}</div>
+        <div style={{ fontSize: '8pt', marginTop: '13pt', ...editBox }}>
+          【備考】
+          {editing
+            ? <input value={note} onChange={e => setNote(e.target.value)} style={{ ...inputStyle, width: '85%' }} placeholder={ISSUER.note} />
+            : (note || ISSUER.note)}
+        </div>
       </div>
 
     </div>

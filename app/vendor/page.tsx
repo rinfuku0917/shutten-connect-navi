@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import MeetingRequestForm from '../components/MeetingRequestForm'
 
 export default function VendorPage() {
   const steps = [
@@ -20,6 +21,7 @@ export default function VendorPage() {
         <div style={{display:'flex',gap:'12px',justifyContent:'center',flexWrap:'wrap'}}>
           <Link href='/sellers' style={{background:'#fff',color:'#111',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>出店者を探す</Link>
           <Link href='/register' style={{background:'#0EA5E9',color:'#111',fontWeight:'900',fontSize:'16px',border:'#0EA5E9',padding:'14px 36px',borderRadius:'999px',textDecoration:'none'}}>無料会員登録</Link>
+          <a href='#soudan' style={{background:'rgba(255,255,255,0.16)',color:'#fff',fontWeight:'900',fontSize:'16px',border:'2px solid #fff',padding:'12px 34px',borderRadius:'999px',textDecoration:'none'}}>まずは相談する</a>
         </div>
       </div>
       <div style={{background:'#fff',padding:'48px 24px'}}>
@@ -36,6 +38,19 @@ export default function VendorPage() {
           </div>
         </div>
       </div>
+      {/* 会員登録の前でも相談できる導線。掲載を迷っている段階の方向け */}
+      <div id='soudan' style={{background:'#FFF8F0',padding:'52px 24px',scrollMarginTop:'80px'}}>
+        <div style={{maxWidth:'640px',margin:'0 auto'}}>
+          <h2 style={{fontSize:'26px',fontWeight:'900',textAlign:'center',marginBottom:'10px',color:'#111'}}>まずはご相談ください</h2>
+          <p style={{fontSize:'14px',color:'#555',textAlign:'center',lineHeight:1.9,marginBottom:'28px'}}>
+            会員登録は不要です。Zoomでも直接お伺いでも、ご都合の良い方法で承ります。
+          </p>
+          <div style={{background:'#fff',borderRadius:'16px',border:'1px solid #FFE0A0',padding:'28px 24px',boxShadow:'0 4px 20px rgba(0,0,0,0.05)'}}>
+            <MeetingRequestForm />
+          </div>
+        </div>
+      </div>
+
       <SiteFooter />
     </div>
   )

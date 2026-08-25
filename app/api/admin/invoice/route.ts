@@ -30,7 +30,7 @@ function feeLabel(place: any): string {
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, sellerId, period, action, dueOn } = await req.json()
+    const { requesterId, sellerId, period, action, dueOn, edited } = await req.json()
     if (!requesterId || !sellerId || !period) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
@@ -116,15 +116,46 @@ export async function POST(req: Request) {
       zeroCount: zero.length,
     }
 
+    if (action === 'save') {
+      // 既に発行済みの請求書の内容を修正して保存する
+      if (!edited) return NextResponse.json({ error: '保存する内容がありません' }, { status: 400 })
+      const sub = (edited.items || []).reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
+      const tx = Math.floor(sub * 0.1)
+      const { data: upd, error: uErr } = await admin.from('invoices').update({
+        items: edited.items || null,
+        to_name: edited.toName ?? null,
+        to_person: edited.toPerson ?? null,
+        note: edited.note ?? null,
+        due_on: /^\d{4}-\d{2}-\d{2}$/.test(edited.dueOn || '') ? edited.dueOn : null,
+        subtotal: sub, tax: tx, total: sub + tx, item_count: (edited.items || []).length,
+      }).eq('seller_id', sellerId).eq('period', period).select('invoice_no')
+      if (uErr) return NextResponse.json({ error: '保存に失敗しました: ' + uErr.message }, { status: 500 })
+      if (!upd || upd.length === 0) return NextResponse.json({ error: '対象の請求書が見つかりませんでした' }, { status: 404 })
+      return NextResponse.json({ success: true })
+    }
+
     if (action !== 'issue') {
       // 既に発行済みなら、その番号もあわせて返す
       const { data: exist } = await admin
-        .from('invoices').select('invoice_no, issued_on, due_on')
+        .from('invoices').select('invoice_no, issued_on, due_on, items, to_name, to_person, note')
         .eq('seller_id', sellerId).eq('period', period)
         .order('created_at', { ascending: false })
+      const saved = exist && exist.length > 0 ? exist[0] : null
+      // 一度修正して保存してある場合は、その内容を優先して返す
+      if (saved?.items) {
+        const sub = saved.items.reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
+        const tx = Math.floor(sub * 0.1)
+        return NextResponse.json({
+          ...payload,
+          seller: { shopName: saved.to_name ?? payload.seller.shopName, personName: saved.to_person ?? payload.seller.personName },
+          items: saved.items, subtotal: sub, tax: tx, total: sub + tx, itemCount: saved.items.length,
+          note: saved.note ?? null,
+          invoiceNo: saved.invoice_no, dueOn: saved.due_on, alreadyIssued: exist || [],
+        })
+      }
       return NextResponse.json({
-        ...payload, invoiceNo: null,
-        dueOn: exist && exist.length > 0 ? exist[0].due_on : null,
+        ...payload, invoiceNo: saved?.invoice_no ?? null,
+        dueOn: saved?.due_on ?? null,
         alreadyIssued: exist || [],
       })
     }
@@ -142,16 +173,29 @@ export async function POST(req: Request) {
     const invoiceNo = `${year}-${String(seq).padStart(4, '0')}`
 
     const due = typeof dueOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueOn) ? dueOn : null
+    // 画面で修正されていれば、その内容で発行する
+    const useItems = edited?.items?.length ? edited.items : items
+    const sub2 = useItems.reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
+    const tax2 = Math.floor(sub2 * 0.1)
     const { error: iErr } = await admin.from('invoices').insert({
       invoice_no: invoiceNo, seller_id: sellerId, period,
-      subtotal, tax, total, item_count: items.length,
+      subtotal: sub2, tax: tax2, total: sub2 + tax2, item_count: useItems.length,
       sale_ids: items.map(i => i.saleId),
       due_on: due,
+      items: edited?.items?.length ? edited.items : null,
+      to_name: edited?.toName ?? null,
+      to_person: edited?.toPerson ?? null,
+      note: edited?.note ?? null,
     })
     if (iErr) {
       return NextResponse.json({ error: '請求書の記録に失敗しました: ' + iErr.message }, { status: 500 })
     }
-    return NextResponse.json({ ...payload, invoiceNo, dueOn: due })
+    return NextResponse.json({
+      ...payload, invoiceNo, dueOn: due,
+      items: useItems, subtotal: sub2, tax: tax2, total: sub2 + tax2, itemCount: useItems.length,
+      seller: { shopName: edited?.toName ?? payload.seller.shopName, personName: edited?.toPerson ?? payload.seller.personName },
+      note: edited?.note ?? null,
+    })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '不明なエラー'
     return NextResponse.json({ error: msg }, { status: 500 })

@@ -35,7 +35,7 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
@@ -489,6 +489,45 @@ export default function AdminPage() {
     if (!removed || removed.length === 0) { alert('削除できませんでした（権限をご確認ください）'); return }
     loadPlacesList()
   }
+  // ===== 打ち合わせ希望（募集者からの相談） =====
+  type MeetingReq = {
+    id: string; name: string; company: string | null; email: string; phone: string | null
+    method: string; preferred_dates: string | null; message: string | null
+    status: string; admin_memo: string | null; created_at: string
+  }
+  const METHOD_LABEL: Record<string, string> = { zoom: 'Zoom希望', in_person: '直接お会いしたい', both: 'どちらでも可' }
+  const MEET_STATUS: Record<string, { label: string, color: string, bg: string }> = {
+    new: { label: '未対応', color: '#DC2626', bg: '#FEE2E2' },
+    in_progress: { label: '対応中', color: '#92400E', bg: '#FEF3C7' },
+    done: { label: '完了', color: '#16A34A', bg: '#ECFDF5' },
+  }
+  const [meetings, setMeetings] = useState<MeetingReq[]>([])
+  const [meetingsLoading, setMeetingsLoading] = useState(false)
+  const loadMeetings = async () => {
+    setMeetingsLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setMeetingsLoading(false); return }
+    const res = await fetch('/api/meeting-request', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'list', requesterId: user.id }),
+    })
+    const j = await res.json()
+    setMeetings(res.ok ? (j.items || []) : [])
+    setMeetingsLoading(false)
+  }
+  const setMeetingStatus = async (id: string, status: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const res = await fetch('/api/meeting-request', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'status', requesterId: user.id, id, status }),
+    })
+    const j = await res.json()
+    if (!res.ok) { alert('更新できませんでした: ' + (j.error || '')); return }
+    loadMeetings()
+  }
+  useEffect(() => { if (tab === 'meetings' && authChecked) loadMeetings() }, [tab, authChecked])
+
   // ===== 新規案件の登録 =====
   // places への INSERT はRLSで弾かれるおそれがあるため、承認処理と同じく
   // サービスロールのAPI経由で登録する。
@@ -901,6 +940,7 @@ const previewDoc = async (fileUrl: string) => {
             { key: 'messages', label: 'メッセージ' },
             { key: 'reviews', label: 'レビュー審査' },
             { key: 'applications', label: '出店承認' },
+            { key: 'meetings', label: '打ち合わせ希望' },
             { key: 'publish', label: '公開申請' },
             { key: 'blog', label: 'ブログ' },
             { key: 'csv', label: 'CSVインポート' },
@@ -940,6 +980,7 @@ const previewDoc = async (fileUrl: string) => {
             {tab === 'messages' && 'メッセージ'}
             {tab === 'reviews' && 'レビュー審査'}
             {tab === 'applications' && '出店承認'}
+            {tab === 'meetings' && '打ち合わせ希望'}
             {tab === 'publish' && '公開申請'}
             {tab === 'blog' && 'ブログ記事管理'}
             {tab === 'imported' && 'インポート名簿'}
@@ -1694,6 +1735,69 @@ const previewDoc = async (fileUrl: string) => {
             </div>
             )
           })()}
+
+          {tab === 'meetings' && (
+            <div>
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#1D4ED8' }}>
+                掲載を検討している施設・企業さまからの打ち合わせ希望です。ご希望の方法（Zoom／対面）に合わせてご連絡ください。
+              </div>
+              {(() => {
+                const counts = { new: 0, in_progress: 0, done: 0 } as Record<string, number>
+                for (const m of meetings) counts[m.status] = (counts[m.status] || 0) + 1
+                return (
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                    {Object.entries(MEET_STATUS).map(([k, v]) => (
+                      <span key={k} style={{ background: v.bg, color: v.color, borderRadius: '999px', padding: '5px 14px', fontSize: '12px', fontWeight: 700 }}>
+                        {v.label} {counts[k] || 0}件
+                      </span>
+                    ))}
+                  </div>
+                )
+              })()}
+              {meetingsLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
+              {!meetingsLoading && meetings.length === 0 && (
+                <div style={{ color: '#999', fontSize: '13px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>まだ打ち合わせのご希望はありません。</div>
+              )}
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {meetings.map(m => {
+                  const st = MEET_STATUS[m.status] || MEET_STATUS.new
+                  return (
+                    <div key={m.id} style={{ background: '#fff', borderRadius: '12px', border: m.status === 'new' ? '1px solid #FECACA' : '1px solid #E2E8F0', padding: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ background: st.bg, color: st.color, borderRadius: '4px', padding: '2px 10px', fontSize: '11px', fontWeight: 700 }}>{st.label}</span>
+                          <span style={{ background: '#EFF6FF', color: '#1D4ED8', borderRadius: '4px', padding: '2px 10px', fontSize: '11px', fontWeight: 700 }}>{METHOD_LABEL[m.method] || m.method}</span>
+                          <strong style={{ fontSize: '14px', color: '#1a1a1a' }}>{m.company || m.name}</strong>
+                        </div>
+                        <span style={{ fontSize: '11px', color: '#94A3B8' }}>{new Date(m.created_at).toLocaleString('ja-JP')}</span>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '10px' }}>
+                        <tbody>
+                          {([
+                            ['ご担当者', m.name],
+                            ['連絡先', [m.email, m.phone].filter(Boolean).join(' ／ ')],
+                            ['ご希望の日時', m.preferred_dates || ''],
+                            ['ご相談内容', m.message || ''],
+                          ] as [string, string][]).filter(r => r[1]).map(([label, val]) => (
+                            <tr key={label}>
+                              <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top', width: '96px' }}>{label}</td>
+                              <td style={{ padding: '3px 0', color: '#1a1a1a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{val}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <a href={'mailto:' + m.email} style={{ background: '#F5A623', color: '#fff', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>メールで連絡</a>
+                        {m.status !== 'in_progress' && <button onClick={() => setMeetingStatus(m.id, 'in_progress')} style={{ background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>対応中にする</button>}
+                        {m.status !== 'done' && <button onClick={() => setMeetingStatus(m.id, 'done')} style={{ background: '#ECFDF5', color: '#16A34A', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>完了にする</button>}
+                        {m.status !== 'new' && <button onClick={() => setMeetingStatus(m.id, 'new')} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>未対応に戻す</button>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {tab === 'reviews' && (() => {
             const pending = reviewList.filter(r => r.status === 'pending')

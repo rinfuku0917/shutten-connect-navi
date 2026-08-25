@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
+import MeetingRequestForm from '../../components/MeetingRequestForm'
 
 type Place = {
   id: string
@@ -26,6 +27,11 @@ export default function HostDashboard() {
   const [apps, setApps] = useState<HostApp[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
+
+  // ===== 打ち合わせのご相談 =====
+  // 掲載する前に「そもそも可能性があるか」を相談したいという要望が多いため、
+  // 相談フォーム（共通部品）を開けるようにする。
+  const [meetingOpen, setMeetingOpen] = useState(false)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -123,8 +129,21 @@ export default function HostDashboard() {
             <h1 style={{fontSize:'22px',fontWeight:'900',color:'#1a1a1a',marginBottom:'4px'}}>場所・案件管理</h1>
             <p style={{fontSize:'13px',color:'#888'}}>案件の公開・非公開・上位表示を管理できます</p>
           </div>
-          <Link href='/dashboard/host/new-place' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'10px 20px',borderRadius:'8px',textDecoration:'none'}}>+ 新規登録</Link>
+          <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+            <button onClick={() => setMeetingOpen(true)} style={{background:'#fff',color:'#1D4ED8',border:'1.5px solid #BFDBFE',fontWeight:'900',fontSize:'14px',padding:'10px 18px',borderRadius:'8px',cursor:'pointer'}}>打ち合わせを相談する</button>
+            <Link href='/dashboard/host/new-place' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'10px 20px',borderRadius:'8px',textDecoration:'none'}}>+ 新規登録</Link>
+          </div>
         </div>
+        {meetingOpen && (
+          <div style={{background:'#fff',border:'2px solid #BFDBFE',borderRadius:'12px',padding:'20px',marginBottom:'24px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
+              <div style={{fontWeight:'900',fontSize:'15px',color:'#1D4ED8'}}>打ち合わせのご相談</div>
+              <button onClick={() => setMeetingOpen(false)} style={{background:'none',border:'none',color:'#94A3B8',fontSize:'13px',cursor:'pointer'}}>閉じる ✕</button>
+            </div>
+            <MeetingRequestForm onClose={() => setMeetingOpen(false)} />
+          </div>
+        )}
+
         <div style={{background:'#FFF8E1',border:'1px solid #FFE082',borderRadius:'8px',padding:'14px 16px',marginBottom:'24px',fontSize:'13px',color:'#B45309'}}>
           上位表示：ピン留めした案件は一覧ページの上位に表示されます（最大3件）。更新ボタンで新着順でも上位に表示できます。
         </div>
