@@ -249,7 +249,15 @@ export default function HostMessages() {
               <div style={{ padding: '12px 16px', borderTop: msgFile ? 'none' : '1px solid #E2E8F0', display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <label htmlFor="host-msg-file-input" style={{ cursor: msgUploading ? 'not-allowed' : 'pointer', fontSize: '20px', opacity: msgUploading ? 0.4 : 1, userSelect: 'none' }}>📎</label>
                 <input id="host-msg-file-input" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={msgUploading} onChange={e => { const file = e.target.files?.[0]; if (file) setMsgFile(file); e.currentTarget.value = '' }} />
-                <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} placeholder='メッセージを入力...（改行できます。送信はボタンから）' disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
+                <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} onKeyDown={e => {
+                        if (e.key !== 'Enter' || e.shiftKey) return
+                        // 日本語変換の確定Enterでは送信しない（変換中は無視する）
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const ne = e.nativeEvent as any
+                        if (ne?.isComposing || ne?.keyCode === 229) return
+                        // 1回目のEnterは改行。すでに末尾が改行なら2回目とみなして送信する
+                        if (msg.endsWith('\n')) { e.preventDefault(); sendMessage() }
+                      }} placeholder='メッセージを入力...（Enterで改行／2回続けて押すと送信）' disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
                 <button onClick={sendMessage} disabled={msgUploading} style={{ background: msgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: msgUploading ? 'not-allowed' : 'pointer' }}>{msgUploading ? '...' : '送信'}</button>
               </div>
             </>

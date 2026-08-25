@@ -2,8 +2,8 @@
 import Link from 'next/link'
 import SiteHeader from '../../components/SiteHeader'
 import SiteFooter from '../../components/SiteFooter'
-import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { Suspense, useState, useEffect } from 'react'
+import { useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
 type Seller = { id: string; name: string | null; shop_name: string | null; genre: string[] | string | null; areas: string[] | null; photos: string[] | null }
@@ -42,7 +42,7 @@ const Stars = ({ n }: { n: number }) => (
   </span>
 )
 
-export default function SellerDetailPage() {
+function SellerDetailInner() {
   const params = useParams()
   const id = params?.id as string
   const [seller, setSeller] = useState<Seller | null>(null)
@@ -66,15 +66,20 @@ export default function SellerDetailPage() {
     setReviews((data || []) as Review[])
   }
 
+  const searchParams = useSearchParams()
+  const isPreview = searchParams.get('preview') === '1'
+
   useEffect(() => {
     if (!id) return
     const load = async () => {
-      const { data: s } = await supabase
+      // 通常は公開済み（承認済み）の出店者のみ表示する。
+      // 管理画面からの「プレビュー」だけは、承認前の内容も確認できるようにする。
+      let q = supabase
         .from('profiles')
         .select('id, name, shop_name, genre, areas, photos')
         .eq('id', id)
-        .eq('approval_status', 'approved')
-        .single()
+      if (!isPreview) q = q.eq('approval_status', 'approved')
+      const { data: s } = await q.single()
       setSeller(s as Seller)
       await loadReviews()
       const { data: menuData } = await supabase
@@ -87,7 +92,8 @@ export default function SellerDetailPage() {
       setLoading(false)
     }
     load()
-  }, [id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isPreview])
 
   const avg = reviews.length > 0 ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) / 10 : 0
 
@@ -216,5 +222,14 @@ export default function SellerDetailPage() {
 
       <SiteFooter />
     </div>
+  )
+}
+
+// useSearchParams を使うため Suspense で包む（本番ビルドで必要）
+export default function SellerDetailPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#FFF8F0' }} />}>
+      <SellerDetailInner />
+    </Suspense>
   )
 }
