@@ -86,6 +86,13 @@ export default function LoginPage() {
             <div style={{textAlign:'center',fontSize:'12px'}}>
               <Link href='/reset-password' style={{color:'#999',textDecoration:'none'}}>パスワードをお忘れの方</Link>
             </div>
+            {/* 旧サイトから会員情報を引き継いでいるため、新規登録が不要なことを伝える */}
+            <div style={{background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:'8px',padding:'10px 14px',marginTop:'14px',fontSize:'12px',color:'#B45309',lineHeight:1.8}}>
+              以前の出店コネクトナビをご利用の方へ<br />
+              会員情報を引き継いでいるため<strong>新規登録は不要</strong>です。
+              <Link href='/reset-password' style={{color:'#1D4ED8',fontWeight:700}}>パスワードの再設定</Link>
+              から、旧サイトでご登録のメールアドレスでパスワードを設定してご利用ください。
+            </div>
           </div>
         </div>
       </div>
