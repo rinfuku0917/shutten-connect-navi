@@ -24,6 +24,14 @@ body {
 html, body { max-width: 100%; }
 img { max-width: 100%; height: auto; }
 
+/* 請求書PDFの文字位置がずれないようにするための1行。
+   PDFの書き出しに使っている html2canvas は、文字をどの高さに描くかを
+   「1×1の透明画像を文字の隣に置いて位置を測る」方法で決めている。
+   Tailwind が画像を display:block にしていると、その画像が別の行に落ちて
+   測定結果が狂い、PDFの文字だけが数pt下にずれる（文字が大きいほど大きくずれる）。
+   測定用の1×1画像だけ元に戻す。 */
+img[width='1'][height='1'] { display: inline !important; }
+
 
 /* レスポンシブ・グリッド: PCは指定列、スマホは1〜2列に畳む */
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
