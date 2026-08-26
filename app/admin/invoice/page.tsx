@@ -6,9 +6,12 @@ import { supabase } from '../../lib/supabase'
 
 // 出店者への請求書。/admin/invoice?seller=<id>&period=YYYY-MM で開く。
 //
-// レイアウトは実際に発行している請求書のPDFに合わせている。
-// A4(596×842pt)・左右余白48pt・本文幅500pt。文字サイズも pt でそのまま指定し、
-// 明細表の列幅は No.32pt / 実施日58pt / 請求件名317pt / 金額93pt。
+// レイアウトは実際に発行している請求書のPDFから座標を読み取って合わせている。
+// A4(596×842pt)。表より上は元PDFと同じ位置に絶対配置し、
+// 【明細】から下だけを流し込む（件数で高さが変わるため）。
+//   本文の左端 53.2pt / 右端 540.8pt、明細表は 48pt〜547.5pt
+//   列幅 No.32.2 / 実施日58 / 請求件名317.2 / 金額92.1
+// 流し込みで組むと下にいくほど位置がずれるので、この形を崩さないこと。
 // 体裁を変えるときは元のPDFと見比べること。
 
 const ISSUER = {
@@ -151,8 +154,7 @@ function InvoiceInner() {
         import('html2canvas'),
         import('jspdf'),
       ])
-      // 印刷用CSSは幅100%・余白0に上書きするため、画像化のあいだだけ
-      // 画面表示と同じA4の紙面（596×842pt・余白48pt）に固定する
+      // 画像化のあいだだけ、画面表示と同じA4の紙面（596×842pt）に固定する
       const canvas = await html2canvas(sheet, {
         scale: 2, backgroundColor: '#ffffff', useCORS: true,
         windowWidth: sheet.scrollWidth, windowHeight: sheet.scrollHeight,
@@ -161,7 +163,6 @@ function InvoiceInner() {
           if (!el) return
           el.style.setProperty('width', '596pt', 'important')
           el.style.setProperty('min-height', '842pt', 'important')
-          el.style.setProperty('padding', '48pt', 'important')
           el.style.setProperty('margin', '0', 'important')
           el.style.setProperty('box-shadow', 'none', 'important')
           el.style.setProperty('box-sizing', 'border-box', 'important')
@@ -233,11 +234,13 @@ function InvoiceInner() {
   const LINE = '#B7C8E8'
   const ACCENT = '#1A56B0'
   const TINT = '#E8F0FE'
-  const cell: React.CSSProperties = { border: `0.5pt solid ${LINE}`, padding: '3pt 5pt', fontSize: '9pt', lineHeight: 1.5 }
-  const head: React.CSSProperties = { ...cell, textAlign: 'center', background: TINT }
+  const cell: React.CSSProperties = { border: `0.5pt solid ${LINE}`, padding: '0 6.7pt', fontSize: '10pt', height: '17.5pt' }
+  const head: React.CSSProperties = { ...cell, textAlign: 'center', background: TINT, height: '17pt' }
   const right: React.CSSProperties = { ...cell, textAlign: 'right' }
-  const sumLabel: React.CSSProperties = { ...cell, textAlign: 'right', background: TINT }
-  const sumValue: React.CSSProperties = { ...right, background: TINT }
+  const sumLabel: React.CSSProperties = { ...cell, textAlign: 'right', background: TINT, height: '18.5pt' }
+  const sumValue: React.CSSProperties = { ...right, background: TINT, height: '18.5pt' }
+  // 絶対配置の共通指定。元PDFの座標をそのまま使う（下の abs() 参照）
+  const abs: React.CSSProperties = { position: 'absolute', whiteSpace: 'nowrap' }
   // 編集中だけ入力できることが分かるようにする（印刷・PDFには枠を出さない）
   const editBox: React.CSSProperties = editing
     ? { background: '#FFFDF5', outline: '1pt dashed #F5A623', borderRadius: '2pt' }
@@ -307,70 +310,76 @@ function InvoiceInner() {
         </div>
       )}
 
-      {/* ===== 請求書本体（A4・余白48pt） ===== */}
+      {/* ===== 請求書本体 =====
+          元のPDFから読み取った座標をそのまま指定している（単位はすべて pt）。
+          流し込みで組むと明細に近づくほど位置がずれていくため、
+          表より上は絶対配置で固定し、【明細】から下だけを流している。 */}
       <div id='invoice-sheet' className='invoice-sheet' style={{
-        width: '596pt', minHeight: '842pt', margin: '0 auto', background: '#fff',
-        padding: '48pt', boxSizing: 'border-box', color: '#000',
+        position: 'relative', width: '596pt', minHeight: '842pt', margin: '0 auto', background: '#fff',
+        boxSizing: 'border-box', color: '#000',
         fontFamily: '"Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif',
         boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
       }}>
-        {/* 上段：左にロゴ、右に請求書番号・発行日・振込期限（元のPDFと同じ配置） */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <img src='/logo.svg' alt='出店コネクトナビ' className='invoice-logo'
-            style={{ height: '24pt', width: 'auto', marginLeft: '6.8pt', display: 'block' }} />
-          <div style={{ textAlign: 'right', fontSize: '9pt', lineHeight: 1.55 }}>
-            <div>請求書番号:{inv.invoiceNo || '（未発行）'}</div>
-            <div>発行日:{issuedOn}</div>
-            {dueOn && <div>お支払期限:{jpDate(dueOn)}</div>}
-          </div>
+        {/* ロゴ。SVGのままだと画像化のときに下半分が切れてしまうためPNGを使う */}
+        <img src='/logo-invoice.png' alt='出店コネクトナビ' className='invoice-logo'
+          style={{ ...abs, left: '54.8pt', top: '55.3pt', width: '99.1pt', height: '24pt' }} />
+
+        <div style={{ ...abs, right: '55.2pt', top: '53.9pt', fontSize: '10pt', lineHeight: '11.9pt', textAlign: 'right' }}>
+          <div>請求書番号:{inv.invoiceNo || '（未発行）'}</div>
+          <div>発行日:{issuedOn}</div>
+          {dueOn && <div>お支払期限:{jpDate(dueOn)}</div>}
         </div>
 
-        <h1 style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 400, letterSpacing: '0.28em', margin: '20pt 0 0', textIndent: '0.28em' }}>請求書</h1>
+        <div style={{ ...abs, left: '258.5pt', top: '120.4pt', fontSize: '22pt', lineHeight: '22pt', letterSpacing: '6.1pt' }}>請求書</div>
 
-        {/* 宛先と差出人 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '24pt' }}>
-          <div style={{ minWidth: 0, paddingTop: '2pt' }}>
-            <div style={{ fontSize: '15pt', lineHeight: 1.3, borderBottom: `0.5pt solid ${LINE}`, paddingBottom: '3pt', display: 'block', minWidth: '150pt', ...editBox }}>
+        {/* 宛先 */}
+        <div style={{ ...abs, left: '53.2pt', top: '161.9pt', fontSize: '15pt', lineHeight: '15pt', ...editBox }}>
+          {editing
+            ? <input value={toName} onChange={e => setToName(e.target.value)} style={{ ...inputStyle, width: '200pt' }} placeholder='店舗名' />
+            : (toName || '（店名未登録）')}
+        </div>
+        {(editing || toPerson) && (
+          <div style={{ ...abs, left: '53.2pt', top: '181.5pt', fontSize: '12pt', lineHeight: '12pt' }}>
+            <span style={{ display: 'inline-block', ...(editing ? { minWidth: '80pt', ...editBox } : {}) }}>
               {editing
-                ? <input value={toName} onChange={e => setToName(e.target.value)} style={inputStyle} placeholder='店舗名' />
-                : (toName || '（店名未登録）')}
-            </div>
-            {(editing || toPerson) && (
-              <div style={{ fontSize: '12pt', marginTop: '5pt', display: 'flex', alignItems: 'baseline', gap: '2pt' }}>
-                <span style={{ minWidth: '80pt', ...editBox }}>
-                  {editing
-                    ? <input value={toPerson} onChange={e => setToPerson(e.target.value)} style={inputStyle} placeholder='担当者名' />
-                    : toPerson}
-                </span>
-                <span>様</span>
-              </div>
-            )}
+                ? <input value={toPerson} onChange={e => setToPerson(e.target.value)} style={inputStyle} placeholder='担当者名' />
+                : toPerson}
+            </span>
+            <span style={{ marginLeft: '3.3pt' }}>様</span>
           </div>
-          <div style={{ fontSize: '9pt', lineHeight: 1.75, textAlign: 'right', whiteSpace: 'nowrap' }}>
-            <div>{ISSUER.name}</div>
-            <div>{ISSUER.zip} {ISSUER.address}</div>
-            <div>{ISSUER.mail}</div>
-            <div>{ISSUER.taxId}</div>
-          </div>
+        )}
+
+        {/* 差出人 */}
+        <div style={{ ...abs, right: '55.2pt', top: '160.9pt', fontSize: '10pt', lineHeight: '11.9pt', textAlign: 'right' }}>
+          <div>{ISSUER.name}</div>
+          <div>{ISSUER.zip} {ISSUER.address}</div>
+          <div>{ISSUER.mail}</div>
+          <div>{ISSUER.taxId}</div>
         </div>
 
-        <p style={{ fontSize: '9pt', margin: '10pt 0 0' }}>
+        <div style={{ ...abs, left: '53.2pt', top: '202.7pt', fontSize: '10pt', lineHeight: '10pt' }}>
           {inv.periodLabel}({items.length}件)を下記のとおりご請求申し上げます。
-        </p>
+        </div>
 
         {/* ご請求金額（枠つき） */}
-        <div style={{ border: `0.5pt solid ${ACCENT}`, background: TINT, marginTop: '20pt', height: '29pt', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14pt' }}>
-          <span style={{ fontSize: '16pt' }}>ご請求金額({inv.periodLabel})</span>
-          <span style={{ fontSize: '16pt' }}>{yen(total)}(税込)</span>
+        <div style={{
+          ...abs, left: '48pt', top: '235.5pt', width: '498.8pt', height: '29.2pt', boxSizing: 'border-box',
+          border: `0.5pt solid ${ACCENT}`, background: TINT,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '13.3pt', fontSize: '18pt',
+        }}>
+          <span>ご請求金額({inv.periodLabel})</span>
+          <span>{yen(total)}(税込)</span>
         </div>
 
-        <div style={{ fontSize: '10pt', margin: '18pt 0 4pt' }}>【明細】</div>
-        <table style={{ width: '500pt', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        {/* ここから下は明細の件数で高さが変わるので、流し込みのまま置く */}
+        <div style={{ paddingTop: '283.7pt', paddingLeft: '48pt', paddingRight: '48.5pt' }}>
+        <div style={{ fontSize: '10pt', lineHeight: '10pt', marginLeft: '-5.5pt' }}>【明細】</div>
+        <table style={{ width: '499.5pt', borderCollapse: 'collapse', tableLayout: 'fixed', marginTop: '2.2pt' }}>
           <colgroup>
-            <col style={{ width: '32pt' }} />
+            <col style={{ width: '32.2pt' }} />
             <col style={{ width: '58pt' }} />
-            <col style={{ width: '317pt' }} />
-            <col style={{ width: '93pt' }} />
+            <col style={{ width: '317.2pt' }} />
+            <col style={{ width: '92.1pt' }} />
           </colgroup>
           <thead>
             <tr>
@@ -404,6 +413,13 @@ function InvoiceInner() {
                 </td>
               </tr>
             ))}
+            {/* 元のPDFは明細と合計のあいだに空の行が1つ入る */}
+            <tr>
+              <td style={cell}>&nbsp;</td>
+              <td style={cell}>&nbsp;</td>
+              <td style={cell}>&nbsp;</td>
+              <td style={cell}>&nbsp;</td>
+            </tr>
             {/* 合計欄も同じ表の中に置く（元のPDFと同じ体裁） */}
             <tr>
               <td style={cell}>&nbsp;</td>
@@ -420,22 +436,23 @@ function InvoiceInner() {
             <tr>
               <td style={cell}>&nbsp;</td>
               <td style={cell}>&nbsp;</td>
-              <td style={{ ...sumLabel, fontSize: '11pt', fontWeight: 700 }}>税込合計</td>
-              <td style={{ ...sumValue, fontSize: '11pt', fontWeight: 700 }}>{yen(total)}</td>
+              <td style={{ ...sumLabel, height: '20pt', fontSize: '11.5pt', fontWeight: 700 }}>税込合計</td>
+              <td style={{ ...sumValue, height: '20pt', fontSize: '11.5pt', fontWeight: 700 }}>{yen(total)}</td>
             </tr>
           </tbody>
         </table>
 
-        <div style={{ fontSize: '10pt', margin: '22pt 0 3pt' }}>【振込先】</div>
-        <div style={{ fontSize: '9pt', lineHeight: 1.65 }}>
+        <div style={{ fontSize: '10pt', lineHeight: '10pt', marginTop: '23.1pt', marginLeft: '-5.5pt' }}>【振込先】</div>
+        <div style={{ fontSize: '9pt', lineHeight: '11.9pt', marginTop: '2.1pt' }}>
           {ISSUER.bank.map(b => <div key={b}>{b}</div>)}
           {dueOn && <div style={{ marginTop: '4pt' }}>お支払期限:{jpDate(dueOn)}</div>}
         </div>
-        <div style={{ fontSize: '8pt', marginTop: '13pt', ...editBox }}>
+        <div style={{ fontSize: '8.3pt', lineHeight: '8.3pt', marginTop: '6.1pt', marginLeft: '-4.8pt', ...editBox }}>
           【備考】
           {editing
             ? <input value={note} onChange={e => setNote(e.target.value)} style={{ ...inputStyle, width: '85%' }} placeholder={ISSUER.note} />
             : (note || ISSUER.note)}
+        </div>
         </div>
       </div>
 

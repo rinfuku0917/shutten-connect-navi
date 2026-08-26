@@ -274,12 +274,11 @@ img { max-width: 100%; height: auto; }
     margin: 0 !important;
     min-height: 0 !important;
   }
+  /* 請求書は紙面そのものをA4の実寸(596×842pt)で組んでいる。
+     幅を100%に伸ばすと中の座標が全部ずれるので、実寸のまま印刷する。 */
+  @page { size: A4; margin: 0; }
   .invoice-sheet {
     box-shadow: none !important;
-    width: 100% !important;
-    max-width: none !important;
-    min-height: 0 !important;
-    padding: 0 !important;
     margin: 0 !important;
   }
   .invoice-sheet table { page-break-inside: auto; }
