@@ -77,6 +77,8 @@ function EditPlacePageInner() {
 
   const router = useRouter()
   const [imageFiles, setImageFiles] = useState<File[]>([])
+  // 募集者が手動で「急募」にできる（自動判定は開催7日前から）
+  const [urgent, setUrgent] = useState(false)
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
@@ -116,6 +118,7 @@ function EditPlacePageInner() {
         ? (data.images as string[]).filter(Boolean)
         : (data.image_url ? [data.image_url] : [])
       setExistingImages(imgs)
+      setUrgent(!!data.urgent)
       setLoading(false)
     }
     load()
@@ -159,6 +162,7 @@ function EditPlacePageInner() {
       genres: genres,
       image_url: imageUrls[0] || '',
       images: imageUrls,
+      urgent: urgent,
       details: pickDetails(form),
     }).eq('id', id)
     if(updErr) { setErrMsg('更新失敗: ' + updErr.message); setSaving(false); return }
@@ -251,6 +255,19 @@ function EditPlacePageInner() {
               {schedule.length<31 && (
                 <button type='button' onClick={addDay} style={{marginTop:'10px',background:'#fff',color:'#B45309',border:'1.5px dashed #F5A623',borderRadius:'8px',padding:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',width:'100%'}}>＋ 日程を追加（{schedule.length}/31）</button>
               )}
+            </div>
+
+            {/* 開催日が先でも「今すぐ埋めたい」案件があるため、募集者が自分で急募にできる */}
+            <div style={{marginBottom:'20px'}}>
+              <label style={{display:'flex',alignItems:'flex-start',gap:'10px',cursor:'pointer',background:'#FFF1F1',border:'1.5px solid #FCA5A5',borderRadius:'10px',padding:'14px 16px'}}>
+                <input type='checkbox' checked={urgent} onChange={e=>setUrgent(e.target.checked)} style={{marginTop:'3px',width:'16px',height:'16px',accentColor:'#d13b3b'}}/>
+                <span>
+                  <span style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>この案件を「急募」として表示する</span>
+                  <span style={{display:'block',fontSize:'12px',color:'#64748B',marginTop:'4px',lineHeight:1.7}}>
+                    トップページのカードに赤い「急募」バッジが付きます。チェックしなくても、開催日が7日以内になると自動で急募になります。
+                  </span>
+                </span>
+              </label>
             </div>
 
             <div style={{marginBottom:'20px'}}>

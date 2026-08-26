@@ -35,6 +35,7 @@ type NewPlace = {
   schedule: { date: string }[] | null
   open_days: string[] | null
   applications: { count: number }[]
+  urgent: boolean | null
 }
 type WorkPlace = { id: string; title: string; image_url: string | null }
 type BlogPost = { id: string; slug: string; title: string; category: string | null; cover_emoji: string | null; published_at: string | null }
@@ -80,8 +81,10 @@ function scheduleText(s: { date: string }[] | null, openDays?: string[] | null):
   return text || '日程調整中'
 }
 
-// バッジ: 急募(開催7日以内) > 人気(応募5件以上) > 新着(掲載14日以内)
+// バッジ: 急募(募集者が指定 または 開催7日以内) > 人気(応募5件以上) > 新着(掲載14日以内)
 function badgeOf(p: NewPlace): { label: string; bg: string } | null {
+  // フォームで「急募」にした案件は、開催日が先でも急募として出す
+  if (p.urgent) return { label: '急募', bg: '#d13b3b' }
   const today = new Date().toISOString().slice(0, 10)
   const dates = (Array.isArray(p.schedule) ? p.schedule : []).map(d => d?.date).filter(Boolean).sort()
   const next = dates.find(d => d >= today)
@@ -108,7 +111,7 @@ export default function Home() {
     const loadNew = async () => {
       const { data } = await supabase
         .from('places')
-        .select('id,title,prefecture,image_url,posted_at,schedule,open_days,applications(count)')
+        .select('id,title,prefecture,image_url,posted_at,schedule,open_days,urgent,applications(count)')
         .eq('status', 'published')
         .order('pinned', { ascending: false })
         .order('posted_at', { ascending: false })
