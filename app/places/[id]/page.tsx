@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import SiteHeader from '../../components/SiteHeader'
+import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
@@ -175,6 +176,9 @@ export default function PlaceDetail() {
   return (
     <>
     <SiteHeader />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
+        <BackButton fallback='/places' />
+      </div>
     <div style={{ minHeight: '100vh', background: '#FFF9E6' }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
         <Link href="/places" style={{ color: '#3A9BD5', textDecoration: 'none', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginBottom: '20px' }}>

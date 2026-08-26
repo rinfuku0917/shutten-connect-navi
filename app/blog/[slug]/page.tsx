@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import SiteHeader from '../../components/SiteHeader'
+import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 
 export const revalidate = 60
@@ -64,6 +65,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   return (
     <div style={{ background: '#FFF8F0', minHeight: '100vh' }}>
       <SiteHeader />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
+        <BackButton fallback='/blog' />
+      </div>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <article style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 20px 60px' }}>

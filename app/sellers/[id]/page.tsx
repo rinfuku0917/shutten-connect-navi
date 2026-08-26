@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import SiteHeader from '../../components/SiteHeader'
+import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import { Suspense, useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
@@ -130,6 +131,9 @@ function SellerDetailInner() {
   return (
     <div style={{ background: '#FBF7F1', minHeight: '100vh' }}>
       <SiteHeader />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
+        <BackButton fallback='/sellers' />
+      </div>
       <div style={{ maxWidth: '780px', margin: '0 auto', padding: '24px 16px' }}>
         <Link href='/sellers' style={{ fontSize: '13px', color: '#78716C', textDecoration: 'none' }}>← 出店者一覧に戻る</Link>
 
