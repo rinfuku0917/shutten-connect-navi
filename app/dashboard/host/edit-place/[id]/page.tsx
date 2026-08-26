@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { geocodeAddress } from '../../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../../lib/categories'
+import PlaceImagePicker from '../../../../components/PlaceImagePicker'
 
 
 // 案件フォームのうち、専用の列を持たない詳細項目。
@@ -61,7 +62,8 @@ function EditPlacePageInner() {
   const [schedule, setSchedule] = useState([{date:'', start:'選択してください', end:'選択してください'}])
   const [genres, setGenres] = useState<string[]>([])
   const toggleGenre = (g:string) => setGenres(prev => prev.includes(g) ? prev.filter(x=>x!==g) : [...prev, g])
-  const [existingImage, setExistingImage] = useState('')
+  // 登録済みの写真URL（先頭がサムネイル）。× で外せる。
+  const [existingImages, setExistingImages] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const set = (k:string,v:string) => setForm(p=>({...p,[k]:v}))
   const setDay = (i:number,k:'date'|'start'|'end',v:string) => setSchedule(prev=>prev.map((d,idx)=>idx===i?{...d,[k]:v}:d))
@@ -74,7 +76,7 @@ function EditPlacePageInner() {
   const inputStyle = {width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box' as const,color:'#1a1a1a',background:'#fff'}
 
   const router = useRouter()
-  const [imageFile, setImageFile] = useState<File|null>(null)
+  const [imageFiles, setImageFiles] = useState<File[]>([])
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
@@ -109,7 +111,11 @@ function EditPlacePageInner() {
       }
       if(Array.isArray(data.schedule) && data.schedule.length>0) setSchedule(data.schedule)
       if(Array.isArray(data.genres)) setGenres(data.genres)
-      setExistingImage(data.image_url || '')
+      // images が未設定の古い案件は、image_url の1枚だけを持っているものとして扱う
+      const imgs = Array.isArray(data.images) && data.images.length > 0
+        ? (data.images as string[]).filter(Boolean)
+        : (data.image_url ? [data.image_url] : [])
+      setExistingImages(imgs)
       setLoading(false)
     }
     load()
@@ -124,14 +130,16 @@ function EditPlacePageInner() {
     const { data: { user } } = await supabase.auth.getUser()
     if(!user) { setErrMsg('ログインが必要です'); setSaving(false); return }
 
-    let imageUrl = existingImage
-    if(imageFile) {
-      const ext = imageFile.name.split('.').pop()
-      const path = user.id + '/' + Date.now() + '.' + ext
-      const { error: upErr } = await supabase.storage.from('place-images').upload(path, imageFile)
+    // 残した写真 ＋ 新しく足した写真。並びはそのまま案件ページの並びになる。
+    const imageUrls = [...existingImages]
+    for(let i = 0; i < imageFiles.length; i++) {
+      const f = imageFiles[i]
+      const ext = f.name.split('.').pop()
+      const path = user.id + '/' + Date.now() + '-' + i + '.' + ext
+      const { error: upErr } = await supabase.storage.from('place-images').upload(path, f)
       if(upErr) { setErrMsg('画像アップロード失敗: ' + upErr.message); setSaving(false); return }
       const { data: pub } = supabase.storage.from('place-images').getPublicUrl(path)
-      imageUrl = pub.publicUrl
+      imageUrls.push(pub.publicUrl)
     }
 
     const geo = await geocodeAddress((form.prefecture || '') + (form.address || ''))
@@ -149,7 +157,8 @@ function EditPlacePageInner() {
       recruit: form['募集内容'],
       schedule: schedule,
       genres: genres,
-      image_url: imageUrl,
+      image_url: imageUrls[0] || '',
+      images: imageUrls,
       details: pickDetails(form),
     }).eq('id', id)
     if(updErr) { setErrMsg('更新失敗: ' + updErr.message); setSaving(false); return }
@@ -245,15 +254,9 @@ function EditPlacePageInner() {
             </div>
 
             <div style={{marginBottom:'20px'}}>
-              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>イベント画像</label>
-              {existingImage && <div style={{marginTop:'8px'}}><img src={existingImage} alt='' style={{maxWidth:'200px',borderRadius:'8px',border:'1px solid #E5C07B'}}/></div>}
-              <div style={{marginTop:'8px'}}>
-                <label style={{background:'#F5A623',color:'#fff',padding:'8px 20px',borderRadius:'8px',cursor:'pointer',fontSize:'13px',fontWeight:'700'}}>
-                  {existingImage ? '画像を変更' : 'ファイルを選択'}
-                  <input type='file' accept='image/*' onChange={e=>setImageFile(e.target.files?.[0]||null)} style={{display:'none'}}/>
-                </label>
-                {imageFile && <span style={{marginLeft:'12px',fontSize:'13px',color:'#1a1a1a'}}>{imageFile.name}</span>}
-              </div>
+              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>イベント画像（最大4枚）</label>
+              <PlaceImagePicker existing={existingImages} onChangeExisting={setExistingImages}
+                files={imageFiles} onChangeFiles={setImageFiles} />
             </div>
 
             <div style={{marginBottom:'20px'}}>

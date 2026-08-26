@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { geocodeAddress } from '../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../lib/categories'
+import PlaceImagePicker from '../../../components/PlaceImagePicker'
 
 
 // 案件フォームのうち、専用の列を持たない詳細項目。
@@ -70,7 +71,8 @@ function NewPlacePageInner() {
   const inputStyle = {width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box' as const,color:'#1a1a1a',background:'#fff'}
 
   const router = useRouter()
-  const [imageFile, setImageFile] = useState<File|null>(null)
+  // 写真は最大4枚。1枚目が一覧に出るサムネイルになる。
+  const [imageFiles, setImageFiles] = useState<File[]>([])
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
@@ -83,14 +85,16 @@ function NewPlacePageInner() {
     const { data: { user } } = await supabase.auth.getUser()
     if(!user) { setErrMsg('ログインが必要です'); setSaving(false); return }
 
-    let imageUrl = ''
-    if(imageFile) {
-      const ext = imageFile.name.split('.').pop()
-      const path = user.id + '/' + Date.now() + '.' + ext
-      const { error: upErr } = await supabase.storage.from('place-images').upload(path, imageFile)
+    // 選んだ写真を順番にアップロードする。並び順は画面の並びのまま。
+    const imageUrls: string[] = []
+    for(let i = 0; i < imageFiles.length; i++) {
+      const f = imageFiles[i]
+      const ext = f.name.split('.').pop()
+      const path = user.id + '/' + Date.now() + '-' + i + '.' + ext
+      const { error: upErr } = await supabase.storage.from('place-images').upload(path, f)
       if(upErr) { setErrMsg('画像アップロード失敗: ' + upErr.message); setSaving(false); return }
       const { data: pub } = supabase.storage.from('place-images').getPublicUrl(path)
-      imageUrl = pub.publicUrl
+      imageUrls.push(pub.publicUrl)
     }
 
     const geo = await geocodeAddress((form.prefecture || '') + (form.address || ''))
@@ -107,7 +111,8 @@ function NewPlacePageInner() {
       recruit: form['募集内容'],
       schedule: schedule,
       genres: genres,
-      image_url: imageUrl,
+      image_url: imageUrls[0] || '',
+      images: imageUrls,
       latitude: geo?.lat ?? null,
       longitude: geo?.lon ?? null,
       status: 'published',
@@ -204,14 +209,8 @@ function NewPlacePageInner() {
             </div>
 
             <div style={{marginBottom:'20px'}}>
-              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>イベント画像</label>
-              <div style={{marginTop:'8px'}}>
-                <label style={{background:'#F5A623',color:'#fff',padding:'8px 20px',borderRadius:'8px',cursor:'pointer',fontSize:'13px',fontWeight:'700'}}>
-                  ファイルを選択
-                  <input type='file' accept='image/*' onChange={e=>setImageFile(e.target.files?.[0]||null)} style={{display:'none'}}/>
-                </label>
-                {imageFile && <span style={{marginLeft:'12px',fontSize:'13px',color:'#1a1a1a'}}>{imageFile.name}</span>}
-              </div>
+              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>イベント画像（最大4枚）</label>
+              <PlaceImagePicker files={imageFiles} onChangeFiles={setImageFiles} />
             </div>
 
             <div style={{marginBottom:'20px'}}>

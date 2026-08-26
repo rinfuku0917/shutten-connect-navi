@@ -28,6 +28,7 @@ type Place = {
   schedule: { date: string, start: string, end: string }[] | null
   open_days: string[] | null
   image_url: string | null
+  images: string[] | null
   latitude: number | null
   longitude: number | null
   open_time: string | null
@@ -75,6 +76,8 @@ export default function PlaceDetail() {
   const [loading, setLoading] = useState(true)
   // 料金はログイン済みなら表示する（エントリー可否の判定とは別）
   const [canSeeFee, setCanSeeFee] = useState(false)
+  // いま大きく出している写真の番号
+  const [photoIndex, setPhotoIndex] = useState(0)
   const router = useRouter()
   const [showEntry, setShowEntry] = useState(false)
   const [format, setFormat] = useState('')
@@ -168,6 +171,10 @@ export default function PlaceDetail() {
   }
 
   const tag = place.place_type === 'event' ? 'イベント' : '常設'
+  // images に入っていない古い案件は、image_url の1枚だけを表示する
+  const photos = (Array.isArray(place.images) ? place.images.filter(Boolean) : [])
+  if (photos.length === 0 && place.image_url) photos.push(place.image_url)
+  const shownPhoto = photos[photoIndex] || photos[0] || ''
   // 構造化された日程が無い案件は、旧サイトから移行した日程テキストを表示する
   const scheduleText = place.schedule && place.schedule.filter(d => d.date).length > 0
     ? place.schedule.filter(d => d.date).map(d => d.date + ' ' + d.start + '〜' + d.end).join(' / ')
@@ -193,10 +200,20 @@ export default function PlaceDetail() {
             </div>
             <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#1a1a1a', marginBottom: '20px', lineHeight: 1.4 }}>{place.title}</h1>
 
+            {/* 写真は複数枚登録できる。サムネイルを押すと大きい写真が入れ替わる。 */}
             <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', marginBottom: '20px', border: '1px solid #E5E7EB' }}>
-              <div style={{ height: '260px', background: place.image_url ? `url(${place.image_url}) center/cover no-repeat` : 'linear-gradient(135deg,#FFF3CD,#FFE082)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '80px' }}>
-                {!place.image_url && (place.place_type === 'event' ? '🎪' : '🏪')}
+              <div style={{ height: '260px', background: shownPhoto ? `url(${shownPhoto}) center/cover no-repeat` : 'linear-gradient(135deg,#FFF3CD,#FFE082)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '80px' }}>
+                {!shownPhoto && (place.place_type === 'event' ? '🎪' : '🏪')}
               </div>
+              {photos.length > 1 && (
+                <div style={{ display: 'flex', gap: '8px', padding: '10px', flexWrap: 'wrap', borderTop: '1px solid #F1F5F9' }}>
+                  {photos.map((url, i) => (
+                    <button key={url + i} type='button' onClick={() => setPhotoIndex(i)}
+                      style={{ padding: 0, border: i === photoIndex ? '2px solid #F5A623' : '2px solid transparent', borderRadius: '8px', background: `url(${url}) center/cover no-repeat`, width: '72px', height: '54px', cursor: 'pointer' }}
+                      aria-label={'写真' + (i + 1) + 'を表示'} />
+                  ))}
+                </div>
+              )}
             </div>
 
             {place.description && (
