@@ -489,6 +489,26 @@ export default function AdminPage() {
     if (!removed || removed.length === 0) { alert('削除できませんでした（権限をご確認ください）'); return }
     loadPlacesList()
   }
+  // ブログの自動投稿を手動で1本試す（定期実行と同じ処理を呼ぶ）
+  const [autoPosting, setAutoPosting] = useState(false)
+  const runAutoPost = async () => {
+    if (!window.confirm('AIが記事を1本作成し、そのまま公開します。よろしいですか？')) return
+    setAutoPosting(true)
+    try {
+      const res = await fetch('/api/cron/blog')
+      const j = await res.json()
+      if (!res.ok) { alert('作成できませんでした: ' + (j.error || '不明なエラー')) }
+      else {
+        alert('公開しました：' + (j.post?.title || '') + (j.hasImage ? '' : '\n※画像は生成できませんでした'))
+        loadPosts()
+      }
+    } catch (e) {
+      alert('作成できませんでした')
+      console.error(e)
+    }
+    setAutoPosting(false)
+  }
+
   // ===== 打ち合わせ希望（募集者からの相談） =====
   type MeetingReq = {
     id: string; name: string; company: string | null; email: string; phone: string | null
@@ -1984,6 +2004,9 @@ const previewDoc = async (fileUrl: string) => {
                   {pMsg && <div style={{ fontSize: '13px', fontWeight: 700, color: pMsgOk ? '#16A34A' : '#DC2626', padding: '8px 0' }}>{pMsg}</div>}
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button disabled={pSaving} onClick={() => savePost('published')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 700, cursor: pSaving ? 'default' : 'pointer', opacity: pSaving ? 0.6 : 1 }}>{pSaving ? '保存中...' : (editingPost ? '更新して公開' : '公開する')}</button>
+                    <button disabled={autoPosting} onClick={runAutoPost} style={{ background: autoPosting ? '#ccc' : '#1D4ED8', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 20px', fontSize: '14px', fontWeight: 700, cursor: autoPosting ? 'default' : 'pointer' }}>
+                      {autoPosting ? 'AIが作成中...' : 'AIで1本作って公開'}
+                    </button>
                     <button disabled={pSaving} onClick={() => savePost('draft')} style={{ background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 700, cursor: pSaving ? 'default' : 'pointer', opacity: pSaving ? 0.6 : 1 }}>下書き保存</button>
                   </div>
                 </div>

@@ -74,7 +74,9 @@ function InvoiceInner() {
     if (!res.ok) { setErr(j.error || '請求書を作成できませんでした'); setLoading(false); return }
     setErr('')
     setInv(j)
-    if (j.dueOn) setDueOn(j.dueOn)
+    // 最初の読み込みのときだけ保存済みの期限を入れる。
+    // 画面で日付を直したあとに上書きされてしまうため、以降は触らない。
+    if (j.dueOn && action === 'preview') setDueOn(j.dueOn)
     setLoading(false)
   }
 
@@ -149,7 +151,40 @@ function InvoiceInner() {
         import('html2canvas'),
         import('jspdf'),
       ])
-      const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+      // 印刷用CSSは幅100%・余白0に上書きするため、画像化のあいだだけ
+      // 画面表示と同じA4の紙面（596×842pt・余白48pt）に固定する
+      const canvas = await html2canvas(sheet, {
+        scale: 2, backgroundColor: '#ffffff', useCORS: true,
+        windowWidth: sheet.scrollWidth, windowHeight: sheet.scrollHeight,
+        onclone: (doc: Document) => {
+          const el = doc.getElementById('invoice-sheet') as HTMLElement | null
+          if (!el) return
+          el.style.setProperty('width', '596pt', 'important')
+          el.style.setProperty('min-height', '842pt', 'important')
+          el.style.setProperty('padding', '48pt', 'important')
+          el.style.setProperty('margin', '0', 'important')
+          el.style.setProperty('box-shadow', 'none', 'important')
+          el.style.setProperty('box-sizing', 'border-box', 'important')
+          // 編集中の黄色い枠はPDFに出さない
+          el.querySelectorAll('*').forEach(n => {
+            const e = n as HTMLElement
+            if (e.style?.outline) e.style.outline = 'none'
+            if (e.style?.background === 'rgb(255, 253, 245)') e.style.background = 'transparent'
+          })
+          el.querySelectorAll('.no-print').forEach(n => ((n as HTMLElement).style.display = 'none'))
+          // 入力欄は画像化すると文字がずれることがあるため、
+          // 同じ見た目の文字に置き換えてから描画する
+          el.querySelectorAll('input, textarea').forEach(n => {
+            const f = n as HTMLInputElement
+            const span = doc.createElement('span')
+            span.textContent = f.value
+            span.style.font = getComputedStyle(f).font
+            span.style.color = getComputedStyle(f).color
+            span.style.whiteSpace = 'pre-wrap'
+            f.replaceWith(span)
+          })
+        },
+      })
       const pdf = new jsPDF({ unit: 'pt', format: 'a4' })
       const pw = pdf.internal.pageSize.getWidth()
       const ph = pdf.internal.pageSize.getHeight()
@@ -219,8 +254,13 @@ function InvoiceInner() {
         <Link href='/admin' style={{ fontSize: '13px', color: '#64748B', textDecoration: 'none' }}>← 管理画面</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px' }}>
           <span style={{ fontSize: '12px', color: '#64748B' }}>振込期限</span>
-          <input type='date' value={dueOn} onChange={e => setDueOn(e.target.value)} disabled={!!inv.invoiceNo}
+          <input type='date' value={dueOn} onChange={e => setDueOn(e.target.value)}
             style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px' }} />
+          {inv.invoiceNo && (
+            <button onClick={saveEdits} disabled={saving} style={{ background: saving ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+              期限を保存
+            </button>
+          )}
         </div>
         <div style={{ flex: 1 }} />
         <button onClick={() => setEditing(v => !v)} style={{ background: editing ? '#1D4ED8' : '#fff', color: editing ? '#fff' : '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
