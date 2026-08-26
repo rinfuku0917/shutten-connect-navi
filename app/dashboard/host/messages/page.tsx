@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
+import BackButton from '../../../components/BackButton'
 
 type DbMessage = { id: string, application_id: string, sender_id: string | null, body: string, sent_at: string, file_url?: string | null }
 // 申込1件＝やり取り1スレッド。どの案件・どの出店者かが分かるようにまとめて持つ
@@ -183,6 +184,9 @@ export default function HostMessages() {
 
   return (
     <div style={{ padding: '20px 24px' }}>
+      <div style={{ marginBottom: '12px' }}>
+        <BackButton fallback='/dashboard/host' />
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a1a', margin: 0 }}>メッセージ</h1>
       </div>

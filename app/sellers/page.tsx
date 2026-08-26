@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import SiteHeader from '../components/SiteHeader'
+import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
 import SellersBrowser, { type Seller } from './SellersBrowser'
@@ -48,6 +49,9 @@ export default async function SellersPage() {
   return (
     <div style={{ background: '#FBF7F1', minHeight: '100vh' }}>
       <SiteHeader />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
+        <BackButton fallback='/' />
+      </div>
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
         <header className="mb-10 flex flex-row items-center justify-center gap-3 text-center sm:gap-4">
           <div>

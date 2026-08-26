@@ -1,5 +1,6 @@
 'use client'
 import SiteHeader from '../components/SiteHeader'
+import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
 
@@ -22,6 +23,9 @@ export default function CompanyPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#FFF9E6', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
       <SiteHeader />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
+        <BackButton fallback='/' />
+      </div>
 
       <div style={{ background: 'linear-gradient(rgba(20,41,63,.55), rgba(20,41,63,.55)), url(/hero-company.jpg) center/cover no-repeat', padding: '72px 16px', textAlign: 'center' }}>
         <h1 style={{ fontSize: 'clamp(24px,5vw,36px)', fontWeight: 900, color: '#fff', margin: 0, textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>会社概要</h1>

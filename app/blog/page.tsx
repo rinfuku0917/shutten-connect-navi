@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import SiteHeader from '../components/SiteHeader'
+import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 
 export const revalidate = 60
@@ -39,6 +40,9 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
   return (
     <div style={{ background: '#FFF8F0', minHeight: '100vh' }}>
       <SiteHeader />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
+        <BackButton fallback='/' />
+      </div>
       <div style={{ background: 'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-blog.png) center/cover no-repeat', padding: '80px 24px', textAlign: 'center', minHeight: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <h1 style={{ fontSize: 'clamp(28px,4vw,44px)', fontWeight: 900, color: '#fff', marginBottom: '8px', textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>お役立ち情報</h1>
         <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)' }}>出店に役立つ記事・ガイドをお届けします</p>

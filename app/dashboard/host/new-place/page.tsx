@@ -127,6 +127,9 @@ function NewPlacePageInner() {
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
       <div style={{maxWidth:'780px',margin:'0 auto',padding:'40px 24px'}}>
+        <div style={{marginBottom:'16px'}}>
+          <Link href={backTo} style={{display:'inline-flex',alignItems:'center',gap:'6px',background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:'999px',padding:'8px 18px',fontSize:'13px',fontWeight:700,color:'#475569',textDecoration:'none'}}>← 戻る</Link>
+        </div>
         <h1 style={{fontSize:'26px',fontWeight:'900',marginBottom:'8px',textAlign:'center',color:'#1a1a1a'}}>イベント・場所登録</h1>
         <p style={{textAlign:'center',color:'#B45309',fontSize:'13px',marginBottom:'36px'}}>出店者を募集するための情報を登録してください</p>
 

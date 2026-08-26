@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import SiteHeader from '../components/SiteHeader'
+import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import MeetingRequestForm from '../components/MeetingRequestForm'
 
@@ -15,6 +16,9 @@ export default function VendorPage() {
   return (
     <div>
       <SiteHeader />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
+        <BackButton fallback='/' />
+      </div>
       <div style={{background:'linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.35)),url(/hero-bg.png) center/cover no-repeat',padding:'64px 24px',textAlign:'center'}}>
         <h1 style={{fontSize:'32px',fontWeight:'900',color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.5)',marginBottom:'16px'}}>お店を呼びたい方へ</h1>
         <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>あなたのスペースに最適な出店者を見つけよう</p>
