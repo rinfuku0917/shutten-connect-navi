@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import DashboardFooter from '../../components/DashboardFooter'
+import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
 
 type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, file_url?: string | null }
 
@@ -86,6 +87,9 @@ export default function SellerDashboard() {
   const [uploadingType, setUploadingType] = useState<string | null>(null)
 
   // ===== プロフィール（出店者） =====
+  // 保存用。読み取れた数字だけ mm にそろえ、空欄はそのまま空で残す。
+  const mmOrEmpty = (raw: string) => { const n = toMm(raw); return n == null ? '' : String(n) }
+
   type ProfileData = { name: string, shop_name: string, email: string, phone: string, genre: string, address: string, areas: string[], bio: string, sales_type: string, vehicle_type: string, size_length: string, size_width: string, size_height: string, equipment: string, menu: string }
   type SnsLinks = { instagram: string, twitter: string, youtube: string, tiktok: string }
   const emptyProfile: ProfileData = { name: '', shop_name: '', email: '', phone: '', genre: '', address: '', areas: [], bio: '', sales_type: '', vehicle_type: '', size_length: '', size_width: '', size_height: '', equipment: '', menu: '' }
@@ -287,7 +291,10 @@ export default function SellerDashboard() {
       phone: profileForm.phone, genre: profileForm.genre, address: profileForm.address,
       areas: areasArr,
       bio: profileForm.bio, sales_type: profileForm.sales_type, vehicle_type: profileForm.vehicle_type,
-      size_length: profileForm.size_length, size_width: profileForm.size_width, size_height: profileForm.size_height,
+      // 車両サイズは mm の数字にそろえて保存する（表示・書き出しで同じ形になるように）
+      size_length: mmOrEmpty(profileForm.size_length),
+      size_width: mmOrEmpty(profileForm.size_width),
+      size_height: mmOrEmpty(profileForm.size_height),
       equipment: profileForm.equipment, menu: profileForm.menu, photos,
     }
     const { data: pData, error: pErr } = await supabase.from('profiles').update(payload).eq('id', uid).select()
@@ -1252,7 +1259,7 @@ export default function SellerDashboard() {
                     {[
                       { label: '販売形態', value: profile.sales_type },
                       { label: '車種', value: profile.vehicle_type },
-                      { label: 'サイズ', value: [profile.size_length, profile.size_width, profile.size_height].filter(Boolean).join(' × ') },
+                      { label: '車両サイズ', value: formatVehicleSize(profile.size_length, profile.size_width, profile.size_height) },
                       { label: '設備', value: profile.equipment },
                     ].filter(f => f.value).map(fld => (
                       <div key={fld.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
@@ -1381,11 +1388,31 @@ export default function SellerDashboard() {
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>サイズ（全長・全幅・高さ）</div>
+                      {/* サイズは書き方がばらばらだと募集者が見比べられないため、
+                          mm の数字だけを受け取り、下に確定する表記を出す */}
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>車両サイズ（単位：mm）</div>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <input value={profileForm.size_length} onChange={e => setProfileForm({ ...profileForm, size_length: e.target.value })} placeholder='全長' style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
-                        <input value={profileForm.size_width} onChange={e => setProfileForm({ ...profileForm, size_width: e.target.value })} placeholder='全幅' style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
-                        <input value={profileForm.size_height} onChange={e => setProfileForm({ ...profileForm, size_height: e.target.value })} placeholder='高さ' style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                        {([
+                          ['size_length', '全長', '3440'],
+                          ['size_width', '全幅', '1520'],
+                          ['size_height', '高さ', '2460'],
+                        ] as const).map(([key, label, ph]) => (
+                          <div key={key} style={{ flex: 1 }}>
+                            <div style={{ fontSize: '10px', color: '#94A3B8', marginBottom: '2px' }}>{label}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '0 8px 0 10px', background: '#fff' }}>
+                              <input value={profileForm[key]} inputMode='numeric'
+                                onChange={e => setProfileForm({ ...profileForm, [key]: e.target.value.replace(/[^0-9.]/g, '') })}
+                                placeholder={ph}
+                                style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', padding: '8px 0', fontSize: '13px', color: '#1a1a1a', background: 'transparent' }} />
+                              <span style={{ fontSize: '11px', color: '#94A3B8', flexShrink: 0 }}>mm</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginTop: '6px', lineHeight: 1.7 }}>
+                        {formatVehicleSize(profileForm.size_length, profileForm.size_width, profileForm.size_height)
+                          ? <>この表記で掲載されます：<span style={{ color: '#1a1a1a', fontWeight: 700 }}>車両サイズが、{formatVehicleSize(profileForm.size_length, profileForm.size_width, profileForm.size_height)}</span></>
+                          : '例：全長 3440 / 全幅 1520 / 高さ 2460（車検証の「長さ・幅・高さ」をmmでご入力ください）'}
                       </div>
                     </div>
 

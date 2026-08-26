@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
 import { geocodeAddress } from '../lib/geocode'
+import { formatVehicleSize } from '../lib/vehicleSize'
 
 // ダミーデータ
 // profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
@@ -755,7 +756,7 @@ export default function AdminPage() {
 
     const mapped: PendingApp[] = (data || []).map((a: any) => {
       const p = a.profiles || {}
-      const size = [p.size_length, p.size_width, p.size_height].filter(Boolean).join(' × ')
+      const size = formatVehicleSize(p.size_length, p.size_width, p.size_height)
       const dc = docCount.get(a.seller_id) || { ok: 0, total: 0 }
       return {
         id: a.id, apply_date: a.apply_date, format: a.format,
@@ -789,7 +790,7 @@ export default function AdminPage() {
       ['活動エリア', a => a.areas],
       ['販売形態', a => a.salesType],
       ['車種', a => a.vehicleType],
-      ['サイズ(長×幅×高)', a => a.size],
+      ['車両サイズ', a => a.size],
       ['設備', a => a.equipment],
       ['メニュー', a => a.menu],
       ['紹介文', a => a.bio],
@@ -1727,7 +1728,7 @@ const previewDoc = async (fileUrl: string) => {
                             ['活動エリア', a.areas],
                             ['ジャンル', a.genre],
                             ['販売形態・車種', [a.salesType, a.vehicleType].filter(Boolean).join(' ／ ')],
-                            ['サイズ', a.size],
+                            ['車両サイズ', a.size],
                             ['設備', a.equipment],
                             ['メニュー', a.menu],
                             ['書類', a.docsTotal > 0 ? `${a.docsOk}/${a.docsTotal}件 承認済` : '未提出'],
@@ -1744,7 +1745,7 @@ const previewDoc = async (fileUrl: string) => {
                       {(() => {
                         // 承認の判断に必要な情報がどれだけ埋まっているかを出す
                         const missing = [
-                          !a.genre && 'ジャンル', !a.salesType && '販売形態', !a.size && 'サイズ',
+                          !a.genre && 'ジャンル', !a.salesType && '販売形態', !a.size && '車両サイズ',
                           !a.equipment && '設備', !a.menu && 'メニュー', a.docsTotal === 0 && '書類',
                         ].filter(Boolean) as string[]
                         if (missing.length === 0) return null
