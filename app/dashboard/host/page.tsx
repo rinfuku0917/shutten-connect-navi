@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import MeetingRequestForm from '../../components/MeetingRequestForm'
+import { exportPlaceSubmission } from '../../lib/submissionXlsx'
 
 type Place = {
   id: string
@@ -27,6 +28,20 @@ export default function HostDashboard() {
   const [apps, setApps] = useState<HostApp[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
+  const [xlsxBusy, setXlsxBusy] = useState('')
+
+  // 施設・企業へ提出する「出店者情報」Excel。
+  // 承認済みの出店者を、開催日ごとのシートにまとめてダウンロードする。
+  const downloadSubmitXlsx = async (placeId: string, title: string) => {
+    setXlsxBusy(placeId)
+    try {
+      const n = await exportPlaceSubmission(supabase, placeId, title)
+      if (n === 0) alert('この案件には、出店日が入った承認済みの申込がまだありません')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '出力に失敗しました')
+    }
+    setXlsxBusy('')
+  }
 
   // ===== 打ち合わせのご相談 =====
   // 掲載する前に「そもそも可能性があるか」を相談したいという要望が多いため、
@@ -163,6 +178,7 @@ export default function HostDashboard() {
               </div>
               <div style={{display:'flex',gap:'6px',flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end',marginTop:'8px'}}>
                 <Link href={'/dashboard/host/edit-place/' + place.id} style={{background:'#EBF6FD',color:'#1D4ED8',border:'1px solid #BFDBFE',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer',textDecoration:'none'}}>編集</Link>
+                <button onClick={() => downloadSubmitXlsx(place.id, place.title)} disabled={xlsxBusy === place.id} title='承認済みの出店者の情報（店舗名・メニューなど）を日付ごとのシートにまとめたExcelを保存します' style={{background:'#fff',color:'#1D4ED8',border:'1px solid #BFDBFE',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:xlsxBusy === place.id ? 'wait' : 'pointer'}}>{xlsxBusy === place.id ? '作成中…' : '出店者情報Excel'}</button>
                 <button onClick={() => togglePin(place.id, place.pinned)} style={{background:place.pinned ? '#FFF8E1' : '#f6f6f6',color:place.pinned ? '#E08A00' : '#555',border:place.pinned ? '1px solid #FFD54F' : '1px solid #e0e0e0',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.pinned ? '上位解除' : '上位表示'}</button>
                 <button onClick={() => toggleStatus(place.id, place.status)} style={{background:place.status === 'published' ? '#FFF3E0' : '#E8F5E9',color:place.status === 'published' ? '#E65100' : '#2E7D32',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.status === 'published' ? '非公開にする' : '公開する'}</button>
                 <button onClick={() => { if(window.confirm('削除しますか？')) deletePlace(place.id) }} style={{background:'#FEF2F2',color:'#DC2626',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>削除</button>

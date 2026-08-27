@@ -90,9 +90,14 @@ export default function SellerDashboard() {
   // 保存用。読み取れた数字だけ mm にそろえ、空欄はそのまま空で残す。
   const mmOrEmpty = (raw: string) => { const n = toMm(raw); return n == null ? '' : String(n) }
 
-  type ProfileData = { name: string, shop_name: string, email: string, phone: string, genre: string, address: string, areas: string[], bio: string, sales_type: string, vehicle_type: string, size_length: string, size_width: string, size_height: string, equipment: string, menu: string }
+  type ProfileData = { name: string, shop_name: string, email: string, phone: string, genre: string, address: string, areas: string[], bio: string, sales_type: string, vehicle_type: string, size_length: string, size_width: string, size_height: string, equipment: string, menu: string, takeout_bag: string, payment_methods: string[] }
   type SnsLinks = { instagram: string, twitter: string, youtube: string, tiktok: string }
-  const emptyProfile: ProfileData = { name: '', shop_name: '', email: '', phone: '', genre: '', address: '', areas: [], bio: '', sales_type: '', vehicle_type: '', size_length: '', size_width: '', size_height: '', equipment: '', menu: '' }
+  const emptyProfile: ProfileData = { name: '', shop_name: '', email: '', phone: '', genre: '', address: '', areas: [], bio: '', sales_type: '', vehicle_type: '', size_length: '', size_width: '', size_height: '', equipment: '', menu: '', takeout_bag: '', payment_methods: [] }
+  // 施設へ提出する「利用可能決済」の選択肢
+  const PAY_OPTIONS = ['現金', 'クレジットカード', 'PayPay', 'QRコード決済', '電子マネー']
+  // 選択肢に無い決済の自由記述。入力中に区切り文字が消えてしまわないよう、
+  // 文字列のまま持っておき、保存するときに配列へ直す。
+  const [payOther, setPayOther] = useState('')
   const emptySns: SnsLinks = { instagram: '', twitter: '', youtube: '', tiktok: '' }
   const [profile, setProfile] = useState<ProfileData>(emptyProfile)
   const [snsLinks, setSnsLinks] = useState<SnsLinks>(emptySns)
@@ -107,9 +112,10 @@ export default function SellerDashboard() {
   const [publishSaving, setPublishSaving] = useState(false)
 
   // ===== 提供メニュー =====
-  type MenuItem = { id: string, name: string, price: number | null, photo_url: string | null, sort_order: number }
+  type MenuItem = { id: string, name: string, price: number | null, detail: string | null, photo_url: string | null, sort_order: number }
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [menuName, setMenuName] = useState("")
+  const [menuDetail, setMenuDetail] = useState("")
   const [menuPrice, setMenuPrice] = useState("")
   const [menuPhotoUrl, setMenuPhotoUrl] = useState("")
   const [menuPhotoUploading, setMenuPhotoUploading] = useState(false)
@@ -124,7 +130,7 @@ export default function SellerDashboard() {
     if (!uid) { setViewerRole('none'); return }
     const { data: p } = await supabase
       .from('profiles')
-      .select('name, shop_name, email, phone, genre, address, areas, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, photos, approval_status, role')
+      .select('name, shop_name, email, phone, genre, address, areas, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods, photos, approval_status, role')
       .eq('id', uid).single()
     setViewerRole(p?.role === 'seller' ? 'seller' : (p?.role || 'unknown'))
     setViewerName(p?.shop_name || p?.name || p?.email || '')
@@ -136,6 +142,8 @@ export default function SellerDashboard() {
         bio: p.bio || '', sales_type: p.sales_type || '', vehicle_type: p.vehicle_type || '',
         size_length: p.size_length || '', size_width: p.size_width || '', size_height: p.size_height || '',
         equipment: p.equipment || '', menu: p.menu || '',
+        takeout_bag: p.takeout_bag || '',
+        payment_methods: Array.isArray(p.payment_methods) ? p.payment_methods : [],
       }
       setProfile(pd)
       setApprovalStatus(p.approval_status || 'unsubmitted')
@@ -160,7 +168,7 @@ export default function SellerDashboard() {
   const loadMenus = async (uid: string) => {
     const { data } = await supabase
       .from('menus')
-      .select('id, name, price, photo_url, sort_order')
+      .select('id, name, price, detail, photo_url, sort_order')
       .eq('seller_id', uid)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true })
@@ -172,6 +180,7 @@ export default function SellerDashboard() {
     setProfileForm(profile)
     setSnsForm(snsLinks)
     setAreasInput(profile.areas.join('・'))
+    setPayOther(profile.payment_methods.filter(x => !PAY_OPTIONS.includes(x)).join('・'))
     setProfileEdit(true)
   }
 
@@ -235,12 +244,13 @@ export default function SellerDashboard() {
     const { error } = await supabase.from('menus').insert({
       seller_id: uid,
       name: menuName.trim(),
+      detail: menuDetail.trim() || null,
       price: priceNum,
       photo_url: menuPhotoUrl || null,
       sort_order: nextOrder,
     })
     if (error) { alert('メニューの追加に失敗: ' + error.message); setMenuSaving(false); return }
-    setMenuName(''); setMenuPrice(''); setMenuPhotoUrl('')
+    setMenuName(''); setMenuDetail(''); setMenuPrice(''); setMenuPhotoUrl('')
     await loadMenus(uid)
     setMenuSaving(false)
   }
@@ -296,6 +306,13 @@ export default function SellerDashboard() {
       size_width: mmOrEmpty(profileForm.size_width),
       size_height: mmOrEmpty(profileForm.size_height),
       equipment: profileForm.equipment, menu: profileForm.menu, photos,
+      // 「有料」を選んで金額が空のままなら「有料」とだけ保存する
+      takeout_bag: profileForm.takeout_bag === '有料：円' ? '有料' : profileForm.takeout_bag,
+      // チェックした決済 ＋ 自由記述（「・」「、」区切り）。重複は取り除く
+      payment_methods: Array.from(new Set([
+        ...profileForm.payment_methods.filter(x => PAY_OPTIONS.includes(x)),
+        ...payOther.split(/[・、,]/).map(x => x.trim()).filter(Boolean),
+      ])),
     }
     const { data: pData, error: pErr } = await supabase.from('profiles').update(payload).eq('id', uid).select()
     if (pErr) { alert('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
@@ -1261,6 +1278,8 @@ export default function SellerDashboard() {
                       { label: '車種', value: profile.vehicle_type },
                       { label: '車両サイズ', value: formatVehicleSize(profile.size_length, profile.size_width, profile.size_height) },
                       { label: '設備', value: profile.equipment },
+                      { label: 'テイクアウトの袋', value: profile.takeout_bag },
+                      { label: '利用できる決済', value: profile.payment_methods.join('・') },
                     ].filter(f => f.value).map(fld => (
                       <div key={fld.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
                         <div style={{ width: '100px', fontSize: '12px', color: '#64748B', flexShrink: 0 }}>{fld.label}</div>
@@ -1332,6 +1351,7 @@ export default function SellerDashboard() {
                               <button onClick={() => deleteMenu(m)} style={{ position: 'absolute', top: '6px', right: '6px', width: '22px', height: '22px', borderRadius: '11px', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '14px', lineHeight: '1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                               <div style={{ padding: '8px 10px' }}>
                                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a' }}>{m.name}</div>
+                                {m.detail && <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>{m.detail}</div>}
                                 <div style={{ fontSize: '13px', color: '#F5A623', fontWeight: 700, marginTop: '2px' }}>{m.price != null ? m.price.toLocaleString() + '円' : '価格応相談'}</div>
                               </div>
                             </div>
@@ -1358,6 +1378,7 @@ export default function SellerDashboard() {
                           {/* 名前・価格 */}
                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <input value={menuName} onChange={e => setMenuName(e.target.value)} placeholder='メニュー名（例：ダックステーキ）' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                            <input value={menuDetail} onChange={e => setMenuDetail(e.target.value)} placeholder='詳細（例：2本／ミルク・ソーダ選べます）※任意' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                             <input value={menuPrice} onChange={e => setMenuPrice(e.target.value)} placeholder='価格（例：1000）※数字のみ' inputMode='numeric' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                           </div>
                         </div>
@@ -1419,6 +1440,71 @@ export default function SellerDashboard() {
                     <div style={{ marginBottom: '12px' }}>
                       <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>設備</div>
                       <input value={profileForm.equipment} onChange={e => setProfileForm({ ...profileForm, equipment: e.target.value })} placeholder='例：給排水タンク、発電機、冷蔵庫' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                    </div>
+
+                    {/* ===== 施設への提出用情報 =====
+                        出店が決まると、施設・企業へ「出店者情報」（店舗名・Instagram・
+                        ジャンル・テイクアウト袋・決済方法・メニュー）を提出する。
+                        ここで入力した内容がそのまま提出書類に載る。 */}
+                    <div style={{ marginBottom: '12px', border: '1.5px solid #BFDBFE', background: '#F8FBFF', borderRadius: '10px', padding: '12px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#1D4ED8', marginBottom: '4px' }}>施設への提出用情報</div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '10px', lineHeight: 1.7 }}>
+                        出店が決まった際、施設・企業へ提出する「出店者情報」に載る項目です。メニューは上の「メニュー」欄の内容がそのまま使われます。
+                      </div>
+
+                      <div style={{ marginBottom: '10px' }}>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>テイクアウトの袋</div>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          {(['無料', '有料'] as const).map(v => {
+                            const isPaid = profileForm.takeout_bag.startsWith('有料')
+                            const on = v === '無料' ? profileForm.takeout_bag === '無料' : isPaid
+                            return (
+                              <label key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: '#1a1a1a', cursor: 'pointer' }}>
+                                <input type='radio' name='takeoutBag' checked={on}
+                                  onChange={() => setProfileForm({ ...profileForm, takeout_bag: v === '無料' ? '無料' : '有料：円' })}
+                                  style={{ accentColor: '#1D4ED8' }} />
+                                {v}
+                              </label>
+                            )
+                          })}
+                          {profileForm.takeout_bag.startsWith('有料') && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#1a1a1a' }}>
+                              <input value={(profileForm.takeout_bag.match(/[0-9]+/) || [''])[0]} inputMode='numeric'
+                                onChange={e => setProfileForm({ ...profileForm, takeout_bag: '有料：' + e.target.value.replace(/[^0-9]/g, '') + '円' })}
+                                placeholder='5' style={{ width: '64px', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '6px 8px', fontSize: '13px', color: '#1a1a1a', textAlign: 'right' }} />
+                              円
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>利用できる決済（複数選択できます）</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+                          {PAY_OPTIONS.map(v => {
+                            const on = profileForm.payment_methods.includes(v)
+                            return (
+                              <label key={v} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+                                border: on ? '1.5px solid #1D4ED8' : '1.5px solid #E2E8F0', background: on ? '#EFF6FF' : '#fff',
+                                borderRadius: '999px', padding: '6px 12px', fontSize: '12px', color: '#1a1a1a',
+                              }}>
+                                <input type='checkbox' checked={on}
+                                  onChange={() => setProfileForm({ ...profileForm, payment_methods: on ? profileForm.payment_methods.filter(x => x !== v) : [...profileForm.payment_methods, v] })}
+                                  style={{ accentColor: '#1D4ED8' }} />
+                                {v}
+                              </label>
+                            )
+                          })}
+                        </div>
+                        {/* 選択肢に無い決済（交通系ICなど）は自由記述で足す。
+                            「・」区切りで複数書ける。保存時に配列へ直す。 */}
+                        <input
+                          value={payOther}
+                          onChange={e => setPayOther(e.target.value)}
+                          placeholder='その他（例：交通系IC・au PAY）※任意'
+                          style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                      </div>
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>

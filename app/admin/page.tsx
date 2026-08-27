@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
 import { geocodeAddress } from '../lib/geocode'
 import { formatVehicleSize } from '../lib/vehicleSize'
+import { exportPlaceSubmission } from '../lib/submissionXlsx'
 
 // ダミーデータ
 // profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
@@ -732,6 +733,9 @@ export default function AdminPage() {
   }
   const [pendingApps, setPendingApps] = useState<PendingApp[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
+  // 施設へ提出するExcel用。承認済みの申込がある案件の一覧。
+  const [approvedPlaces, setApprovedPlaces] = useState<{ placeId: string, title: string, count: number }[]>([])
+  const [submitXlsxBusy, setSubmitXlsxBusy] = useState('')
   const loadPendingApps = async () => {
     setPendingLoading(true)
     const { data } = await supabase
@@ -773,6 +777,34 @@ export default function AdminPage() {
     })
     setPendingApps(mapped)
     setPendingLoading(false)
+
+    // 承認済みの申込を案件ごとに数え、提出用Excelのボタンを出す
+    const { data: approved } = await supabase
+      .from('applications')
+      .select('place_id, places(title)')
+      .eq('status', 'approved')
+      .not('apply_date', 'is', null)
+    const byPlace = new Map<string, { placeId: string, title: string, count: number }>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const a of (approved || []) as any[]) {
+      if (!a.place_id) continue
+      const cur = byPlace.get(a.place_id) || { placeId: a.place_id, title: a.places?.title || '(案件)', count: 0 }
+      cur.count += 1
+      byPlace.set(a.place_id, cur)
+    }
+    setApprovedPlaces([...byPlace.values()].sort((x, y) => x.title.localeCompare(y.title, 'ja')))
+  }
+
+  // 施設・企業へ提出する「出店者情報」Excel（承認済みの出店者を日付ごとのシートに載せる）
+  const downloadSubmitXlsx = async (placeId: string, title: string) => {
+    setSubmitXlsxBusy(placeId)
+    try {
+      const n = await exportPlaceSubmission(supabase, placeId, title)
+      if (n === 0) alert('この案件には、出店日が入った承認済みの申込がまだありません')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '出力に失敗しました')
+    }
+    setSubmitXlsxBusy('')
   }
   // 施設側に渡すための一覧をExcelで開ける形（CSV・Shift-JIS互換のBOM付きUTF-8）で書き出す
   const exportPendingCsv = (rows: PendingApp[], label: string) => {
@@ -1707,6 +1739,24 @@ const previewDoc = async (fileUrl: string) => {
                   </div>
                 )
               })()}
+              {/* 施設・企業へ提出する「出店者情報」。承認済みの出店者を、
+                  普段提出しているExcelと同じ様式（日付ごとのシート）で出力する */}
+              {approvedPlaces.length > 0 && (
+                <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#1D4ED8', marginBottom: '4px' }}>提出用Excel（承認済みの出店者情報）</div>
+                  <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px', lineHeight: 1.7 }}>
+                    開催日ごとのシートに、店舗名・Instagram・ジャンル・テイクアウト袋・決済方法・メニューをまとめます。そのまま施設・企業へ提出できます。
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {approvedPlaces.map(pl => (
+                      <button key={pl.placeId} onClick={() => downloadSubmitXlsx(pl.placeId, pl.title)} disabled={submitXlsxBusy === pl.placeId}
+                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: submitXlsxBusy === pl.placeId ? 'wait' : 'pointer' }}>
+                        {submitXlsxBusy === pl.placeId ? '作成中…' : `${pl.title}（${pl.count}件）`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'grid', gap: '12px' }}>
                 {pendingLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
                 {!pendingLoading && pendingApps.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>承認待ちの応募はありません。</div>}
