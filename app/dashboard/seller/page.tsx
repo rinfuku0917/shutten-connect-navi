@@ -369,7 +369,12 @@ export default function SellerDashboard() {
 
   // 報告を保存する（売上の記録として保存される）
   const saveReport = async () => {
-    if (!reportFor) return
+    if (!reportFor || rpSaving) return
+    // 送信中は最初から押せないようにする。案件の読み直しにも時間がかかるため、
+    // ここで先に閉じておかないと連打で二重に登録されてしまう。
+    setRpSaving(true)
+    const revenue = parseInt(rpRevenue.replace(/[^0-9]/g, ''), 10)
+    if (isNaN(revenue) || revenue < 0) { setRpSaving(false); alert('売上金額を入力してください'); return }
     // ホームなど売上タブ以外から開いた場合は案件一覧をまだ読んでいないので、
     // 見つからなければここで読み直してから探す
     let app = myApprovedApps.find(x => x.application_id === reportFor.application_id)
@@ -377,18 +382,21 @@ export default function SellerDashboard() {
       const fresh = await loadMyApprovedApps()
       app = fresh.find(x => x.application_id === reportFor.application_id)
     }
-    if (!app) { alert('案件が見つかりません。画面を再読み込みしてお試しください。'); return }
-    const revenue = parseInt(rpRevenue.replace(/[^0-9]/g, ''), 10)
-    if (isNaN(revenue) || revenue < 0) { alert('売上金額を入力してください'); return }
+    if (!app) { setRpSaving(false); alert('案件が見つかりません。画面を再読み込みしてお試しください。'); return }
     const items = rpItems
       .map(it => ({ name: it.name.trim(), qty: parseInt(it.qty, 10) || 0, price: it.price.trim() === '' ? null : (parseInt(it.price.replace(/[^0-9]/g, ''), 10) || 0) }))
       .filter(it => it.name && it.qty > 0)
-    setRpSaving(true)
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
-    // 同じ出店を二重に報告すると請求が二重になるため、保存の直前に確かめる
-    const { data: dup } = await supabase
+    // 同じ出店を二重に報告すると請求が二重になるため、保存の直前に確かめる。
+    // 確認そのものに失敗したときは、登録せずに中断する。
+    const { data: dup, error: dupErr } = await supabase
       .from('sales').select('id').eq('application_id', app.application_id).limit(1)
+    if (dupErr) {
+      setRpSaving(false)
+      alert('通信に失敗しました。時間をおいてもう一度お試しください。')
+      return
+    }
     if (dup && dup.length > 0) {
       setRpSaving(false)
       alert('この出店はすでに報告済みです。内容を直す場合は、売上報告の一覧から一度削除したうえで、あらためてご報告ください。')
@@ -557,6 +565,15 @@ export default function SellerDashboard() {
     if (app.apply_date && td < app.apply_date) { alert('この案件の出店日は ' + app.apply_date + ' です。出店日を過ぎてから売上を入力してください。'); return }
     if (app.apply_date && saleDate < app.apply_date) { alert('売上日は出店日（' + app.apply_date + '）以降を指定してください。'); return }
     if (saleDate > td) { alert('未来の日付では売上を記録できません。'); return }
+    // すでに報告済みの出店をもう一度登録すると請求も2件分になるため、
+    // 気付かず重ねてしまわないように確認する（意図的な追加登録は通す）
+    const { data: dup, error: dupErr } = await supabase
+      .from('sales').select('id, sale_date').eq('application_id', app.application_id)
+    if (dupErr) { alert('通信に失敗しました。時間をおいてもう一度お試しください。'); return }
+    if (dup && dup.length > 0) {
+      const dates = dup.map(d => d.sale_date).join('、')
+      if (!window.confirm('この出店はすでに報告済みです（' + dates + '）。\nもう1件追加で登録すると、出店料も2件分の請求になります。\n続けますか？')) return
+    }
     setSaleSaving(true)
     const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv)
     const applied = taxOf(app, saleTaxOv)
@@ -2079,10 +2096,10 @@ export default function SellerDashboard() {
                     </div>
                   )}
                   {rpItems.map((it, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
+                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
                       <input value={it.name}
                         onChange={e => setRpItems(rpItems.map((x, k) => k === idx ? { ...x, name: e.target.value } : x))}
-                        placeholder='品目名' style={{ ...box, flex: 1, minWidth: 0, fontSize: '13px' }} />
+                        placeholder='品目名' style={{ ...box, flex: '1 1 140px', minWidth: '120px', fontSize: '13px' }} />
                       <input value={it.price} inputMode='numeric'
                         onChange={e => setRpItems(rpItems.map((x, k) => k === idx ? { ...x, price: e.target.value.replace(/[^0-9]/g, '') } : x))}
                         placeholder='単価' style={{ ...box, width: '76px', flexShrink: 0, textAlign: 'right', fontSize: '13px' }} />
@@ -2100,7 +2117,8 @@ export default function SellerDashboard() {
                     {totalQty > 0 && (
                       <span style={{ fontSize: '12px', color: '#475569' }}>
                         合計 <strong>{totalQty}食</strong>
-                        {itemSum > 0 && <>／単価から <strong>{itemSum.toLocaleString()}円</strong></>}
+                        {allPriced && <>／単価から <strong>{itemSum.toLocaleString()}円</strong></>}
+                        {!allPriced && itemSum > 0 && <span style={{ color: '#94A3B8' }}>（単価が空の品目があるため金額は出していません）</span>}
                       </span>
                     )}
                   </div>
