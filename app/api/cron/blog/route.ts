@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { verifyCronCaller } from '../../../lib/cronAuth'
 
 // ブログの自動投稿。Vercel の定期実行（毎週 月・木の朝）から呼ばれる。
 //
@@ -109,12 +110,8 @@ async function generateImage(title: string): Promise<string | null> {
 
 export async function GET(req: Request) {
   // Vercel の定期実行、または管理画面からの手動実行のみ受け付ける
-  const auth = req.headers.get('authorization')
-  const secret = process.env.CRON_SECRET
-  const url = new URL(req.url)
-  if (secret && auth !== `Bearer ${secret}` && url.searchParams.get('key') !== secret) {
-    return NextResponse.json({ error: '権限がありません' }, { status: 401 })
-  }
+  const auth = await verifyCronCaller(req)
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   try {
     const sUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

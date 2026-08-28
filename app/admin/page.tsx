@@ -219,7 +219,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews() }, [tab, authChecked])
 
   // ===== 売上管理（管理者） =====
-  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string }
+  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string, items: { name: string, qty: number, price: number | null }[] }
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
@@ -269,13 +269,14 @@ export default function AdminPage() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, places(title), profiles!sales_seller_id_fkey(name)')
+      .select('id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, items, places(title), profiles!sales_seller_id_fkey(name)')
       .gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SaleRow[] = (data || []).map((s: any) => ({
       id: s.id, place_id: s.place_id, seller_id: s.seller_id, sale_date: s.sale_date,
       revenue: s.revenue, fee: s.fee, place_fee: s.place_fee ?? 0, company_fee: s.company_fee ?? s.fee, total_pay: s.total_pay ?? s.fee,
-      placeTitle: s.places?.title || '(案件名なし)', sellerName: s.profiles?.name || '(出店者)'
+      placeTitle: s.places?.title || '(案件名なし)', sellerName: s.profiles?.name || '(出店者)',
+      items: Array.isArray(s.items) ? s.items : [],
     }))
     setSales(mapped)
     setSalesLoading(false)
@@ -497,7 +498,12 @@ export default function AdminPage() {
     if (!window.confirm('AIが記事を1本作成し、そのまま公開します。よろしいですか？')) return
     setAutoPosting(true)
     try {
-      const res = await fetch('/api/cron/blog')
+      // 定期実行と同じAPIを呼ぶ。管理者であることを確かめられるよう
+      // ログイン中のアクセストークンを添えて呼ぶ。
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/cron/blog', {
+        headers: { Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+      })
       const j = await res.json()
       if (!res.ok) { alert('作成できませんでした: ' + (j.error || '不明なエラー')) }
       else {
@@ -509,6 +515,27 @@ export default function AdminPage() {
       console.error(e)
     }
     setAutoPosting(false)
+  }
+
+  // 売上報告のリマインドを今すぐ送る（定期実行と同じ処理を呼ぶ）
+  const [reminding, setReminding] = useState(false)
+  const runSalesReminder = async () => {
+    if (!window.confirm('出店日を過ぎても売上報告が無い出店者へ、催促メールを送ります。よろしいですか？\n※同じ出店については一度しか送られません。')) return
+    setReminding(true)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/cron/sales-reminder', {
+        headers: { Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+      })
+      const j = await res.json()
+      if (!res.ok) alert('送信できませんでした: ' + (j.error || '不明なエラー'))
+      else if (j.sent === 0) alert('送信対象はありませんでした（' + (j.note || '未報告なし') + '）')
+      else alert(j.sent + '名の出店者へリマインドを送信しました')
+    } catch (e) {
+      alert('送信できませんでした')
+      console.error(e)
+    }
+    setReminding(false)
   }
 
   // ===== 打ち合わせ希望（募集者からの相談） =====
@@ -1498,6 +1525,10 @@ const previewDoc = async (fileUrl: string) => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者の売上を記録すると、出店料（＝弊社の利益／出店コネクトナビへのお支払い額）を自動集計します。出店料は売上×料率（税別）で計算します。</p>
+                <button onClick={runSalesReminder} disabled={reminding} title='出店日を過ぎても売上報告が無い出店者へ催促メールを送ります（毎朝9時に自動送信もされます）'
+                  style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: reminding ? 'wait' : 'pointer', flexShrink: 0 }}>
+                  {reminding ? '送信中…' : '売上報告を催促する'}
+                </button>
                 <input type='month' value={saleMonth} onChange={e => setSaleMonth(e.target.value)} style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', flexShrink: 0 }} />
               </div>
 
@@ -1623,7 +1654,14 @@ const previewDoc = async (fileUrl: string) => {
                     ) : sales.map((s, i) => (
                       <tr key={s.id} style={{ borderBottom: i < sales.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{s.sale_date}</td>
-                        <td style={{ padding: '10px 14px' }}>{s.placeTitle}</td>
+                        <td style={{ padding: '10px 14px' }}>
+                          {s.placeTitle}
+                          {s.items.length > 0 && (
+                            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                              {s.items.map(it => it.name + '×' + it.qty + '食').join('、')}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ padding: '10px 14px' }}>{s.sellerName}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#64748B' }}>¥{(s.place_fee ?? 0).toLocaleString()}</td>

@@ -344,7 +344,35 @@ export default function SellerDashboard() {
 
   // ===== 売上（出店者） =====
   type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string }
-  type SellerSale = { id: string, sale_date: string, placeTitle: string, revenue: number, fee: number }
+  type SaleItem = { name: string, qty: string, price: string }
+  type SellerSale = { id: string, sale_date: string, placeTitle: string, revenue: number, fee: number, items: { name: string, qty: number, price: number | null }[] }
+  // 品目別の内訳（任意）。施設から「何が何食売れたか」を求められることがある
+  const [saleItems, setSaleItems] = useState<SaleItem[]>([])
+  // 売上報告がまだの承認済み申込（リマインド表示用）
+  const [unreported, setUnreported] = useState<{ application_id: string, placeTitle: string, apply_date: string }[]>([])
+
+  // 出店日を過ぎたのに売上報告が無い申込を探す（直近30日）
+  const loadUnreported = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const today = todayStr()
+    const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('id, apply_date, places(title)')
+      .eq('seller_id', uid).eq('status', 'approved')
+      .not('apply_date', 'is', null).gte('apply_date', from).lt('apply_date', today)
+    if (!apps || apps.length === 0) { setUnreported([]); return }
+    const { data: reported } = await supabase
+      .from('sales').select('application_id').eq('seller_id', uid).in('application_id', apps.map(a => a.id))
+    const done = new Set((reported || []).map(r => r.application_id))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setUnreported((apps as any[])
+      .filter(a => !done.has(a.id))
+      .map(a => ({ application_id: a.id, placeTitle: a.places?.title || '(案件)', apply_date: a.apply_date }))
+      .sort((a, b) => (a.apply_date < b.apply_date ? -1 : 1)))
+  }
   const [myApprovedApps, setMyApprovedApps] = useState<SellerApp[]>([])
   const [mySales, setMySales] = useState<SellerSale[]>([])
   const [saleAppId, setSaleAppId] = useState('')
@@ -408,12 +436,13 @@ export default function SellerDashboard() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, sale_date, revenue, fee, total_pay, places(title)')
+      .select('id, sale_date, revenue, fee, total_pay, items, places(title)')
       .eq('seller_id', uid).gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SellerSale[] = (data || []).map((s: any) => ({
       id: s.id, sale_date: s.sale_date, revenue: s.revenue, fee: s.total_pay ?? s.fee,
       placeTitle: s.places?.title || '(案件名なし)',
+      items: Array.isArray(s.items) ? s.items : [],
     }))
     setMySales(mapped)
   }
@@ -445,16 +474,24 @@ export default function SellerDashboard() {
     }
     // 内訳は分けて入力したときだけ渡す
     if (saleSplit) { row.revenue_reduced = rev8; row.revenue_standard = rev10 }
+    // 品目別の内訳（品目名と食数が入っている行だけ保存する）
+    const items = saleItems
+      .map(it => ({ name: it.name.trim(), qty: parseInt(it.qty, 10) || 0, price: it.price.trim() === '' ? null : (parseInt(it.price.replace(/[^0-9]/g, ''), 10) || 0) }))
+      .filter(it => it.name && it.qty > 0)
+    if (items.length > 0) row.items = items
     const { error } = await supabase.from('sales').insert(row)
     if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
-    setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleRev8(''); setSaleRev10(''); setSaleSaving(false)
+    setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleRev8(''); setSaleRev10(''); setSaleItems([]); setSaleSaving(false)
     loadMySales()
+    loadUnreported()
   }
 
   const deleteMySale = async (id: string) => {
     const { error } = await supabase.from('sales').delete().eq('id', id)
     if (error) { alert('削除失敗: ' + error.message); return }
     loadMySales()
+    // 消した分は「未報告」に戻るため、バナーも数え直す
+    loadUnreported()
   }
 
   // ログイン中ユーザーの申込一覧を読み込む
@@ -699,7 +736,7 @@ export default function SellerDashboard() {
     openThread(appId)
   }
 
-  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile() }, [])
+  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile(); loadUnreported() }, [])
 
   // 別のタブで申込や承認をしたあとに戻ってきたとき、古い表示のままにならないよう読み直す。
   // 画面を開いたときに一度読むだけだと「承認したのに反映されない」ように見えてしまう。
@@ -826,6 +863,23 @@ export default function SellerDashboard() {
         </div>
 
         <div style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
+
+          {/* 売上報告がまだの出店があれば、どのタブでも気付けるように出す */}
+          {unreported.length > 0 && tab !== 'sales' && (
+            <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#DC2626', marginBottom: '6px' }}>売上報告がまだの出店があります</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {unreported.slice(0, 5).map(u => (
+                  <div key={u.application_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '12px', color: '#7F1D1D' }}>{u.apply_date.slice(5).replace('-', '/')}　{u.placeTitle}</span>
+                    <button onClick={() => { setTab('sales'); setSaleAppId(u.application_id); setSaleDate(u.apply_date) }}
+                      style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>報告する</button>
+                  </div>
+                ))}
+                {unreported.length > 5 && <div style={{ fontSize: '11px', color: '#991B1B' }}>ほか{unreported.length - 5}件</div>}
+              </div>
+            </div>
+          )}
 
           {/* ホーム */}
           {tab === 'home' && (
@@ -1584,6 +1638,20 @@ export default function SellerDashboard() {
           {/* 売上報告 */}
           {tab === 'sales' && (
             <>
+              {unreported.length > 0 && (
+                <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#DC2626', marginBottom: '6px' }}>売上報告がまだの出店</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {unreported.map(u => (
+                      <button key={u.application_id} onClick={() => { setSaleAppId(u.application_id); setSaleDate(u.apply_date) }}
+                        style={{ background: '#fff', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                        {u.apply_date.slice(5).replace('-', '/')} {u.placeTitle}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#991B1B', marginTop: '6px' }}>押すと下の入力欄に案件と日付が入ります。</div>
+                </div>
+              )}
               <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
                 <span>承認された案件ごとに売上を入力すると、出店料（出店コネクトナビへのお支払い額）とあなたの利益（手取り）が自動計算されます。<br /><strong>出店料の請求は税別となります。</strong>ご請求時に消費税10%を加算した金額をご請求します。</span>
               </div>
@@ -1632,6 +1700,66 @@ export default function SellerDashboard() {
                   <input type='checkbox' checked={saleSplit} onChange={e => setSaleSplit(e.target.checked)} style={{ accentColor: '#F5A623', cursor: 'pointer' }} />
                   税率ごとに分けて入力する（任意）
                 </label>
+
+                {/* 品目別の内訳（任意）。施設・企業から「何が何食売れたか」を
+                    求められることがあるため、品目と食数を記録できるようにする */}
+                <div style={{ marginTop: '14px', border: '1px dashed #CBD5E1', borderRadius: '10px', padding: '12px', background: '#F8FAFC' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', marginBottom: saleItems.length > 0 ? '10px' : 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#1a1a1a' }}>品目別の内訳（任意）</div>
+                    <button type='button' onClick={() => setSaleItems([...saleItems, { name: '', qty: '', price: '' }])}
+                      style={{ background: '#fff', color: '#B45309', border: '1.5px dashed #F5A623', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>＋ 品目を追加</button>
+                  </div>
+                  {saleItems.length === 0 && (
+                    <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '6px', lineHeight: 1.7 }}>
+                      「何が何食売れたか」を施設・企業へ報告する場合にご利用ください。登録済みのメニュー名が候補に出ます。
+                    </div>
+                  )}
+                  {saleItems.map((it, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input value={it.name} list='sale-item-menus'
+                        onChange={e => setSaleItems(saleItems.map((x, k) => k === idx ? { ...x, name: e.target.value } : x))}
+                        placeholder='品目名（例：唐揚げ弁当）'
+                        style={{ flex: '2 1 180px', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', background: '#fff' }} />
+                      <input value={it.qty} inputMode='numeric'
+                        onChange={e => setSaleItems(saleItems.map((x, k) => k === idx ? { ...x, qty: e.target.value.replace(/[^0-9]/g, '') } : x))}
+                        placeholder='食数'
+                        style={{ flex: '0 1 80px', width: '80px', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', textAlign: 'right', background: '#fff' }} />
+                      <input value={it.price} inputMode='numeric'
+                        onChange={e => setSaleItems(saleItems.map((x, k) => k === idx ? { ...x, price: e.target.value.replace(/[^0-9]/g, '') } : x))}
+                        placeholder='単価（任意）'
+                        style={{ flex: '0 1 100px', width: '100px', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', textAlign: 'right', background: '#fff' }} />
+                      <button type='button' onClick={() => setSaleItems(saleItems.filter((_, k) => k !== idx))} title='この行を削除'
+                        style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}>✕</button>
+                    </div>
+                  ))}
+                  {/* 品目名の候補は登録済みメニューから */}
+                  <datalist id='sale-item-menus'>
+                    {menus.map(m => <option key={m.id} value={m.name} />)}
+                  </datalist>
+                  {(() => {
+                    // 保存されるのは品目名と食数が入っている行だけなので、
+                    // 合計もその行だけで数える（画面と保存内容を一致させる）
+                    const valid = saleItems.filter(it => it.name.trim() && (parseInt(it.qty, 10) || 0) > 0)
+                    const sum = valid.reduce((t, it) => {
+                      const q = parseInt(it.qty, 10) || 0
+                      const pr = parseInt(it.price, 10) || 0
+                      return t + q * pr
+                    }, 0)
+                    const cnt = valid.reduce((t, it) => t + (parseInt(it.qty, 10) || 0), 0)
+                    const skipped = saleItems.filter(it => !it.name.trim() && (parseInt(it.qty, 10) || 0) > 0).length
+                    if (cnt === 0 && skipped === 0) return null
+                    return (
+                      <div style={{ fontSize: '12px', color: '#475569', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <span>合計 <strong>{cnt}食</strong>{sum > 0 && <>／単価から計算した売上 <strong>{sum.toLocaleString()}円</strong></>}</span>
+                        {skipped > 0 && <span style={{ color: '#DC2626' }}>品目名が空の行が{skipped}件あります（このままでは保存されません）</span>}
+                        {sum > 0 && !saleSplit && (
+                          <button type='button' onClick={() => setSaleRevenue(String(sum))}
+                            style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>この金額を売上欄に入れる</button>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
                 <div style={{ marginTop: '8px', fontSize: '11px', color: '#94A3B8', lineHeight: 1.7 }}>
                   {saleSplit
                     ? 'ご自身の商品の税率で分けて入力してください。軽減税率8%の商品（フードやドリンクの持ち帰りなど）と、10%の商品（お酒・物販・その場でのご飲食など）の内訳を記録できます。出店料は合計額から計算するため、分けても金額は変わりません。'
@@ -1705,7 +1833,14 @@ export default function SellerDashboard() {
                     ) : mySales.map((s, i) => (
                       <tr key={s.id} style={{ borderBottom: i < mySales.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{s.sale_date}</td>
-                        <td style={{ padding: '10px 14px' }}>{s.placeTitle}</td>
+                        <td style={{ padding: '10px 14px' }}>
+                          {s.placeTitle}
+                          {s.items.length > 0 && (
+                            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                              {s.items.map(it => it.name + '×' + it.qty).join('、')}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{s.fee.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.revenue - s.fee).toLocaleString()}</td>
