@@ -219,7 +219,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews() }, [tab, authChecked])
 
   // ===== 売上管理（管理者） =====
-  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string, items: { name: string, qty: number, price: number | null }[] }
+  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
@@ -269,7 +269,7 @@ export default function AdminPage() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, items, places(title), profiles!sales_seller_id_fkey(name)')
+      .select('id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, items, weather, customers, note, places(title), profiles!sales_seller_id_fkey(name)')
       .gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SaleRow[] = (data || []).map((s: any) => ({
@@ -277,6 +277,7 @@ export default function AdminPage() {
       revenue: s.revenue, fee: s.fee, place_fee: s.place_fee ?? 0, company_fee: s.company_fee ?? s.fee, total_pay: s.total_pay ?? s.fee,
       placeTitle: s.places?.title || '(案件名なし)', sellerName: s.profiles?.name || '(出店者)',
       items: Array.isArray(s.items) ? s.items : [],
+      weather: s.weather || '', customers: s.customers ?? null, note: s.note || '',
     }))
     setSales(mapped)
     setSalesLoading(false)
@@ -1659,6 +1660,14 @@ const previewDoc = async (fileUrl: string) => {
                           {s.items.length > 0 && (
                             <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
                               {s.items.map(it => it.name + '×' + it.qty + '食').join('、')}
+                              （合計{s.items.reduce((t, it) => t + (it.qty || 0), 0)}食）
+                            </div>
+                          )}
+                          {(s.weather || s.customers != null || s.note) && (
+                            <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                              {s.weather && <>天候：{s.weather}　</>}
+                              {s.customers != null && <>来客：{s.customers}　</>}
+                              {s.note}
                             </div>
                           )}
                         </td>

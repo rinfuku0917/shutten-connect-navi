@@ -345,7 +345,79 @@ export default function SellerDashboard() {
   // ===== 売上（出店者） =====
   type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string }
   type SaleItem = { name: string, qty: string, price: string }
-  type SellerSale = { id: string, sale_date: string, placeTitle: string, revenue: number, fee: number, items: { name: string, qty: number, price: number | null }[] }
+  type SellerSale = { id: string, application_id: string | null, sale_date: string, placeTitle: string, revenue: number, fee: number, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
+
+  // ===== 出店報告フォーム =====
+  // 出店が終わったら、企業へ提出できる形で報告してもらう専用の入力画面。
+  // 売上だけの入力と違い、品目ごとの食数・天候・所感まで順に埋められる。
+  type ReportTarget = { application_id: string, placeTitle: string, apply_date: string }
+  const WEATHERS = ['晴れ', 'くもり', '雨', '雪']
+  const [reportFor, setReportFor] = useState<ReportTarget | null>(null)
+  const [rpRevenue, setRpRevenue] = useState('')
+  const [rpItems, setRpItems] = useState<SaleItem[]>([])
+  const [rpWeather, setRpWeather] = useState('')
+  const [rpCustomers, setRpCustomers] = useState('')
+  const [rpNote, setRpNote] = useState('')
+  const [rpSaving, setRpSaving] = useState(false)
+
+  // 報告フォームを開く。品目は登録済みメニューを並べて、食数を入れるだけにする。
+  const openReport = (t: ReportTarget) => {
+    setReportFor(t)
+    setRpRevenue(''); setRpWeather(''); setRpCustomers(''); setRpNote('')
+    setRpItems(menus.map(m => ({ name: m.name, qty: '', price: m.price != null ? String(m.price) : '' })))
+  }
+
+  // 報告を保存する（売上の記録として保存される）
+  const saveReport = async () => {
+    if (!reportFor) return
+    // ホームなど売上タブ以外から開いた場合は案件一覧をまだ読んでいないので、
+    // 見つからなければここで読み直してから探す
+    let app = myApprovedApps.find(x => x.application_id === reportFor.application_id)
+    if (!app) {
+      const fresh = await loadMyApprovedApps()
+      app = fresh.find(x => x.application_id === reportFor.application_id)
+    }
+    if (!app) { alert('案件が見つかりません。画面を再読み込みしてお試しください。'); return }
+    const revenue = parseInt(rpRevenue.replace(/[^0-9]/g, ''), 10)
+    if (isNaN(revenue) || revenue < 0) { alert('売上金額を入力してください'); return }
+    const items = rpItems
+      .map(it => ({ name: it.name.trim(), qty: parseInt(it.qty, 10) || 0, price: it.price.trim() === '' ? null : (parseInt(it.price.replace(/[^0-9]/g, ''), 10) || 0) }))
+      .filter(it => it.name && it.qty > 0)
+    setRpSaving(true)
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    // 同じ出店を二重に報告すると請求が二重になるため、保存の直前に確かめる
+    const { data: dup } = await supabase
+      .from('sales').select('id').eq('application_id', app.application_id).limit(1)
+    if (dup && dup.length > 0) {
+      setRpSaving(false)
+      alert('この出店はすでに報告済みです。内容を直す場合は、売上報告の一覧から一度削除したうえで、あらためてご報告ください。')
+      setReportFor(null)
+      await loadMySales(); await loadUnreported(); await loadCalSales()
+      return
+    }
+    const { placeFee, companyFee, total } = calcFee(revenue, app, '')
+    const applied = taxOf(app, '')
+    const row: Record<string, unknown> = {
+      application_id: app.application_id, place_id: app.place_id, seller_id: uid,
+      sale_date: reportFor.apply_date, revenue,
+      fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: total,
+      tax_basis: applied.basis, tax_rate: applied.rate,
+    }
+    if (items.length > 0) row.items = items
+    if (rpWeather) row.weather = rpWeather
+    const cust = parseInt(rpCustomers, 10)
+    if (!isNaN(cust) && cust > 0) row.customers = cust
+    if (rpNote.trim()) row.note = rpNote.trim()
+    const { error } = await supabase.from('sales').insert(row)
+    setRpSaving(false)
+    if (error) { alert('報告の保存に失敗しました: ' + error.message); return }
+    setReportFor(null)
+    await loadMySales()
+    await loadUnreported()
+    await loadCalSales()
+    alert('出店報告を送信しました。ありがとうございました。')
+  }
   // 品目別の内訳（任意）。施設から「何が何食売れたか」を求められることがある
   const [saleItems, setSaleItems] = useState<SaleItem[]>([])
   // 売上報告がまだの承認済み申込（リマインド表示用）
@@ -375,6 +447,28 @@ export default function SellerDashboard() {
   }
   const [myApprovedApps, setMyApprovedApps] = useState<SellerApp[]>([])
   const [mySales, setMySales] = useState<SellerSale[]>([])
+  // カレンダーから参照する売上。売上タブの月しぼりとは別に持つ。
+  const [calSales, setCalSales] = useState<SellerSale[]>([])
+
+  // カレンダーに出す売上（直近1年分）を読み込む
+  const loadCalSales = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    const from = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10)
+    const { data } = await supabase
+      .from('sales')
+      .select('id, application_id, sale_date, revenue, fee, total_pay, items, weather, customers, note, places(title)')
+      .eq('seller_id', uid).gte('sale_date', from)
+      .order('sale_date', { ascending: false })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setCalSales((data || []).map((x: any) => ({
+      id: x.id, application_id: x.application_id ?? null, sale_date: x.sale_date, revenue: x.revenue, fee: x.total_pay ?? x.fee,
+      placeTitle: x.places?.title || '(案件名なし)',
+      items: Array.isArray(x.items) ? x.items : [],
+      weather: x.weather || '', customers: x.customers ?? null, note: x.note || '',
+    })))
+  }
   const [saleAppId, setSaleAppId] = useState('')
   const [saleDate, setSaleDate] = useState('')
   const [saleRevenue, setSaleRevenue] = useState('')
@@ -405,10 +499,10 @@ export default function SellerDashboard() {
   const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
   // 自分の承認済み案件を読み込む
-  const loadMyApprovedApps = async () => {
+  const loadMyApprovedApps = async (): Promise<SellerApp[]> => {
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
-    if (!uid) return
+    if (!uid) return []
     const { data } = await supabase
       .from('applications')
       .select('id, place_id, apply_date, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate)')
@@ -424,6 +518,7 @@ export default function SellerDashboard() {
       apply_date: a.apply_date || '',
     }))
     setMyApprovedApps(mapped)
+    return mapped
   }
 
   // 自分の指定月の売上を読み込む
@@ -436,13 +531,14 @@ export default function SellerDashboard() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, sale_date, revenue, fee, total_pay, items, places(title)')
+      .select('id, application_id, sale_date, revenue, fee, total_pay, items, weather, customers, note, places(title)')
       .eq('seller_id', uid).gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SellerSale[] = (data || []).map((s: any) => ({
-      id: s.id, sale_date: s.sale_date, revenue: s.revenue, fee: s.total_pay ?? s.fee,
+      id: s.id, application_id: s.application_id ?? null, sale_date: s.sale_date, revenue: s.revenue, fee: s.total_pay ?? s.fee,
       placeTitle: s.places?.title || '(案件名なし)',
       items: Array.isArray(s.items) ? s.items : [],
+      weather: s.weather || '', customers: s.customers ?? null, note: s.note || '',
     }))
     setMySales(mapped)
   }
@@ -484,6 +580,7 @@ export default function SellerDashboard() {
     setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleRev8(''); setSaleRev10(''); setSaleItems([]); setSaleSaving(false)
     loadMySales()
     loadUnreported()
+    loadCalSales()
   }
 
   const deleteMySale = async (id: string) => {
@@ -492,6 +589,7 @@ export default function SellerDashboard() {
     loadMySales()
     // 消した分は「未報告」に戻るため、バナーも数え直す
     loadUnreported()
+    loadCalSales()
   }
 
   // ログイン中ユーザーの申込一覧を読み込む
@@ -736,7 +834,7 @@ export default function SellerDashboard() {
     openThread(appId)
   }
 
-  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile(); loadUnreported() }, [])
+  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile(); loadUnreported(); loadMyApprovedApps() }, [])
 
   // 別のタブで申込や承認をしたあとに戻ってきたとき、古い表示のままにならないよう読み直す。
   // 画面を開いたときに一度読むだけだと「承認したのに反映されない」ように見えてしまう。
@@ -757,6 +855,7 @@ export default function SellerDashboard() {
   // タブを切り替えたときも最新にする
   useEffect(() => {
     if (tab === 'calendar' || tab === 'applies') loadApplies()
+    if (tab === 'calendar') { loadCalSales(); loadMyApprovedApps() }
     if (tab === 'messages') loadMessages()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
@@ -872,7 +971,7 @@ export default function SellerDashboard() {
                 {unreported.slice(0, 5).map(u => (
                   <div key={u.application_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '12px', color: '#7F1D1D' }}>{u.apply_date.slice(5).replace('-', '/')}　{u.placeTitle}</span>
-                    <button onClick={() => { setTab('sales'); setSaleAppId(u.application_id); setSaleDate(u.apply_date) }}
+                    <button onClick={() => openReport(u)}
                       style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>報告する</button>
                   </div>
                 ))}
@@ -1013,6 +1112,7 @@ export default function SellerDashboard() {
                     {l.label}
                   </div>
                 ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#16A34A', fontWeight: 700 }}>¥ 売上を報告済み（日付をタップで内訳）</div>
               </div>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '16px' }}>
                 {(() => {
@@ -1083,10 +1183,14 @@ export default function SellerDashboard() {
                           const main = items.find(a => a.status === '承認済') || items[0]
                           const dow = (firstDow + i) % 7
                           const isToday = ds === today
+                          // その日に報告済みの売上があれば、マスにも金額を出す
+                          const dayRev = calSales.filter(x => x.sale_date === ds).reduce((t, x) => t + x.revenue, 0)
+                          const hasSale = calSales.some(x => x.sale_date === ds)
+                          const tappable = items.length > 0 || hasSale
                           return (
                             <div key={d} title={items.length ? items.map(a => `${a.status}：${a.place}`).join('\n') : undefined}
-                              onClick={() => { if (items.length) setCalPicked(calPicked === ds ? null : ds) }}
-                              style={{ minHeight: '60px', borderRadius: '8px', border: calPicked === ds ? '2px solid #1D4ED8' : (isToday ? '2px solid #F5A623' : `1px solid ${main ? main.statusColor : '#E2E8F0'}`), background: main ? main.statusBg : '#fff', padding: '5px', overflow: 'hidden', cursor: items.length ? 'pointer' : 'default' }}>
+                              onClick={() => { if (tappable) setCalPicked(calPicked === ds ? null : ds) }}
+                              style={{ minHeight: '60px', borderRadius: '8px', border: calPicked === ds ? '2px solid #1D4ED8' : (isToday ? '2px solid #F5A623' : `1px solid ${main ? main.statusColor : '#E2E8F0'}`), background: main ? main.statusBg : '#fff', padding: '5px', overflow: 'hidden', cursor: tappable ? 'pointer' : 'default' }}>
                               <div style={{ fontSize: '12px', fontWeight: isToday ? '800' : '600', color: dow === 0 ? '#DC2626' : dow === 6 ? '#1D4ED8' : '#333', marginBottom: '3px' }}>{d}</div>
                               {items.slice(0, 2).map(a => (
                                 <div key={a.id} style={{ fontSize: '9px', fontWeight: '700', color: a.statusColor, lineHeight: 1.3, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1094,6 +1198,9 @@ export default function SellerDashboard() {
                                 </div>
                               ))}
                               {items.length > 2 && <div style={{ fontSize: '9px', color: '#64748B' }}>ほか{items.length - 2}件</div>}
+                              {hasSale && (
+                                <div style={{ fontSize: '9px', fontWeight: 800, color: '#16A34A', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>¥{dayRev.toLocaleString()}</div>
+                              )}
                             </div>
                           )
                         })}
@@ -1105,7 +1212,8 @@ export default function SellerDashboard() {
               {/* 選んだ日の申込内容 */}
               {calPicked && (() => {
                 const items = myApplies.filter(a => a.rawDate === calPicked)
-                if (items.length === 0) return null
+                const daySales = calSales.filter(x => x.sale_date === calPicked)
+                if (items.length === 0 && daySales.length === 0) return null
                 const [yy, mm, dd] = calPicked.split('-')
                 return (
                   <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #BFDBFE', padding: '16px 18px', marginBottom: '16px' }}>
@@ -1115,6 +1223,52 @@ export default function SellerDashboard() {
                       </div>
                       <button onClick={() => setCalPicked(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '13px', cursor: 'pointer' }}>閉じる ✕</button>
                     </div>
+                    {/* この日の売上（報告済みならここで内容を確認できる） */}
+                    {daySales.length > 0 && (
+                      <div style={{ marginBottom: '12px' }}>
+                        {daySales.map(sale => (
+                          <div key={sale.id} style={{ border: '1px solid #BBF7D0', background: '#F0FDF4', borderRadius: '8px', padding: '12px 14px', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 700, color: '#15803D', marginBottom: '8px' }}>この日の売上（報告済み）</div>
+                            <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginBottom: sale.items.length || sale.weather || sale.customers || sale.note ? '10px' : 0 }}>
+                              {([
+                                ['売上', '¥' + sale.revenue.toLocaleString(), '#1a1a1a'],
+                                ['出店料（税別）', '¥' + sale.fee.toLocaleString(), '#3A9BD5'],
+                                ['手取り', '¥' + (sale.revenue - sale.fee).toLocaleString(), '#16A34A'],
+                              ] as [string, string, string][]).map(([l, v, c]) => (
+                                <div key={l}>
+                                  <div style={{ fontSize: '10px', color: '#64748B' }}>{l}</div>
+                                  <div style={{ fontSize: '15px', fontWeight: 900, color: c }}>{v}</div>
+                                </div>
+                              ))}
+                            </div>
+                            {sale.items.length > 0 && (
+                              <div style={{ borderTop: '1px solid #DCFCE7', paddingTop: '8px', marginBottom: '6px' }}>
+                                <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>
+                                  販売食数（合計{sale.items.reduce((t, it) => t + (it.qty || 0), 0)}食）
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                  {sale.items.map((it, k) => (
+                                    <span key={k} style={{ background: '#fff', border: '1px solid #BBF7D0', borderRadius: '999px', padding: '3px 10px', fontSize: '11px', color: '#166534' }}>
+                                      {it.name} <strong>{it.qty}</strong>食
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {(sale.weather || sale.customers) && (
+                              <div style={{ fontSize: '11px', color: '#475569' }}>
+                                {sale.weather && <>天候：{sale.weather}　</>}
+                                {sale.customers != null && <>来客：{sale.customers}</>}
+                              </div>
+                            )}
+                            {sale.note && (
+                              <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{sale.note}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <div style={{ display: 'grid', gap: '10px' }}>
                       {items.map(a => (
                         <div key={a.id} style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px' }}>
@@ -1129,6 +1283,14 @@ export default function SellerDashboard() {
                             )}
                             {a.status === '承認済' && (
                               <button onClick={() => { setTab('messages'); openThread(a.id) }} style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>メッセージを見る</button>
+                            )}
+                            {/* 出店日を過ぎていて、まだ報告が無い場合はここからも報告できる */}
+                            {/* 報告済みかどうかは日付ではなく申込ごとに見る。
+                                同じ日に2件出店した場合や、売上日を別の日で登録した場合に
+                                取りこぼしたり二重に登録したりしないようにするため。 */}
+                            {a.status === '承認済' && a.rawDate && a.rawDate < todayStr() && !calSales.some(x => x.application_id === a.id) && (
+                              <button onClick={() => openReport({ application_id: a.id, placeTitle: a.place, apply_date: a.rawDate || '' })}
+                                style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>売上を報告する</button>
                             )}
                             <button onClick={() => setTab('applies')} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>申込一覧で見る</button>
                           </div>
@@ -1643,13 +1805,13 @@ export default function SellerDashboard() {
                   <div style={{ fontSize: '13px', fontWeight: 700, color: '#DC2626', marginBottom: '6px' }}>売上報告がまだの出店</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                     {unreported.map(u => (
-                      <button key={u.application_id} onClick={() => { setSaleAppId(u.application_id); setSaleDate(u.apply_date) }}
+                      <button key={u.application_id} onClick={() => openReport(u)}
                         style={{ background: '#fff', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
                         {u.apply_date.slice(5).replace('-', '/')} {u.placeTitle}
                       </button>
                     ))}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#991B1B', marginTop: '6px' }}>押すと下の入力欄に案件と日付が入ります。</div>
+                  <div style={{ fontSize: '11px', color: '#991B1B', marginTop: '6px' }}>押すと報告フォームが開きます。売上と食数をまとめて報告できます。</div>
                 </div>
               )}
               <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
@@ -1858,6 +2020,152 @@ export default function SellerDashboard() {
 
         <DashboardFooter />
       </div>
+
+      {/* ===== 出店報告フォーム =====
+          出店が終わったら、企業へ提出できる形で報告してもらう。
+          品目は登録済みメニューが並ぶので、売れた数を入れるだけで済む。 */}
+      {reportFor && (() => {
+        const app = myApprovedApps.find(x => x.application_id === reportFor.application_id)
+        const rev = parseInt(rpRevenue.replace(/[^0-9]/g, ''), 10) || 0
+        const filled = rpItems.filter(it => it.name.trim() && (parseInt(it.qty, 10) || 0) > 0)
+        const totalQty = filled.reduce((t, it) => t + (parseInt(it.qty, 10) || 0), 0)
+        const itemSum = filled.reduce((t, it) => t + (parseInt(it.qty, 10) || 0) * (parseInt(it.price, 10) || 0), 0)
+        // 単価が入っていない品目があると合計は当てにならないので、
+        // 全部そろっているときだけ金額の食い違いを知らせる
+        const allPriced = filled.length > 0 && filled.every(it => (parseInt(it.price, 10) || 0) > 0)
+        const fee = app ? calcFee(rev, app, '').total : 0
+        const [ry, rm, rd] = reportFor.apply_date.split('-')
+        const label: React.CSSProperties = { fontSize: '12px', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }
+        const box: React.CSSProperties = { border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }
+        return (
+          <div onClick={() => { if (!rpSaving) setReportFor(null) }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '16px', overflowY: 'auto' }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '560px', margin: 'auto', overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
+
+              <div style={{ background: '#F5A623', color: '#fff', padding: '16px 20px' }}>
+                <div style={{ fontSize: '16px', fontWeight: 900, marginBottom: '2px' }}>出店お疲れさまでした</div>
+                <div style={{ fontSize: '12px', opacity: 0.95 }}>
+                  {parseInt(ry, 10)}年{parseInt(rm, 10)}月{parseInt(rd, 10)}日　{reportFor.placeTitle}
+                </div>
+              </div>
+
+              <div style={{ padding: '18px 20px', maxHeight: '65vh', overflowY: 'auto' }}>
+                <div style={{ fontSize: '12px', color: '#64748B', lineHeight: 1.8, marginBottom: '16px' }}>
+                  当日の結果をご報告ください。ここでご入力いただいた内容が、施設・企業へのご報告に使われます。
+                </div>
+
+                {/* 売上 */}
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={label}>売上金額（税込・必須）</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input value={rpRevenue} inputMode='numeric' autoFocus
+                      onChange={e => setRpRevenue(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder='50000' style={{ ...box, flex: 1, textAlign: 'right', fontSize: '18px', fontWeight: 700 }} />
+                    <span style={{ fontSize: '14px', color: '#64748B' }}>円</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>レジの合計（お客様からお預かりした金額）をご入力ください。</div>
+                </div>
+
+                {/* 品目ごとの食数 */}
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={label}>品目ごとの販売食数</div>
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '8px', lineHeight: 1.7 }}>
+                    売れた品目の数だけご入力ください（0や空欄の品目は報告されません）。企業から食数のご報告を求められることがあります。単価は登録済みメニューから入りますが、当日変更した場合は直せます。
+                  </div>
+                  {rpItems.length === 0 && (
+                    <div style={{ fontSize: '12px', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 12px', marginBottom: '8px' }}>
+                      メニューが未登録です。プロフィールにメニューを登録すると、ここに自動で並びます。下の「品目を追加」から手入力もできます。
+                    </div>
+                  )}
+                  {rpItems.map((it, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
+                      <input value={it.name}
+                        onChange={e => setRpItems(rpItems.map((x, k) => k === idx ? { ...x, name: e.target.value } : x))}
+                        placeholder='品目名' style={{ ...box, flex: 1, minWidth: 0, fontSize: '13px' }} />
+                      <input value={it.price} inputMode='numeric'
+                        onChange={e => setRpItems(rpItems.map((x, k) => k === idx ? { ...x, price: e.target.value.replace(/[^0-9]/g, '') } : x))}
+                        placeholder='単価' style={{ ...box, width: '76px', flexShrink: 0, textAlign: 'right', fontSize: '13px' }} />
+                      <input value={it.qty} inputMode='numeric'
+                        onChange={e => setRpItems(rpItems.map((x, k) => k === idx ? { ...x, qty: e.target.value.replace(/[^0-9]/g, '') } : x))}
+                        placeholder='0' style={{ ...box, width: '68px', flexShrink: 0, textAlign: 'right', fontSize: '13px' }} />
+                      <span style={{ fontSize: '12px', color: '#64748B', flexShrink: 0 }}>食</span>
+                      <button type='button' onClick={() => setRpItems(rpItems.filter((_, k) => k !== idx))} title='この行を消す'
+                        style={{ border: 'none', background: 'none', color: '#CBD5E1', cursor: 'pointer', fontSize: '15px', flexShrink: 0, padding: '0 2px' }}>✕</button>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    <button type='button' onClick={() => setRpItems([...rpItems, { name: '', qty: '', price: '' }])}
+                      style={{ background: '#fff', color: '#B45309', border: '1.5px dashed #F5A623', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>＋ 品目を追加</button>
+                    {totalQty > 0 && (
+                      <span style={{ fontSize: '12px', color: '#475569' }}>
+                        合計 <strong>{totalQty}食</strong>
+                        {itemSum > 0 && <>／単価から <strong>{itemSum.toLocaleString()}円</strong></>}
+                      </span>
+                    )}
+                  </div>
+                  {allPriced && rev > 0 && Math.abs(itemSum - rev) > Math.max(500, rev * 0.1) && (
+                    <div style={{ fontSize: '11px', color: '#DC2626', marginTop: '6px', lineHeight: 1.7 }}>
+                      売上金額（{rev.toLocaleString()}円）と食数から計算した金額（{itemSum.toLocaleString()}円）が離れています。入力をご確認ください。
+                    </div>
+                  )}
+                  {allPriced && rev === 0 && (
+                    <button type='button' onClick={() => setRpRevenue(String(itemSum))}
+                      style={{ marginTop: '6px', background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                      {itemSum.toLocaleString()}円を売上に入れる
+                    </button>
+                  )}
+                </div>
+
+                {/* 当日の状況 */}
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={label}>当日の状況（任意）</div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    {WEATHERS.map(w => (
+                      <button key={w} type='button' onClick={() => setRpWeather(rpWeather === w ? '' : w)}
+                        style={{ border: rpWeather === w ? '1.5px solid #1D4ED8' : '1.5px solid #E2E8F0', background: rpWeather === w ? '#EFF6FF' : '#fff', color: '#1a1a1a', borderRadius: '999px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>{w}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input value={rpCustomers} inputMode='numeric'
+                      onChange={e => setRpCustomers(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder='来客数' style={{ ...box, width: '120px', textAlign: 'right', fontSize: '13px' }} />
+                    <span style={{ fontSize: '12px', color: '#64748B' }}>組・人（任意）</span>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '4px' }}>
+                  <div style={label}>所感・特記事項（任意）</div>
+                  <textarea value={rpNote} onChange={e => setRpNote(e.target.value)} rows={3}
+                    placeholder='例：昼の時間帯に行列ができました。次回は仕込みを増やします。'
+                    style={{ ...box, width: '100%', fontSize: '13px', resize: 'vertical', fontFamily: 'inherit' }} />
+                </div>
+
+                {/* 計算結果 */}
+                {rev > 0 && app && (
+                  <div style={{ marginTop: '14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px', fontSize: '12px', color: '#475569', lineHeight: 1.9 }}>
+                    <div>売上：<strong>{rev.toLocaleString()}円</strong></div>
+                    <div>出店料（税別）：<strong>{fee.toLocaleString()}円</strong></div>
+                    <div style={{ borderTop: '1px solid #E2E8F0', marginTop: '6px', paddingTop: '6px' }}>
+                      あなたの利益（手取り）：<strong style={{ color: '#16A34A', fontSize: '14px' }}>{(rev - fee).toLocaleString()}円</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px solid #E2E8F0', padding: '14px 20px', display: 'flex', gap: '10px' }}>
+                <button onClick={() => setReportFor(null)} disabled={rpSaving}
+                  style={{ flex: '0 0 auto', background: '#fff', color: '#64748B', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '12px 20px', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>あとで</button>
+                <button onClick={saveReport} disabled={rpSaving || !rpRevenue}
+                  style={{ flex: 1, background: (rpSaving || !rpRevenue) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '15px', fontWeight: 900, cursor: (rpSaving || !rpRevenue) ? 'not-allowed' : 'pointer' }}>
+                  {rpSaving ? '送信中…' : 'この内容で報告する'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
     </div>
   )
 }
