@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server'
 //   action='report'  … 出店者が「振り込みました」と報告する → 運営へメール
 //   action='list'    … 管理者が入金状況の一覧を見る
 //   action='confirm' … 管理者が入金を確認する → 出店者へメール
+//   action='delete'  … 管理者が請求書を取り消す（テストで作ったものの片付け用）
 //
 // 呼び出し元はログイン中のアクセストークンで判定する（本人以外は触れない）。
 
@@ -200,6 +201,19 @@ export async function POST(req: Request) {
         }
       }
       return NextResponse.json({ success: true })
+    }
+
+    // ===== 管理者：請求書を削除する =====
+    // 誤って発行したものやテストで作ったものを片付けるため。
+    // 請求書の記録だけを消し、売上（sales）はそのまま残す。
+    if (action === 'delete') {
+      const { invoiceId } = body
+      if (!invoiceId) return NextResponse.json({ error: '請求書が指定されていません' }, { status: 400 })
+      const { data: del, error: dErr } = await db
+        .from('invoices').delete().eq('id', invoiceId).select('invoice_no')
+      if (dErr) return NextResponse.json({ error: '削除に失敗しました: ' + dErr.message }, { status: 500 })
+      if (!del || del.length === 0) return NextResponse.json({ error: '対象が見つかりませんでした' }, { status: 404 })
+      return NextResponse.json({ success: true, invoiceNo: del[0].invoice_no })
     }
 
     return NextResponse.json({ error: '不明な操作です' }, { status: 400 })

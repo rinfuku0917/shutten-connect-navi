@@ -7,6 +7,7 @@ import { PLACE_CATEGORIES } from '../lib/categories'
 import { geocodeAddress } from '../lib/geocode'
 import { formatVehicleSize } from '../lib/vehicleSize'
 import { exportPlaceSubmission } from '../lib/submissionXlsx'
+import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 
 // ダミーデータ
 // profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
@@ -281,6 +282,16 @@ export default function AdminPage() {
     }))
     setSales(mapped)
     setSalesLoading(false)
+
+    // 案件ごとに売上報告の件数を数え、提出用Excelのボタンを出す
+    const byPlace = new Map<string, { placeId: string, title: string, count: number }>()
+    for (const r of mapped) {
+      if (!r.place_id) continue
+      const cur = byPlace.get(r.place_id) || { placeId: r.place_id, title: r.placeTitle, count: 0 }
+      cur.count += 1
+      byPlace.set(r.place_id, cur)
+    }
+    setReportPlaces([...byPlace.values()].sort((a, b) => a.title.localeCompare(b.title, 'ja')))
   }
 
   // 売上を保存
@@ -564,6 +575,40 @@ export default function AdminPage() {
       await loadPayments()
     } catch (e) {
       alert(e instanceof Error ? e.message : '更新に失敗しました')
+    }
+    setPayBusy('')
+  }
+
+  // 企業へ提出する売上報告のExcel。案件ごとに、報告された売上と
+  // 品目ごとの販売食数をまとめて出す。
+  const [repXlsxBusy, setRepXlsxBusy] = useState('')
+  const [reportPlaces, setReportPlaces] = useState<{ placeId: string, title: string, count: number }[]>([])
+  const downloadSalesReportXlsx = async (placeId: string, title: string) => {
+    setRepXlsxBusy(placeId)
+    try {
+      const n = await exportPlaceSalesReport(supabase, placeId, title)
+      if (n === 0) alert('この案件には、まだ売上の報告がありません')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '出力に失敗しました')
+    }
+    setRepXlsxBusy('')
+  }
+
+  // 請求書を削除する。テストで作ったものや、誤って発行したものの片付け用。
+  // 売上（sales）は消さないので、必要ならあらためて発行し直せる。
+  const deleteInvoice = async (row: PayRow) => {
+    if (!window.confirm(
+      row.invoice_no + '（' + row.sellerName + ' さん・¥' + row.total.toLocaleString() + '）の請求書を削除します。\n\n'
+      + '・出店者の「お支払い」欄からも消えます\n'
+      + '・売上の記録は残るので、必要なら発行し直せます\n'
+      + '・すでに送信したメールは取り消せません\n\nよろしいですか？'
+    )) return
+    setPayBusy(row.id)
+    try {
+      await callPayApi({ action: 'delete', invoiceId: row.id })
+      await loadPayments()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '削除に失敗しました')
     }
     setPayBusy('')
   }
@@ -915,7 +960,7 @@ export default function AdminPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `出店申込一覧_${label}_${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `社内確認用_出店申込一覧_${label}_${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -1584,6 +1629,24 @@ const previewDoc = async (fileUrl: string) => {
               </div>
 
 
+              {/* 企業へ提出する売上報告 */}
+              {reportPlaces.length > 0 && (
+                <div style={{ background: '#fff', border: '2px solid #BBF7D0', borderRadius: '10px', padding: '14px 16px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#15803D', marginBottom: '4px' }}>📊 施設・企業へ提出する売上報告Excel</div>
+                  <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px', lineHeight: 1.7 }}>
+                    出店者から届いた報告（売上・品目ごとの販売食数・天候・来客数・所感）を、開催日ごとのシートにまとめます。「何食売れたか」のご報告にそのまま使えます。
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {reportPlaces.map(pl => (
+                      <button key={pl.placeId} onClick={() => downloadSalesReportXlsx(pl.placeId, pl.title)} disabled={repXlsxBusy === pl.placeId}
+                        style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: repXlsxBusy === pl.placeId ? 'wait' : 'pointer' }}>
+                        {repXlsxBusy === pl.placeId ? '作成中…' : `${pl.title}（${pl.count}件）`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 出店料の入金状況 */}
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
@@ -1601,64 +1664,64 @@ const previewDoc = async (fileUrl: string) => {
                     {payLoading ? '読み込み中...' : '発行済みの請求書はまだありません。'}
                   </div>
                 ) : (
-                  <div className='admin-table-wrap'>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                      <thead>
-                        <tr>
-                          {['状況', '出店者', '対象月', '請求額(税込)', '支払期限', '振込の報告', ''].map(h => (
-                            <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {payRows.map(r => {
-                          const st = r.paid_status === 'paid'
-                            ? { label: '入金確認済', color: '#16A34A', bg: '#ECFDF5' }
-                            : r.paid_status === 'reported'
-                              ? { label: '振込報告あり', color: '#B45309', bg: '#FEF3C7' }
-                              : { label: '未入金', color: '#DC2626', bg: '#FEE2E2' }
-                          // 日付はローカル（日本時間）で見る。UTCで比べると朝9時まで1日ずれる
-                          const nd = new Date()
-                          const todayLocal = nd.getFullYear() + '-' + String(nd.getMonth() + 1).padStart(2, '0') + '-' + String(nd.getDate()).padStart(2, '0')
-                          const overdue = r.paid_status !== 'paid' && r.due_on && r.due_on < todayLocal
-                          return (
-                            <tr key={r.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>
-                                <span style={{ background: st.bg, color: st.color, borderRadius: '4px', padding: '2px 8px', fontSize: '11px', fontWeight: 700 }}>{st.label}</span>
-                              </td>
-                              <td style={{ padding: '9px 10px' }}>
-                                {r.sellerName}
-                                <div style={{ fontSize: '10px', color: '#94A3B8' }}>{r.invoice_no}</div>
-                              </td>
-                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>{r.period}</td>
-                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap', fontWeight: 700 }}>¥{r.total.toLocaleString()}</td>
-                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap', color: overdue ? '#DC2626' : '#475569' }}>
+                  /* 横に長い表はスマホで切れてしまうため、1件ずつのカードで出す */
+                  <div style={{ display: 'grid', gap: '10px' }}>
+                    {payRows.map(r => {
+                      const st = r.paid_status === 'paid'
+                        ? { label: '入金確認済', color: '#16A34A', bg: '#ECFDF5', border: '#BBF7D0' }
+                        : r.paid_status === 'reported'
+                          ? { label: '振込報告あり', color: '#B45309', bg: '#FEF3C7', border: '#FDE68A' }
+                          : { label: '未入金', color: '#DC2626', bg: '#FEE2E2', border: '#FECACA' }
+                      // 日付はローカル（日本時間）で見る。UTCで比べると朝9時まで1日ずれる
+                      const nd = new Date()
+                      const todayLocal = nd.getFullYear() + '-' + String(nd.getMonth() + 1).padStart(2, '0') + '-' + String(nd.getDate()).padStart(2, '0')
+                      const overdue = r.paid_status !== 'paid' && r.due_on && r.due_on < todayLocal
+                      return (
+                        <div key={r.id} style={{ border: `1px solid ${overdue ? '#FECACA' : '#E2E8F0'}`, borderRadius: '10px', padding: '12px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                            <span style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: '999px', padding: '2px 10px', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>{st.label}</span>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a' }}>{r.sellerName}</span>
+                            <span style={{ fontSize: '11px', color: '#94A3B8' }}>{r.invoice_no}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#64748B' }}>請求額（税込）</div>
+                              <div style={{ fontSize: '16px', fontWeight: 900, color: '#1a1a1a' }}>¥{r.total.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#64748B' }}>対象月</div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#475569', paddingTop: '2px' }}>{r.period}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#64748B' }}>支払期限</div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: overdue ? '#DC2626' : '#475569', paddingTop: '2px' }}>
                                 {r.due_on ? r.due_on.replace(/-/g, '/') : '—'}{overdue && ' 超過'}
-                              </td>
-                              <td style={{ padding: '9px 10px', fontSize: '11px', color: '#475569' }}>
-                                {r.paid_status === 'unpaid' ? '—' : (
-                                  <>
-                                    {r.paid_on ? r.paid_on.replace(/-/g, '/') : '日付なし'}
-                                    {r.paid_name && <div style={{ color: '#94A3B8' }}>名義：{r.paid_name}</div>}
-                                  </>
-                                )}
-                              </td>
-                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>
-                                {r.paid_status === 'paid' ? (
-                                  <button onClick={() => confirmPayment(r, true)} disabled={payBusy === r.id}
-                                    style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>取り消す</button>
-                                ) : (
-                                  <button onClick={() => confirmPayment(r, false)} disabled={payBusy === r.id}
-                                    style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: payBusy === r.id ? 'wait' : 'pointer' }}>
-                                    {payBusy === r.id ? '…' : '入金を確認'}
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                              </div>
+                            </div>
+                          </div>
+                          {r.paid_status !== 'unpaid' && (
+                            <div style={{ fontSize: '11px', color: '#475569', marginBottom: '8px' }}>
+                              振込の報告：{r.paid_on ? r.paid_on.replace(/-/g, '/') : '日付なし'}
+                              {r.paid_name && <>／名義 {r.paid_name}</>}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {r.paid_status === 'paid' ? (
+                              <button onClick={() => confirmPayment(r, true)} disabled={payBusy === r.id}
+                                style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>確認を取り消す</button>
+                            ) : (
+                              <button onClick={() => confirmPayment(r, false)} disabled={payBusy === r.id}
+                                style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 18px', fontSize: '12px', fontWeight: 700, cursor: payBusy === r.id ? 'wait' : 'pointer' }}>
+                                {payBusy === r.id ? '…' : '入金を確認'}
+                              </button>
+                            )}
+                            {/* テストで作った請求書などを消せるようにする */}
+                            <button onClick={() => deleteInvoice(r)} disabled={payBusy === r.id}
+                              style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>この請求書を削除</button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -1887,11 +1950,30 @@ const previewDoc = async (fileUrl: string) => {
               <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#1D4ED8', display: 'flex', gap: '8px' }}>
                 <span>出店者からの応募を承認すると、マッチングが成立します。却下すると取り消されます。</span>
               </div>
+              {/* 施設・企業へ提出する「出店者情報」。承認済みの出店者を、
+                  普段提出しているExcelと同じ様式（日付ごとのシート）で出力する */}
+              {approvedPlaces.length > 0 && (
+                <div style={{ background: '#fff', border: '2px solid #BFDBFE', borderRadius: '10px', padding: '14px 16px', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#1D4ED8', marginBottom: '4px' }}>📄 施設・企業へ提出するExcel</div>
+                  <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px', lineHeight: 1.7 }}>
+                    普段ご提出いただいている様式そのままで出力します（開催日ごとのシート／店舗名・Instagram・ジャンル・テイクアウト袋・決済方法・メニュー）。<strong style={{ color: '#1D4ED8' }}>提出用はこちらをお使いください。</strong>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {approvedPlaces.map(pl => (
+                      <button key={pl.placeId} onClick={() => downloadSubmitXlsx(pl.placeId, pl.title)} disabled={submitXlsxBusy === pl.placeId}
+                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: submitXlsxBusy === pl.placeId ? 'wait' : 'pointer' }}>
+                        {submitXlsxBusy === pl.placeId ? '作成中…' : `${pl.title}（${pl.count}件）`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', margin: '0 0 10px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', margin: 0 }}>承認待ち（{pendingApps.length}件）</h3>
                 {pendingApps.length > 0 && (
                   <button onClick={() => exportPendingCsv(pendingApps, '全案件')} style={{ background: '#1E2A3B', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                    Excel出力（全{pendingApps.length}件）
+                    社内確認用CSV（全{pendingApps.length}件）
                   </button>
                 )}
               </div>
@@ -1905,7 +1987,10 @@ const previewDoc = async (fileUrl: string) => {
                 if (byPlace.size === 0) return null
                 return (
                   <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginBottom: '8px' }}>案件ごとに出力（施設・企業さまへの共有用）</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginBottom: '2px' }}>社内確認用CSV（案件ごと）</div>
+                    <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '8px', lineHeight: 1.7 }}>
+                      承認の判断に使う全項目（住所・活動エリア・紹介文・書類の提出状況など）が入ります。施設への提出には上の「施設・企業へ提出するExcel」をお使いください。
+                    </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                       {[...byPlace.entries()].map(([title, rows]) => (
                         <button key={title} onClick={() => exportPendingCsv(rows, title)} style={{ background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
@@ -1916,24 +2001,6 @@ const previewDoc = async (fileUrl: string) => {
                   </div>
                 )
               })()}
-              {/* 施設・企業へ提出する「出店者情報」。承認済みの出店者を、
-                  普段提出しているExcelと同じ様式（日付ごとのシート）で出力する */}
-              {approvedPlaces.length > 0 && (
-                <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#1D4ED8', marginBottom: '4px' }}>提出用Excel（承認済みの出店者情報）</div>
-                  <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px', lineHeight: 1.7 }}>
-                    開催日ごとのシートに、店舗名・Instagram・ジャンル・テイクアウト袋・決済方法・メニューをまとめます。そのまま施設・企業へ提出できます。
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                    {approvedPlaces.map(pl => (
-                      <button key={pl.placeId} onClick={() => downloadSubmitXlsx(pl.placeId, pl.title)} disabled={submitXlsxBusy === pl.placeId}
-                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: submitXlsxBusy === pl.placeId ? 'wait' : 'pointer' }}>
-                        {submitXlsxBusy === pl.placeId ? '作成中…' : `${pl.title}（${pl.count}件）`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
               <div style={{ display: 'grid', gap: '12px' }}>
                 {pendingLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
                 {!pendingLoading && pendingApps.length === 0 && <div style={{ color: '#999', fontSize: '13px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>承認待ちの応募はありません。</div>}
@@ -1990,7 +2057,7 @@ const previewDoc = async (fileUrl: string) => {
                         <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>プロフィールを見る</a>
                       )}
                       <button onClick={() => setTab('docs')} style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>書類を確認</button>
-                      <button onClick={() => exportPendingCsv([a], a.sellerName)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>Excel出力</button>
+                      <button onClick={() => exportPendingCsv([a], a.sellerName)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>社内確認用CSV</button>
                     </div>
                   </div>
                 ))}
