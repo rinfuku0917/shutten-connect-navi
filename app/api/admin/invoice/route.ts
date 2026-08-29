@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { perDayFee } from '../../../lib/placeFee'
 
 // 出店者への請求書を組み立てる。
 // action='preview' は番号を採番せず内容だけ返す（確認用）。
@@ -16,14 +17,23 @@ async function verifyAdmin(admin: any, requesterId: string) {
   return true
 }
 
-// 案件の料金設定から、請求件名に載せる条件（「10%」「5,000円/日」など）を作る
+// 案件の料金設定から、請求件名に載せる条件（「10%」「5,000円/日」など）を作る。
+// 日ごとに金額を決めている案件は、その日の金額を出す。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function feeLabel(place: any): string {
+function feeLabel(place: any, saleDate?: string | null): string {
   const pct = (place?.company_share_pct || 0) + (place?.price_share_pct || 0)
-  const fixed = (place?.company_fixed_amount || 0) + (place?.price_fixed || 0)
-  const perEvent = place?.company_fixed_unit === 'per_event' || place?.place_fixed_unit === 'per_event'
   const parts: string[] = []
   if (pct > 0) parts.push(pct + '%')
+
+  const day = perDayFee(place?.schedule, saleDate)
+  if (day.placeFee != null || day.companyFee != null) {
+    const total = (day.placeFee ?? 0) + (day.companyFee ?? 0)
+    if (total > 0) parts.push(total.toLocaleString() + '円')
+    return parts.join(' ＋ ')
+  }
+
+  const fixed = (place?.company_fixed_amount || 0) + (place?.price_fixed || 0)
+  const perEvent = place?.company_fixed_unit === 'per_event' || place?.place_fixed_unit === 'per_event'
   if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + (perEvent ? '期間' : '日'))
   return parts.join(' ＋ ')
 }
@@ -71,7 +81,7 @@ export async function POST(req: Request) {
     const placeIds = Array.from(new Set(sales.map(s => s.place_id).filter(Boolean)))
     const { data: places } = await admin
       .from('places')
-      .select('id, title, company_share_pct, price_share_pct, company_fixed_amount, price_fixed, company_fixed_unit, place_fixed_unit')
+      .select('id, title, company_share_pct, price_share_pct, company_fixed_amount, price_fixed, company_fixed_unit, place_fixed_unit, schedule')
       .in('id', placeIds)
     const placeOf = new Map((places || []).map(p => [p.id, p]))
 
@@ -88,7 +98,7 @@ export async function POST(req: Request) {
     const items = billable.map((s, i) => {
       const p = placeOf.get(s.place_id)
       const amount = s.total_pay ?? s.fee ?? 0
-      const cond = feeLabel(p)
+      const cond = feeLabel(p, s.sale_date)
       // 元の請求書と同じ「7/1」形式にする（月・日とも先頭のゼロを外す）
       const [mm, dd] = s.sale_date.slice(5).split('-')
       const md = `${parseInt(mm, 10)}/${parseInt(dd, 10)}`
