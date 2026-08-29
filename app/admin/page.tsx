@@ -1617,7 +1617,10 @@ const previewDoc = async (fileUrl: string) => {
                             : r.paid_status === 'reported'
                               ? { label: '振込報告あり', color: '#B45309', bg: '#FEF3C7' }
                               : { label: '未入金', color: '#DC2626', bg: '#FEE2E2' }
-                          const overdue = r.paid_status !== 'paid' && r.due_on && r.due_on < new Date().toISOString().slice(0, 10)
+                          // 日付はローカル（日本時間）で見る。UTCで比べると朝9時まで1日ずれる
+                          const nd = new Date()
+                          const todayLocal = nd.getFullYear() + '-' + String(nd.getMonth() + 1).padStart(2, '0') + '-' + String(nd.getDate()).padStart(2, '0')
+                          const overdue = r.paid_status !== 'paid' && r.due_on && r.due_on < todayLocal
                           return (
                             <tr key={r.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                               <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>

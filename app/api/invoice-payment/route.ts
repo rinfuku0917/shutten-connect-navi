@@ -15,6 +15,11 @@ import { NextResponse } from 'next/server'
 const ADMIN_EMAIL = 'info@connect-navi.com'
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
+// 同じ請求書の振込報告が短時間に繰り返されたとき、運営へ何通も飛ばさない。
+// notify 系と同じ方式。サーバーが入れ替わると消えるため、DBの報告時刻でも見る。
+const recentReports = new Map<string, number>()
+const REPORT_MAIL_INTERVAL = 10 * 60 * 1000 // 10分
+
 const yen = (n: number) => '¥' + Number(n || 0).toLocaleString()
 const jpDate = (iso: string) => {
   if (!iso) return ''
@@ -47,7 +52,7 @@ export async function POST(req: Request) {
     if (action === 'mine') {
       const { data, error } = await db
         .from('invoices')
-        .select('id, invoice_no, period, issued_on, due_on, total, paid_status, paid_on, paid_reported_at, paid_confirmed_at')
+        .select('id, invoice_no, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at')
         .eq('seller_id', uid)
         .order('issued_on', { ascending: false })
       if (error) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })
@@ -60,11 +65,22 @@ export async function POST(req: Request) {
       if (!invoiceId) return NextResponse.json({ error: '請求書が指定されていません' }, { status: 400 })
 
       const { data: inv, error: gErr } = await db
-        .from('invoices').select('id, invoice_no, seller_id, period, total, paid_status').eq('id', invoiceId).maybeSingle()
+        .from('invoices').select('id, invoice_no, seller_id, period, total, paid_status, paid_reported_at').eq('id', invoiceId).maybeSingle()
       if (gErr || !inv) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
       // 本人の請求書だけ報告できる
       if (inv.seller_id !== uid) return NextResponse.json({ error: '権限がありません' }, { status: 403 })
       if (inv.paid_status === 'paid') return NextResponse.json({ error: 'この請求書はすでに入金確認済みです' }, { status: 409 })
+
+      // 直前に同じ報告が来ていたら、記録は更新するがメールは送らない
+      const now = Date.now()
+      const lastMem = recentReports.get(invoiceId) || 0
+      const lastDb = inv.paid_reported_at ? new Date(inv.paid_reported_at).getTime() : 0
+      const skipMail = (now - Math.max(lastMem, lastDb)) < REPORT_MAIL_INTERVAL
+      recentReports.set(invoiceId, now)
+      // 溜まり続けないように、古いものを捨てる
+      if (recentReports.size > 500) {
+        for (const [k, t] of recentReports) if (now - t > REPORT_MAIL_INTERVAL) recentReports.delete(k)
+      }
 
       const { data: upd, error: uErr2 } = await db.from('invoices').update({
         paid_status: 'reported',
@@ -77,7 +93,7 @@ export async function POST(req: Request) {
 
       // 運営へ知らせる（メールが送れなくても報告自体は成功とする）
       const apiKey = process.env.RESEND_API_KEY
-      if (apiKey) {
+      if (apiKey && !skipMail) {
         try {
           const shop = me?.shop_name || me?.name || '(出店者)'
           await new Resend(apiKey).emails.send({
@@ -135,12 +151,14 @@ export async function POST(req: Request) {
       if (!invoiceId) return NextResponse.json({ error: '請求書が指定されていません' }, { status: 400 })
 
       const { data: inv, error: gErr } = await db
-        .from('invoices').select('id, invoice_no, seller_id, period, total, paid_status').eq('id', invoiceId).maybeSingle()
+        .from('invoices').select('id, invoice_no, seller_id, period, total, paid_status, paid_reported_at').eq('id', invoiceId).maybeSingle()
       if (gErr || !inv) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
 
-      // 取り消しは、間違えて確認済みにしたときに戻すためのもの
+      // 取り消しは、間違えて確認済みにしたときに戻すためのもの。
+      // 出店者から振込の報告が来ていた場合は「確認中」に戻す。
+      // 未入金に落としてしまうと、振込日や名義が画面から消えて督促してしまう。
       const patch = undo
-        ? { paid_status: 'unpaid', paid_confirmed_at: null }
+        ? { paid_status: inv.paid_reported_at ? 'reported' : 'unpaid', paid_confirmed_at: null }
         : { paid_status: 'paid', paid_confirmed_at: new Date().toISOString() }
       if (typeof memo === 'string') (patch as Record<string, unknown>).paid_memo = memo.slice(0, 500)
 

@@ -462,11 +462,12 @@ export default function SellerDashboard() {
   // 請求書は管理者しか触れないため、専用のAPIを通して自分の分だけ受け取る。
   type MyInvoice = {
     id: string, invoice_no: string, period: string, issued_on: string, due_on: string | null,
-    total: number, paid_status: string, paid_on: string | null,
+    total: number, paid_status: string, paid_on: string | null, paid_name: string | null,
     paid_reported_at: string | null, paid_confirmed_at: string | null,
   }
   const [myInvoices, setMyInvoices] = useState<MyInvoice[]>([])
   const [invLoading, setInvLoading] = useState(false)
+  const [invError, setInvError] = useState('')
   const [payFor, setPayFor] = useState<MyInvoice | null>(null)
   const [payOn, setPayOn] = useState('')
   const [payName, setPayName] = useState('')
@@ -491,7 +492,12 @@ export default function SellerDashboard() {
     try {
       const j = await callPayApi({ action: 'mine' })
       setMyInvoices(j.items || [])
-    } catch { /* 未ログインなどは一覧を空のままにする */ }
+      setInvError('')
+    } catch (e) {
+      // 取得できなかったことを「請求書なし」と見せると、
+      // 支払いが済んでいると誤解されるため、はっきり伝える
+      setInvError(e instanceof Error ? e.message : '読み込めませんでした')
+    }
     setInvLoading(false)
   }
 
@@ -1399,6 +1405,12 @@ export default function SellerDashboard() {
 
               {invLoading ? (
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999', fontSize: '13px' }}>読み込み中...</div>
+              ) : invError ? (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #FECACA', padding: '28px', textAlign: 'center', fontSize: '13px', lineHeight: 1.8 }}>
+                  <div style={{ color: '#DC2626', fontWeight: 700, marginBottom: '4px' }}>お支払い状況を読み込めませんでした</div>
+                  <div style={{ color: '#64748B', fontSize: '12px', marginBottom: '12px' }}>{invError}</div>
+                  <button onClick={loadMyInvoices} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>もう一度読み込む</button>
+                </div>
               ) : myInvoices.length === 0 ? (
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999', fontSize: '13px', lineHeight: 1.8 }}>
                   発行済みの請求書はまだありません。<br />売上をご報告いただくと、運営で請求書を作成いたします。
@@ -1441,7 +1453,12 @@ export default function SellerDashboard() {
                           <div style={{ fontSize: '11px', color: '#16A34A', marginBottom: '8px' }}>ご入金を確認いたしました。ありがとうございました。</div>
                         )}
                         {iv.paid_status !== 'paid' && (
-                          <button onClick={() => { setPayFor(iv); setPayOn(todayStr()); setPayName(profile.shop_name || profile.name || '') }}
+                          <button onClick={() => {
+                            setPayFor(iv)
+                            // 出し直しのときは前回の内容を出す（今日の日付で上書きしない）
+                            setPayOn(iv.paid_on || todayStr())
+                            setPayName(iv.paid_name || profile.shop_name || profile.name || '')
+                          }}
                             style={{ background: iv.paid_status === 'reported' ? '#fff' : '#F5A623', color: iv.paid_status === 'reported' ? '#B45309' : '#fff', border: iv.paid_status === 'reported' ? '1px solid #FDE68A' : 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
                             {iv.paid_status === 'reported' ? '報告内容を出し直す' : '振り込みました'}
                           </button>
