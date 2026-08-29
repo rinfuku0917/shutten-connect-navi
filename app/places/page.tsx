@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
+import { compareByTitle } from '../lib/placeSort'
 
 // 地図はSSRでLeafletを読むと壊れるのでクライアントのみで読み込む
 const PlacesMap = dynamic(() => import('../components/PlacesMap'), {
@@ -51,6 +52,9 @@ export default function PlacesPage() {
   // 料金はログイン済みなら表示する（出店者・募集者・管理者いずれも）
   const [canSeeFee, setCanSeeFee] = useState(false)
   const [kw, setKw] = useState('')
+  // 並び順。既定は新着順（新しい案件を見つけてもらうため）。
+  // 名前順にすると同じ系列（イオン、サンユーストアーなど）がまとまる。
+  const [sortBy, setSortBy] = useState<'new' | 'name'>('new')
   const [pref, setPref] = useState('')
   const [genre, setGenre] = useState('')
 const [showMap, setShowMap] = useState(false)
@@ -92,7 +96,11 @@ const [showMap, setShowMap] = useState(false)
       if (!hay.includes(kw.toLowerCase())) return false
     }
     return true
-  }), [places, pref, genre, kw])
+  }).slice().sort((a, b) => {
+    // 新着順は読み込み時の順序（ピン留め→掲載日の降順）をそのまま使う
+    if (sortBy === 'new') return 0
+    return compareByTitle(a.title, b.title)
+  }), [places, pref, genre, kw, sortBy])
   const PER_PAGE = 12
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const pageSafe = Math.min(Math.max(1, page), totalPages)
@@ -128,6 +136,10 @@ const [showMap, setShowMap] = useState(false)
           <select value={genre} onChange={e=>setGenre(e.target.value)} style={selectStyle}>
             <option value=''>カテゴリー（すべて）</option>
             {PLACE_CATEGORIES.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value as 'new' | 'name')} style={selectStyle}>
+            <option value='new'>新着順</option>
+            <option value='name'>名前順</option>
           </select>
           {(kw || pref || genre) && (
             <button onClick={()=>{setKw('');setPref('');setGenre('')}} style={{ padding:'10px 14px', borderRadius:'8px', border:'1.5px solid #E2E8F0', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#64748B' }}>クリア</button>

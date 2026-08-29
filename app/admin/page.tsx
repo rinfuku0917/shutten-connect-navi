@@ -8,6 +8,7 @@ import { geocodeAddress } from '../lib/geocode'
 import { formatVehicleSize } from '../lib/vehicleSize'
 import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
+import { compareByTitle } from '../lib/placeSort'
 
 // ダミーデータ
 // profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
@@ -460,12 +461,20 @@ export default function AdminPage() {
     setPlacesList(mapped)
     setPlacesLoading(false)
   }
+  // 並び順。同じ系列（イオン、サンユーストアーなど）がまとまるよう
+  // 名前順を既定にする。登録したばかりの案件を探したいときは新着順に切り替える。
+  const [placesSort, setPlacesSort] = useState<'name' | 'new'>('name')
+
   const placesFiltered = placesList.filter(x => {
     if (pPref && x.area !== pPref) return false
     if (pGenre && !(x.genres || []).includes(pGenre)) return false
     if (placeStatusFilter && x.status !== placeStatusFilter) return false
     if (pKw) { const hay=((x.title||'')+(x.area||'')+(x.host||'')).toLowerCase(); if(!hay.includes(pKw.toLowerCase())) return false }
     return true
+  }).slice().sort((a, b) => {
+    // 新着順は読み込み時の順序（created_at の降順）をそのまま使う
+    if (placesSort === 'new') return 0
+    return compareByTitle(a.title, b.title)
   })
   const PLACES_PER_PAGE = 30
   const placesTotalPages = Math.max(1, Math.ceil(placesFiltered.length / PLACES_PER_PAGE))
@@ -1350,6 +1359,10 @@ const previewDoc = async (fileUrl: string) => {
                   <option value=''>状態（すべて）</option>
                   <option value='公開中'>公開中</option>
                   <option value='下書き'>下書き</option>
+                </select>
+                <select value={placesSort} onChange={e=>setPlacesSort(e.target.value as 'name' | 'new')} style={{ padding:'9px 12px', borderRadius:'8px', border:'1.5px solid #E2E8F0', fontSize:'13px', minWidth:'130px' }}>
+                  <option value='name'>名前順（系列でまとまる）</option>
+                  <option value='new'>新着順</option>
                 </select>
                 {(pKw||pPref||pGenre||placeStatusFilter) && <button onClick={()=>{setPKw('');setPPref('');setPGenre('');setPlaceStatusFilter('')}} style={{ padding:'9px 14px', borderRadius:'8px', border:'1.5px solid #E2E8F0', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#64748B' }}>クリア</button>}
                 <span style={{ fontSize:'12px', color:'#64748B' }}>{placesFiltered.length}件</span>
