@@ -518,6 +518,56 @@ export default function AdminPage() {
     setAutoPosting(false)
   }
 
+  // ===== 出店料の入金状況 =====
+  type PayRow = {
+    id: string, invoice_no: string, seller_id: string, sellerName: string, period: string,
+    issued_on: string, due_on: string | null, total: number, paid_status: string,
+    paid_on: string | null, paid_name: string | null,
+    paid_reported_at: string | null, paid_confirmed_at: string | null, paid_memo: string | null,
+  }
+  const [payRows, setPayRows] = useState<PayRow[]>([])
+  const [payLoading, setPayLoading] = useState(false)
+  const [payBusy, setPayBusy] = useState('')
+
+  const callPayApi = async (payload: Record<string, unknown>) => {
+    const { data: sess } = await supabase.auth.getSession()
+    const res = await fetch('/api/invoice-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+      body: JSON.stringify(payload),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(j.error || '通信に失敗しました')
+    return j
+  }
+
+  const loadPayments = async () => {
+    setPayLoading(true)
+    try {
+      const j = await callPayApi({ action: 'list' })
+      setPayRows(j.items || [])
+    } catch (e) {
+      console.error('入金状況の取得に失敗', e)
+    }
+    setPayLoading(false)
+  }
+
+  // 入金を確認する／取り消す。確認したときだけ出店者へお礼のメールが届く。
+  const confirmPayment = async (row: PayRow, undo: boolean) => {
+    const msg = undo
+      ? '「入金確認済み」を取り消します。よろしいですか？（出店者へのメールは送られません）'
+      : row.sellerName + ' さんの ' + row.invoice_no + '（¥' + row.total.toLocaleString() + '）の入金を確認済みにします。\n出店者へ確認のお知らせメールが届きます。よろしいですか？'
+    if (!window.confirm(msg)) return
+    setPayBusy(row.id)
+    try {
+      await callPayApi({ action: 'confirm', invoiceId: row.id, undo })
+      await loadPayments()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '更新に失敗しました')
+    }
+    setPayBusy('')
+  }
+
   // 売上報告のリマインドを今すぐ送る（定期実行と同じ処理を呼ぶ）
   const [reminding, setReminding] = useState(false)
   const runSalesReminder = async () => {
@@ -915,7 +965,7 @@ export default function AdminPage() {
 
 
   // salesタブを開いたら読み込む
-  useEffect(() => { if (tab === 'sales' && authChecked) { loadApprovedApps(); loadSales() } }, [tab, authChecked])
+  useEffect(() => { if (tab === 'sales' && authChecked) { loadApprovedApps(); loadSales(); loadPayments() } }, [tab, authChecked])
   useEffect(() => { if (tab === 'sales' && authChecked) loadSales() }, [saleMonth])
   useEffect(() => {
     if (!/^\d{4}-\d{2}$/.test(saleMonth)) return
@@ -1531,6 +1581,83 @@ const previewDoc = async (fileUrl: string) => {
                   {reminding ? '送信中…' : '売上報告を催促する'}
                 </button>
                 <input type='month' value={saleMonth} onChange={e => setSaleMonth(e.target.value)} style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', flexShrink: 0 }} />
+              </div>
+
+
+              {/* 出店料の入金状況 */}
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a' }}>出店料の入金状況</div>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>発行済みの請求書と、振込の報告・確認の状況です。出店者が振込を報告すると運営にメールが届きます。</div>
+                  </div>
+                  <button onClick={loadPayments} disabled={payLoading}
+                    style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                    {payLoading ? '読み込み中…' : '更新'}
+                  </button>
+                </div>
+                {payRows.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#999', fontSize: '12px' }}>
+                    {payLoading ? '読み込み中...' : '発行済みの請求書はまだありません。'}
+                  </div>
+                ) : (
+                  <div className='admin-table-wrap'>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr>
+                          {['状況', '出店者', '対象月', '請求額(税込)', '支払期限', '振込の報告', ''].map(h => (
+                            <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payRows.map(r => {
+                          const st = r.paid_status === 'paid'
+                            ? { label: '入金確認済', color: '#16A34A', bg: '#ECFDF5' }
+                            : r.paid_status === 'reported'
+                              ? { label: '振込報告あり', color: '#B45309', bg: '#FEF3C7' }
+                              : { label: '未入金', color: '#DC2626', bg: '#FEE2E2' }
+                          const overdue = r.paid_status !== 'paid' && r.due_on && r.due_on < new Date().toISOString().slice(0, 10)
+                          return (
+                            <tr key={r.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>
+                                <span style={{ background: st.bg, color: st.color, borderRadius: '4px', padding: '2px 8px', fontSize: '11px', fontWeight: 700 }}>{st.label}</span>
+                              </td>
+                              <td style={{ padding: '9px 10px' }}>
+                                {r.sellerName}
+                                <div style={{ fontSize: '10px', color: '#94A3B8' }}>{r.invoice_no}</div>
+                              </td>
+                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>{r.period}</td>
+                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap', fontWeight: 700 }}>¥{r.total.toLocaleString()}</td>
+                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap', color: overdue ? '#DC2626' : '#475569' }}>
+                                {r.due_on ? r.due_on.replace(/-/g, '/') : '—'}{overdue && ' 超過'}
+                              </td>
+                              <td style={{ padding: '9px 10px', fontSize: '11px', color: '#475569' }}>
+                                {r.paid_status === 'unpaid' ? '—' : (
+                                  <>
+                                    {r.paid_on ? r.paid_on.replace(/-/g, '/') : '日付なし'}
+                                    {r.paid_name && <div style={{ color: '#94A3B8' }}>名義：{r.paid_name}</div>}
+                                  </>
+                                )}
+                              </td>
+                              <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>
+                                {r.paid_status === 'paid' ? (
+                                  <button onClick={() => confirmPayment(r, true)} disabled={payBusy === r.id}
+                                    style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>取り消す</button>
+                                ) : (
+                                  <button onClick={() => confirmPayment(r, false)} disabled={payBusy === r.id}
+                                    style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: payBusy === r.id ? 'wait' : 'pointer' }}>
+                                    {payBusy === r.id ? '…' : '入金を確認'}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* 出店者ごとにまとめて、その月の請求書を作れるようにする */}

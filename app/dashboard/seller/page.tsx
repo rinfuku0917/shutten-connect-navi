@@ -60,8 +60,8 @@ const docStatusLabel = (s: string | undefined) =>
 
 export default function SellerDashboard() {
   const router = useRouter()
-  type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'|'sales'
-  const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile','sales']
+  type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'|'sales'|'payments'
+  const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile','sales','payments']
   const [tab, setTab] = useState<TabKey>(() => { if (typeof window === 'undefined') return 'home'; const t = new URLSearchParams(window.location.search).get('tab'); return (t && validTabs.includes(t as TabKey)) ? (t as TabKey) : 'home' })
   const [chatOpen, setChatOpen] = useState<string|null>(null)
   const [msg, setMsg] = useState('')
@@ -458,6 +458,58 @@ export default function SellerDashboard() {
   // カレンダーから参照する売上。売上タブの月しぼりとは別に持つ。
   const [calSales, setCalSales] = useState<SellerSale[]>([])
 
+  // ===== 出店料のお支払い =====
+  // 請求書は管理者しか触れないため、専用のAPIを通して自分の分だけ受け取る。
+  type MyInvoice = {
+    id: string, invoice_no: string, period: string, issued_on: string, due_on: string | null,
+    total: number, paid_status: string, paid_on: string | null,
+    paid_reported_at: string | null, paid_confirmed_at: string | null,
+  }
+  const [myInvoices, setMyInvoices] = useState<MyInvoice[]>([])
+  const [invLoading, setInvLoading] = useState(false)
+  const [payFor, setPayFor] = useState<MyInvoice | null>(null)
+  const [payOn, setPayOn] = useState('')
+  const [payName, setPayName] = useState('')
+  const [paySaving, setPaySaving] = useState(false)
+  // 未払い（入金確認がまだ）の件数。サイドバーの印に使う。
+  const unpaidCount = myInvoices.filter(x => x.paid_status !== 'paid').length
+
+  const callPayApi = async (payload: Record<string, unknown>) => {
+    const { data: sess } = await supabase.auth.getSession()
+    const res = await fetch('/api/invoice-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+      body: JSON.stringify(payload),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(j.error || '通信に失敗しました')
+    return j
+  }
+
+  const loadMyInvoices = async () => {
+    setInvLoading(true)
+    try {
+      const j = await callPayApi({ action: 'mine' })
+      setMyInvoices(j.items || [])
+    } catch { /* 未ログインなどは一覧を空のままにする */ }
+    setInvLoading(false)
+  }
+
+  // 「振り込みました」の報告を送る
+  const sendPaymentReport = async () => {
+    if (!payFor || paySaving) return
+    setPaySaving(true)
+    try {
+      await callPayApi({ action: 'report', invoiceId: payFor.id, paidOn: payOn || null, paidName: payName })
+      setPayFor(null); setPayOn(''); setPayName('')
+      await loadMyInvoices()
+      alert('お振込の報告を受け付けました。運営で確認のうえ、あらためてご連絡いたします。')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '送信に失敗しました')
+    }
+    setPaySaving(false)
+  }
+
   // カレンダーに出す売上（直近1年分）を読み込む
   const loadCalSales = async () => {
     const { data: userData } = await supabase.auth.getUser()
@@ -783,6 +835,7 @@ export default function SellerDashboard() {
 
   useEffect(() => {
     if (tab === 'sales') { loadMyApprovedApps(); loadMySales() }
+    if (tab === 'payments') loadMyInvoices()
   }, [tab])
   useEffect(() => {
     if (tab === 'sales') loadMySales()
@@ -851,7 +904,7 @@ export default function SellerDashboard() {
     openThread(appId)
   }
 
-  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile(); loadUnreported(); loadMyApprovedApps() }, [])
+  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile(); loadUnreported(); loadMyApprovedApps(); loadMyInvoices() }, [])
 
   // 別のタブで申込や承認をしたあとに戻ってきたとき、古い表示のままにならないよう読み直す。
   // 画面を開いたときに一度読むだけだと「承認したのに反映されない」ように見えてしまう。
@@ -897,6 +950,7 @@ export default function SellerDashboard() {
     { key: 'messages', label: 'メッセージ', badge: unread > 0 ? unread : undefined },
     { key: 'docs', label: '書類管理' },
     { key: 'sales', label: '売上報告' },
+    { key: 'payments', label: 'お支払い', badge: unpaidCount > 0 ? unpaidCount : undefined },
     { key: 'profile', label: 'プロフィール' },
   ]
 
@@ -967,6 +1021,7 @@ export default function SellerDashboard() {
             {tab === 'messages' && 'メッセージ'}
             {tab === 'docs' && '書類管理'}
             {tab === 'sales' && '売上報告'}
+            {tab === 'payments' && '出店料のお支払い'}
             {tab === 'profile' && 'プロフィール'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
@@ -1321,6 +1376,81 @@ export default function SellerDashboard() {
               <div style={{ textAlign: 'center' }}>
                 <button onClick={() => window.location.href='/places'} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 28px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>＋ 新しい出店日を申込む</button>
               </div>
+            </>
+          )}
+
+
+          {/* お支払い（出店料） */}
+          {tab === 'payments' && (
+            <>
+              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', lineHeight: 1.8 }}>
+                発行済みの請求書と、お支払いの状況をご確認いただけます。お振込が済みましたら「振り込みました」からお知らせください。運営で確認のうえ、確認済みのご連絡をいたします。
+              </div>
+
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>お振込先</div>
+                <div style={{ fontSize: '13px', color: '#475569', lineHeight: 1.9 }}>
+                  東京シティ信用金庫 日本橋支店<br />
+                  普通 1095906<br />
+                  口座名義：カ)ナヴ
+                </div>
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '6px' }}>お振込手数料は貴社にてご負担をお願いいたします。</div>
+              </div>
+
+              {invLoading ? (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999', fontSize: '13px' }}>読み込み中...</div>
+              ) : myInvoices.length === 0 ? (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999', fontSize: '13px', lineHeight: 1.8 }}>
+                  発行済みの請求書はまだありません。<br />売上をご報告いただくと、運営で請求書を作成いたします。
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '12px' }}>
+                  {myInvoices.map(iv => {
+                    const st = iv.paid_status === 'paid'
+                      ? { label: '入金確認済み', color: '#16A34A', bg: '#ECFDF5', border: '#BBF7D0' }
+                      : iv.paid_status === 'reported'
+                        ? { label: '確認中', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' }
+                        : { label: 'お支払い前', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' }
+                    // 期限を過ぎている未払いは目立たせる
+                    const overdue = iv.paid_status !== 'paid' && iv.due_on && iv.due_on < todayStr()
+                    return (
+                      <div key={iv.id} style={{ background: '#fff', borderRadius: '12px', border: `1px solid ${overdue ? '#FECACA' : '#E2E8F0'}`, padding: '16px 18px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                          <span style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: '999px', padding: '3px 12px', fontSize: '11px', fontWeight: 700 }}>{st.label}</span>
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a1a' }}>{iv.period} 分</span>
+                          <span style={{ fontSize: '11px', color: '#94A3B8' }}>請求書番号 {iv.invoice_no}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                          <div>
+                            <div style={{ fontSize: '10px', color: '#64748B' }}>ご請求額（税込）</div>
+                            <div style={{ fontSize: '20px', fontWeight: 900, color: '#1a1a1a' }}>¥{iv.total.toLocaleString()}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '10px', color: '#64748B' }}>お支払期限</div>
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: overdue ? '#DC2626' : '#475569', paddingTop: '4px' }}>
+                              {iv.due_on ? iv.due_on.replace(/-/g, '/') : '—'}{overdue && '（期限を過ぎています）'}
+                            </div>
+                          </div>
+                        </div>
+                        {iv.paid_status === 'reported' && (
+                          <div style={{ fontSize: '11px', color: '#B45309', marginBottom: '8px' }}>
+                            {iv.paid_on ? iv.paid_on.replace(/-/g, '/') + ' のお振込としてご報告いただいています。' : 'お振込のご報告をいただいています。'}運営で確認しております。
+                          </div>
+                        )}
+                        {iv.paid_status === 'paid' && (
+                          <div style={{ fontSize: '11px', color: '#16A34A', marginBottom: '8px' }}>ご入金を確認いたしました。ありがとうございました。</div>
+                        )}
+                        {iv.paid_status !== 'paid' && (
+                          <button onClick={() => { setPayFor(iv); setPayOn(todayStr()); setPayName(profile.shop_name || profile.name || '') }}
+                            style={{ background: iv.paid_status === 'reported' ? '#fff' : '#F5A623', color: iv.paid_status === 'reported' ? '#B45309' : '#fff', border: iv.paid_status === 'reported' ? '1px solid #FDE68A' : 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                            {iv.paid_status === 'reported' ? '報告内容を出し直す' : '振り込みました'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </>
           )}
 
@@ -2037,6 +2167,43 @@ export default function SellerDashboard() {
 
         <DashboardFooter />
       </div>
+
+
+      {/* お振込の報告 */}
+      {payFor && (
+        <div onClick={() => { if (!paySaving) setPayFor(null) }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '420px', overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
+            <div style={{ background: '#F5A623', color: '#fff', padding: '16px 20px' }}>
+              <div style={{ fontSize: '16px', fontWeight: 900 }}>お振込のご報告</div>
+              <div style={{ fontSize: '12px', opacity: 0.95, marginTop: '2px' }}>{payFor.period} 分／¥{payFor.total.toLocaleString()}（税込）</div>
+            </div>
+            <div style={{ padding: '18px 20px' }}>
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>お振込日</div>
+                <input type='date' value={payOn} max={todayStr()} onChange={e => setPayOn(e.target.value)}
+                  style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ marginBottom: '6px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>お振込名義</div>
+                <input value={payName} onChange={e => setPayName(e.target.value)} placeholder='例：カ)ナヴ'
+                  style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px', lineHeight: 1.7 }}>
+                  通帳のお名前と照らし合わせます。店舗名と違う名義でお振込の場合は、その名義をご記入ください。
+                </div>
+              </div>
+            </div>
+            <div style={{ borderTop: '1px solid #E2E8F0', padding: '14px 20px', display: 'flex', gap: '10px' }}>
+              <button onClick={() => setPayFor(null)} disabled={paySaving}
+                style={{ background: '#fff', color: '#64748B', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '12px 20px', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>やめる</button>
+              <button onClick={sendPaymentReport} disabled={paySaving}
+                style={{ flex: 1, background: paySaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '15px', fontWeight: 900, cursor: paySaving ? 'not-allowed' : 'pointer' }}>
+                {paySaving ? '送信中…' : '報告する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== 出店報告フォーム =====
           出店が終わったら、企業へ提出できる形で報告してもらう。
