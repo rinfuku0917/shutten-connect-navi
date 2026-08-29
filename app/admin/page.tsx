@@ -9,6 +9,7 @@ import { formatVehicleSize } from '../lib/vehicleSize'
 import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
+import { perDayFee } from '../lib/placeFee'
 
 // ダミーデータ
 // profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
@@ -225,7 +226,7 @@ export default function AdminPage() {
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
-  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number }
+  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, schedule: unknown }
   const [approvedApps, setApprovedApps] = useState<ApprovedApp[]>([])
   const [saleAppId, setSaleAppId] = useState('')
   const [saleDate, setSaleDate] = useState('')
@@ -234,12 +235,14 @@ export default function AdminPage() {
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
 
   // 料金を計算（取引先分・弊社利益・お支払い総額を返す。per_event固定は日次では0扱い＝次フェーズ）
-  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number }, ov: string = '') => {
+  // date を渡すと、その日に金額が設定されていればそちらを使う
+  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number; schedule?: unknown }, ov: string = '', date: string | null = null) => {
     const rate = ov === 'ex8' ? 8 : ov === 'ex10' ? 10 : (a.share_tax_rate || 8)
     const basis = ov === 'ex8' || ov === 'ex10' ? 'tax_excluded' : ov === 'as_entered' ? 'as_entered' : (a.share_tax_basis || 'as_entered')
     const base = basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
-    const placeFixed = a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0)
-    const companyFixed = a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0)
+    const day = perDayFee(a.schedule, date)
+    const placeFixed = day.placeFee != null ? day.placeFee : (a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0))
+    const companyFixed = day.companyFee != null ? day.companyFee : (a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0))
     const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
     const companyFee = Math.floor(companyFixed + base * (a.company_share_pct || 0) / 100)
     return { placeFee, companyFee, totalPay: placeFee + companyFee, basis, rate }
@@ -249,7 +252,7 @@ export default function AdminPage() {
   const loadApprovedApps = async () => {
     const { data } = await supabase
       .from('applications')
-      .select('id, place_id, seller_id, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate), profiles!applications_seller_id_fkey(name)')
+      .select('id, place_id, seller_id, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule), profiles!applications_seller_id_fkey(name)')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
     const mapped: ApprovedApp[] = (data || []).map((a: any) => ({
@@ -258,7 +261,8 @@ export default function AdminPage() {
       price_fixed: a.places?.price_fixed || 0, price_share_pct: a.places?.price_share_pct || 0,
       place_fixed_unit: a.places?.place_fixed_unit || 'per_day', company_fixed_amount: a.places?.company_fixed_amount || 0,
       company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0,
-      share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 8
+      share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 8,
+      schedule: a.places?.schedule ?? null
     }))
     setApprovedApps(mapped)
   }
@@ -303,7 +307,7 @@ export default function AdminPage() {
     const revenue = parseInt(saleRevenue, 10)
     if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
     setSaleSaving(true)
-    const { placeFee, companyFee, totalPay, basis, rate } = calcFees(revenue, app, saleTaxOv)
+    const { placeFee, companyFee, totalPay, basis, rate } = calcFees(revenue, app, saleTaxOv, saleDate)
     const { error } = await supabase.from('sales').insert({
       application_id: app.application_id, place_id: app.place_id, seller_id: app.seller_id,
       sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: totalPay,

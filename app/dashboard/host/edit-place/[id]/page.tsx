@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
 import { geocodeAddress } from '../../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../../lib/categories'
+import { toYen, hasPerDayFee } from '../../../../lib/placeFee'
 import PlaceImagePicker from '../../../../components/PlaceImagePicker'
 
 
@@ -59,14 +60,26 @@ function EditPlacePageInner() {
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
   })
-  const [schedule, setSchedule] = useState([{date:'', start:'選択してください', end:'選択してください'}])
+  const [schedule, setSchedule] = useState<{date:string,start:string,end:string,placeFee?:number,companyFee?:number}[]>([{date:'', start:'選択してください', end:'選択してください'}])
+  // 日ごとに金額を入れるかどうか
+  const [perDayOn, setPerDayOn] = useState(false)
   const [genres, setGenres] = useState<string[]>([])
   const toggleGenre = (g:string) => setGenres(prev => prev.includes(g) ? prev.filter(x=>x!==g) : [...prev, g])
   // 登録済みの写真URL（先頭がサムネイル）。× で外せる。
   const [existingImages, setExistingImages] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const set = (k:string,v:string) => setForm(p=>({...p,[k]:v}))
-  const setDay = (i:number,k:'date'|'start'|'end',v:string) => setSchedule(prev=>prev.map((d,idx)=>idx===i?{...d,[k]:v}:d))
+  // 金額（placeFee / companyFee）は数値で持つ。空欄は未設定として消す。
+  const setDay = (i:number,k:'date'|'start'|'end'|'placeFee'|'companyFee',v:string) => setSchedule(prev=>prev.map((d,idx)=>{
+    if(idx!==i) return d
+    if(k==='placeFee'||k==='companyFee'){
+      const n = toYen(v)
+      const next = {...d} as Record<string, unknown>
+      if(n==null) delete next[k]; else next[k]=n
+      return next as typeof d
+    }
+    return {...d,[k]:v}
+  }))
   const addDay = () => setSchedule(prev=>prev.length<31 ? [...prev,{date:'',start:'選択してください',end:'選択してください'}] : prev)
   const removeDay = (i:number) => setSchedule(prev=>prev.filter((_,idx)=>idx!==i))
   const req = <span style={{background:'#F5A623',color:'#fff',fontSize:'11px',padding:'2px 8px',borderRadius:'999px',marginLeft:'8px',fontWeight:'700'}}>必須</span>
@@ -112,6 +125,7 @@ function EditPlacePageInner() {
         })
       }
       if(Array.isArray(data.schedule) && data.schedule.length>0) setSchedule(data.schedule)
+      if(hasPerDayFee(data.schedule)) setPerDayOn(true)
       if(Array.isArray(data.genres)) setGenres(data.genres)
       // images が未設定の古い案件は、image_url の1枚だけを持っているものとして扱う
       const imgs = Array.isArray(data.images) && data.images.length > 0
@@ -249,9 +263,33 @@ function EditPlacePageInner() {
                         <select value={d.end} onChange={e=>setDay(i,'end',e.target.value)} style={{...inputStyle,marginTop:'4px'}}>{times.map(t=><option key={t}>{t}</option>)}</select>
                       </div>
                     </div>
+                    {/* 日によって金額が変わる案件（平日2,000円・週末3,000円など）向け。
+                        入れた日はこの金額を使い、空欄の日は案件全体の設定を使う。 */}
+                    {perDayOn && (
+                      <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'8px'}}>
+                        <div>
+                          <label style={{fontSize:'12px',fontWeight:'700',color:'#B45309'}}>取引先へ渡す額（円）</label>
+                          <input inputMode='numeric' value={d.placeFee ?? ''} onChange={e=>setDay(i,'placeFee',e.target.value.replace(/[^0-9]/g,''))} placeholder='例：2000' style={{...inputStyle,marginTop:'4px'}}/>
+                        </div>
+                        <div>
+                          <label style={{fontSize:'12px',fontWeight:'700',color:'#1D4ED8'}}>弊社の固定額（円）</label>
+                          <input inputMode='numeric' value={d.companyFee ?? ''} onChange={e=>setDay(i,'companyFee',e.target.value.replace(/[^0-9]/g,''))} placeholder='空欄可' style={{...inputStyle,marginTop:'4px'}}/>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
+              {/* 日によって金額が違う案件のための切り替え */}
+              <label style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'10px',fontSize:'13px',color:'#1a1a1a',cursor:'pointer'}}>
+                <input type='checkbox' checked={perDayOn} onChange={e=>setPerDayOn(e.target.checked)} style={{accentColor:'#F5A623',cursor:'pointer'}}/>
+                日によって金額を変える（平日2,000円・週末3,000円など）
+              </label>
+              {perDayOn && (
+                <div style={{fontSize:'11px',color:'#64748B',marginTop:'6px',lineHeight:1.7}}>
+                  金額を入れた日はその額を使います。空欄の日は「料金設定」の金額がそのまま使われます。
+                </div>
+              )}
               {schedule.length<31 && (
                 <button type='button' onClick={addDay} style={{marginTop:'10px',background:'#fff',color:'#B45309',border:'1.5px dashed #F5A623',borderRadius:'8px',padding:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',width:'100%'}}>＋ 日程を追加（{schedule.length}/31）</button>
               )}

@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import DashboardFooter from '../../components/DashboardFooter'
 import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
+import { perDayFee } from '../../lib/placeFee'
 
 type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, file_url?: string | null }
 
@@ -343,7 +344,7 @@ export default function SellerDashboard() {
   }
 
   // ===== 売上（出店者） =====
-  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string }
+  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string, schedule: unknown }
   type SaleItem = { name: string, qty: string, price: string }
   type SellerSale = { id: string, application_id: string | null, sale_date: string, placeTitle: string, revenue: number, fee: number, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
 
@@ -404,7 +405,7 @@ export default function SellerDashboard() {
       await loadMySales(); await loadUnreported(); await loadCalSales()
       return
     }
-    const { placeFee, companyFee, total } = calcFee(revenue, app, '')
+    const { placeFee, companyFee, total } = calcFee(revenue, app, '', null, reportFor.apply_date)
     const applied = taxOf(app, '')
     const row: Record<string, unknown> = {
       application_id: app.application_id, place_id: app.place_id, seller_id: uid,
@@ -553,11 +554,13 @@ export default function SellerDashboard() {
   // 税率ごとに分けて入力した場合も、出店料は売上の合計額から計算する。
   // 分けた内訳は記録用に保存するだけで、金額は分けても分けなくても同じになる。
 
-  const calcFee = (revenue: number, a: SellerApp, ov: string = '', baseOverride: number | null = null) => {
+  // date を渡すと、その日に金額が設定されていればそちらを使う
+  const calcFee = (revenue: number, a: SellerApp, ov: string = '', baseOverride: number | null = null, date: string | null = null) => {
     const { basis, rate } = taxOf(a, ov)
     const base = baseOverride != null ? baseOverride : (basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue)
-    const placeFixed = a.place_fixed_unit === 'per_event' ? 0 : (a.price_fixed || 0)
-    const companyFixed = a.company_fixed_unit === 'per_event' ? 0 : (a.company_fixed_amount || 0)
+    const day = perDayFee(a.schedule, date || a.apply_date)
+    const placeFixed = day.placeFee != null ? day.placeFee : (a.place_fixed_unit === 'per_event' ? 0 : (a.price_fixed || 0))
+    const companyFixed = day.companyFee != null ? day.companyFee : (a.company_fixed_unit === 'per_event' ? 0 : (a.company_fixed_amount || 0))
     const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
     const companyFee = Math.floor(companyFixed + base * (a.company_share_pct || 0) / 100)
     return { placeFee, companyFee, total: placeFee + companyFee }
@@ -571,7 +574,7 @@ export default function SellerDashboard() {
     if (!uid) return []
     const { data } = await supabase
       .from('applications')
-      .select('id, place_id, apply_date, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate)')
+      .select('id, place_id, apply_date, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule)')
       .eq('seller_id', uid).eq('status', 'approved')
       .order('created_at', { ascending: false })
     const mapped: SellerApp[] = (data || []).map((a: any) => ({
@@ -582,6 +585,7 @@ export default function SellerDashboard() {
       company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0,
       share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 8,
       apply_date: a.apply_date || '',
+      schedule: a.places?.schedule ?? null,
     }))
     setMyApprovedApps(mapped)
     return mapped
@@ -633,7 +637,7 @@ export default function SellerDashboard() {
       if (!window.confirm('この出店はすでに報告済みです（' + dates + '）。\nもう1件追加で登録すると、出店料も2件分の請求になります。\n続けますか？')) return
     }
     setSaleSaving(true)
-    const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv)
+    const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv, null, saleDate)
     const applied = taxOf(app, saleTaxOv)
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
@@ -2096,7 +2100,7 @@ export default function SellerDashboard() {
                   const r8 = parseInt(saleRev8 || '0', 10) || 0
                   const r10 = parseInt(saleRev10 || '0', 10) || 0
                   const rev = saleSplit ? r8 + r10 : (parseInt(saleRevenue || '0', 10) || 0)
-                  const fee = calcFee(rev, a, saleTaxOv).total
+                  const fee = calcFee(rev, a, saleTaxOv, null, saleDate).total
                   // 出店料が何を元に計算されたかを明示する（計算自体は calcFee に任せる）
                   const { basis, rate } = taxOf(a, saleTaxOv)
                   const exTax = basis === 'tax_excluded'
@@ -2234,7 +2238,7 @@ export default function SellerDashboard() {
         // 単価が入っていない品目があると合計は当てにならないので、
         // 全部そろっているときだけ金額の食い違いを知らせる
         const allPriced = filled.length > 0 && filled.every(it => (parseInt(it.price, 10) || 0) > 0)
-        const fee = app ? calcFee(rev, app, '').total : 0
+        const fee = app ? calcFee(rev, app, '', null, reportFor.apply_date).total : 0
         const [ry, rm, rd] = reportFor.apply_date.split('-')
         const label: React.CSSProperties = { fontSize: '12px', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }
         const box: React.CSSProperties = { border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }

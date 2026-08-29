@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import SiteHeader from '../../components/SiteHeader'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
+import { perDayFeeRange, perDayFee } from '../../lib/placeFee'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
 type Place = {
@@ -59,8 +60,18 @@ function detailText(key: string, raw: string | undefined): string {
 }
 
 function feeText(p: Place): string {
-  const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
   const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
+  // 日ごとに金額が決まっている案件は、その幅を出す（例：2,000円〜3,000円/日）
+  const range = perDayFeeRange(p.schedule)
+  if (range) {
+    const parts: string[] = []
+    parts.push(range.min === range.max
+      ? range.min.toLocaleString() + '円/日'
+      : range.min.toLocaleString() + '円〜' + range.max.toLocaleString() + '円/日')
+    if (pct > 0) parts.push('売上の' + pct + '%')
+    return parts.join(' ＋ ')
+  }
+  const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
   if (fixed === 0 && pct === 0) return p.fee || '要相談'
   const unit = p.place_fixed_unit === 'per_event' ? '期間' : '日'
   const parts: string[] = []
@@ -431,7 +442,16 @@ export default function PlaceDetail() {
                         {place.schedule.filter(d => d.date).map(d => (
                           <label key={d.date} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', border: selectedDates.includes(d.date) ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#1a1a1a', background: selectedDates.includes(d.date) ? '#FFFBEB' : '#fff' }}>
                             <input type="checkbox" checked={selectedDates.includes(d.date)} onChange={() => toggleDate(d.date)} style={{ accentColor: '#F5A623' }} />
-                            {d.date}（{d.start}〜{d.end}）
+                            <span>
+                              {d.date}（{d.start}〜{d.end}）
+                              {/* 日ごとに金額が決まっている案件は、その日の額も出す */}
+                              {canSeeFee && (() => {
+                                const f = perDayFee(place.schedule, d.date)
+                                const total = (f.placeFee ?? 0) + (f.companyFee ?? 0)
+                                if (f.placeFee == null && f.companyFee == null) return null
+                                return <span style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {total.toLocaleString()}円</span>
+                              })()}
+                            </span>
                           </label>
                         ))}
                       </div>
