@@ -86,6 +86,48 @@ export default function PlaceDetail() {
   const [submitting, setSubmitting] = useState(false)
   const [entryErr, setEntryErr] = useState('')
   const [entryDone, setEntryDone] = useState(false)
+  // この案件に自分がすでに申し込んでいるか。申込済みなのに
+  // 「エントリーする」と出ていると、済んでいないように見えてしまう。
+  type MyEntry = { id: string, apply_date: string | null, status: string }
+  const [myEntries, setMyEntries] = useState<MyEntry[]>([])
+  const [cancelingId, setCancelingId] = useState<string | null>(null)
+
+  const loadMyEntries = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || !id) { setMyEntries([]); return }
+    const { data } = await supabase
+      .from('applications')
+      .select('id, apply_date, status')
+      .eq('place_id', id).eq('seller_id', user.id)
+      .order('apply_date', { ascending: true })
+    setMyEntries((data || []) as MyEntry[])
+  }
+
+  // 申込のキャンセル（出店者ダッシュボードと同じAPIを使う）
+  const cancelEntry = async (appId: string, status: string) => {
+    const ok = window.confirm(
+      status === 'approved'
+        ? 'この承認済みの申込をキャンセルしますか？募集者にも通知されます。この操作は取り消せません。'
+        : 'この申込をキャンセルしますか？この操作は取り消せません。'
+    )
+    if (!ok) return
+    setCancelingId(appId)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) { alert('ログインが必要です。再度ログインしてください。'); return }
+      const res = await fetch('/api/applications/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ applicationId: appId }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { alert('キャンセルに失敗しました: ' + (j.error || res.status)); return }
+      await loadMyEntries()
+    } finally {
+      setCancelingId(null)
+    }
+  }
 
   const handleEntryClick = async () => {
     setEntryErr('')
@@ -127,6 +169,7 @@ export default function PlaceDetail() {
     if (error) { const msg = error.message.includes('duplicate key') ? 'この案件には既に申込済みの日があります。' : 'エントリー失敗: ' + error.message; setEntryErr(msg); setSubmitting(false); return }
     setSubmitting(false)
     setEntryDone(true)
+    await loadMyEntries()
     // ホストへ申込通知（失敗しても応募は成功させる）
     try {
       await fetch('/api/notify/new-application', {
@@ -145,7 +188,7 @@ export default function PlaceDetail() {
       setPlace(data)
       setLoading(false)
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) setCanSeeFee(true)
+      if (user) { setCanSeeFee(true); await loadMyEntries() }
     }
     if (id) load()
   }, [id])
@@ -323,6 +366,41 @@ export default function PlaceDetail() {
                     <div style={{ fontSize: '13px', color: '#666', marginBottom: '16px', lineHeight: 1.7 }}>申込内容はマイページでご確認いただけます。</div>
                     <Link href="/dashboard/seller" style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', textDecoration: 'none' }}>マイページへ</Link>
                   </div>
+                ) : (!showEntry && myEntries.length > 0) ? (
+                  /* すでに申し込んでいる場合は、その状態を出す。
+                     「エントリーする」だけだと未申込に見えてしまうため。 */
+                  <>
+                    <div style={{ background: '#ECFDF5', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 900, color: '#16A34A', marginBottom: '8px' }}>この案件はエントリー済みです</div>
+                      <div style={{ display: 'grid', gap: '8px' }}>
+                        {myEntries.map(e => {
+                          const st = e.status === 'approved'
+                            ? { label: '承認済', color: '#16A34A' }
+                            : e.status === 'rejected'
+                              ? { label: '否認', color: '#DC2626' }
+                              : { label: '審査中', color: '#B45309' }
+                          return (
+                            <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', background: '#fff', borderRadius: '6px', padding: '8px 10px' }}>
+                              <span style={{ color: st.color, border: `1px solid ${st.color}`, borderRadius: '4px', padding: '1px 8px', fontSize: '11px', fontWeight: 700 }}>{st.label}</span>
+                              <span style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: 700 }}>
+                                {e.apply_date ? e.apply_date.replace(/-/g, '/') : '日程調整中'}
+                              </span>
+                              {e.status !== 'rejected' && (
+                                <button onClick={() => cancelEntry(e.id, e.status)} disabled={cancelingId === e.id}
+                                  style={{ marginLeft: 'auto', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: cancelingId === e.id ? 'not-allowed' : 'pointer' }}>
+                                  {cancelingId === e.id ? '取消中...' : 'キャンセル'}
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <Link href="/dashboard/seller" style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '13px', borderRadius: '8px', fontWeight: '900', fontSize: '14px', textDecoration: 'none', marginBottom: '10px' }}>マイページで確認する</Link>
+                    <button onClick={handleEntryClick} style={{ width: '100%', display: 'block', background: '#fff', color: '#3A9BD5', textAlign: 'center', padding: '12px', borderRadius: '8px', fontWeight: '700', fontSize: '13px', border: '1.5px solid #BFDBFE', cursor: 'pointer' }}>
+                      別の日程を追加でエントリーする
+                    </button>
+                  </>
                 ) : !showEntry ? (
                   <>
                     <div style={{ fontSize: '13px', color: '#888', marginBottom: '16px', lineHeight: 1.7 }}>
