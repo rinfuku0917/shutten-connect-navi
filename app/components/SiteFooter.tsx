@@ -5,9 +5,15 @@ import { C, maru } from './siteTheme'
 // トップページと同じ淡いパステルグリーンのフッター。全公開ページで共有する。
 // トップページのフッターと同じ構成（実績紹介・よくある質問はトップ内アンカー）
 const cols: { head: string; items: { href: string; label: string }[] }[] = [
-  { head: 'メニュー', items: [
+  { head: 'キッチンカーを呼びたい方', items: [
+    { href: '/vendor', label: 'キッチンカーの手配・派遣' },
+    { href: '/vendor/event', label: 'イベント・マルシェ・お祭り' },
+    { href: '/sellers', label: '登録キッチンカーを見る' },
+  ] },
+  { head: 'キッチンカーで出店したい方', items: [
     { href: '/space', label: '出店したい方へ' },
-    { href: '/vendor', label: 'お店を呼びたい方へ' },
+    { href: '/places', label: '出店場所を探す' },
+    { href: '/sell', label: '車両を売りたい' },
     { href: '/#works', label: '実績紹介' },
     { href: '/blog', label: 'ブログ' },
   ] },

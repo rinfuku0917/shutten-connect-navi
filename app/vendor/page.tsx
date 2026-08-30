@@ -46,8 +46,8 @@ async function countSellers(): Promise<number | null> {
   }
 }
 
-const CASES = [
-  { t: 'イベントに呼びたい', d: 'お祭り、マルシェ、スポーツ大会、学園祭など。来場者数と会場の広さに合わせて台数と業態を組みます。' },
+const CASES: { t: string; d: string; href?: string }[] = [
+  { t: 'イベントに呼びたい', d: 'お祭り、マルシェ、スポーツ大会、学園祭など。来場者数と会場の広さに合わせて台数と業態を組みます。', href: '/vendor/event' },
   { t: '商業施設の空きスペースを活用したい', d: 'スーパーやホームセンターの駐車場、店舗前スペースなど。曜日を決めた定期出店にも対応できます。' },
   { t: '社内イベント・社員向けに手配したい', d: 'オフィスの昼食提供、社員感謝デー、周年イベントなど。社内向けの単発利用でもご相談いただけます。' },
   { t: '自治体・公共施設の催しで出店者を集めたい', d: '市民まつり、防災訓練、公園イベントなど。必要な許可や書類の確認も含めてサポートします。' },
@@ -147,6 +147,11 @@ export default async function VendorPage() {
               <div key={c.t} style={CARD}>
                 <div style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
                 <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
+                {c.href && (
+                  <Link href={c.href} style={{ display: 'inline-block', marginTop: '10px', fontSize: '13px', fontWeight: 700, color: '#B45309', textDecoration: 'none' }}>
+                    イベントの手配について詳しく →
+                  </Link>
+                )}
               </div>
             ))}
           </div>

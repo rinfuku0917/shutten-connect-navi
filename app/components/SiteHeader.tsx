@@ -8,7 +8,7 @@ import { C } from './siteTheme'
 // トップページと同じ見た目のヘッダー。全公開ページで共有する。
 const menuItems: { href: string; label: string }[] = [
   { href: '/space', label: '出店したい方へ' },
-  { href: '/vendor', label: 'お店を呼びたい方へ' },
+  { href: '/vendor', label: 'キッチンカーを呼びたい方へ' },
   { href: '/places', label: '出店場所を探す' },
   { href: '/sellers', label: '出店者を探す' },
   { href: '/sell', label: '車両を売りたい' },
