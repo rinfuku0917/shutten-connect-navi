@@ -1,8 +1,15 @@
-'use client'
+import type { Metadata } from 'next'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
+
+export const metadata: Metadata = {
+  title: '運営会社（株式会社nav）',
+  description:
+    '出店コネクトナビを運営する株式会社navの会社概要です。所在地・代表者・事業内容を掲載しています。',
+  alternates: { canonical: '/company' },
+}
 
 export default function CompanyPage() {
   const rows: { label: string; value: React.ReactNode }[] = [

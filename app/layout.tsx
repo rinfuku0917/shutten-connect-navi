@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { SITE_NAME, SITE_URL } from "./lib/seo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "出店コネクトナビ｜全国の出店場所・出店者をつなぐマッチングサービス",
-  description: "キッチンカー・出店者と出店場所をつなぐマッチングサービス。全国の出店場所を探せます。",
+  // 相対パスの canonical・OG画像を絶対URLに直すための基準
+  metadataBase: new URL(SITE_URL),
+  title: {
+    // 子ページが title を指定しなかったときに使う見出し
+    default: "キッチンカーの手配・派遣と出店場所探し｜出店コネクトナビ",
+    // 子ページの title の後ろに付ける
+    template: `%s｜${SITE_NAME}`,
+  },
+  description:
+    "イベント・商業施設・オフィスへのキッチンカーの手配と、キッチンカー事業者の出店場所探しをつなぐマッチングサービス。ご相談は無料です。",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    locale: "ja_JP",
+    url: SITE_URL,
+  },
+  twitter: { card: "summary_large_image" },
   icons: {
     icon: "/icon.png",
     apple: "/icon.png",

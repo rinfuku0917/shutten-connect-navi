@@ -1,7 +1,15 @@
-'use client'
+import type { Metadata } from 'next'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
+
+export const metadata: Metadata = {
+  title: 'キャンセルポリシー',
+  description:
+    '出店コネクトナビにおけるキャンセルの取り扱いについてご案内します。',
+  alternates: { canonical: '/cancel-policy' },
+  robots: { index: false, follow: true },
+}
 
 // キャンセル料の有無・金額・条件は案件ごとに定める方針のため、
 // このページには具体的な料率や金額を書かない。

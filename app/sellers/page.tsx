@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
@@ -8,6 +9,13 @@ import SellersBrowser, { type Seller } from './SellersBrowser'
 const EXCLUDED_SHOP_NAMES = ['株式会社nav', '株式会社アーク']
 
 export const revalidate = 600
+
+export const metadata: Metadata = {
+  title: 'キッチンカー・出店者一覧｜業態・エリアから探す',
+  description:
+    '出店コネクトナビに登録しているキッチンカー・出店事業者の一覧です。食事・スイーツ・ドリンク・物販など業態と出店エリアで絞り込めます。イベントや施設へ呼びたい方はこちらからお探しください。',
+  alternates: { canonical: '/sellers' },
+}
 
 async function fetchSellers(): Promise<Seller[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

@@ -1,8 +1,15 @@
-'use client'
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
+
+export const metadata: Metadata = {
+  title: 'キッチンカー・移動販売車の売却',
+  description:
+    '使わなくなったキッチンカー・移動販売車の売却をご相談いただけます。車両の状態をお知らせいただければ、買い手をお探しします。',
+  alternates: { canonical: '/sell' },
+}
 
 export default function SellPage() {
   const features = [

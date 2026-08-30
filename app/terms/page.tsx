@@ -1,8 +1,16 @@
-'use client'
+import type { Metadata } from 'next'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
+
+export const metadata: Metadata = {
+  title: '利用規約',
+  description:
+    '出店コネクトナビの利用規約です。',
+  alternates: { canonical: '/terms' },
+  robots: { index: false, follow: true },
+}
 
 const sections: { title: string; body: string[] }[] = [
   { title: '第1条（適用）', body: [

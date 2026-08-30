@@ -1,8 +1,15 @@
-'use client'
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
+
+export const metadata: Metadata = {
+  title: 'キッチンカーの出店場所を探す｜出店したい方へ',
+  description:
+    '全国のイベント・商業施設・空きスペースの出店募集を掲載。キッチンカー・移動販売の出店場所を条件で探して応募できます。登録・利用は無料です。',
+  alternates: { canonical: '/space' },
+}
 
 export default function SpacePage() {
   const merits = [

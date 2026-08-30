@@ -150,6 +150,11 @@ export default function Home() {
       {/* HERO: イラスト画像1枚敷き（PC=横 / スマホ=縦を picture で出し分け） */}
       <header style={{ background: C.cream }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '16px 16px 0' }}>
+          {/* ページの主題。ヒーロー画像に文字が焼き込まれていて
+              検索エンジンには読めないため、テキストとしても置いている */}
+          <h1 style={{ fontSize: '15px', fontWeight: 700, color: C.ink, textAlign: 'center', lineHeight: 1.8, margin: '0 0 12px' }}>
+            キッチンカーの手配・派遣と、出店場所探しをつなぐ「出店コネクトナビ」
+          </h1>
           <picture>
             <source media='(max-width:640px)' srcSet='/hero-full-sp.jpg' />
             <img src='/hero-full.jpg' alt='「どこへ行く？」が「ここに来る！」に。最高の人を最適な場所へナビゲート。キッチンカーと出店者、お客さんのイラスト' style={{ width: '100%', height: 'auto', display: 'block', borderRadius: '18px' }} />

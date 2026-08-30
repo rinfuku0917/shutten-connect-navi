@@ -1,8 +1,16 @@
-'use client'
+import type { Metadata } from 'next'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
+
+export const metadata: Metadata = {
+  title: 'プライバシーポリシー',
+  description:
+    '出店コネクトナビにおける個人情報の取り扱いについて定めたものです。',
+  alternates: { canonical: '/privacy' },
+  robots: { index: false, follow: true },
+}
 
 const sections: { title: string; body: string[] }[] = [
   { title: '1. 個人情報の定義', body: [
