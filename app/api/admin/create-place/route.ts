@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { verifyCronCaller } from '../../../lib/cronAuth'
 
 // 管理者が案件を新規登録する。
 // places に管理者向けの INSERT ポリシーがあるとは限らず、クライアントから
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { requesterId, place } = body
-    if (!requesterId || !place) {
+    if (!place) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
     if (!place.title || !String(place.title).trim()) {
@@ -39,8 +40,14 @@ export async function POST(req: Request) {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
+    // 管理画面からは requesterId で、移行作業などでは運用の鍵で判定する
+    if (requesterId) {
+      if (!(await verifyAdmin(admin, requesterId))) {
+        return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
+      }
+    } else {
+      const auth = await verifyCronCaller(req)
+      if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
     }
 
     const num = (v: unknown) => {
@@ -63,6 +70,9 @@ export async function POST(req: Request) {
       max_slots: num(place.max_slots),
       reminder_days: num(place.reminder_days) ?? 7,
       image_url: place.image_url || null,
+      images: Array.isArray(place.images) ? place.images : [],
+      // 出店条件（開催時間・電源・ガスなど）。案件フォームと同じ形で入れる
+      details: place.details && typeof place.details === 'object' ? place.details : null,
       latitude: typeof place.latitude === 'number' ? place.latitude : null,
       longitude: typeof place.longitude === 'number' ? place.longitude : null,
       status: place.status,
