@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
+import { firstImage } from '../lib/postImage'
 
 export const revalidate = 60
 
@@ -56,9 +57,9 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
               <Link key={post.id} href={'/blog/' + post.slug} style={{ textDecoration: 'none', display: 'block', background: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px', padding: '20px', color: 'inherit' }}>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
                   {(() => {
-                    const m = post.content && post.content.match(/!\[[^\]]*\]\((https:\/\/[^)]+)\)/);
-                    return m
-                      ? <img src={m[1]} alt="" style={{ width: '96px', height: '96px', objectFit: 'cover', borderRadius: '10px', flexShrink: 0 }} />
+                    const img = firstImage(post.content)
+                    return img
+                      ? <img src={img} alt="" style={{ width: '96px', height: '96px', objectFit: 'cover', borderRadius: '10px', flexShrink: 0 }} />
                       : <div style={{ fontSize: '40px', flexShrink: 0 }}>{post.cover_emoji || '📝'}</div>
                   })()}
                   <div style={{ minWidth: 0 }}>

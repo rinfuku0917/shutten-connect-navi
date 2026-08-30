@@ -5,6 +5,7 @@ import { supabase } from './lib/supabase'
 import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
+import { firstImage } from './lib/postImage'
 
 // デザイン見本(top-v3)指定フォント: 見出し=丸ゴシック / 本文=角ゴシック
 const maru = Zen_Maru_Gothic({ weight: ['500', '700', '900'], subsets: ['latin'] })
@@ -38,7 +39,7 @@ type NewPlace = {
   urgent: boolean | null
 }
 type WorkPlace = { id: string; title: string; image_url: string | null }
-type BlogPost = { id: string; slug: string; title: string; category: string | null; cover_emoji: string | null; published_at: string | null }
+type BlogPost = { id: string; slug: string; title: string; category: string | null; cover_emoji: string | null; published_at: string | null; content: string | null }
 
 // ヒーロー下2入口カード用の線画アイコン（見本デザイン準拠）
 const TruckIcon = ({ color }: { color: string }) => (
@@ -350,7 +351,13 @@ export default function Home() {
               {posts.map(b => (
                 <Link key={b.id} href={'/blog/' + b.slug} className='top3-blogitem' style={{ display: 'block', background: '#fff', border: '1px solid ' + C.line, borderRadius: '10px', overflow: 'hidden', marginBottom: '12px', textDecoration: 'none', color: C.ink }}>
                   <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                    <div style={{ width: '96px', height: '64px', flexShrink: 0, background: 'linear-gradient(135deg,#dfe8ef,#c9d6e2)', display: 'grid', placeItems: 'center', fontSize: '24px' }}>{b.cover_emoji || '📄'}</div>
+                    {/* 記事の本文にある画像をサムネイルに使う。ブログ一覧と同じ絵柄になる */}
+                    {(() => {
+                      const img = firstImage(b.content)
+                      return img
+                        ? <img src={img} alt='' style={{ width: '96px', height: '64px', flexShrink: 0, objectFit: 'cover', display: 'block' }} />
+                        : <div style={{ width: '96px', height: '64px', flexShrink: 0, background: 'linear-gradient(135deg,#dfe8ef,#c9d6e2)', display: 'grid', placeItems: 'center', fontSize: '24px' }}>{b.cover_emoji || '📄'}</div>
+                    })()}
                     <div style={{ padding: '8px 12px 8px 0', minWidth: 0 }}>
                       <div style={{ fontSize: '14px', fontWeight: 700, lineHeight: 1.4, marginBottom: '5px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{b.title}</div>
                       <div style={{ fontSize: '11px', color: C.muted, display: 'flex', gap: '8px', alignItems: 'center' }}>
