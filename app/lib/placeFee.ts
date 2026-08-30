@@ -1,3 +1,5 @@
+import { isWeekendOrHoliday } from './jpHoliday'
+
 // 案件の出店料を計算するための、日ごとの金額の扱い。
 //
 // 通常は案件ごとに決めた固定額（取引先の取り分・弊社の利益）を使うが、
@@ -25,6 +27,33 @@ export type ScheduleDay = {
 export function hasPerDayFee(schedule: unknown): boolean {
   if (!Array.isArray(schedule)) return false
   return schedule.some(d => d && (typeof d.placeFee === 'number' || typeof d.companyFee === 'number'))
+}
+
+// 平日／土日祝で決めた金額。祝日は土日と同じ扱いにする。
+export type DayTypeFees = {
+  weekday?: { placeFee?: number | null; companyFee?: number | null }
+  weekend?: { placeFee?: number | null; companyFee?: number | null }
+} | null
+
+export function hasDayTypeFee(dtf: unknown): boolean {
+  if (!dtf || typeof dtf !== 'object') return false
+  const d = dtf as DayTypeFees
+  const has = (x?: { placeFee?: number | null; companyFee?: number | null }) =>
+    !!x && (typeof x.placeFee === 'number' || typeof x.companyFee === 'number')
+  return has(d?.weekday) || has(d?.weekend)
+}
+
+// その日が平日か土日祝かを見て、決めてある金額を返す
+export function dayTypeFee(dtf: unknown, date: string | null | undefined): { placeFee: number | null; companyFee: number | null } {
+  const none = { placeFee: null, companyFee: null }
+  if (!date || !hasDayTypeFee(dtf)) return none
+  const d = dtf as DayTypeFees
+  const side = isWeekendOrHoliday(date) ? d?.weekend : d?.weekday
+  if (!side) return none
+  return {
+    placeFee: typeof side.placeFee === 'number' ? side.placeFee : null,
+    companyFee: typeof side.companyFee === 'number' ? side.companyFee : null,
+  }
 }
 
 // その日の固定額を返す。日ごとの指定が無ければ null（＝案件全体の設定を使う）

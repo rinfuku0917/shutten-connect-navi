@@ -9,7 +9,7 @@ import { formatVehicleSize } from '../lib/vehicleSize'
 import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
-import { perDayFee } from '../lib/placeFee'
+import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 
 // ダミーデータ
 // profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
@@ -226,7 +226,7 @@ export default function AdminPage() {
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
-  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, schedule: unknown }
+  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, schedule: unknown, day_type_fees: unknown }
   const [approvedApps, setApprovedApps] = useState<ApprovedApp[]>([])
   const [saleAppId, setSaleAppId] = useState('')
   const [saleDate, setSaleDate] = useState('')
@@ -236,13 +236,19 @@ export default function AdminPage() {
 
   // 料金を計算（取引先分・弊社利益・お支払い総額を返す。per_event固定は日次では0扱い＝次フェーズ）
   // date を渡すと、その日に金額が設定されていればそちらを使う
-  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number; schedule?: unknown }, ov: string = '', date: string | null = null) => {
+  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number; schedule?: unknown; day_type_fees?: unknown }, ov: string = '', date: string | null = null) => {
     const rate = ov === 'ex8' ? 8 : ov === 'ex10' ? 10 : (a.share_tax_rate || 8)
     const basis = ov === 'ex8' || ov === 'ex10' ? 'tax_excluded' : ov === 'as_entered' ? 'as_entered' : (a.share_tax_basis || 'as_entered')
     const base = basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
+    // 金額の優先順位: 日程に入れたその日の額 → 平日/土日祝の額 → 案件全体の固定額
     const day = perDayFee(a.schedule, date)
-    const placeFixed = day.placeFee != null ? day.placeFee : (a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0))
-    const companyFixed = day.companyFee != null ? day.companyFee : (a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0))
+    const dt = dayTypeFee(a.day_type_fees, date)
+    const placeFixed = day.placeFee != null ? day.placeFee
+      : dt.placeFee != null ? dt.placeFee
+      : (a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0))
+    const companyFixed = day.companyFee != null ? day.companyFee
+      : dt.companyFee != null ? dt.companyFee
+      : (a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0))
     const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
     const companyFee = Math.floor(companyFixed + base * (a.company_share_pct || 0) / 100)
     return { placeFee, companyFee, totalPay: placeFee + companyFee, basis, rate }
@@ -252,7 +258,7 @@ export default function AdminPage() {
   const loadApprovedApps = async () => {
     const { data } = await supabase
       .from('applications')
-      .select('id, place_id, seller_id, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule), profiles!applications_seller_id_fkey(name)')
+      .select('id, place_id, seller_id, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees), profiles!applications_seller_id_fkey(name)')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
     const mapped: ApprovedApp[] = (data || []).map((a: any) => ({
@@ -262,7 +268,8 @@ export default function AdminPage() {
       place_fixed_unit: a.places?.place_fixed_unit || 'per_day', company_fixed_amount: a.places?.company_fixed_amount || 0,
       company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0,
       share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 8,
-      schedule: a.places?.schedule ?? null
+      schedule: a.places?.schedule ?? null,
+      day_type_fees: a.places?.day_type_fees ?? null
     }))
     setApprovedApps(mapped)
   }
@@ -432,7 +439,7 @@ export default function AdminPage() {
   // ===== レビュー審査（管理者）=====
   type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
   // ===== 案件一覧（管理者・実データ） =====
-  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, fee: string, genres: string[] }
+  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, day_type_fees: unknown, fee: string, genres: string[] }
   const [placesList, setPlacesList] = useState<AdminPlace[]>([])
   const [placesLoading, setPlacesLoading] = useState(false)
   const [pKw, setPKw] = useState('')
@@ -446,7 +453,7 @@ export default function AdminPage() {
     setPlacesLoading(true)
     const { data } = await supabase
       .from('places')
-      .select('id, title, prefecture, place_type, status, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, fee, genres, profiles(name), applications(count)')
+      .select('id, title, prefecture, place_type, status, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, day_type_fees, fee, genres, profiles(name), applications(count)')
       .order('created_at', { ascending: false })
     const mapped: AdminPlace[] = (data || []).map((p: any) => ({
       id: p.id,
@@ -459,6 +466,7 @@ export default function AdminPage() {
       price_fixed: p.price_fixed ?? 0, price_share_pct: p.price_share_pct ?? 0, place_fixed_unit: p.place_fixed_unit || 'per_day',
       share_tax_basis: p.share_tax_basis || 'as_entered', share_tax_rate: p.share_tax_rate ?? 8,
       company_fixed_amount: p.company_fixed_amount ?? 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct ?? 0,
+      day_type_fees: p.day_type_fees ?? null,
       fee: p.fee || '',
       genres: p.genres || [],
     }))
@@ -489,12 +497,43 @@ export default function AdminPage() {
   // ===== 料金設定モーダル =====
   const [feePlace, setFeePlace] = useState<AdminPlace | null>(null)
   const [feeForm, setFeeForm] = useState({ price_fixed: 0, price_share_pct: 0, place_fixed_unit: 'per_day', company_fixed_amount: 0, company_fixed_unit: 'per_day', company_share_pct: 0, share_tax_basis: 'as_entered', share_tax_rate: 8 })
+  // 平日と土日祝で金額が変わる案件のための欄（空欄なら使わない）
+  const [dtOn, setDtOn] = useState(false)
+  const [dtForm, setDtForm] = useState({ wdPlace: '', wdCompany: '', wePlace: '', weCompany: '' })
   const [feeSaving, setFeeSaving] = useState(false)
   const [saleTaxOv, setSaleTaxOv] = useState('')
   const openFeeModal = (p: AdminPlace) => {
     setFeePlace(p)
     setFeeForm({ price_fixed: p.price_fixed || 0, price_share_pct: p.price_share_pct || 0, place_fixed_unit: p.place_fixed_unit || 'per_day', company_fixed_amount: p.company_fixed_amount || 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct || 0, share_tax_basis: p.share_tax_basis || 'as_entered', share_tax_rate: p.share_tax_rate || 8 })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dtf = (p.day_type_fees || null) as any
+    const g = (side: string, key: string) => {
+      const v = dtf?.[side]?.[key]
+      return typeof v === 'number' ? String(v) : ''
+    }
+    setDtForm({ wdPlace: g('weekday', 'placeFee'), wdCompany: g('weekday', 'companyFee'), wePlace: g('weekend', 'placeFee'), weCompany: g('weekend', 'companyFee') })
+    setDtOn(hasDayTypeFee(p.day_type_fees))
   }
+  // 平日/土日祝の金額を保存用の形にする。使わない場合は null にして消す。
+  const buildDayTypeFees = () => {
+    if (!dtOn) return null
+    const n = (v: string) => { const x = parseInt(String(v).replace(/[^0-9]/g, ''), 10); return isNaN(x) ? null : x }
+    const side = (pf: string, cf: string) => {
+      const o: Record<string, number> = {}
+      const a = n(pf), b = n(cf)
+      if (a != null) o.placeFee = a
+      if (b != null) o.companyFee = b
+      return Object.keys(o).length ? o : null
+    }
+    const wd = side(dtForm.wdPlace, dtForm.wdCompany)
+    const we = side(dtForm.wePlace, dtForm.weCompany)
+    if (!wd && !we) return null
+    const out: Record<string, unknown> = {}
+    if (wd) out.weekday = wd
+    if (we) out.weekend = we
+    return out
+  }
+
   const saveFee = async () => {
     if (!feePlace) return
     setFeeSaving(true)
@@ -502,7 +541,8 @@ export default function AdminPage() {
     const { data: updated, error } = await supabase.from('places').update({
       price_fixed: feeForm.price_fixed, price_share_pct: feeForm.price_share_pct, place_fixed_unit: feeForm.place_fixed_unit,
       company_fixed_amount: feeForm.company_fixed_amount, company_fixed_unit: feeForm.company_fixed_unit, company_share_pct: feeForm.company_share_pct,
-      share_tax_basis: feeForm.share_tax_basis, share_tax_rate: feeForm.share_tax_rate
+      share_tax_basis: feeForm.share_tax_basis, share_tax_rate: feeForm.share_tax_rate,
+      day_type_fees: buildDayTypeFees(),
     }).eq('id', feePlace.id).select('id')
     if (error) { alert('保存失敗: ' + error.message); setFeeSaving(false); return }
     if (!updated || updated.length === 0) {
@@ -1528,6 +1568,44 @@ const previewDoc = async (fileUrl: string) => {
                       <div><label style={{fontSize: '11px',color: '#64748B'}}>単位</label><select value={ff.company_fixed_unit} onChange={e=>setFeeForm({...ff, company_fixed_unit: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value= 'per_day'>1日あたり</option><option value= 'per_event'>期間で1回</option></select></div>
                       <div><label style={{fontSize: '11px',color: '#64748B'}}>歩合（%）</label><input type= 'number' value={ff.company_share_pct === 0 ? '' : ff.company_share_pct} onChange={e=>setFeeForm({...ff, company_share_pct: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
                     </div>
+                    {/* 平日と土日祝で金額が変わる案件のための欄。
+                        入れた場合は、上の固定額の代わりにこちらを使う。
+                        祝日は土日と同じ扱いにする。 */}
+                    <label style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'8px', fontSize:'13px', color:'#1a1a1a', cursor:'pointer' }}>
+                      <input type='checkbox' checked={dtOn} onChange={e=>setDtOn(e.target.checked)} style={{ accentColor:'#F5A623', cursor:'pointer' }} />
+                      <span style={{ fontWeight:700 }}>平日と土日祝で金額を変える</span>
+                    </label>
+                    {dtOn && (
+                      <div style={{ border:'1.5px solid #FDE68A', background:'#FFFBEB', borderRadius:'8px', padding:'12px', marginBottom:'18px' }}>
+                        <div style={{ fontSize:'11px', color:'#64748B', lineHeight:1.8, marginBottom:'10px' }}>
+                          売上の日付から自動で使い分けます。土日と<strong>祝日・振替休日</strong>は「土日祝」の金額になります。
+                          空欄のところは、上で決めた固定額をそのまま使います。
+                        </div>
+                        {([
+                          ['平日（月〜金）', 'wdPlace', 'wdCompany'],
+                          ['土日祝', 'wePlace', 'weCompany'],
+                        ] as const).map(([label, pk, ck]) => (
+                          <div key={label} style={{ marginBottom:'10px' }}>
+                            <div style={{ fontSize:'12px', fontWeight:700, color:'#B45309', marginBottom:'4px' }}>{label}</div>
+                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+                              <div>
+                                <label style={{fontSize:'11px',color:'#64748B'}}>取引先へ渡す額（円）</label>
+                                <input inputMode='numeric' value={dtForm[pk]} onChange={e=>setDtForm({...dtForm, [pk]: e.target.value.replace(/[^0-9]/g,'')})} placeholder='空欄可' style={{width:'100%',border:'1.5px solid #E2E8F0',borderRadius:'8px',padding:'8px',fontSize:'13px',boxSizing:'border-box'}} />
+                              </div>
+                              <div>
+                                <label style={{fontSize:'11px',color:'#64748B'}}>弊社の利益（円）</label>
+                                <input inputMode='numeric' value={dtForm[ck]} onChange={e=>setDtForm({...dtForm, [ck]: e.target.value.replace(/[^0-9]/g,'')})} placeholder='空欄可' style={{width:'100%',border:'1.5px solid #E2E8F0',borderRadius:'8px',padding:'8px',fontSize:'13px',boxSizing:'border-box'}} />
+                              </div>
+                            </div>
+                            {(() => {
+                              const a = parseInt(dtForm[pk]||'0',10)||0, b = parseInt(dtForm[ck]||'0',10)||0
+                              if (a+b === 0) return null
+                              return <div style={{ fontSize:'11px', color:'#475569', marginTop:'4px' }}>出店者が払う額：<strong>{(a+b).toLocaleString()}円</strong></div>
+                            })()}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ fontWeight:700, fontSize: '13px', color: '#16A34A', marginBottom: '8px' }}>歩合の計算元（税の扱い）</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '18px' }}>
                       <div><label style={{fontSize: '11px',color: '#64748B'}}>計算元</label><select value={ff.share_tax_basis} onChange={e=>setFeeForm({...ff, share_tax_basis: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value='as_entered'>入力金額そのまま</option><option value='tax_excluded'>税抜に換算してから</option></select></div>
