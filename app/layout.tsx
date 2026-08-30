@@ -33,12 +33,14 @@ export const metadata: Metadata = {
   },
   twitter: { card: "summary_large_image" },
   // Google Search Console の所有権確認タグ。
-  // Vercel の環境変数 GOOGLE_SITE_VERIFICATION に、Search Console が出す
-  // 確認コード（content="..." の中身だけ）を入れると出力される。
-  // 未設定のときは何も出ない。
-  ...(process.env.GOOGLE_SITE_VERIFICATION
-    ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
-    : {}),
+  // 消すと所有者確認が外れるので残しておくこと。
+  // 別のコードに差し替えたいときは、Vercel の環境変数
+  // GOOGLE_SITE_VERIFICATION を設定すればそちらが使われる。
+  verification: {
+    google:
+      process.env.GOOGLE_SITE_VERIFICATION ||
+      "rIIXLOS5VjasmJlsGubBBt_j5FaZsva8jdrB9hltZcI",
+  },
   icons: {
     icon: "/icon.png",
     apple: "/icon.png",
