@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { verifyCronCaller } from '../../../lib/cronAuth'
 
 // 旧サイトの会員CSVを取り込む。管理画面からのみ実行できる。
 //
@@ -34,15 +35,10 @@ export async function POST(req: Request) {
     if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
     const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 
-    // 管理者だけが実行できる
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-    const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-    if (me?.role !== 'admin') return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
+    // 管理画面からのログイン、または運用の鍵（CRON_SECRET）でのみ実行できる。
+    // 鍵での実行は、移行作業などで管理画面を開けないときに使う。
+    const auth = await verifyCronCaller(req)
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
     const body = await req.json()
     const dryRun = !!body.dryRun
