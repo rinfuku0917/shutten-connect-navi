@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { createClient } from '@supabase/supabase-js'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
@@ -25,25 +24,6 @@ export const metadata: Metadata = {
     url: '/vendor',
     type: 'website',
   },
-}
-
-// 登録している出店者の数。実数を出したいので毎回データベースから数える。
-async function countSellers(): Promise<number | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) return null
-  try {
-    const db = createClient(url, key, { auth: { persistSession: false } })
-    const { count, error } = await db
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('role', 'seller')
-      .eq('approval_status', 'approved')
-    if (error) return null
-    return count ?? null
-  } catch {
-    return null
-  }
 }
 
 const CASES: { t: string; d: string; href?: string }[] = [
@@ -83,9 +63,7 @@ const SETSUBI = [
   ['希望メニュー・NGメニュー', '出してほしいもの、避けてほしいもの'],
 ]
 
-export default async function VendorPage() {
-  const sellerCount = await countSellers()
-
+export default function VendorPage() {
   const H2: React.CSSProperties = { fontSize: '26px', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
   const LEAD: React.CSSProperties = { fontSize: '14px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '32px' }
   const CARD: React.CSSProperties = { background: '#fff', border: '1px solid #EEE', borderRadius: '14px', padding: '20px 18px' }
@@ -164,7 +142,7 @@ export default async function VendorPage() {
           <h2 style={H2}>出店コネクトナビでできること</h2>
           <p style={LEAD}>
             キッチンカー事業者と、出店場所をお持ちの施設・主催者をつなぐサービスです。
-            {sellerCount != null && `現在 ${sellerCount.toLocaleString('ja-JP')} 店舗の出店者が登録しています。`}
+            現在 3,000 店舗以上の出店者が登録しています。
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px' }}>
             {CAN_DO.map(c => (
