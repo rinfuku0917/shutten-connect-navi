@@ -370,10 +370,25 @@ export default function PlaceDetail() {
               )
             })()}
 
+            {/* 備考・ご案内も出店条件と同じく、ログインした方だけに見せる */}
             {place.details?.notes && (
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', padding: '20px', marginBottom: '20px' }}>
                 <h3 style={{ fontSize: '15px', fontWeight: '900', marginBottom: '10px', color: '#1a1a1a' }}>備考・ご案内</h3>
-                <p style={{ fontSize: '14px', color: '#555', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{place.details.notes}</p>
+                {canSeeFee ? (
+                  <p style={{ fontSize: '14px', color: '#555', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{place.details.notes}</p>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+                    <div style={{ fontSize: '13px', color: '#B45309', fontWeight: 700, marginBottom: '6px' }}>🔒 ログイン後に表示されます</div>
+                    <div style={{ fontSize: '12px', color: '#64748B', lineHeight: 1.9, marginBottom: '14px' }}>
+                      募集者からのご案内・注意事項をご確認いただけます。<br />
+                      会員登録・ご利用はすべて無料です。
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <Link href='/login' style={{ background: '#3A9BD5', color: '#fff', textDecoration: 'none', borderRadius: '8px', padding: '10px 22px', fontSize: '13px', fontWeight: 700 }}>ログイン</Link>
+                      <Link href='/register' style={{ background: '#fff', color: '#E08A00', border: '2px solid #F5A623', textDecoration: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700 }}>新規会員登録（無料）</Link>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
