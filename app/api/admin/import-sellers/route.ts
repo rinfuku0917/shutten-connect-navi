@@ -83,10 +83,23 @@ export async function POST(req: Request) {
       try {
         // 1) 認証アカウントを作る。すでにある場合はそのIDを使う。
         let authId: string | null = null
+        // メタデータは通常の会員登録と同じ形にする。
+        // role などが欠けていると、DB側の登録処理が失敗して
+        // 「Database error creating new user」になる。
+        const areasArr = (s.areas || '').split(/[,、]/).map(x => x.trim()).filter(Boolean)
         const { data: cu, error: cErr } = await db.auth.admin.createUser({
           email,
           email_confirm: true,
-          user_metadata: { name: s.rep || '', shop_name: s.shop || '', imported: true },
+          user_metadata: {
+            name: s.rep || '',
+            role: 'seller',
+            name_kana: '',
+            address: s.addr || '',
+            phone: s.tel || '',
+            ...(s.shop ? { shop_name: s.shop } : {}),
+            ...(areasArr.length > 0 ? { areas: areasArr } : {}),
+            imported: true,
+          },
         })
         if (cErr) {
           // 既に登録済みのメールは、認証アカウントだけ先にできている状態
@@ -102,8 +115,8 @@ export async function POST(req: Request) {
         }
         if (!authId) { errors.push(email + ': アカウントIDを取得できませんでした'); continue }
 
-        // 2) 会員情報を作る（認証アカウントと同じIDで作るのが必須）
-        const areas = (s.areas || '').split(/[,、]/).map(x => x.trim()).filter(Boolean)
+        // 2) 会員情報を作る（認証アカウントと同じIDで作るのが必須）。
+        //    登録処理が先に作っている場合もあるため、上書きして揃える。
         const { error: pErr } = await db.from('profiles').upsert({
           id: authId,
           role: 'seller',
@@ -112,7 +125,7 @@ export async function POST(req: Request) {
           email,
           phone: s.tel || '',
           address: s.addr || '',
-          areas,
+          areas: areasArr,
           approval_status: 'approved',
         }, { onConflict: 'id' })
         if (pErr) { errors.push(email + ': 会員情報の保存に失敗 ' + pErr.message); continue }
