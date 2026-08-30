@@ -332,6 +332,27 @@ export default function PlaceDetail() {
                 { label: '販売禁止・ブランド制限', value: d.brand || '' },
               ].filter(r => r.value)
               if (rows.length === 0) return null
+
+              // 出店条件は出店料と同じく、ログインした方だけに見せる
+              if (!canSeeFee) {
+                return (
+                  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', overflow: 'hidden', marginBottom: '20px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '900', padding: '16px 20px 0', color: '#1a1a1a' }}>出店条件</h3>
+                    <div style={{ padding: '18px 20px 22px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '13px', color: '#B45309', fontWeight: 700, marginBottom: '6px' }}>🔒 ログイン後に表示されます</div>
+                      <div style={{ fontSize: '12px', color: '#64748B', lineHeight: 1.9, marginBottom: '14px' }}>
+                        開催時間・搬入搬出・電源・ガス・水道など、{rows.length}項目の詳しい条件をご確認いただけます。<br />
+                        会員登録・ご利用はすべて無料です。
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <Link href='/login' style={{ background: '#3A9BD5', color: '#fff', textDecoration: 'none', borderRadius: '8px', padding: '10px 22px', fontSize: '13px', fontWeight: 700 }}>ログイン</Link>
+                        <Link href='/register' style={{ background: '#fff', color: '#E08A00', border: '2px solid #F5A623', textDecoration: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700 }}>新規会員登録（無料）</Link>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', overflow: 'hidden', marginBottom: '20px' }}>
                   <h3 style={{ fontSize: '15px', fontWeight: '900', padding: '16px 20px 0', color: '#1a1a1a' }}>出店条件</h3>
