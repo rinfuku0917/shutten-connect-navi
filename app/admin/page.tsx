@@ -647,6 +647,86 @@ export default function AdminPage() {
     setReminding(false)
   }
 
+  // ===== 旧サイトの会員CSVの取り込み =====
+  // 旧サイトは今も新規登録を受け付けているため、登録された方を
+  // 定期的に新サイトへ取り込む必要がある。
+  type ImpRow = { reg_no: string, registered_at: string, shop: string, rep: string, email: string, addr: string, tel: string, areas: string }
+  const [impRows, setImpRows] = useState<ImpRow[]>([])
+  const [impFileName, setImpFileName] = useState('')
+  const [impPreview, setImpPreview] = useState<{ total: number, alreadyExists: number, willCreate: number, sample: { email: string, rep: string, shop: string }[] } | null>(null)
+  const [impBusy, setImpBusy] = useState('')
+  const [impResult, setImpResult] = useState<string>('')
+
+  // 旧サイトのCSVは Shift-JIS（cp932）で書き出される
+  const readImportCsv = async (file: File) => {
+    setImpPreview(null); setImpResult(''); setImpRows([])
+    const buf = await file.arrayBuffer()
+    let text = ''
+    try { text = new TextDecoder('shift_jis').decode(buf) } catch { text = new TextDecoder('utf-8').decode(buf) }
+    // 文字化けしていたら UTF-8 として読み直す
+    if (text.includes('\uFFFD')) text = new TextDecoder('utf-8').decode(buf)
+
+    // 「"..."」で囲まれた値の中の改行・カンマを壊さずに分解する
+    const parse = (t: string): string[][] => {
+      const out: string[][] = []; let row: string[] = []; let cur = ''; let q = false
+      for (let i = 0; i < t.length; i++) {
+        const c = t[i]
+        if (q) {
+          if (c === '"' && t[i + 1] === '"') { cur += '"'; i++ }
+          else if (c === '"') q = false
+          else cur += c
+        } else if (c === '"') q = true
+        else if (c === ',') { row.push(cur); cur = '' }
+        else if (c === '\n') { row.push(cur); cur = ''; out.push(row); row = [] }
+        else if (c !== '\r') cur += c
+      }
+      if (cur || row.length) { row.push(cur); out.push(row) }
+      return out
+    }
+    const rows = parse(text).filter(r => r.some(c => c.trim()))
+    if (rows.length < 2) { setImpResult('CSVを読み取れませんでした'); return }
+    const head = rows[0].map(h => h.trim())
+    const idx = (name: string) => head.findIndex(h => h.replace(/\s/g, '') === name)
+    const iNo = idx('登録No.'), iAt = idx('登録日'), iShop = idx('店舗名・屋号・会社名')
+    const iRep = idx('代表者'), iMail = idx('メールアドレス'), iAddr = idx('住所')
+    const iTel = idx('電話番号'), iArea = idx('販売エリア')
+    if (iMail < 0) { setImpResult('「メールアドレス」の列が見つかりません。旧サイトの会員CSVをお使いください。'); return }
+    const g = (r: string[], i: number) => (i >= 0 ? (r[i] || '').trim() : '')
+    const list: ImpRow[] = rows.slice(1)
+      .map(r => ({
+        reg_no: g(r, iNo), registered_at: g(r, iAt), shop: g(r, iShop),
+        rep: g(r, iRep).replace(/\u3000/g, ' '), email: g(r, iMail),
+        addr: g(r, iAddr), tel: g(r, iTel), areas: g(r, iArea),
+      }))
+      .filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email))
+    setImpRows(list)
+    setImpFileName(file.name + '（' + list.length + '件）')
+  }
+
+  const callImport = async (dryRun: boolean) => {
+    if (impRows.length === 0) { alert('CSVを選んでください'); return }
+    setImpBusy(dryRun ? 'check' : 'run'); setImpResult('')
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/import-sellers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+        body: JSON.stringify({ sellers: impRows, dryRun }),
+      })
+      const j = await res.json()
+      if (!res.ok) { setImpResult('失敗しました: ' + (j.error || res.status)); setImpBusy(''); return }
+      if (dryRun) { setImpPreview(j); }
+      else {
+        setImpPreview(null)
+        setImpResult(`取り込みました。新規 ${j.created} 件 ／ 既に登録済み ${j.skipped} 件` + (j.failed ? ` ／ 失敗 ${j.failed} 件（${(j.errors || []).slice(0, 3).join(' / ')}）` : ''))
+        loadSellersList()
+      }
+    } catch (e) {
+      setImpResult('失敗しました: ' + (e instanceof Error ? e.message : ''))
+    }
+    setImpBusy('')
+  }
+
   // ===== 打ち合わせ希望（募集者からの相談） =====
   type MeetingReq = {
     id: string; name: string; company: string | null; email: string; phone: string | null
@@ -1468,6 +1548,57 @@ const previewDoc = async (fileUrl: string) => {
           {/* ===== 出店者管理 ===== */}
           {tab === 'sellers' && (
             <>
+              {/* 旧サイトの会員CSVの取り込み。
+                  旧サイトが新規登録を受け付けているあいだは、定期的に必要になる。 */}
+              <div style={{ background: '#fff', border: '1.5px solid #BFDBFE', borderRadius: '10px', padding: '14px 16px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1D4ED8', marginBottom: '4px' }}>旧サイトの会員を取り込む</div>
+                <div style={{ fontSize: '11px', color: '#64748B', lineHeight: 1.8, marginBottom: '10px' }}>
+                  旧サイトの会員CSV（kitchenCarUsers.csv）を選ぶと、まだ新サイトに無い方だけを追加します。
+                  ログイン用のアカウントもあわせて作るため、取り込み後は「パスワードをお忘れの方」からログインできるようになります。
+                  すでに登録済みの方は変更しません。何度実行しても重複しません。
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <label style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '9px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                    CSVを選ぶ
+                    <input type='file' accept='.csv,text/csv' style={{ display: 'none' }}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) readImportCsv(f); e.target.value = '' }} />
+                  </label>
+                  {impFileName && <span style={{ fontSize: '12px', color: '#1a1a1a' }}>{impFileName}</span>}
+                  {impRows.length > 0 && (
+                    <button onClick={() => callImport(true)} disabled={!!impBusy}
+                      style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                      {impBusy === 'check' ? '確認中…' : '差分を確認'}
+                    </button>
+                  )}
+                </div>
+
+                {impPreview && (
+                  <div style={{ marginTop: '12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px' }}>
+                    <div style={{ fontSize: '13px', color: '#1a1a1a', marginBottom: '8px' }}>
+                      CSV {impPreview.total} 件のうち、<strong style={{ color: '#1D4ED8', fontSize: '15px' }}>{impPreview.willCreate} 件</strong>が新サイトに未登録です
+                      <span style={{ color: '#94A3B8', fontSize: '11px' }}>（登録済み {impPreview.alreadyExists} 件はそのまま）</span>
+                    </div>
+                    {impPreview.sample.length > 0 && (
+                      <div style={{ fontSize: '11px', color: '#475569', lineHeight: 1.8, marginBottom: '10px' }}>
+                        {impPreview.sample.slice(0, 8).map((x, i) => (
+                          <div key={i}>・{x.rep || '(氏名なし)'}　{x.shop || '(店舗名なし)'}　{x.email}</div>
+                        ))}
+                        {impPreview.willCreate > 8 && <div style={{ color: '#94A3B8' }}>ほか {impPreview.willCreate - 8} 件</div>}
+                      </div>
+                    )}
+                    {impPreview.willCreate > 0 && (
+                      <button onClick={() => { if (window.confirm(impPreview.willCreate + '件を取り込みます。よろしいですか？\n※メールは送信されません。')) callImport(false) }} disabled={!!impBusy}
+                        style={{ background: impBusy ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: impBusy ? 'wait' : 'pointer' }}>
+                        {impBusy === 'run' ? '取り込み中…' : impPreview.willCreate + '件を取り込む'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {impResult && (
+                  <div style={{ marginTop: '10px', fontSize: '12px', color: impResult.startsWith('失敗') ? '#DC2626' : '#16A34A', fontWeight: 700, lineHeight: 1.7 }}>{impResult}</div>
+                )}
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
                   <input type="text" value={sellerKw} onChange={e => setSellerKw(e.target.value)} placeholder="出店者名・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
