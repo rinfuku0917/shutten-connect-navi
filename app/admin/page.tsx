@@ -73,9 +73,11 @@ export default function AdminPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   // ===== 書類審査（管理者） =====
-  type DocReview = { id: string, seller_id: string, doc_type: string, file_url: string, status: string, uploaded_at: string, sellerName: string, sellerShop: string, expiry_date: string | null }
+  type DocReview = { id: string, seller_id: string, doc_type: string, file_url: string, status: string, uploaded_at: string, reviewed_at: string | null, sellerName: string, sellerShop: string, expiry_date: string | null }
   const [docReviews, setDocReviews] = useState<DocReview[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
+  // 出店者名で書類を探す（人数が多く、目当ての人を見つけにくいため）
+  const [docKw, setDocKw] = useState('')
   const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
   const [authChecked, setAuthChecked] = useState(false)
   const [adminUid, setAdminUid] = useState<string | null>(null)
@@ -207,11 +209,11 @@ export default function AdminPage() {
     setDocsLoading(true)
     const { data } = await supabase
       .from('seller_documents')
-      .select('id, seller_id, doc_type, file_url, status, uploaded_at, expiry_date, profiles(name, shop_name)')
+      .select('id, seller_id, doc_type, file_url, status, uploaded_at, reviewed_at, expiry_date, profiles(name, shop_name)')
       .order('uploaded_at', { ascending: false })
     const mapped: DocReview[] = (data || []).map((d: any) => ({
       id: d.id, seller_id: d.seller_id, doc_type: d.doc_type, file_url: d.file_url,
-      status: d.status, uploaded_at: d.uploaded_at, expiry_date: d.expiry_date || null,
+      status: d.status, uploaded_at: d.uploaded_at, reviewed_at: d.reviewed_at || null, expiry_date: d.expiry_date || null,
       sellerName: d.profiles?.name || '(出店者)', sellerShop: d.profiles?.shop_name || ''
     }))
     setDocReviews(mapped)
@@ -1170,9 +1172,11 @@ const previewDoc = async (fileUrl: string) => {
   }
   // 承認/否認
   const reviewDoc = async (id: string, status: 'approved' | 'rejected', reason?: string) => {
-    const patch: { status: string; reject_reason?: string | null } = { status }
+    const patch: { status: string; reject_reason?: string | null; reviewed_at?: string } = { status }
     if (status === 'rejected') patch.reject_reason = reason || null
     if (status === 'approved') patch.reject_reason = null
+    // いつ確認したかを残す（提出日と分けて把握できるように）
+    patch.reviewed_at = new Date().toISOString()
     const { error } = await supabase.from('seller_documents').update(patch).eq('id', id)
     if (error) { alert('更新失敗: ' + error.message); return }
     loadDocReviews()
@@ -1750,6 +1754,16 @@ const previewDoc = async (fileUrl: string) => {
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者が提出した書類を確認し、承認または否認します。</p>
                 <button onClick={loadDocReviews} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>更新</button>
               </div>
+              {/* 人数が多いため、名前で探せるようにする */}
+              <div style={{ marginBottom: '12px', position: 'relative' }}>
+                <input value={docKw} onChange={e => setDocKw(e.target.value)}
+                  placeholder='出店者名・店舗名で探す（例：島んちゅ）'
+                  style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '10px', padding: '11px 38px 11px 14px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+                {docKw && (
+                  <button onClick={() => setDocKw('')} title='検索を消す'
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: '#94A3B8', fontSize: '16px', cursor: 'pointer', padding: 0 }}>✕</button>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
                 {([{ key: 'all', label: 'すべて' }, { key: 'pending', label: '要対応' }, { key: 'expiring', label: '期限1ヶ月以内' }] as { key: 'all' | 'pending' | 'expiring', label: string }[]).map(btn => (
                   <button key={btn.key} onClick={() => setDocFilter(btn.key)} style={{ background: docFilter === btn.key ? '#F5A623' : '#fff', color: docFilter === btn.key ? '#fff' : '#64748B', border: '1px solid ' + (docFilter === btn.key ? '#F5A623' : '#E2E8F0'), borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>{btn.label}</button>
@@ -1785,14 +1799,20 @@ const previewDoc = async (fileUrl: string) => {
                   return days <= 30
                 }
                 // フィルター適用：表示する出店者を絞り込む
+                const kw = docKw.trim().toLowerCase()
                 const shownIds = sellerIds.filter(sid => {
                   const ds = groups[sid]
+                  if (kw) {
+                    const hay = ((ds[0].sellerName || '') + ' ' + (ds[0].sellerShop || '')).toLowerCase()
+                    if (!hay.includes(kw)) return false
+                  }
                   if (docFilter === 'pending') return ds.some(d => d.status === 'pending')
                   if (docFilter === 'expiring') return ds.some(d => isExpiringSoon(d.expiry_date))
                   return true
                 })
                 if (shownIds.length === 0) {
-                  const emptyMsg = docFilter === 'pending' ? '審査中の書類がある出店者はいません。' : docFilter === 'expiring' ? '有効期限が1ヶ月以内の出店者はいません。' : '提出された書類はまだありません。'
+                  const emptyMsg = kw ? '「' + docKw + '」に合う出店者は見つかりませんでした。'
+                    : docFilter === 'pending' ? '審査中の書類がある出店者はいません。' : docFilter === 'expiring' ? '有効期限が1ヶ月以内の出店者はいません。' : '提出された書類はまだありません。'
                   return <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999' }}>{emptyMsg}</div>
                 }
                 return (
@@ -1806,8 +1826,16 @@ const previewDoc = async (fileUrl: string) => {
                         <div key={sid} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                           {/* 出店者ヘッダー */}
                           <div style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                            <div style={{ fontWeight: '700', fontSize: '15px', color: '#1E2A3B' }}>
-                              {head.sellerName}{head.sellerShop && <span style={{ fontWeight: '400', fontSize: '13px', color: '#64748B', marginLeft: '8px' }}>（{head.sellerShop}）</span>}
+                            <div>
+                              <div style={{ fontWeight: '700', fontSize: '15px', color: '#1E2A3B' }}>
+                                {head.sellerName}{head.sellerShop && <span style={{ fontWeight: '400', fontSize: '13px', color: '#64748B', marginLeft: '8px' }}>（{head.sellerShop}）</span>}
+                              </div>
+                              {/* いつ出されたものかが一目で分かるように */}
+                              {(() => {
+                                const last = docs.map(d => d.uploaded_at).filter(Boolean).sort().slice(-1)[0]
+                                if (!last) return null
+                                return <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>最終提出：{new Date(last).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                              })()}
                             </div>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               {counts.pending > 0 && <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: '#FEF3C7', color: '#92400E' }}>審査中 {counts.pending}</span>}
@@ -1822,7 +1850,14 @@ const previewDoc = async (fileUrl: string) => {
                               const exp = expiryInfo(d.expiry_date)
                               return (
                                 <div key={d.id} style={{ borderBottom: '1px solid #F1F5F9', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                                  <div style={{ flex: '1 1 160px', minWidth: 0, fontWeight: '600', fontSize: '13px' }}>{docTypeLabels[d.doc_type] || d.doc_type}</div>
+                                  <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+                                    <div style={{ fontWeight: '600', fontSize: '13px' }}>{docTypeLabels[d.doc_type] || d.doc_type}</div>
+                                    {/* いつ出され、いつこちらが確認したかを添える */}
+                                    <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px', lineHeight: 1.6 }}>
+                                      {d.uploaded_at && <>提出 {new Date(d.uploaded_at).toLocaleDateString('ja-JP')}</>}
+                                      {d.reviewed_at && <>　／　確認 {new Date(d.reviewed_at).toLocaleDateString('ja-JP')}</>}
+                                    </div>
+                                  </div>
                                   <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: meta.bg, color: meta.color, flexShrink: 0 }}>{meta.label}</span>
                                   <span style={{ fontSize: '11px', fontWeight: '600', padding: '3px 10px', borderRadius: '6px', background: exp.bg, color: exp.color, flexShrink: 0 }}>{exp.text}</span>
                                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
