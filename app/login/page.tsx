@@ -54,11 +54,11 @@ export default function LoginPage() {
           <div style={{display:'flex',borderBottom:'1px solid #e0e0e0'}}>
             <button onClick={()=>setTab('seller')} style={{flex:1,padding:'16px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='seller'?'2px solid #F5A623':'2px solid transparent',color:tab==='seller'?'#F5A623':'#888',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
               出店者ログイン
-              <img src='/ic2-truck.png' alt='' style={{height:'26px',width:'auto',objectFit:'contain',opacity:tab==='seller'?1:.5}} />
+              <img src='/ic2-truck.webp' alt='' style={{height:'26px',width:'auto',objectFit:'contain',opacity:tab==='seller'?1:.5}} />
             </button>
             <button onClick={()=>setTab('host')} style={{flex:1,padding:'16px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='host'?'2px solid #F5A623':'2px solid transparent',color:tab==='host'?'#F5A623':'#888',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
               募集者ログイン
-              <img src='/ic-mikan.png' alt='' style={{height:'24px',width:'auto',objectFit:'contain',opacity:tab==='host'?1:.5}} />
+              <img src='/ic-mikan.webp' alt='' style={{height:'24px',width:'auto',objectFit:'contain',opacity:tab==='host'?1:.5}} />
             </button>
           </div>
           <div style={{padding:'32px'}}>

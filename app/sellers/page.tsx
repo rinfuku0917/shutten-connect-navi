@@ -77,7 +77,7 @@ export default async function SellersPage() {
           </p>
           </div>
           {/* globals.css の img{height:auto} がレイヤー外でTailwindのh-*を上書きするため、サイズは専用クラスで指定する */}
-          <img src="/ic2-truck.png" alt="" className="sellers-hero-icon shrink-0 object-contain" />
+          <img src="/ic2-truck.webp" alt="" className="sellers-hero-icon shrink-0 object-contain" />
         </header>
 
         {errorMessage ? (

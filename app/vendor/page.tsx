@@ -91,7 +91,7 @@ export default function VendorPage() {
       </div>
 
       {/* ヒーロー */}
-      <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-bg.png) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
+      <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-bg.webp) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
         {/* 背景写真が明るいので、文字の下に暗い面を敷いて読めるようにする */}
         <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px clamp(14px,4vw,26px)' }}>
           <h1 className='jp-head' style={{ fontSize: 'clamp(20px,5.6vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>

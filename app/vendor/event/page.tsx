@@ -147,7 +147,7 @@ export default function EventVendorPage() {
       </div>
 
       {/* ヒーロー */}
-      <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-poster.jpg) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
+      <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-poster.webp) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
         <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px clamp(14px,4vw,26px)' }}>
           <h1 className='jp-head' style={{ fontSize: 'clamp(20px,5.6vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
             イベントでの出店にお困りの方へ

@@ -13,10 +13,10 @@ export const metadata: Metadata = {
 
 export default function SpacePage() {
   const merits = [
-    {img:'/ic-pin.png',title:'好立地の場所を簡単発見',desc:'駅前・商業施設・イベントスペースなど多数掲載'},
-    {img:'/ic-money.png',title:'費用を比較して選べる',desc:'日額・月額・売上歩合など多様なプランを比較'},
-    {img:'/ic-handshake.png',title:'安心のマッチング',desc:'実績・口コミ付きの信頼できる場所オーナーと繋がれる'},
-    {img:'/ic-phone.png',title:'スマホで完結',desc:'申込から契約まで全てオンラインで完結します'},
+    {img:'/ic-pin.webp',title:'好立地の場所を簡単発見',desc:'駅前・商業施設・イベントスペースなど多数掲載'},
+    {img:'/ic-money.webp',title:'費用を比較して選べる',desc:'日額・月額・売上歩合など多様なプランを比較'},
+    {img:'/ic-handshake.webp',title:'安心のマッチング',desc:'実績・口コミ付きの信頼できる場所オーナーと繋がれる'},
+    {img:'/ic-phone.webp',title:'スマホで完結',desc:'申込から契約まで全てオンラインで完結します'},
   ]
 
   return (
@@ -25,7 +25,7 @@ export default function SpacePage() {
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
         <BackButton fallback='/' />
       </div>
-      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-top.png) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'300px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',width:'100%'}}>
+      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-top.webp) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'300px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',width:'100%'}}>
         <h1 style={{color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.5)',fontSize:'clamp(26px,4vw,44px)',fontWeight:'900',marginBottom:'12px'}}>出店したい方へ</h1>
         <p style={{color:'#fff',textShadow:'0 1px 4px rgba(0,0,0,0.5)',fontSize:'16px',marginBottom:'32px'}}>全国の出店スペースを検索して、理想の場所を見つけよう</p>
         <div style={{display:'flex',gap:'12px',justifyContent:'center',flexWrap:'wrap'}}>

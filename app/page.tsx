@@ -172,9 +172,9 @@ export default async function Home() {
           {/* 幅と高さを書いておくと、写真が読み込まれる前から場所を確保できる。
               入れないと読み込み時にページが伸び、ページ内リンクの飛び先がずれる */}
           <picture>
-            <source media='(max-width:640px)' srcSet='/hero-full-sp.jpg' width='864' height='1821' />
+            <source media='(max-width:640px)' srcSet='/hero-full-sp.webp' width='864' height='1821' />
             <img
-              src='/hero-full.jpg'
+              src='/hero-full.webp'
               alt='「どこへ行く？」が「ここに来る！」に。最高の人を最適な場所へナビゲート。キッチンカーと出店者、お客さんのイラスト'
               width='1774'
               height='887'
@@ -208,10 +208,10 @@ export default async function Home() {
       <div style={{ ...wrap, padding: '36px 20px' }}>
         <div className='top3-stats'>
           {([
-            { img: '/ic-chef.png', value: 3521, label: '登録出店者' },
-            { img: '/ic-pin.png', value: 301, suffix: '+', label: '出店場所' },
-            { img: '/ic-phone.png', value: 2000, suffix: '+', label: 'LINE登録' },
-            { img: '/ic-globe.png', text: '全国対応', label: '対応エリア拡大中', small: true },
+            { img: '/ic-chef.webp', value: 3521, label: '登録出店者' },
+            { img: '/ic-pin.webp', value: 301, suffix: '+', label: '出店場所' },
+            { img: '/ic-phone.webp', value: 2000, suffix: '+', label: 'LINE登録' },
+            { img: '/ic-globe.webp', text: '全国対応', label: '対応エリア拡大中', small: true },
           ] as { img: string; value?: number; suffix?: string; text?: string; label: string; small?: boolean }[]).map(s => (
             <div key={s.label} className='top3-stat'>
               <img src={s.img} alt='' style={{ height: '52px', width: '52px', objectFit: 'contain', display: 'block', margin: '0 auto 8px' }} />
@@ -263,7 +263,7 @@ export default async function Home() {
           <div className='top3-which'>
             <div className='top3-wbox-seller' style={{ background: '#fff', borderRadius: '16px', padding: '28px 26px', border: '1px solid ' + C.line }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
-                <img src='/ic-truck.png' alt='' style={{ width: '80px', height: '80px', flexShrink: 0, objectFit: 'contain' }} />
+                <img src='/ic-truck.webp' alt='' style={{ width: '80px', height: '80px', flexShrink: 0, objectFit: 'contain' }} />
                 <div>
                   <div className={maru.className} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.goldDeep }}>出店場所を探したい方</div>
                   <div style={{ fontSize: '13px', color: C.muted }}>キッチンカーとして出店したい方はこちら</div>
@@ -276,7 +276,7 @@ export default async function Home() {
             </div>
             <div className='top3-wbox-host' style={{ background: '#fff', borderRadius: '16px', padding: '28px 26px', border: '1px solid ' + C.line }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
-                <img src='/ic-tent.png' alt='' style={{ width: '80px', height: '80px', flexShrink: 0, objectFit: 'contain' }} />
+                <img src='/ic-tent.webp' alt='' style={{ width: '80px', height: '80px', flexShrink: 0, objectFit: 'contain' }} />
                 <div>
                   <div className={maru.className} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.navy }}>キッチンカーを呼びたい方</div>
                   <div style={{ fontSize: '13px', color: C.muted }}>イベントや施設に出店を呼びたい方はこちら</div>
@@ -297,10 +297,10 @@ export default async function Home() {
           <h2 className={maru.className} style={{ ...h2Style, textAlign: 'center', marginBottom: '30px' }}>ご利用の流れ</h2>
           <div className='top3-flow'>
             {[
-              { n: '1', img: '/ic-member.png', h: '会員登録', p: '無料で簡単登録' },
-              { n: '2', img: '/ic-search.png', h: '案件を探す・応募', p: '条件を絞って検索' },
-              { n: '3', img: '/ic-match.png', h: 'マッチング・決定', p: '主催者と内容を調整' },
-              { n: '4', img: '/ic-balloon.png', h: '出店・開催', p: '当日は思いっきり営業！' },
+              { n: '1', img: '/ic-member.webp', h: '会員登録', p: '無料で簡単登録' },
+              { n: '2', img: '/ic-search.webp', h: '案件を探す・応募', p: '条件を絞って検索' },
+              { n: '3', img: '/ic-match.webp', h: 'マッチング・決定', p: '主催者と内容を調整' },
+              { n: '4', img: '/ic-balloon.webp', h: '出店・開催', p: '当日は思いっきり営業！' },
             ].map(s => (
               <div key={s.n} className='top3-fstep'>
                 <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#fff', border: '2px solid ' + C.gold, color: C.goldDeep, fontWeight: 900, display: 'grid', placeItems: 'center', margin: '0 auto 12px', fontSize: '14px' }}>{s.n}</div>
@@ -339,7 +339,7 @@ export default async function Home() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
                 <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900 }}>よくある質問</h2>
-                <img src='/ic-mikan.png' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
+                <img src='/ic-mikan.webp' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
               </div>
               {([
                 { q: '登録に費用はかかりますか？', a: '会員登録・案件の閲覧・応募はすべて無料です。出店が決定した際の手数料については、案件ごとにご案内しています。', open: true },
@@ -368,7 +368,7 @@ export default async function Home() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
                 <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900 }}>最新記事</h2>
-                <img src='/ic-camera.png' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
+                <img src='/ic-camera.webp' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
               </div>
               {posts.length === 0 && <div style={{ color: C.muted, fontSize: '13px', padding: '8px 0' }}>記事は準備中です。</div>}
               {posts.map(b => (
@@ -402,7 +402,7 @@ export default async function Home() {
         <div style={wrap}>
           <div className='top3-signup' style={{ background: `linear-gradient(135deg,${C.cream2},#ffe9bd)`, borderRadius: '20px', padding: '28px 30px' }}>
             <div className='top3-signup-l'>
-              <img src='/signup-banner.jpg' alt='' className='top3-signup-img' style={{ borderRadius: '12px', display: 'block', flexShrink: 0 }} />
+              <img src='/signup-banner.webp' alt='' className='top3-signup-img' style={{ borderRadius: '12px', display: 'block', flexShrink: 0 }} />
               <div>
                 <h3 className={maru.className} style={{ fontSize: '22px', fontWeight: 900, marginBottom: '4px', lineHeight: 1.3 }}>まずは無料で会員登録</h3>
                 <p style={{ fontSize: '13px', color: C.muted }}>案件の閲覧・応募には会員登録が必要です</p>
