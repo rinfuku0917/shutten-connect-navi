@@ -211,16 +211,20 @@ export default function VendorPage() {
               </div>
               <div style={{ background: '#FFF8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '12px' }}>
                 <div style={{ fontSize: '12px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#111' }}>別途お見積り</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: '#111' }}>
+                  1台あたり 5,500円（税込）〜
+                </div>
               </div>
               <ul className='jp-text' style={{ fontSize: '13px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
-                <li>会場に合う出店者の選定・声かけ</li>
-                <li>条件のとりまとめと出店者への周知</li>
-                <li>当日の搬入・配置・連絡などの運営</li>
-                <li>必要な書類（営業許可・保険など）の確認</li>
+                <li>会場に合う出店者への声かけと、候補のご提案</li>
+                <li>条件のとりまとめと、出店者への周知</li>
+                <li>当日の運営（搬入時間・配置の連絡、当日の対応）</li>
+                <li>必要な書類（営業許可・保険など）の確認と、申請の代行</li>
               </ul>
               <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: 0 }}>
-                台数・開催日数・会場の条件によって変わります。ご相談・お見積りは無料ですので、まずは内容をお聞かせください。
+                どの出店者に決めるかは、ご担当者さまで選んでいただくこともできます。
+                現地での立ち会いも、イベントの規模や内容に応じてご相談いただけます。
+                金額は台数・開催日数・会場の条件によって変わりますので、内容をうかがったうえでお見積りします。
               </p>
             </div>
           </div>
