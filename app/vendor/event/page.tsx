@@ -155,12 +155,12 @@ export default function EventVendorPage() {
             <br />
             フード出店を手配します
           </h1>
-          <p style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
+          <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
             <JpText>小さなマルシェ、地元のお祭り、商店街や自治会の催し、学校行事、社内イベント。</JpText>
             <br />
             <JpText>キッチンカーや飲食の出店者が集まらずお困りでしたら、ご相談ください。</JpText>
           </p>
-          <p style={{ fontSize: '14px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
+          <p className='jp-text' style={{ fontSize: '14px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
             1台からご相談いただけます。ご相談は無料、会員登録も不要です。
           </p>
         </div>
@@ -174,12 +174,12 @@ export default function EventVendorPage() {
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>こんなイベントに手配しています</h2>
-          <p style={LEAD}>規模は問いません。数百人の地域の催しから、企業のイベントまでご相談いただけます。</p>
+          <p className='jp-text' style={LEAD}>規模は問いません。数百人の地域の催しから、企業のイベントまでご相談いただけます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {SCENES.map(c => (
               <div key={c.t} style={CARD}>
                 <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
-                <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
+                <div className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
               </div>
             ))}
           </div>
@@ -190,12 +190,12 @@ export default function EventVendorPage() {
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>イベントの出店でよくあるお困りごと</h2>
-          <p style={LEAD}>ひとつでも当てはまるものがあれば、お力になれます。</p>
+          <p className='jp-text' style={LEAD}>ひとつでも当てはまるものがあれば、お力になれます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {TROUBLES.map(c => (
               <div key={c.t} style={CARD}>
                 <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
-                <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
+                <div className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
               </div>
             ))}
           </div>
@@ -206,7 +206,7 @@ export default function EventVendorPage() {
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>いつまでにご相談いただくとよいか</h2>
-          <p style={LEAD}>開催日の2週間前までを目安にご相談ください。</p>
+          <p className='jp-text' style={LEAD}>開催日の2週間前までを目安にご相談ください。</p>
           <div style={{ ...CARD, fontSize: '14px', color: '#333', lineHeight: 2 }}>
             <p style={{ marginBottom: '14px' }}>
               <strong>最低でも開催日の2週間前まで</strong>にご相談いただくのが目安です。
@@ -288,7 +288,7 @@ export default function EventVendorPage() {
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>ご相談時にお聞きすること</h2>
-          <p style={LEAD}>すべて決まっていなくても構いません。分かる範囲でお知らせください。</p>
+          <p className='jp-text' style={LEAD}>すべて決まっていなくても構いません。分かる範囲でお知らせください。</p>
           <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
             {PREP.map(([k, v], i) => (
               <div key={k} style={{ display: 'flex', gap: '16px', padding: '14px 18px', borderTop: i === 0 ? 'none' : '1px solid #F0F0F0', flexWrap: 'wrap' }}>
@@ -304,7 +304,7 @@ export default function EventVendorPage() {
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>よくあるご質問</h2>
-          <p style={LEAD}>イベントの主催者からよくいただくご質問です。</p>
+          <p className='jp-text' style={LEAD}>イベントの主催者からよくいただくご質問です。</p>
           <div>
             {faqAll.map((f, i) => (
               <div key={f.q} style={{ padding: '18px 0', borderTop: i === 0 ? 'none' : '1px solid #E8E8E8' }}>
@@ -320,7 +320,7 @@ export default function EventVendorPage() {
       <div id='soudan' style={{ background: '#FFF8F0', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>まずはご相談ください</h2>
-          <p style={LEAD}>
+          <p className='jp-text' style={LEAD}>
             会員登録は不要です。開催日と場所が決まっていなくても構いません。
           </p>
           <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #FFE0A0', padding: '28px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
