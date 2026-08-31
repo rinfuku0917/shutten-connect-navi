@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { SITE_NAME, SITE_URL } from "./lib/seo";
 
 const geistSans = Geist({
@@ -52,12 +53,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Google アナリティクスの測定ID。Vercel の環境変数
+  // NEXT_PUBLIC_GA_ID に「G-」で始まるIDを入れると計測が始まる。
+  // 未設定のときは読み込まないので、サイトの動きは何も変わらない。
+  const gaId = process.env.NEXT_PUBLIC_GA_ID;
+
   return (
     <html
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
+      {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
     </html>
   );
 }
