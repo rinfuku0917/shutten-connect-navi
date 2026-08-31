@@ -56,7 +56,7 @@ export default function SiteFooter() {
               </a>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '44px', flexWrap: 'wrap' }}>
+          <div className='top3-footcols'>
             {cols.map(col => (
               <div key={col.head} className='top3-footcol'>
                 <h4 style={{ fontSize: '12px', color: C.footerMuted, fontWeight: 700, marginBottom: '12px' }}>{col.head}</h4>

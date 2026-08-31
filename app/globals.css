@@ -309,3 +309,18 @@ img[width='1'][height='1'] { display: inline !important; }
   word-break: auto-phrase;
   text-wrap: pretty;
 }
+
+/* フッターのリンク列。
+   横並びの折り返しにすると、画面幅によって1列だけ次の行に落ちて
+   段差ができてしまうため、格子で位置をそろえる。 */
+.top3-footcols {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 28px 40px;
+}
+@media (max-width: 900px) {
+  .top3-footcols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .top3-footcols { gap: 22px 20px; }
+}
