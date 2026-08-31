@@ -174,22 +174,71 @@ export default function VendorPage() {
 
       {/* 費用の考え方 */}
       <div id='cost' style={{ background: '#FAFAFA', padding: '52px 24px', scrollMarginTop: '80px' }}>
-        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>費用の考え方</h2>
-          <p className='jp-text' style={LEAD}>金額は会場の条件によって変わるため、ご相談のうえ個別にお見積りします。</p>
+        <div style={{ maxWidth: '860px', margin: '0 auto' }}>
+          <h2 className='jp-head' style={H2}>掲載は無料です</h2>
+          <p className='jp-text' style={LEAD}>
+            募集の掲載に費用はかかりません。
+            <br />
+            どこまでを弊社にお任せいただくかで、2つの形からお選びいただけます。
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '16px', marginBottom: '18px' }}>
+            {/* ご自身で運営する形 */}
+            <div style={{ ...CARD, borderColor: '#CFE3D4' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'baseline', flexWrap: 'wrap', marginBottom: '10px' }}>
+                <span style={{ background: '#2E7D32', color: '#fff', fontSize: '12px', fontWeight: 800, padding: '4px 10px', borderRadius: '999px' }}>無料</span>
+                <span className='jp-head' style={{ fontWeight: 900, fontSize: '17px', color: '#111' }}>ご自身で募集する</span>
+              </div>
+              <div style={{ background: '#FAFAFA', borderRadius: '10px', padding: '12px 14px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: '#111' }}>0円</div>
+              </div>
+              <ul className='jp-text' style={{ fontSize: '13px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
+                <li>募集情報の掲載</li>
+                <li>出店者からの応募の受付</li>
+                <li>出店者とのやり取り、日程や条件の調整</li>
+              </ul>
+              <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: 0 }}>
+                掲載料・登録料・成約手数料はいただきません。出店者の選定や当日の段取りは、ご担当者さまで進めていただく形です。
+              </p>
+            </div>
+
+            {/* 運営におまかせいただく形 */}
+            <div style={{ ...CARD, borderColor: '#FFE0A0', background: '#FFFDF8' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'baseline', flexWrap: 'wrap', marginBottom: '10px' }}>
+                <span style={{ background: '#B45309', color: '#fff', fontSize: '12px', fontWeight: 800, padding: '4px 10px', borderRadius: '999px' }}>おまかせ</span>
+                <span className='jp-head' style={{ fontWeight: 900, fontSize: '17px', color: '#111' }}>運営をお任せいただく</span>
+              </div>
+              <div style={{ background: '#FFF8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: '#111' }}>別途お見積り</div>
+              </div>
+              <ul className='jp-text' style={{ fontSize: '13px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
+                <li>会場に合う出店者の選定・声かけ</li>
+                <li>条件のとりまとめと出店者への周知</li>
+                <li>当日の搬入・配置・連絡などの運営</li>
+                <li>必要な書類（営業許可・保険など）の確認</li>
+              </ul>
+              <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: 0 }}>
+                台数・開催日数・会場の条件によって変わります。ご相談・お見積りは無料ですので、まずは内容をお聞かせください。
+              </p>
+            </div>
+          </div>
+
           <div style={{ ...CARD, fontSize: '14px', color: '#333', lineHeight: 2 }}>
-            <p style={{ marginBottom: '14px' }}>
+            <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '10px' }}>出店料の決まり方</div>
+            <p className='jp-text' style={{ marginBottom: '14px' }}>
               出店者がお支払いする出店料は、次の2つを合わせた金額です。
             </p>
-            <ul style={{ paddingLeft: '20px', marginBottom: '14px' }}>
+            <ul className='jp-text' style={{ paddingLeft: '20px', marginBottom: '14px' }}>
               <li>会場をご提供いただく施設・主催者へお渡しする分</li>
               <li>募集や調整にかかる弊社の運営分</li>
             </ul>
-            <p style={{ marginBottom: '14px' }}>
+            <p className='jp-text' style={{ marginBottom: '14px' }}>
               固定額での設定のほか、売上に対する割合（歩合）での設定もできます。
               平日と土日祝で金額を分けることも可能です。
             </p>
-            <p style={{ color: '#666', fontSize: '13px' }}>
+            <p className='jp-text' style={{ color: '#666', fontSize: '13px', margin: 0 }}>
               ご相談・お見積りは無料です。会員登録をされる場合も、初期費用や登録料はいただきません。
             </p>
           </div>

@@ -261,8 +261,19 @@ export default function EventVendorPage() {
               </div>
             ))}
 
+            <div style={{ ...CARD, borderColor: '#CFE3D4' }}>
+              <div className='jp-head' style={{ fontWeight: 900, fontSize: '16px', color: '#111', marginBottom: '10px' }}>
+                募集の掲載は無料です
+              </div>
+              <p className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.9, margin: 0 }}>
+                ご自身で募集を出し、応募のあった出店者とやり取りしていただく形であれば、掲載料・登録料・成約手数料はかかりません。
+                出店者の選定から当日の運営までお任せいただく場合のみ、上記とは別に費用を申し受けます。
+                台数や開催日数によって変わるため、ご相談のうえお見積りします。
+              </p>
+            </div>
+
             <div style={CARD}>
-              <div style={{ fontWeight: 900, fontSize: '16px', color: '#111', marginBottom: '10px' }}>
+              <div className='jp-head' style={{ fontWeight: 900, fontSize: '16px', color: '#111', marginBottom: '10px' }}>
                 金額が変わる主な要素
               </div>
               <ul style={{ fontSize: '13px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
