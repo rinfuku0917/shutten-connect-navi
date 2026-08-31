@@ -39,6 +39,14 @@ export default function ClosedToggle({
       const j = await res.json().catch(() => ({}))
       if (!res.ok) { alert('変更できませんでした: ' + (j.error || res.status)); return }
       setNow(next)
+      // 公開ページにもすぐ反映させる
+      try {
+        await fetch('/api/revalidate-place', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ placeId }),
+        })
+      } catch { /* 反映が遅れるだけなので、失敗しても切り替えは成功として扱う */ }
     } finally {
       setBusy(false)
     }

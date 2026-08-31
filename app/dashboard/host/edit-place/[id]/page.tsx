@@ -180,8 +180,23 @@ function EditPlacePageInner() {
       details: pickDetails(form),
     }).eq('id', id)
     if(updErr) { setErrMsg('更新失敗: ' + updErr.message); setSaving(false); return }
+    await refreshPublicPages(id)
     router.push(backTo)
   }
+
+// 保存した内容を公開ページにすぐ反映させる（キャッシュを作り直す）
+async function refreshPublicPages(placeId?: string) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return
+    await fetch('/api/revalidate-place', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ placeId }),
+    })
+  } catch { /* 反映が遅れるだけなので、失敗しても保存は成功として扱う */ }
+}
 
   const Radio = ({name,val,label}:{name:string,val:string,label:string}) => (
     <label style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'14px'}}>
