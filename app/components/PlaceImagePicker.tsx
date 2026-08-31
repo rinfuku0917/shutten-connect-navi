@@ -52,9 +52,12 @@ export default function PlaceImagePicker({
     setWorking(true)
     try {
       const made: File[] = []
-      for (const f of picked) {
-        try { made.push(await addBand(f, useBand ? label : '')) }
-        catch { made.push(f) }  // 加工に失敗しても、元の写真は登録できるようにする
+      for (let i = 0; i < picked.length; i++) {
+        // 帯は1枚目（一覧のサムネイルになる写真）だけに入れる。
+        // 2枚目以降は区画図などが多く、帯があると邪魔になるため。
+        const isFirst = existing.length + files.length + i === 0
+        try { made.push(await addBand(picked[i], isFirst && useBand ? label : '')) }
+        catch { made.push(picked[i]) }  // 加工に失敗しても、元の写真は登録できるようにする
       }
       onChangeFiles([...files, ...made])
     } finally {
@@ -100,11 +103,12 @@ export default function PlaceImagePicker({
         </div>
       )}
 
-      {/* 帯の設定。写真を選ぶ前に決めてもらう */}
+      {/* 帯の設定。1枚目をこれから選ぶときだけ出す */}
+      {total === 0 && rest > 0 && (
       <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px', marginBottom: '12px' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
           <input type='checkbox' checked={useBand} onChange={e => setUseBand(e.target.checked)} />
-          写真に案件名の帯を入れる
+          1枚目の写真に案件名の帯を入れる
         </label>
         {useBand && (
           <>
@@ -115,12 +119,13 @@ export default function PlaceImagePicker({
               style={{ width: '100%', marginTop: '8px', border: '1.5px solid #E2E8F0', borderRadius: '6px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }}
             />
             <p style={{ fontSize: '11.5px', color: '#94A3B8', marginTop: '6px', lineHeight: 1.7 }}>
-              これから選ぶ写真に入ります。すでに追加した写真は変わりません。
-              空欄のまま選ぶと、帯なしで切り出しだけ行います。
+              一覧のサムネイルになる1枚目だけに入ります。2枚目以降（区画図など）には入りません。
+              すでに追加した写真は変わりません。空欄のまま選ぶと、帯なしで切り出しだけ行います。
             </p>
           </>
         )}
       </div>
+      )}
 
       {rest > 0 ? (
         <label style={{ display: 'inline-block', background: working ? '#CBD5E1' : '#F5A623', color: '#fff', padding: '8px 20px', borderRadius: '8px', cursor: working ? 'wait' : 'pointer', fontSize: '13px', fontWeight: 700 }}>
