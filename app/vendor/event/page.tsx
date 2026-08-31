@@ -216,7 +216,7 @@ export default function EventVendorPage() {
             <p style={{ marginBottom: '14px' }}>
               ただし、出店者は当日に向けて材料を手配します。また、先の出店予定を早い段階から
               押さえているため、直前だと空いている事業者が限られます。
-              <strong>早めにお声がけいただくほど、条件に合う出店者を集めやすくなります。</strong>
+              <strong>早めにご相談いただくほど、条件に合う出店者を集めやすくなります。</strong>
             </p>
             <p style={{ color: '#666', fontSize: '13px', margin: 0 }}>
               開催日と場所が決まった時点でご連絡いただくのが確実です。
