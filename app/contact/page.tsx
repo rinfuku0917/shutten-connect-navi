@@ -4,6 +4,7 @@ import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
 import { useState } from 'react'
+import { track } from '../lib/ga'
 
 export default function ContactPage() {
   const [name, setName] = useState('')
@@ -33,6 +34,7 @@ export default function ContactPage() {
         return
       }
       setStatus('done')
+      track('contact_submit')
       setName(''); setEmail(''); setMessage('')
     } catch {
       setErrMsg('通信エラーが発生しました')

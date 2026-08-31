@@ -169,7 +169,7 @@ export default function HostDashboard() {
               <div style={{fontWeight:'900',fontSize:'15px',color:'#1D4ED8'}}>打ち合わせのご相談</div>
               <button onClick={() => setMeetingOpen(false)} style={{background:'none',border:'none',color:'#94A3B8',fontSize:'13px',cursor:'pointer'}}>閉じる ✕</button>
             </div>
-            <MeetingRequestForm onClose={() => setMeetingOpen(false)} />
+            <MeetingRequestForm source='dashboard' onClose={() => setMeetingOpen(false)} />
           </div>
         )}
 

@@ -323,7 +323,7 @@ export default function EventVendorPage() {
             会員登録は不要です。開催日と場所が決まっていなくても構いません。
           </p>
           <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #FFE0A0', padding: '28px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-            <MeetingRequestForm />
+            <MeetingRequestForm source='vendor-event' />
           </div>
           <p style={{ fontSize: '13px', color: '#666', textAlign: 'center', marginTop: '20px' }}>
             施設への常設出店や、定期的な出店については

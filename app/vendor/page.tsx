@@ -257,7 +257,7 @@ export default function VendorPage() {
             会員登録は不要です。Zoomでも直接お伺いでも、ご都合の良い方法で承ります。
           </p>
           <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #FFE0A0', padding: '28px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-            <MeetingRequestForm />
+            <MeetingRequestForm source='vendor' />
           </div>
         </div>
       </div>

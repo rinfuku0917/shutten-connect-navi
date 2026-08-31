@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import { track } from '../lib/ga'
 
 const AREA_GROUPS: { region: string, prefs: string[] }[] = [
   { region: '関東', prefs: ['東京','神奈川','千葉','埼玉','茨城','群馬','栃木'] },
@@ -90,6 +91,8 @@ export default function RegisterPage() {
       console.error('メール通知に失敗しましたが登録は完了しました', e)
     }
     setDone(true)
+    // 出店者・募集者どちらの登録かも記録する
+    track('signup', { role })
     setLoading(false)
   }
 

@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { track } from '../lib/ga'
 
 // 打ち合わせ・ご相談の申し込みフォーム。
 // 会員登録の前でも相談できるよう、ログインしていなくても送信できる。
@@ -17,9 +18,12 @@ const empty = { name: '', company: '', email: '', phone: '', method: 'both', pre
 export default function MeetingRequestForm({
   onClose,
   compact = false,
+  source = 'unknown',
 }: {
   onClose?: () => void
   compact?: boolean
+  /** どのページに置かれたフォームか（計測用） */
+  source?: string
 }) {
   const [form, setForm] = useState(empty)
   const [sending, setSending] = useState(false)
@@ -42,6 +46,8 @@ export default function MeetingRequestForm({
     setSending(false)
     if (!res.ok) { setErr(j.error || '送信できませんでした'); return }
     setDone(true)
+    // どのページ経由の相談かを記録する
+    track('soudan_submit', { source, method: form.method })
   }
 
   const input: React.CSSProperties = {
