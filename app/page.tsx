@@ -1,7 +1,5 @@
-'use client'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
-import { supabase } from './lib/supabase'
+import { createClient } from '@supabase/supabase-js'
 import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
@@ -103,43 +101,57 @@ function badgeOf(p: NewPlace): { label: string; bg: string } | null {
   return null
 }
 
-export default function Home() {
-  const [newPlaces, setNewPlaces] = useState<NewPlace[]>([])
-  const [works, setWorks] = useState<WorkPlace[]>([])
-  const [posts, setPosts] = useState<BlogPost[]>([])
+// トップに出す内容はサーバー側で読み込む。
+// ブラウザ側で読み込んでいたころは、読み込み後にページが伸びるため
+// 「実績紹介」「よくある質問」へのリンクが目的の場所からずれていた。
+// あわせて、検索エンジンにも案件や記事が見えるようになる。
+export const revalidate = 600
 
+function db() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+}
 
-  useEffect(() => {
-    const loadNew = async () => {
-      const { data } = await supabase
-        .from('places')
+async function loadTop(): Promise<{ newPlaces: NewPlace[]; works: WorkPlace[]; posts: BlogPost[] }> {
+  const empty = { newPlaces: [], works: [], posts: [] }
+  const client = db()
+  if (!client) return empty
+  try {
+    const [a, b, c] = await Promise.all([
+      client.from('places')
         .select('id,title,prefecture,image_url,posted_at,schedule,open_days,urgent,applications(count)')
         .eq('status', 'published')
         .order('pinned', { ascending: false })
         .order('posted_at', { ascending: false })
-        .limit(4)
-      setNewPlaces((data as NewPlace[] | null) || [])
-    }
-    const loadWorks = async () => {
-      const { data } = await supabase
-        .from('places')
+        .limit(4),
+      client.from('places')
         .select('id,title,image_url')
         .eq('status', 'published')
         .not('image_url', 'is', null)
         .order('pinned', { ascending: false })
         .order('posted_at', { ascending: false })
-        .limit(6)
-      setWorks(data || [])
+        .limit(6),
+      client.from('posts')
+        .select('id,slug,title,category,cover_emoji,published_at,content')
+        .eq('status', 'published')
+        .order('published_at', { ascending: false })
+        .limit(3),
+    ])
+    return {
+      newPlaces: (a.data as NewPlace[] | null) ?? [],
+      works: (b.data as WorkPlace[] | null) ?? [],
+      posts: (c.data as BlogPost[] | null) ?? [],
     }
-    const loadPosts = async () => {
-      try {
-        const res = await fetch('/api/posts')
-        const json = await res.json()
-        if (Array.isArray(json.posts)) setPosts(json.posts.slice(0, 3))
-      } catch { /* 記事が取れなくてもトップは表示する */ }
-    }
-    loadNew(); loadWorks(); loadPosts()
-  }, [])
+  } catch {
+    // 読み込めなくてもトップは表示する
+    return empty
+  }
+}
+
+export default async function Home() {
+  const { newPlaces, works, posts } = await loadTop()
 
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ja-JP').replaceAll('/', '.') : ''
 
@@ -157,9 +169,17 @@ export default function Home() {
           <h1 className='jp-head' style={{ fontSize: '15px', fontWeight: 700, color: C.ink, textAlign: 'center', lineHeight: 1.8, margin: '0 0 12px' }}>
             キッチンカーの手配・派遣と、出店場所探しをつなぐ「出店コネクトナビ」
           </h1>
+          {/* 幅と高さを書いておくと、写真が読み込まれる前から場所を確保できる。
+              入れないと読み込み時にページが伸び、ページ内リンクの飛び先がずれる */}
           <picture>
-            <source media='(max-width:640px)' srcSet='/hero-full-sp.jpg' />
-            <img src='/hero-full.jpg' alt='「どこへ行く？」が「ここに来る！」に。最高の人を最適な場所へナビゲート。キッチンカーと出店者、お客さんのイラスト' style={{ width: '100%', height: 'auto', display: 'block', borderRadius: '18px' }} />
+            <source media='(max-width:640px)' srcSet='/hero-full-sp.jpg' width='864' height='1821' />
+            <img
+              src='/hero-full.jpg'
+              alt='「どこへ行く？」が「ここに来る！」に。最高の人を最適な場所へナビゲート。キッチンカーと出店者、お客さんのイラスト'
+              width='1774'
+              height='887'
+              style={{ width: '100%', height: 'auto', display: 'block', borderRadius: '18px' }}
+            />
           </picture>
         </div>
         <div className='top3-gates2'>
@@ -294,7 +314,7 @@ export default function Home() {
       </section>
 
       {/* WORKS */}
-      <section id='works' style={{ padding: '54px 0' }}>
+      <section id='works' style={{ padding: '54px 0', scrollMarginTop: '72px' }}>
         <div style={wrap}>
           <div style={secHead}>
             <h2 className={maru.className + ' top3-sechead-bar'} style={h2Style}>出店実績</h2>
@@ -313,7 +333,7 @@ export default function Home() {
       </section>
 
       {/* FAQ + BLOG */}
-      <section id='faq' style={{ padding: '54px 0', background: C.cream }}>
+      <section id='faq' style={{ padding: '54px 0', background: C.cream, scrollMarginTop: '72px' }}>
         <div style={wrap}>
           <div className='top3-fb'>
             <div>
