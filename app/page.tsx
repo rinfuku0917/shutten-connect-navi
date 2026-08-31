@@ -6,6 +6,7 @@ import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
 import { firstImage } from './lib/postImage'
+import CountUp from './components/CountUp'
 
 // デザイン見本(top-v3)指定フォント: 見出し=丸ゴシック / 本文=角ゴシック
 const maru = Zen_Maru_Gothic({ weight: ['500', '700', '900'], subsets: ['latin'] })
@@ -187,16 +188,18 @@ export default function Home() {
       <div style={{ ...wrap, padding: '36px 20px' }}>
         <div className='top3-stats'>
           {([
-            { img: '/ic-chef.png', num: '3,000+', label: '登録出店者' },
-            { img: '/ic-pin.png', num: '200+', label: '出店場所' },
-            { img: '/ic-phone.png', num: '2,000+', label: 'LINE登録' },
-            { img: '/ic-globe.png', num: '全国対応', label: '対応エリア拡大中', small: true },
-          ] as { ic?: string; img?: string; num: string; label: string; small?: boolean }[]).map(s => (
+            { img: '/ic-chef.png', value: 3521, label: '登録出店者' },
+            { img: '/ic-pin.png', value: 301, suffix: '+', label: '出店場所' },
+            { img: '/ic-phone.png', value: 2000, suffix: '+', label: 'LINE登録' },
+            { img: '/ic-globe.png', text: '全国対応', label: '対応エリア拡大中', small: true },
+          ] as { img: string; value?: number; suffix?: string; text?: string; label: string; small?: boolean }[]).map(s => (
             <div key={s.label} className='top3-stat'>
-              {s.img
-                ? <img src={s.img} alt='' style={{ height: '52px', width: '52px', objectFit: 'contain', display: 'block', margin: '0 auto 8px' }} />
-                : <div style={{ fontSize: '26px', marginBottom: '6px' }}>{s.ic}</div>}
-              <div className={maru.className} style={{ fontSize: s.small ? 'clamp(20px,2.8vw,27px)' : 'clamp(26px,3.6vw,34px)', fontWeight: 900, color: C.navy, lineHeight: 1 }}>{s.num}</div>
+              <img src={s.img} alt='' style={{ height: '52px', width: '52px', objectFit: 'contain', display: 'block', margin: '0 auto 8px' }} />
+              <div className={maru.className} style={{ fontSize: s.small ? 'clamp(20px,2.8vw,27px)' : 'clamp(26px,3.6vw,34px)', fontWeight: 900, color: C.navy, lineHeight: 1 }}>
+                {s.value != null
+                  ? <CountUp value={s.value} suffix={s.suffix} />
+                  : s.text}
+              </div>
               <div style={{ fontSize: '12.5px', color: C.muted, fontWeight: 700, marginTop: '6px' }}>{s.label}</div>
             </div>
           ))}
