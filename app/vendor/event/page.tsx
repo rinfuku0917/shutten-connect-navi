@@ -5,7 +5,6 @@ import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import MeetingRequestForm from '../../components/MeetingRequestForm'
 import JsonLd from '../../components/JsonLd'
-import JpText from '../../components/JpText'
 import { SITE_URL, breadcrumbJsonLd } from '../../lib/seo'
 import { EVENT_FAQ, VENDOR_FAQ, faqJsonLd } from '../../lib/faq'
 
@@ -156,9 +155,9 @@ export default function EventVendorPage() {
             フード出店を手配します
           </h1>
           <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
-            <JpText>小さなマルシェ、地元のお祭り、商店街や自治会の催し、学校行事、社内イベント。</JpText>
+            小さなマルシェ、地元のお祭り、商店街や自治会の催し、学校行事、社内イベント。
             <br />
-            <JpText>キッチンカーや飲食の出店者が集まらずお困りでしたら、ご相談ください。</JpText>
+            キッチンカーや飲食の出店者が集まらずお困りでしたら、ご相談ください。
           </p>
           <p className='jp-text' style={{ fontSize: '14px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
             1台からご相談いただけます。ご相談は無料、会員登録も不要です。

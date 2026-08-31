@@ -6,7 +6,6 @@ import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
 import { firstImage } from './lib/postImage'
-import JpText from './components/JpText'
 
 // デザイン見本(top-v3)指定フォント: 見出し=丸ゴシック / 本文=角ゴシック
 const maru = Zen_Maru_Gothic({ weight: ['500', '700', '900'], subsets: ['latin'] })
@@ -155,7 +154,7 @@ export default function Home() {
           {/* ページの主題。ヒーロー画像に文字が焼き込まれていて
               検索エンジンには読めないため、テキストとしても置いている */}
           <h1 className='jp-head' style={{ fontSize: '15px', fontWeight: 700, color: C.ink, textAlign: 'center', lineHeight: 1.8, margin: '0 0 12px' }}>
-            <JpText>キッチンカーの手配・派遣と、出店場所探しをつなぐ「出店コネクトナビ」</JpText>
+            キッチンカーの手配・派遣と、出店場所探しをつなぐ「出店コネクトナビ」
           </h1>
           <picture>
             <source media='(max-width:640px)' srcSet='/hero-full-sp.jpg' />

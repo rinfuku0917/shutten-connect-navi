@@ -5,7 +5,6 @@ import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import MeetingRequestForm from '../components/MeetingRequestForm'
 import JsonLd from '../components/JsonLd'
-import JpText from '../components/JpText'
 import { SITE_URL } from '../lib/seo'
 import { VENDOR_FAQ, faqJsonLd } from '../lib/faq'
 
@@ -101,9 +100,9 @@ export default function VendorPage() {
             イベント・施設に呼ぶなら
           </h1>
           <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
-            <JpText>キッチンカーを呼びたい、出店を依頼したい、出張販売を手配したい。</JpText>
+            キッチンカーを呼びたい、出店を依頼したい、出張販売を手配したい。
             <br />
-            <JpText>施設運営者・イベント運営会社・企業・自治体のご担当者からのご相談を承ります。</JpText>
+            施設運営者・イベント運営会社・企業・自治体のご担当者からのご相談を承ります。
           </p>
           <p className='jp-text' style={{ fontSize: '14px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
             ご相談は無料、会員登録も不要です。
