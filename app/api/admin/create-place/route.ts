@@ -64,6 +64,10 @@ export async function POST(req: Request) {
       place_type: place.place_type === 'event' ? 'event' : 'regular',
       genres: Array.isArray(place.genres) && place.genres.length > 0 ? place.genres : null,
       open_days: Array.isArray(place.open_days) && place.open_days.length > 0 ? place.open_days : null,
+      // 開催日。日付が入っている行だけを残す
+      schedule: Array.isArray(place.schedule)
+        ? place.schedule.filter((d: unknown) => d && typeof (d as { date?: unknown }).date === 'string' && (d as { date: string }).date)
+        : null,
       open_time: place.open_time || null,
       close_time: place.close_time || null,
       fee: place.fee || null,
