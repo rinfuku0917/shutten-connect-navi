@@ -78,6 +78,28 @@ export async function POST(req: Request) {
     let skipped = 0
     const errors: string[] = []
 
+    // 取り込み名簿（インポート名簿の画面に出る一覧）は、CSVに載っていた人を
+    // すべて記録する。以前は新しく作った会員だけを記録していたため、
+    // すでに会員がいる人が名簿に載らず、CSVを入れ直しても直らなかった。
+    let rosterSaved = 0
+    for (const s of list) {
+      if (!s.reg_no) continue
+      const email = (s.email || '').trim().toLowerCase()
+      if (!email) continue
+      const { error } = await db.from('imported_sellers').upsert({
+        reg_no: Number(s.reg_no),
+        registered_at: s.registered_at || null,
+        shop_name: s.shop || null,
+        rep_name: s.rep || null,
+        email,
+        phone: s.tel || null,
+        address: s.addr || null,
+        area: s.areas || null,
+        source: 'csv',
+      }, { onConflict: 'reg_no' })
+      if (!error) rosterSaved += 1
+    }
+
     for (const s of targets) {
       const email = (s.email || '').trim().toLowerCase()
       try {
@@ -130,20 +152,6 @@ export async function POST(req: Request) {
         }, { onConflict: 'id' })
         if (pErr) { errors.push(email + ': 会員情報の保存に失敗 ' + pErr.message); continue }
 
-        // 3) 取り込み元の記録も残す（次回の差分判定に使う）
-        if (s.reg_no) {
-          await db.from('imported_sellers').upsert({
-            reg_no: Number(s.reg_no),
-            registered_at: s.registered_at || null,
-            shop_name: s.shop || null,
-            rep_name: s.rep || null,
-            email,
-            phone: s.tel || null,
-            address: s.addr || null,
-            area: s.areas || null,
-            source: 'csv',
-          }, { onConflict: 'reg_no' })
-        }
         created += 1
       } catch (e) {
         errors.push(email + ': ' + (e instanceof Error ? e.message : '不明なエラー'))
@@ -156,6 +164,7 @@ export async function POST(req: Request) {
       total: list.length,
       created,
       skipped,
+      rosterSaved,
       failed: errors.length,
       errors: errors.slice(0, 20),
     })
