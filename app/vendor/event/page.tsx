@@ -5,6 +5,7 @@ import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import MeetingRequestForm from '../../components/MeetingRequestForm'
 import JsonLd from '../../components/JsonLd'
+import JpText from '../../components/JpText'
 import { SITE_URL, breadcrumbJsonLd } from '../../lib/seo'
 import { EVENT_FAQ, VENDOR_FAQ, faqJsonLd } from '../../lib/faq'
 
@@ -104,7 +105,7 @@ const PREP = [
 ]
 
 export default function EventVendorPage() {
-  const H2: React.CSSProperties = { fontSize: '26px', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
+  const H2: React.CSSProperties = { fontSize: 'clamp(21px,6.4vw,26px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
   const LEAD: React.CSSProperties = { fontSize: '14px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '32px' }
   const CARD: React.CSSProperties = { background: '#fff', border: '1px solid #EEE', borderRadius: '14px', padding: '20px 18px' }
   const faqAll = [...EVENT_FAQ, ...VENDOR_FAQ]
@@ -148,16 +149,16 @@ export default function EventVendorPage() {
 
       {/* ヒーロー */}
       <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-poster.jpg) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
-        <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px 26px' }}>
-          <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
+        <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px clamp(14px,4vw,26px)' }}>
+          <h1 className='jp-head' style={{ fontSize: 'clamp(20px,5.6vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
             イベントでの出店にお困りの方へ
             <br />
             フード出店を手配します
           </h1>
           <p style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
-            小さなマルシェ、地元のお祭り、商店街や自治会の催し、学校行事、社内イベント。
+            <JpText>小さなマルシェ、地元のお祭り、商店街や自治会の催し、学校行事、社内イベント。</JpText>
             <br />
-            キッチンカーや飲食の出店者が集まらずお困りでしたら、ご相談ください。
+            <JpText>キッチンカーや飲食の出店者が集まらずお困りでしたら、ご相談ください。</JpText>
           </p>
           <p style={{ fontSize: '14px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
             1台からご相談いただけます。ご相談は無料、会員登録も不要です。
@@ -172,12 +173,12 @@ export default function EventVendorPage() {
       {/* こんなイベントに */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 style={H2}>こんなイベントに手配しています</h2>
+          <h2 className='jp-head' style={H2}>こんなイベントに手配しています</h2>
           <p style={LEAD}>規模は問いません。数百人の地域の催しから、企業のイベントまでご相談いただけます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {SCENES.map(c => (
               <div key={c.t} style={CARD}>
-                <div style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
                 <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
               </div>
             ))}
@@ -188,12 +189,12 @@ export default function EventVendorPage() {
       {/* お困りごと */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 style={H2}>イベントの出店でよくあるお困りごと</h2>
+          <h2 className='jp-head' style={H2}>イベントの出店でよくあるお困りごと</h2>
           <p style={LEAD}>ひとつでも当てはまるものがあれば、お力になれます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {TROUBLES.map(c => (
               <div key={c.t} style={CARD}>
-                <div style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
                 <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
               </div>
             ))}
@@ -204,7 +205,7 @@ export default function EventVendorPage() {
       {/* いつまでに */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 style={H2}>いつまでにご相談いただくとよいか</h2>
+          <h2 className='jp-head' style={H2}>いつまでにご相談いただくとよいか</h2>
           <p style={LEAD}>開催日の2週間前までを目安にご相談ください。</p>
           <div style={{ ...CARD, fontSize: '14px', color: '#333', lineHeight: 2 }}>
             <p style={{ marginBottom: '14px' }}>
@@ -228,7 +229,7 @@ export default function EventVendorPage() {
       {/* 費用の目安（見積り例） */}
       <div id='cost' style={{ background: '#FAFAFA', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 style={H2}>費用の目安</h2>
+          <h2 className='jp-head' style={H2}>費用の目安</h2>
           <p style={{ ...LEAD, marginBottom: '12px' }}>
             キッチンカーを呼ぶときの費用は、3つの形のどれかになります。
             <br />
@@ -286,7 +287,7 @@ export default function EventVendorPage() {
       {/* 準備いただくこと */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 style={H2}>ご相談時にお聞きすること</h2>
+          <h2 className='jp-head' style={H2}>ご相談時にお聞きすること</h2>
           <p style={LEAD}>すべて決まっていなくても構いません。分かる範囲でお知らせください。</p>
           <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
             {PREP.map(([k, v], i) => (
@@ -302,13 +303,13 @@ export default function EventVendorPage() {
       {/* FAQ */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 style={H2}>よくあるご質問</h2>
+          <h2 className='jp-head' style={H2}>よくあるご質問</h2>
           <p style={LEAD}>イベントの主催者からよくいただくご質問です。</p>
           <div>
             {faqAll.map((f, i) => (
               <div key={f.q} style={{ padding: '18px 0', borderTop: i === 0 ? 'none' : '1px solid #E8E8E8' }}>
-                <h3 style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{f.q}</h3>
-                <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.9 }}>{f.a}</p>
+                <h3 className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{f.q}</h3>
+                <p className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.9 }}>{f.a}</p>
               </div>
             ))}
           </div>
@@ -318,7 +319,7 @@ export default function EventVendorPage() {
       {/* 相談フォーム */}
       <div id='soudan' style={{ background: '#FFF8F0', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <h2 style={H2}>まずはご相談ください</h2>
+          <h2 className='jp-head' style={H2}>まずはご相談ください</h2>
           <p style={LEAD}>
             会員登録は不要です。開催日と場所が決まっていなくても構いません。
           </p>

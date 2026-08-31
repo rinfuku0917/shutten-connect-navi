@@ -5,6 +5,7 @@ import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import MeetingRequestForm from '../components/MeetingRequestForm'
 import JsonLd from '../components/JsonLd'
+import JpText from '../components/JpText'
 import { SITE_URL } from '../lib/seo'
 import { VENDOR_FAQ, faqJsonLd } from '../lib/faq'
 
@@ -30,15 +31,15 @@ const CASES: { t: string; d: string; href?: string }[] = [
   { t: 'イベントに呼びたい', d: 'お祭り、マルシェ、スポーツ大会、学園祭など。来場者数と会場の広さに合わせて台数と業態を組みます。', href: '/vendor/event' },
   { t: '商業施設の空きスペースを活用したい', d: 'スーパーやホームセンターの駐車場、店舗前スペースなど。曜日を決めた定期出店にも対応できます。' },
   { t: '社内イベント・社員向けに手配したい', d: 'オフィスの昼食提供、社員感謝デー、周年イベントなど。社内向けの単発利用でもご相談いただけます。' },
-  { t: '自治体・公共施設の催しで出店者を集めたい', d: '市民まつり、防災訓練、公園イベントなど。必要な許可や書類の確認も含めてサポートします。' },
+  { t: '自治体・公共施設の催しに呼びたい', d: '市民まつり、防災訓練、公園イベントなど。必要な許可や書類の確認も含めてサポートします。' },
   { t: 'マンション・団地の住民向けに呼びたい', d: '住民向けの催しや、買い物が不便な地域での定期販売など。' },
   { t: '毎週・毎月決まった曜日に来てほしい', d: '単発ではなく継続的な出店をご希望の場合も、曜日と条件を決めて募集できます。' },
 ]
 
 const CAN_DO = [
-  { t: '目的に合った出店者を探せる', d: '登録している事業者から、業態・メニュー・車両サイズ・対応エリアで絞り込んでお探しします。' },
+  { t: '目的に合う出店者を探せる', d: '登録している事業者から、業態・メニュー・車両サイズ・対応エリアで絞り込んでお探しします。' },
   { t: '募集から当日までまとめて', d: '出店者の募集、条件の調整、当日の連絡まで運営が窓口になります。個別のやり取りは不要です。' },
-  { t: '条件を揃えてから募集できる', d: '電源や水道の有無、搬入時間、NGメニューなどを先に決めた形で募集するので、話が食い違いません。' },
+  { t: '条件を揃えて募集できる', d: '電源や水道の有無、搬入時間、NGメニューなどを先に決めた形で募集するので、話が食い違いません。' },
   { t: 'ご相談は無料', d: '会員登録も不要です。まだ日程が固まっていない段階からご相談いただけます。' },
 ]
 
@@ -64,7 +65,7 @@ const SETSUBI = [
 ]
 
 export default function VendorPage() {
-  const H2: React.CSSProperties = { fontSize: '26px', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
+  const H2: React.CSSProperties = { fontSize: 'clamp(21px,6.4vw,26px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
   const LEAD: React.CSSProperties = { fontSize: '14px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '32px' }
   const CARD: React.CSSProperties = { background: '#fff', border: '1px solid #EEE', borderRadius: '14px', padding: '20px 18px' }
 
@@ -93,16 +94,16 @@ export default function VendorPage() {
       {/* ヒーロー */}
       <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-bg.png) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
         {/* 背景写真が明るいので、文字の下に暗い面を敷いて読めるようにする */}
-        <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px 26px' }}>
-          <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
+        <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px clamp(14px,4vw,26px)' }}>
+          <h1 className='jp-head' style={{ fontSize: 'clamp(20px,5.6vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
             キッチンカーの手配・派遣
             <br />
             イベント・施設に呼ぶなら
           </h1>
           <p style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
-            キッチンカーを呼びたい、出店を依頼したい、出張販売を手配したい。
+            <JpText>キッチンカーを呼びたい、出店を依頼したい、出張販売を手配したい。</JpText>
             <br />
-            施設運営者・イベント運営会社・企業・自治体のご担当者からのご相談を承ります。
+            <JpText>施設運営者・イベント運営会社・企業・自治体のご担当者からのご相談を承ります。</JpText>
           </p>
           <p style={{ fontSize: '14px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
             ご相談は無料、会員登録も不要です。
@@ -118,12 +119,12 @@ export default function VendorPage() {
       {/* こんなときに */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 style={H2}>こんなときにご相談ください</h2>
+          <h2 className='jp-head' style={H2}>こんなときにご相談ください</h2>
           <p style={LEAD}>キッチンカーを呼びたい理由は会場ごとに違います。まずは状況をお聞かせください。</p>
           <div className='grid-3' style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {CASES.map(c => (
               <div key={c.t} style={CARD}>
-                <div style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
                 <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
                 {c.href && (
                   <Link href={c.href} style={{ display: 'inline-block', marginTop: '10px', fontSize: '13px', fontWeight: 700, color: '#B45309', textDecoration: 'none' }}>
@@ -139,7 +140,7 @@ export default function VendorPage() {
       {/* できること */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 style={H2}>出店コネクトナビでできること</h2>
+          <h2 className='jp-head' style={H2}>出店コネクトナビでできること</h2>
           <p style={LEAD}>
             キッチンカー事業者と、出店場所をお持ちの施設・主催者をつなぐサービスです。
             現在 3,000 店舗以上の出店者が登録しています。
@@ -147,7 +148,7 @@ export default function VendorPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px' }}>
             {CAN_DO.map(c => (
               <div key={c.t} style={CARD}>
-                <div style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
                 <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
               </div>
             ))}
@@ -158,13 +159,13 @@ export default function VendorPage() {
       {/* 流れ */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <h2 style={H2}>ご相談から当日までの流れ</h2>
+          <h2 className='jp-head' style={H2}>ご相談から当日までの流れ</h2>
           <p style={LEAD}>会員登録の前でもご相談いただけます。</p>
           <div className='grid-4' style={{ gap: '20px' }}>
             {STEPS.map((s, i) => (
               <div key={s.t} style={{ textAlign: 'center', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>{i + 1}</div>
-                <div style={{ fontWeight: 900, fontSize: '15px', marginBottom: '8px', color: '#111' }}>{s.t}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', marginBottom: '8px', color: '#111' }}>{s.t}</div>
                 <div style={{ fontSize: '12px', color: '#111', lineHeight: 1.7 }}>{s.d}</div>
               </div>
             ))}
@@ -175,7 +176,7 @@ export default function VendorPage() {
       {/* 費用の考え方 */}
       <div id='cost' style={{ background: '#FAFAFA', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 style={H2}>費用の考え方</h2>
+          <h2 className='jp-head' style={H2}>費用の考え方</h2>
           <p style={LEAD}>金額は会場の条件によって変わるため、ご相談のうえ個別にお見積りします。</p>
           <div style={{ ...CARD, fontSize: '14px', color: '#333', lineHeight: 2 }}>
             <p style={{ marginBottom: '14px' }}>
@@ -199,7 +200,7 @@ export default function VendorPage() {
       {/* 設備・条件 */}
       <div id='setsubi' style={{ background: '#fff', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 style={H2}>事前にご確認いただきたい設備・条件</h2>
+          <h2 className='jp-head' style={H2}>事前にご確認いただきたい設備・条件</h2>
           <p style={LEAD}>
             募集を出す前に、次の項目を決めていただきます。分からない項目はご相談の中で一緒に整理します。
           </p>
@@ -221,7 +222,7 @@ export default function VendorPage() {
       {/* 対応エリア */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={H2}>対応エリア</h2>
+          <h2 className='jp-head' style={H2}>対応エリア</h2>
           <p style={{ ...LEAD, marginBottom: '20px' }}>
             全国のイベント・施設に対応しています。
             現在掲載中の募集案件は「出店場所を探す」からご覧いただけます。
@@ -236,13 +237,13 @@ export default function VendorPage() {
       {/* よくあるご質問 */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 style={H2}>よくあるご質問</h2>
+          <h2 className='jp-head' style={H2}>よくあるご質問</h2>
           <p style={LEAD}>キッチンカーを呼びたい方からよくいただくご質問です。</p>
           <div>
             {VENDOR_FAQ.map((f, i) => (
               <div key={f.q} style={{ padding: '18px 0', borderTop: i === 0 ? 'none' : '1px solid #F0F0F0' }}>
-                <h3 style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{f.q}</h3>
-                <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.9 }}>{f.a}</p>
+                <h3 className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{f.q}</h3>
+                <p className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.9 }}>{f.a}</p>
               </div>
             ))}
           </div>
@@ -252,7 +253,7 @@ export default function VendorPage() {
       {/* 会員登録の前でも相談できる導線。掲載を迷っている段階の方向け */}
       <div id='soudan' style={{ background: '#FFF8F0', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <h2 style={H2}>まずはご相談ください</h2>
+          <h2 className='jp-head' style={H2}>まずはご相談ください</h2>
           <p style={LEAD}>
             会員登録は不要です。Zoomでも直接お伺いでも、ご都合の良い方法で承ります。
           </p>

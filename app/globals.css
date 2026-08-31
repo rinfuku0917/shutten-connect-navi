@@ -293,3 +293,19 @@ img[width='1'][height='1'] { display: inline !important; }
   .invoice-sheet tr { page-break-inside: avoid; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* 日本語の折り返しをきれいにする。
+   これを付けないと「キッチンカーの手 / 配・派遣」のように
+   語の途中で改行され、1文字だけ次の行に落ちることがある。
+
+   word-break: auto-phrase … 文節の切れ目で改行する
+   text-wrap: balance      … 各行の長さをそろえる（見出し向け）
+   text-wrap: pretty       … 最後の行に1文字だけ残さない（本文向け） */
+.jp-head {
+  word-break: auto-phrase;
+  text-wrap: balance;
+}
+.jp-text {
+  word-break: auto-phrase;
+  text-wrap: pretty;
+}
