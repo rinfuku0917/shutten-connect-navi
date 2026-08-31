@@ -17,6 +17,7 @@ export type Place = {
   prefecture: string | null
   address: string | null
   place_type: string | null
+  closed: boolean | null
   fee: string | null
   price_fixed: number | null
   price_share_pct: number | null
@@ -259,6 +260,9 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
           <div>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
               <span style={{ background: '#F5A623', color: '#fff', fontSize: '12px', fontWeight: '700', padding: '3px 12px', borderRadius: '999px' }}>{tag}</span>
+              {place.closed && (
+                <span style={{ background: '#E02020', color: '#fff', fontSize: '12px', fontWeight: 700, padding: '3px 12px', borderRadius: '999px' }}>募集終了</span>
+              )}
               {place.prefecture && <span style={{ background: '#EBF6FD', color: '#1D4ED8', fontSize: '12px', fontWeight: '700', padding: '3px 12px', borderRadius: '999px' }}>📍{place.prefecture}</span>}
             </div>
             <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#1a1a1a', marginBottom: '20px', lineHeight: 1.4 }}>{place.title}</h1>
@@ -403,11 +407,27 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
 
           <div style={{ position: 'sticky', top: '20px' }}>
             <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', overflow: 'hidden', marginBottom: '16px' }}>
-              <div style={{ background: '#F5A623', padding: '14px 20px' }}>
-                <div style={{ color: '#fff', fontWeight: '900', fontSize: '15px' }}>この案件に出店する</div>
+              <div style={{ background: place.closed ? '#E02020' : '#F5A623', padding: '14px 20px' }}>
+                <div style={{ color: '#fff', fontWeight: '900', fontSize: '15px' }}>
+                  {place.closed ? 'この案件は募集を終了しました' : 'この案件に出店する'}
+                </div>
               </div>
               <div style={{ padding: '20px' }}>
-                {entryDone ? (
+                {/* 募集が終わった案件は、掲載は残したままエントリーだけ止める */}
+                {place.closed ? (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.9, marginBottom: '16px' }}>
+                      この案件の募集は終了しています。
+                      <br />
+                      同じ場所で新しい募集が出ることがありますので、
+                      <br />
+                      ほかの案件もご覧ください。
+                    </div>
+                    <Link href='/places' style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '13px', borderRadius: '8px', fontWeight: 900, fontSize: '14px', textDecoration: 'none' }}>
+                      募集中の案件を探す
+                    </Link>
+                  </div>
+                ) : entryDone ? (
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '40px', marginBottom: '10px' }}>🎉</div>
                     <div style={{ fontSize: '15px', fontWeight: '900', color: '#16A34A', marginBottom: '8px' }}>エントリーが完了しました</div>

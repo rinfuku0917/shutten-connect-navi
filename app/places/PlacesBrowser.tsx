@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
 import { compareByTitle } from '../lib/placeSort'
+import ClosedRibbon from '../components/ClosedRibbon'
 
 // 地図はSSRでLeafletを読むと壊れるのでクライアントのみで読み込む
 const PlacesMap = dynamic(() => import('../components/PlacesMap'), {
@@ -28,6 +29,7 @@ export type Place = {
   company_fixed_unit: string | null
   company_share_pct: number | null
   place_type: string | null
+  closed: boolean | null
   genres: string[] | null
   image_url: string | null
   latitude: number | null
@@ -84,6 +86,9 @@ const [showMap, setShowMap] = useState(false)
     }
     return true
   }).slice().sort((a, b) => {
+    // 募集終了は、募集中のうしろにまとめる
+    const ca = a.closed ? 1 : 0, cb = b.closed ? 1 : 0
+    if (ca !== cb) return ca - cb
     // 新着順は読み込み時の順序（ピン留め→掲載日の降順）をそのまま使う
     if (sortBy === 'new') return 0
     return compareByTitle(a.title, b.title)
@@ -158,8 +163,9 @@ const [showMap, setShowMap] = useState(false)
           {loading && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>読み込み中...</div>}
           {!loading && filtered.length === 0 && <div style={{color:'#999',fontSize:'14px',padding:'20px',textAlign:'center'}}>条件に合う出店場所が見つかりませんでした。</div>}
           {paged.map(place => (
-            <Link key={place.id} href={'/places/' + place.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',overflow:'hidden',color:'inherit'}}>
-              <div style={{height:'170px',background:'#F5A623',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',backgroundImage:place.image_url?`url(${place.image_url})`:undefined,backgroundSize:'cover',backgroundPosition:'center'}}>
+            <Link key={place.id} href={'/places/' + place.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',overflow:'hidden',color:'inherit',position:'relative'}}>
+              {place.closed && <ClosedRibbon />}
+              <div style={{height:'170px',background:'#F5A623',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',backgroundImage:place.image_url?`url(${place.image_url})`:undefined,backgroundSize:'cover',backgroundPosition:'center',filter:place.closed?'grayscale(1) opacity(0.55)':undefined}}>
                 {!place.image_url && (place.place_type==='event'?'🎪':'🏪')}
               </div>
               <div style={{padding:'20px'}}>
@@ -168,6 +174,7 @@ const [showMap, setShowMap] = useState(false)
                 <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{canSeeFee ? feeText(place) : '🔒 ログイン後表示'}</div>
                 <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
                   <span style={{background:'#EBF6FD',color:'#1565C0',fontSize:'11px',padding:'3px 8px',borderRadius:'4px'}}>🏪 {place.place_type==='event'?'イベント':'常設'}</span>
+                  {place.closed && <span style={{background:'#FEE2E2',color:'#C81E1E',fontSize:'11px',fontWeight:700,padding:'3px 8px',borderRadius:'4px'}}>募集終了</span>}
                 </div>
               </div>
             </Link>

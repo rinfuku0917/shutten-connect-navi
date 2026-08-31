@@ -28,7 +28,7 @@ async function fetchPlaces(): Promise<Place[]> {
     const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
     const { data } = await db
       .from('places')
-      .select('id, title, prefecture, address, fee, place_type, genres, image_url, latitude, longitude, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct')
+      .select('id, title, prefecture, address, fee, place_type, closed, genres, image_url, latitude, longitude, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct')
       .eq('status', 'published')
       .order('pinned', { ascending: false })
       .order('posted_at', { ascending: false })

@@ -10,6 +10,8 @@ import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
+import ClosedToggle from '../components/ClosedToggle'
+import DuplicateButton from '../components/DuplicateButton'
 
 // ダミーデータ
 // profiles.genre は ["食事","スイーツ"] のようなJSON文字列で入っているため
@@ -441,7 +443,7 @@ export default function AdminPage() {
   // ===== レビュー審査（管理者）=====
   type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
   // ===== 案件一覧（管理者・実データ） =====
-  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, day_type_fees: unknown, fee: string, genres: string[] }
+  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, closed: boolean, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, day_type_fees: unknown, fee: string, genres: string[] }
   const [placesList, setPlacesList] = useState<AdminPlace[]>([])
   const [placesLoading, setPlacesLoading] = useState(false)
   const [pKw, setPKw] = useState('')
@@ -455,7 +457,7 @@ export default function AdminPage() {
     setPlacesLoading(true)
     const { data } = await supabase
       .from('places')
-      .select('id, title, prefecture, place_type, status, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, day_type_fees, fee, genres, profiles(name), applications(count)')
+      .select('id, title, prefecture, place_type, status, closed, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, day_type_fees, fee, genres, profiles(name), applications(count)')
       .order('created_at', { ascending: false })
     const mapped: AdminPlace[] = (data || []).map((p: any) => ({
       id: p.id,
@@ -465,6 +467,7 @@ export default function AdminPage() {
       type: p.place_type === 'event' ? 'イベント' : (p.place_type || '-'),
       applies: p.applications?.[0]?.count ?? 0,
       status: p.status === 'published' ? '公開中' : '下書き',
+      closed: !!p.closed,
       price_fixed: p.price_fixed ?? 0, price_share_pct: p.price_share_pct ?? 0, place_fixed_unit: p.place_fixed_unit || 'per_day',
       share_tax_basis: p.share_tax_basis || 'as_entered', share_tax_rate: p.share_tax_rate ?? 8,
       company_fixed_amount: p.company_fixed_amount ?? 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct ?? 0,
@@ -1518,11 +1521,15 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
                             {place.status === '公開中' ? (
-                              <button onClick={() => { if (window.confirm('この案件を下書きに戻しますか？（サイトに表示されなくなります）')) setPlaceStatus(place.id, 'draft') }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', fontWeight: '700' }}>下書きに戻す</button>
+                              <>
+                                <ClosedToggle placeId={place.id} closed={place.closed} compact />
+                                <button onClick={() => { if (window.confirm('この案件を下書きに戻しますか？（サイトに表示されなくなります）')) setPlaceStatus(place.id, 'draft') }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', fontWeight: '700' }}>下書きに戻す</button>
+                              </>
                             ) : (
                               <button onClick={() => setPlaceStatus(place.id, 'published')} style={{ fontSize: '11px', padding: '4px 10px', border: 'none', borderRadius: '6px', background: '#16A34A', cursor: 'pointer', color: '#fff', fontWeight: '700' }}>公開する</button>
                             )}
                             <button onClick={() => openFeeModal(place)} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FDE68A', borderRadius: '6px', background: '#FFFBEB', cursor: 'pointer', color: '#B45309', fontWeight: '700' }}>料金</button>
+                            <DuplicateButton placeId={place.id} compact fromAdmin />
                             <a href={'/places/' + place.id} target='_blank' rel='noopener noreferrer' style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #BFDBFE', borderRadius: '6px', background: '#EFF6FF', cursor: 'pointer', color: '#1D4ED8', textDecoration: 'none', fontWeight: '700' }}>詳細</a>
                             <Link href={'/dashboard/host/edit-place/' + place.id + '?from=admin'} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', textDecoration: 'none' }}>編集</Link>
                             <button onClick={() => { if (window.confirm('この案件を削除しますか？')) deletePlaceAdmin(place.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>削除</button>

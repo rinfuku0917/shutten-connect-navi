@@ -5,12 +5,15 @@ import { supabase } from '../../lib/supabase'
 import MeetingRequestForm from '../../components/MeetingRequestForm'
 import { exportPlaceSubmission } from '../../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../../lib/salesReportXlsx'
+import ClosedToggle from '../../components/ClosedToggle'
+import DuplicateButton from '../../components/DuplicateButton'
 
 type Place = {
   id: string
   title: string
   prefecture: string | null
   status: string | null
+  closed?: boolean | null
   pinned: boolean | null
   created_at: string | null
 }
@@ -72,7 +75,7 @@ export default function HostDashboard() {
     if (!user) { setLoading(false); return }
     const { data } = await supabase
       .from('places')
-      .select('id,title,prefecture,status,pinned,created_at')
+      .select('id,title,prefecture,status,pinned,closed,created_at')
       .eq('host_id', user.id)
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
@@ -188,12 +191,15 @@ export default function HostDashboard() {
               <div style={{display:'flex',gap:'16px',fontSize:'12px',color:'#999',flexWrap:'wrap'}}>
                 <span>{place.prefecture || '-'}</span>
                 <span>状態：{place.status === 'published' ? '公開中' : '非公開'}</span>
+                {place.closed && <span style={{color:'#9CA3AF',fontWeight:700}}>募集終了</span>}
                 <span>登録：{fmtDate(place.created_at)}</span>
               </div>
               <div style={{display:'flex',gap:'6px',flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end',marginTop:'8px'}}>
                 <Link href={'/dashboard/host/edit-place/' + place.id} style={{background:'#EBF6FD',color:'#1D4ED8',border:'1px solid #BFDBFE',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer',textDecoration:'none'}}>編集</Link>
+                <DuplicateButton placeId={place.id} />
                 <button onClick={() => downloadSubmitXlsx(place.id, place.title)} disabled={xlsxBusy === place.id} title='承認済みの出店者の情報（店舗名・メニューなど）を日付ごとのシートにまとめたExcelを保存します' style={{background:'#fff',color:'#1D4ED8',border:'1px solid #BFDBFE',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:xlsxBusy === place.id ? 'wait' : 'pointer'}}>{xlsxBusy === place.id ? '作成中…' : '出店者情報Excel'}</button>
                 <button onClick={() => downloadSalesReportXlsx(place.id, place.title)} disabled={repBusy === place.id} title='報告された売上と、品目ごとの販売食数をまとめたExcelを保存します' style={{background:'#F0FDF4',color:'#15803D',border:'1px solid #BBF7D0',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:repBusy === place.id ? 'wait' : 'pointer'}}>{repBusy === place.id ? '作成中…' : '売上報告Excel'}</button>
+                <ClosedToggle placeId={place.id} closed={!!place.closed} compact />
                 <button onClick={() => togglePin(place.id, place.pinned)} style={{background:place.pinned ? '#FFF8E1' : '#f6f6f6',color:place.pinned ? '#E08A00' : '#555',border:place.pinned ? '1px solid #FFD54F' : '1px solid #e0e0e0',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.pinned ? '上位解除' : '上位表示'}</button>
                 <button onClick={() => toggleStatus(place.id, place.status)} style={{background:place.status === 'published' ? '#FFF3E0' : '#E8F5E9',color:place.status === 'published' ? '#E65100' : '#2E7D32',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.status === 'published' ? '非公開にする' : '公開する'}</button>
                 <button onClick={() => { if(window.confirm('削除しますか？')) deletePlace(place.id) }} style={{background:'#FEF2F2',color:'#DC2626',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>削除</button>
