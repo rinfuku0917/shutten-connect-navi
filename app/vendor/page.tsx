@@ -142,7 +142,7 @@ export default function VendorPage() {
           <h2 className='jp-head' style={H2}>出店コネクトナビでできること</h2>
           <p className='jp-text' style={LEAD}>
             キッチンカー事業者と、出店場所をお持ちの施設・主催者をつなぐサービスです。
-            現在 3,000 店舗以上の出店者が登録しています。
+            現在 3,521 店舗の出店者が登録しています。
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px' }}>
             {CAN_DO.map(c => (
