@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export type Seller = {
   id: string
@@ -77,6 +77,28 @@ export default function SellersBrowser({ initialSellers }: { initialSellers: Sel
   const [area, setArea] = useState('')
   const [page, setPage] = useState(1)
 
+  // 絞り込みとページ番号をURLに持たせる。
+  // 持たせないと、再読み込みや戻る操作のたびに1ページ目に戻ってしまう。
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const n = parseInt(q.get('page') || '1', 10)
+    if (Number.isFinite(n) && n > 1) setPage(n)
+    const qq = q.get('q'); if (qq) setQuery(qq)
+    const g = q.get('genre'); if (g) setGenre(g)
+    const a = q.get('area'); if (a) setArea(a)
+    setReady(true)
+  }, [])
+
+  // 絞り込みを変えたら1ページ目に戻す。
+  // ただしURLから絞り込みを復元したときは戻さない。
+  const filterFirst = useRef(true)
+  useEffect(() => {
+    if (!ready) return
+    if (filterFirst.current) { filterFirst.current = false; return }
+    setPage(1)
+  }, [ready, query, genre, area])
+
   const genreOptions = useMemo<Option[]>(() => {
     const counts = new Map<string, number>()
     for (const s of initialSellers) {
@@ -113,6 +135,18 @@ export default function SellersBrowser({ initialSellers }: { initialSellers: Sel
   const safePage = Math.min(page, totalPages)
   const pageItems = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE)
   const hasFilters = query !== '' || genre !== '' || area !== ''
+
+  // 変わったらURLに書き戻す。履歴は増やさない
+  useEffect(() => {
+    if (!ready) return
+    const q = new URLSearchParams()
+    if (safePage > 1) q.set('page', String(safePage))
+    if (query) q.set('q', query)
+    if (genre) q.set('genre', genre)
+    if (area) q.set('area', area)
+    const qs = q.toString()
+    window.history.replaceState(null, '', qs ? '?' + qs : window.location.pathname)
+  }, [ready, safePage, query, genre, area])
 
   const resetTo1 = () => setPage(1)
   const clearAll = () => {

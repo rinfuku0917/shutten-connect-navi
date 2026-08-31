@@ -4,7 +4,7 @@ import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import dynamic from 'next/dynamic'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
 import { compareByTitle } from '../lib/placeSort'
@@ -62,6 +62,22 @@ export default function PlacesBrowser({ initialPlaces }: { initialPlaces: Place[
   const [pref, setPref] = useState('')
   const [genre, setGenre] = useState('')
 const [showMap, setShowMap] = useState(false)
+  // 絞り込みとページ番号をURLに持たせる。
+  // 持たせないと、再読み込みや戻る操作のたびに1ページ目に戻ってしまう。
+  const [ready, setReady] = useState(false)
+
+  // 最初にURLから読み取る
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const n = parseInt(q.get('page') || '1', 10)
+    if (Number.isFinite(n) && n > 1) setPage(n)
+    const pf = q.get('pref'); if (pf) setPref(pf)
+    const g = q.get('genre'); if (g) setGenre(g)
+    const k = q.get('q'); if (k) setKw(k)
+    const so = q.get('sort'); if (so === 'name' || so === 'new') setSortBy(so)
+    setReady(true)
+  }, [])
+
   // ログインしているかだけを確かめる（料金の表示可否に使う）
   useEffect(() => {
     const checkSeller = async () => {
@@ -93,10 +109,32 @@ const [showMap, setShowMap] = useState(false)
     if (sortBy === 'new') return 0
     return compareByTitle(a.title, b.title)
   }), [places, pref, genre, kw, sortBy])
+  // 絞り込みを変えたら1ページ目に戻す（そのままだと空のページが出る）。
+  // ただしURLから絞り込みを復元したときは戻さない。
+  const filterFirst = useRef(true)
+  useEffect(() => {
+    if (!ready) return
+    if (filterFirst.current) { filterFirst.current = false; return }
+    setPage(1)
+  }, [ready, pref, genre, kw])
+
   const PER_PAGE = 12
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const pageSafe = Math.min(Math.max(1, page), totalPages)
   const paged = filtered.slice((pageSafe - 1) * PER_PAGE, pageSafe * PER_PAGE)
+
+  // 変わったらURLに書き戻す。履歴は増やさない（戻るボタンを汚さないため）
+  useEffect(() => {
+    if (!ready) return
+    const q = new URLSearchParams()
+    if (pageSafe > 1) q.set('page', String(pageSafe))
+    if (pref) q.set('pref', pref)
+    if (genre) q.set('genre', genre)
+    if (kw) q.set('q', kw)
+    if (sortBy !== 'new') q.set('sort', sortBy)
+    const qs = q.toString()
+    window.history.replaceState(null, '', qs ? '?' + qs : window.location.pathname)
+  }, [ready, pageSafe, pref, genre, kw, sortBy])
 
   // 地図用ピン（緯度経度ありのみ）
   const pins = useMemo(() => filtered
