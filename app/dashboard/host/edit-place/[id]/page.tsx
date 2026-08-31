@@ -311,7 +311,7 @@ function EditPlacePageInner() {
             <div style={{marginBottom:'20px'}}>
               <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>イベント画像（最大4枚）</label>
               <PlaceImagePicker existing={existingImages} onChangeExisting={setExistingImages}
-                files={imageFiles} onChangeFiles={setImageFiles} />
+                files={imageFiles} onChangeFiles={setImageFiles} bandLabel={form.title} />
             </div>
 
             <div style={{marginBottom:'20px'}}>
