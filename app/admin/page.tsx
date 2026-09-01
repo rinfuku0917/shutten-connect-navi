@@ -2112,7 +2112,7 @@ const previewDoc = async (fileUrl: string) => {
                   <div style={{ flex: '2 1 200px', minWidth: 0 }}>
                     <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>案件・出店者</label>
                     <select value={saleAppId} onChange={e => setSaleAppId(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', background: '#fff' }}>
-                      <option value=''>選択してください</option>
+                      <option value=''>{approvedApps.length === 0 ? '承認済みの申込がありません' : '選択してください'}</option>
                       {approvedApps.map(a => (
                         <option key={a.application_id} value={a.application_id}>{a.placeTitle}／{a.sellerName}</option>
                       ))}
@@ -2135,7 +2135,7 @@ const previewDoc = async (fileUrl: string) => {
                       <option value='ex10'>税抜に換算（10%）</option>
                     </select>
                   </div>
-                  <button onClick={saveSale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{saleSaving ? '保存中...' : '記録する'}</button>
+                  <button onClick={saveSale} disabled={saleSaving || !saleAppId} title={!saleAppId ? '先に案件・出店者を選んでください' : ''} style={{ background: (saleSaving || !saleAppId) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: (saleSaving || !saleAppId) ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
                 {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const { placeFee, companyFee, totalPay } = calcFees(rev, a, saleTaxOv, saleDate); return (
                   <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B', lineHeight: 1.9 }}>

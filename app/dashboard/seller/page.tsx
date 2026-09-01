@@ -2009,9 +2009,16 @@ export default function SellerDashboard() {
                   <div className='sale-field' style={{ flex: '1 1 200px' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>案件</div>
                     <select value={saleAppId} onChange={e => setSaleAppId(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', background: '#fff' }}>
-                      <option value=''>選択してください</option>
+                      <option value=''>{myApprovedApps.length === 0 ? '承認された案件がありません' : '選択してください'}</option>
                       {myApprovedApps.map(a => { const notYet = !!a.apply_date && todayStr() < a.apply_date; return (<option key={a.application_id} value={a.application_id} disabled={notYet}>{a.placeTitle}{a.apply_date ? '（出店日 ' + a.apply_date.slice(5).replace('-', '/') + '）' : ''}{notYet ? ' ※出店後に入力できます' : ''}</option>) })}
                     </select>
+                    {myApprovedApps.length === 0 && (
+                      // 承認された申込が1件も無いと、案件を選べず売上を記録できない。
+                      // 「選択してください」だけだと理由が分からないため、ここで説明する。
+                      <div style={{ fontSize: '11px', color: '#B45309', marginTop: '6px', lineHeight: 1.7 }}>
+                        売上を記録できるのは、出店が承認された案件だけです。承認されるとここに出ます。
+                      </div>
+                    )}
                   </div>
                   <div className='sale-field' style={{ flex: '0 1 160px' }}>
                     <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上日</div>
@@ -2041,7 +2048,7 @@ export default function SellerDashboard() {
                       <option value='as_entered'>入力した金額をそのまま使う</option>
                     </select>
                   </div>
-                  <button onClick={saveMySale} disabled={saleSaving} style={{ background: saleSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: saleSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{saleSaving ? '保存中...' : '記録する'}</button>
+                  <button onClick={saveMySale} disabled={saleSaving || !saleAppId} title={!saleAppId ? '先に案件を選んでください' : ''} style={{ background: (saleSaving || !saleAppId) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: (saleSaving || !saleAppId) ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
                 <label style={{ marginTop: '12px', display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#1a1a1a', cursor: 'pointer' }}>
                   <input type='checkbox' checked={saleSplit} onChange={e => setSaleSplit(e.target.checked)} style={{ accentColor: '#F5A623', cursor: 'pointer' }} />
