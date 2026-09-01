@@ -122,11 +122,10 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
 
   // 申込のキャンセル（出店者ダッシュボードと同じAPIを使う）
   const cancelEntry = async (appId: string, status: string) => {
-    const ok = window.confirm(
-      status === 'approved'
-        ? 'この承認済みの申込をキャンセルしますか？募集者にも通知されます。この操作は取り消せません。'
-        : 'この申込をキャンセルしますか？この操作は取り消せません。'
-    )
+    // 出店が決まったものはボタン自体を出していないが、
+    // 念のためここでも止める（サーバー側でも拒否している）
+    if (status === 'approved') return
+    const ok = window.confirm('この申込を辞退しますか？運営と募集者にお知らせが届きます。この操作は取り消せません。')
     if (!ok) return
     setCancelingId(appId)
     try {
@@ -445,7 +444,7 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                           const st = e.status === 'approved'
                             ? { label: '承認済', color: '#16A34A' }
                             : e.status === 'rejected'
-                              ? { label: '否認', color: '#DC2626' }
+                              ? { label: '不採用', color: '#DC2626' }
                               : { label: '審査中', color: '#B45309' }
                           return (
                             <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', background: '#fff', borderRadius: '6px', padding: '8px 10px' }}>
@@ -453,12 +452,20 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                               <span style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: 700 }}>
                                 {e.apply_date ? e.apply_date.replace(/-/g, '/') : '日程調整中'}
                               </span>
-                              {e.status !== 'rejected' && (
+                              {e.status === 'approved' ? (
+                                // 出店が決まったあとは、この画面からは取り消せない。
+                                // 募集者が会場や書類の準備を進めているため。
+                                <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#64748B', lineHeight: 1.7, textAlign: 'right' }}>
+                                  出店が決定しています。
+                                  <br />
+                                  やむを得ない場合は運営までご連絡ください。
+                                </span>
+                              ) : e.status !== 'rejected' ? (
                                 <button onClick={() => cancelEntry(e.id, e.status)} disabled={cancelingId === e.id}
-                                  style={{ marginLeft: 'auto', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: cancelingId === e.id ? 'not-allowed' : 'pointer' }}>
-                                  {cancelingId === e.id ? '取消中...' : 'キャンセル'}
+                                  style={{ marginLeft: 'auto', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: cancelingId === e.id ? 'not-allowed' : 'pointer', minHeight: '30px' }}>
+                                  {cancelingId === e.id ? '取消中...' : '辞退する'}
                                 </button>
-                              )}
+                              ) : null}
                             </div>
                           )
                         })}

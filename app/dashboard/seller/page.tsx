@@ -711,14 +711,11 @@ export default function SellerDashboard() {
     setMyApplies(mapped)
   }
 
-  // 申込のキャンセル（審査中・承認済のどちらも本人なら取消可）
+  // 申込の辞退。承認済み（出店決定後）はボタンを出さず、サーバー側でも拒否している。
   const [cancelingId, setCancelingId] = useState<string | null>(null)
   const cancelApplication = async (appId: string, statusLabel: string) => {
-    const ok = window.confirm(
-      statusLabel === '承認済'
-        ? 'この承認済みの申込をキャンセルしますか？募集者にも通知されます。この操作は取り消せません。'
-        : 'この申込をキャンセルしますか？この操作は取り消せません。'
-    )
+    if (statusLabel === '承認済') return
+    const ok = window.confirm('この申込を辞退しますか？運営と募集者にお知らせが届きます。この操作は取り消せません。')
     if (!ok) return
     setCancelingId(appId)
     try {
@@ -1182,7 +1179,9 @@ export default function SellerDashboard() {
                       <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: a.statusBg, color: a.statusColor }}>{a.status}</span>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button onClick={() => { setTab('messages'); openThread(a.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>連絡</button>
-                        {(a.status === '審査中' || a.status === '承認済') && <button onClick={() => cancelApplication(a.id, a.status)} disabled={cancelingId === a.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEF2F2', color: '#DC2626', cursor: cancelingId === a.id ? 'not-allowed' : 'pointer' }}>{cancelingId === a.id ? '取消中...' : '取消'}</button>}
+                        {a.status === '審査中' && <button onClick={() => cancelApplication(a.id, a.status)} disabled={cancelingId === a.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEF2F2', color: '#DC2626', cursor: cancelingId === a.id ? 'not-allowed' : 'pointer', minHeight: '30px' }}>{cancelingId === a.id ? '取消中...' : '辞退'}</button>}
+                        {/* 出店が決まったあとは、この画面からは取り消せない。募集者が準備を進めているため */}
+                        {a.status === '承認済' && <span style={{ fontSize: '11px', color: '#64748B' }}>出店決定（辞退は運営へご連絡ください）</span>}
                         {a.status === '否認' && <button style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #F5A623', borderRadius: '6px', background: '#FFF8E1', color: '#B45309', cursor: 'pointer' }}>再申込</button>}
                       </div>
                     </div>

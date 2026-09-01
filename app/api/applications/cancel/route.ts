@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
+// 運営あての宛先。ほかの通知（新規登録・振込報告）と同じ。
+const ADMIN_EMAIL = 'info@connect-navi.com'
 
 // 二重送信抑制（notify系と同じ方式：dedupeKey + 10秒）
 const recentSends = new Map<string, number>()
@@ -49,6 +51,15 @@ export async function POST(req: Request) {
     if (app.seller_id !== uid) {
       return NextResponse.json({ error: '自分の申込のみキャンセルできます' }, { status: 403 })
     }
+    // 出店が決まったあとの取り消しは受け付けない。
+    // 募集者が会場や提出書類の準備を進めているため、画面を経由しない
+    // 直接の呼び出しも含めてここで止める。
+    if (app.status === 'approved') {
+      return NextResponse.json(
+        { error: '出店が決定しているため、この画面からは辞退できません。運営（info@connect-navi.com）までご連絡ください。' },
+        { status: 409 },
+      )
+    }
 
     // 募集者への通知に必要な情報を、削除前に取得
     const { data: place } = await db
@@ -66,8 +77,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'キャンセルに失敗しました: ' + dErr.message }, { status: 500 })
     }
 
-    // 募集者へ通知メール（送れなくてもキャンセル自体は成功扱い）
-    if (apiKey && host && host.email) {
+    // 通知メール（送れなくてもキャンセル自体は成功扱い）。
+    //
+    // ・運営には必ず知らせる。案件によっては募集者が紐づいていない
+    //   （host_id が未設定の取り込み案件がある）ため、運営だけが
+    //   気づける経路になる。
+    // ・募集者が紐づいていれば、そちらにも知らせる。
+    if (apiKey) {
       const dedupeKey = String(applicationId)
       const nowTs = Date.now()
       const lastTs = recentSends.get(dedupeKey)
@@ -80,23 +96,53 @@ export async function POST(req: Request) {
         const sellerName = seller?.name || '出店者'
         const shopName = seller?.shop_name ? '（' + seller.shop_name + '）' : ''
         const dateText = app.apply_date || '日程指定なし'
-        const subject = '【出店コネクトナビ】「' + placeTitle + '」の出店申込がキャンセルされました'
-        const text = [
-          (host.name || 'ご担当者') + ' 様',
-          '',
-          'あなたの案件「' + placeTitle + '」への出店申込が、出店者によりキャンセルされました。',
-          '',
-          '出店者: ' + sellerName + shopName,
-          '対象日程: ' + dateText,
-          '',
-          'ダッシュボードで最新の申込状況をご確認ください。',
-          'https://app.connect-navi.com/dashboard/host',
-        ].join('\n')
+        const resend = new Resend(apiKey)
+
+        // 運営あて
         try {
-          const resend = new Resend(apiKey)
-          await resend.emails.send({ from: '出店コネクトナビ <' + FROM_EMAIL + '>', to: host.email, subject, text })
+          await resend.emails.send({
+            from: '出店コネクトナビ <' + FROM_EMAIL + '>',
+            to: ADMIN_EMAIL,
+            subject: '【辞退】「' + placeTitle + '」の出店申込が取り消されました',
+            text: [
+              '出店者が申込を辞退しました。',
+              '',
+              '案件: ' + placeTitle,
+              '出店者: ' + sellerName + shopName,
+              '対象日程: ' + dateText,
+              '辞退前の状態: ' + (app.status === 'pending' ? '承認待ち' : String(app.status)),
+              '募集者: ' + (host?.name || '（案件に募集者が紐づいていません）'),
+              '',
+              '管理画面で最新の申込状況をご確認ください。',
+              'https://app.connect-navi.com/admin',
+            ].join('\n'),
+          })
         } catch (e) {
-          console.error('キャンセル通知メールに失敗しましたがキャンセルは完了しました', e)
+          console.error('運営への辞退通知に失敗しましたが、辞退は完了しました', e)
+        }
+
+        // 募集者あて（案件に募集者が紐づいている場合だけ）
+        if (host && host.email) {
+          try {
+            await resend.emails.send({
+              from: '出店コネクトナビ <' + FROM_EMAIL + '>',
+              to: host.email,
+              subject: '【出店コネクトナビ】「' + placeTitle + '」の出店申込がキャンセルされました',
+              text: [
+                (host.name || 'ご担当者') + ' 様',
+                '',
+                'あなたの案件「' + placeTitle + '」への出店申込が、出店者によりキャンセルされました。',
+                '',
+                '出店者: ' + sellerName + shopName,
+                '対象日程: ' + dateText,
+                '',
+                'ダッシュボードで最新の申込状況をご確認ください。',
+                'https://app.connect-navi.com/dashboard/host',
+              ].join('\n'),
+            })
+          } catch (e) {
+            console.error('募集者への辞退通知に失敗しましたが、辞退は完了しました', e)
+          }
         }
       }
     }
