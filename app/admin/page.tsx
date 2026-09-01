@@ -79,6 +79,8 @@ export default function AdminPage() {
   type DocReview = { id: string, seller_id: string, doc_type: string, file_url: string, status: string, uploaded_at: string, reviewed_at: string | null, sellerName: string, sellerShop: string, expiry_date: string | null }
   const [docReviews, setDocReviews] = useState<DocReview[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
+  // 応募者一覧の書類バッジから飛んできたとき、その出店者だけに絞り込む
+  const [docSellerId, setDocSellerId] = useState<{ id: string; name: string } | null>(null)
   // 出店者名で書類を探す（人数が多く、目当ての人を見つけにくいため）
   const [docKw, setDocKw] = useState('')
   const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
@@ -1773,6 +1775,21 @@ const previewDoc = async (fileUrl: string) => {
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者が提出した書類を確認し、承認または否認します。</p>
                 <button onClick={loadDocReviews} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>更新</button>
               </div>
+              {docSellerId && (
+                <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '11px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '13px', color: '#1D4ED8', fontWeight: 700 }}>
+                    「{docSellerId.name}」の書類だけを表示しています
+                  </span>
+                  <button
+                    type='button'
+                    onClick={() => setDocSellerId(null)}
+                    style={{ background: '#fff', border: '1px solid #BFDBFE', color: '#1D4ED8', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', minHeight: '34px' }}
+                  >
+                    すべての出店者を表示
+                  </button>
+                </div>
+              )}
+
               {/* 人数が多いため、名前で探せるようにする */}
               <div style={{ marginBottom: '12px', position: 'relative' }}>
                 <input value={docKw} onChange={e => setDocKw(e.target.value)}
@@ -1821,6 +1838,8 @@ const previewDoc = async (fileUrl: string) => {
                 const kw = docKw.trim().toLowerCase()
                 const shownIds = sellerIds.filter(sid => {
                   const ds = groups[sid]
+                  // 応募者一覧から特定の出店者を指定して来た場合は、その人だけ出す
+                  if (docSellerId && sid !== docSellerId.id) return false
                   if (kw) {
                     const hay = ((ds[0].sellerName || '') + ' ' + (ds[0].sellerShop || '')).toLowerCase()
                     if (!hay.includes(kw)) return false
@@ -2768,6 +2787,15 @@ const previewDoc = async (fileUrl: string) => {
           placeId={appsFor.id}
           placeTitle={appsFor.title}
           onClose={() => { setAppsFor(null); loadPendingApps() }}
+          onOpenDocs={(sellerId, sellerName) => {
+            setAppsFor(null)
+            setDocSellerId({ id: sellerId, name: sellerName })
+            setDocKw('')
+            setDocFilter('all')
+            setTab('docs')
+            try { localStorage.setItem('adminTab', 'docs') } catch { /* 保存できなくても動く */ }
+            window.scrollTo({ top: 0 })
+          }}
         />
       )}
     </div>

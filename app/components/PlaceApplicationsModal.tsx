@@ -73,10 +73,13 @@ export default function PlaceApplicationsModal({
   placeId,
   placeTitle,
   onClose,
+  onOpenDocs,
 }: {
   placeId: string
   placeTitle: string
   onClose: () => void
+  /** 書類の件数を押したときに、その出店者の書類審査へ移動する */
+  onOpenDocs?: (sellerId: string, sellerName: string) => void
 }) {
   const [loading, setLoading] = useState(true)
   const [sellers, setSellers] = useState<Seller[]>([])
@@ -341,9 +344,34 @@ export default function PlaceApplicationsModal({
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
                             <span style={{ fontSize: '14px', fontWeight: 900, color: '#111' }}>{s.shopName}</span>
                             {s.docsTotal > 0 && (
-                              <span style={{ ...chip, background: s.docsOk === s.docsTotal ? '#ECFDF5' : '#FFF7ED', color: s.docsOk === s.docsTotal ? '#047857' : '#C2410C' }}>
-                                書類 {s.docsOk}/{s.docsTotal}
-                              </span>
+                              onOpenDocs ? (
+                                <button
+                                  type='button'
+                                  onClick={() => onOpenDocs(s.id, s.shopName)}
+                                  title={`${s.shopName} の書類審査を開く`}
+                                  style={{ ...chip, background: s.docsOk === s.docsTotal ? '#ECFDF5' : '#FFF7ED', color: s.docsOk === s.docsTotal ? '#047857' : '#C2410C', border: '1px solid ' + (s.docsOk === s.docsTotal ? '#A7F3D0' : '#FED7AA'), cursor: 'pointer', minHeight: '28px' }}
+                                >
+                                  書類 {s.docsOk}/{s.docsTotal} ›
+                                </button>
+                              ) : (
+                                <span style={{ ...chip, background: s.docsOk === s.docsTotal ? '#ECFDF5' : '#FFF7ED', color: s.docsOk === s.docsTotal ? '#047857' : '#C2410C' }}>
+                                  書類 {s.docsOk}/{s.docsTotal}
+                                </span>
+                              )
+                            )}
+                            {s.docsTotal === 0 && (
+                              onOpenDocs ? (
+                                <button
+                                  type='button'
+                                  onClick={() => onOpenDocs(s.id, s.shopName)}
+                                  title={`${s.shopName} の書類審査を開く`}
+                                  style={{ ...chip, background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', minHeight: '28px' }}
+                                >
+                                  書類 未提出 ›
+                                </button>
+                              ) : (
+                                <span style={{ ...chip, background: '#FEF2F2', color: '#B91C1C' }}>書類 未提出</span>
+                              )
                             )}
                           </div>
 
