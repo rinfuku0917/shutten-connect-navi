@@ -5,7 +5,7 @@ import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import MeetingRequestForm from '../../components/MeetingRequestForm'
 import JsonLd from '../../components/JsonLd'
-import { SITE_URL, breadcrumbJsonLd } from '../../lib/seo'
+import { SITE_URL, breadcrumbJsonLd, OG_DEFAULT_IMAGE } from '../../lib/seo'
 import { COST_FAQ, faqJsonLd } from '../../lib/faq'
 import { AREAS } from '../area/areas'
 
@@ -17,7 +17,7 @@ import { AREAS } from '../area/areas'
 // 金額は /vendor/event の3プランと必ず一致させること（食い違うと信用を失う）。
 
 export const metadata: Metadata = {
-  title: { absolute: 'キッチンカーを呼ぶ費用はいくら？料金の相場と決まり方｜出店コネクトナビ' },
+  title: { absolute: 'キッチンカーを呼ぶ費用と料金相場 - 出店コネクトナビ' },
   description:
     'キッチンカーを呼びたい方へ、費用の相場をまとめました。主催者の負担が0円になる条件、売上保証や商品買取の金額の目安、1台あたりいくらか、出張費やキャンセルの考え方まで。ご相談・お見積りは無料です。',
   alternates: { canonical: '/vendor/cost' },
@@ -27,6 +27,7 @@ export const metadata: Metadata = {
       '主催者の負担が0円になる条件、売上保証・商品買取の金額の目安、1台あたりの相場をまとめました。ご相談は無料です。',
     url: '/vendor/cost',
     type: 'website',
+    images: [OG_DEFAULT_IMAGE],
   },
 }
 

@@ -42,7 +42,9 @@ async function fetchPlace(id: string): Promise<Place | null> {
 // 検索結果に出す説明文。案件の説明が無い場合は場所と募集内容から作る。
 function summarize(p: Place): string {
   const parts: string[] = []
-  const where = [p.prefecture, p.address].filter(Boolean).join(' ')
+  // address に都道府県から入っていることが多いので、二重に出さない
+  const addr = (p.address || '').trim()
+  const where = p.prefecture && addr.startsWith(p.prefecture) ? addr : [p.prefecture, addr].filter(Boolean).join(' ')
   if (where) parts.push(where)
   if (p.recruit) parts.push('募集：' + p.recruit)
   const desc = (p.description || '').replace(/\s+/g, ' ').trim()
@@ -55,16 +57,21 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params
   const place = await fetchPlace(id)
   if (!place) return { title: '案件が見つかりません', robots: { index: false, follow: true } }
+  // 募集終了した案件は、応募できないので検索結果には出さない。
+  // 掲載自体は実績として残すため、リンクはたどれるようにしておく（follow）。
+  const closedRobots = place.closed ? { index: false, follow: true } : undefined
 
-  const area = place.prefecture ? `${place.prefecture}｜` : ''
-  const title = `${place.title}｜${area}キッチンカーの出店募集`
+  // AGENTS.md のSEOルールの形式：{案件名}｜{都道府県}のキッチンカー出店場所 - 出店コネクトナビ
+  const area = place.prefecture ? `｜${place.prefecture}のキッチンカー出店場所` : ''
+  const title = `${place.title}${area}`
   const description = summarize(place)
   const image = place.image_url || (Array.isArray(place.images) ? place.images[0] : null)
 
   return {
-    title: { absolute: `${title}｜出店コネクトナビ` },
+    title: { absolute: `${title} - 出店コネクトナビ` },
     description,
     alternates: { canonical: `/places/${place.id}` },
+    ...(closedRobots ? { robots: closedRobots } : {}),
     openGraph: {
       title,
       description,

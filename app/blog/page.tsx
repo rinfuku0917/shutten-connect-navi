@@ -5,12 +5,15 @@ import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import { firstImage } from '../lib/postImage'
+import { POST_CATEGORIES } from '../lib/postCategories'
 
 export const revalidate = 60
 
 export const metadata: Metadata = {
-  title: 'お役立ち情報 | 出店コネクトナビ',
+  // layout の template が二重に付かないよう absolute で指定する
+  title: { absolute: 'お役立ち情報 - 出店コネクトナビ' },
   description: 'キッチンカー・屋台の開業や出店に役立つ情報をお届けします。開業費用、営業許可、出店場所の探し方、収益アップのコツなど、出店者と募集者のための実践ガイド。',
+  alternates: { canonical: '/blog' },
 }
 
 type Post = {
@@ -21,22 +24,36 @@ type Post = {
 
 const PER_PAGE = 10
 
-async function getPosts(page: number): Promise<{ posts: Post[]; total: number }> {
+async function getPosts(page: number, category: string | null): Promise<{ posts: Post[]; total: number }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return { posts: [], total: 0 }
   const sb = createClient(url, key)
   const start = (page - 1) * PER_PAGE
   const end = start + PER_PAGE - 1
-  const { data, count } = await sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content', { count: 'exact' }).eq('status', 'published').order('published_at', { ascending: false }).range(start, end)
+  let q = sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content', { count: 'exact' }).eq('status', 'published')
+  // 絞り込みはサーバー側で行う（クライアントで絞ると、その分もHTMLに出ないため）
+  if (category) q = q.eq('category', category)
+  const { data, count } = await q.order('published_at', { ascending: false }).range(start, end)
   return { posts: (data as Post[]) || [], total: count || 0 }
 }
 
-export default async function BlogPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+export default async function BlogPage({ searchParams }: { searchParams: Promise<{ page?: string; category?: string }> }) {
   const sp = await searchParams
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
-  const { posts, total } = await getPosts(page)
+  // 決めた4カテゴリ以外が来ても無視する
+  const category = POST_CATEGORIES.includes((sp.category ?? '') as (typeof POST_CATEGORIES)[number]) ? sp.category! : null
+  const { posts, total } = await getPosts(page, category)
   const totalPages = Math.ceil(total / PER_PAGE)
+  const qs = (over: Record<string, string | number | null>) => {
+    const q = new URLSearchParams()
+    const c = 'category' in over ? over.category : category
+    const pg = 'page' in over ? over.page : page
+    if (c) q.set('category', String(c))
+    if (pg && Number(pg) > 1) q.set('page', String(pg))
+    const t = q.toString()
+    return t ? `/blog?${t}` : '/blog'
+  }
 
   return (
     <div style={{ background: '#FFF8F0', minHeight: '100vh' }}>
@@ -49,8 +66,26 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
         <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)' }}>出店に役立つ記事・ガイドをお届けします</p>
       </div>
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 16px' }}>
+        <nav aria-label='記事のカテゴリー' style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '22px' }}>
+          <Link
+            href={qs({ category: null, page: 1 })}
+            style={{ padding: '9px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 800, textDecoration: 'none', border: '1px solid ' + (category ? '#E7DCC8' : '#F5A623'), background: category ? '#fff' : '#F5A623', color: category ? '#64748B' : '#fff' }}
+          >
+            すべて
+          </Link>
+          {POST_CATEGORIES.map(c => (
+            <Link
+              key={c}
+              href={qs({ category: c, page: 1 })}
+              style={{ padding: '9px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 800, textDecoration: 'none', border: '1px solid ' + (category === c ? '#F5A623' : '#E7DCC8'), background: category === c ? '#F5A623' : '#fff', color: category === c ? '#fff' : '#64748B' }}
+            >
+              {c}
+            </Link>
+          ))}
+        </nav>
+
         {posts.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#999', fontSize: '14px' }}>記事を準備中です。もうしばらくお待ちください。</div>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#999', fontSize: '14px' }}>{category ? `「${category}」の記事はまだありません。` : '記事を準備中です。もうしばらくお待ちください。'}</div>
         ) : (
           <div style={{ display: 'grid', gap: '16px' }}>
             {posts.map(post => (
@@ -78,13 +113,13 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
         {totalPages > 1 && (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' }}>
             {page > 1 && (
-              <a href={'/blog?page=' + (page - 1)} style={{ padding: '8px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', background: '#fff', color: '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>← 前へ</a>
+              <a href={qs({ page: page - 1 })} style={{ padding: '8px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', background: '#fff', color: '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>← 前へ</a>
             )}
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-              <a key={n} href={'/blog?page=' + n} style={{ padding: '8px 14px', border: n === page ? '1px solid #F5A623' : '1px solid #e0e0e0', borderRadius: '8px', background: n === page ? '#F5A623' : '#fff', color: n === page ? '#fff' : '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700, minWidth: '20px', textAlign: 'center' }}>{n}</a>
+              <a key={n} href={qs({ page: n })} style={{ padding: '8px 14px', border: n === page ? '1px solid #F5A623' : '1px solid #e0e0e0', borderRadius: '8px', background: n === page ? '#F5A623' : '#fff', color: n === page ? '#fff' : '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700, minWidth: '20px', textAlign: 'center' }}>{n}</a>
             ))}
             {page < totalPages && (
-              <a href={'/blog?page=' + (page + 1)} style={{ padding: '8px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', background: '#fff', color: '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>次へ →</a>
+              <a href={qs({ page: page + 1 })} style={{ padding: '8px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', background: '#fff', color: '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>次へ →</a>
             )}
           </div>
         )}

@@ -7,7 +7,7 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: '運営会社（株式会社nav）',
   description:
-    '出店コネクトナビを運営する株式会社navの会社概要です。所在地・代表者・事業内容を掲載しています。',
+    '出店コネクトナビを運営する株式会社navの会社概要です。キッチンカー事業者と、出店場所をお持ちの施設・イベント主催者をつなぐマッチングサービスを運営しています。所在地・代表者・設立・事業内容を掲載しています。',
   alternates: { canonical: '/company' },
 }
 

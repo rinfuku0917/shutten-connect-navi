@@ -33,3 +33,8 @@ export function breadcrumbJsonLd(items: { name: string; path: string }[]) {
     })),
   }
 }
+
+// SNSで共有したときに出る既定の画像。
+// ページ側で openGraph を書くと layout の既定は引き継がれず置き換わるので、
+// 画像を持たないページでは必ずこれを明示する。
+export const OG_DEFAULT_IMAGE = '/og-default.jpg'

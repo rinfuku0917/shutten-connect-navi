@@ -26,12 +26,16 @@ export const metadata: Metadata = {
   },
   description:
     "イベント・商業施設・オフィスへのキッチンカーの手配と、キッチンカー事業者の出店場所探しをつなぐマッチングサービス。ご相談は無料です。",
-  alternates: { canonical: "/" },
+  // canonical はページごとに指定する。ここに置くと、指定していないページが
+  // すべて「正規URLはトップ」と申告してしまう（過去に1,404ページで発生）。
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
     locale: "ja_JP",
     url: SITE_URL,
+    // SNSで共有したときに出る画像。ページ側で上書きできる。
+    // 無いとカードが文字だけになるので、既定を必ず持たせておく。
+    images: [{ url: "/og-default.jpg", width: 1200, height: 630, alt: SITE_NAME }],
   },
   twitter: { card: "summary_large_image" },
   // Google Search Console の所有権確認タグ。

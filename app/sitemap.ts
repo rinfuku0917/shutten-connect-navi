@@ -34,29 +34,32 @@ function when(...vals: unknown[]): Date | undefined {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
+  // 静的ページの更新日。毎回の生成時刻を入れると「毎時更新」と誤って伝わるので、
+  // 実際に手を入れたときだけここを変える。
+  const STATIC_UPDATED = new Date('2026-09-01T00:00:00Z')
 
   // ログインしなくても見られるページだけを載せる
   const staticPages: MetadataRoute.Sitemap = [
-    { url: `${SITE_URL}/`, lastModified: now, changeFrequency: 'daily', priority: 1 },
-    { url: `${SITE_URL}/vendor`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${SITE_URL}/vendor/event`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${SITE_URL}/vendor/cost`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${SITE_URL}/vendor/area/tokyo`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${SITE_URL}/vendor/area/saitama`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${SITE_URL}/vendor/area/kanagawa`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${SITE_URL}/vendor/area/chiba`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${SITE_URL}/vendor/area/ibaraki`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${SITE_URL}/vendor/area/osaka`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${SITE_URL}/vendor/area/gunma`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${SITE_URL}/vendor/area/tochigi`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${SITE_URL}/vendor/area/hyogo`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${SITE_URL}/places`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
-    { url: `${SITE_URL}/sellers`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${SITE_URL}/space`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${SITE_URL}/blog`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${SITE_URL}/sell`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${SITE_URL}/company`, lastModified: now, changeFrequency: 'monthly', priority: 0.4 },
-    { url: `${SITE_URL}/contact`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${SITE_URL}/`, lastModified: STATIC_UPDATED, changeFrequency: 'daily', priority: 1 },
+    { url: `${SITE_URL}/vendor`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${SITE_URL}/vendor/event`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${SITE_URL}/vendor/cost`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${SITE_URL}/vendor/area/tokyo`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${SITE_URL}/vendor/area/saitama`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${SITE_URL}/vendor/area/kanagawa`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${SITE_URL}/vendor/area/chiba`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${SITE_URL}/vendor/area/ibaraki`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${SITE_URL}/vendor/area/osaka`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${SITE_URL}/vendor/area/gunma`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${SITE_URL}/vendor/area/tochigi`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${SITE_URL}/vendor/area/hyogo`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${SITE_URL}/places`, lastModified: STATIC_UPDATED, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${SITE_URL}/sellers`, lastModified: STATIC_UPDATED, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${SITE_URL}/space`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${SITE_URL}/blog`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${SITE_URL}/sell`, lastModified: STATIC_UPDATED, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${SITE_URL}/company`, lastModified: STATIC_UPDATED, changeFrequency: 'monthly', priority: 0.4 },
+    { url: `${SITE_URL}/contact`, lastModified: STATIC_UPDATED, changeFrequency: 'monthly', priority: 0.5 },
   ]
 
   const db = client()
@@ -70,8 +73,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (let from = 0; ; from += CHUNK) {
       const { data, error } = await db
         .from('places')
-        .select('id, posted_at, created_at')
+        .select('id, posted_at, created_at, closed_at')
         .eq('status', 'published')
+        // 募集終了した案件は載せない。応募できないページに検索から人を送らないため
+        .eq('closed', false)
         .range(from, from + CHUNK - 1)
       if (error || !data || data.length === 0) break
       for (const p of data) {

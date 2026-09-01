@@ -5,7 +5,7 @@ import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import MeetingRequestForm from '../../components/MeetingRequestForm'
 import JsonLd from '../../components/JsonLd'
-import { SITE_URL, breadcrumbJsonLd } from '../../lib/seo'
+import { SITE_URL, breadcrumbJsonLd, OG_DEFAULT_IMAGE } from '../../lib/seo'
 import { EVENT_FAQ, VENDOR_FAQ, faqJsonLd } from '../../lib/faq'
 
 // イベント・マルシェ・お祭りにフード出店を手配したい方向けのページ。
@@ -13,7 +13,7 @@ import { EVENT_FAQ, VENDOR_FAQ, faqJsonLd } from '../../lib/faq'
 // などで検索した主催者が着く想定。
 
 export const metadata: Metadata = {
-  title: { absolute: 'イベントのフード出店を手配｜マルシェ・お祭りのキッチンカー募集なら出店コネクトナビ' },
+  title: { absolute: 'イベントのフード出店を手配 - 出店コネクトナビ' },
   description:
     'イベントでの出店にお困りの方へ。マルシェ、地元のお祭り、商店街や自治会の催し、社内イベントへのフード出店・キッチンカーを手配します。1台からご相談可能、ご相談は無料です。',
   alternates: { canonical: '/vendor/event' },
@@ -22,6 +22,7 @@ export const metadata: Metadata = {
     description: 'マルシェ、地元のお祭り、社内イベントへのフード出店・キッチンカーを手配します。1台からご相談可能。',
     url: '/vendor/event',
     type: 'website',
+    images: [OG_DEFAULT_IMAGE],
   },
 }
 

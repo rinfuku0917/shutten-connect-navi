@@ -1,10 +1,18 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
 import { firstImage } from './lib/postImage'
+import JsonLd from './components/JsonLd'
+import { SITE_URL, SITE_NAME, ORG } from './lib/seo'
 import CountUp from './components/CountUp'
+
+
+// title と description は layout.tsx の既定をそのまま使う。
+// canonical だけは、このページが正規であることを明示する。
+export const metadata: Metadata = { alternates: { canonical: '/' } }
 
 // デザイン見本(top-v3)指定フォント: 見出し=丸ゴシック / 本文=角ゴシック
 const maru = Zen_Maru_Gothic({ weight: ['500', '700', '900'], subsets: ['latin'] })
@@ -160,6 +168,28 @@ export default async function Home() {
 
       {/* HEADER */}
       <SiteHeader />
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'Organization',
+          name: ORG.name,
+          alternateName: SITE_NAME,
+          url: SITE_URL,
+          logo: `${SITE_URL}/logo.svg`,
+          description:
+            'キッチンカー事業者と、出店場所をお持ちの施設・イベント主催者をつなぐマッチングサービスを運営しています。',
+        }}
+      />
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'WebSite',
+          name: SITE_NAME,
+          url: SITE_URL,
+          inLanguage: 'ja',
+          publisher: { '@type': 'Organization', name: ORG.name, url: SITE_URL },
+        }}
+      />
 
       {/* HERO: イラスト画像1枚敷き（PC=横 / スマホ=縦を picture で出し分け） */}
       <header style={{ background: C.cream }}>

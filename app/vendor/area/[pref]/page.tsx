@@ -7,7 +7,7 @@ import BackButton from '../../../components/BackButton'
 import SiteFooter from '../../../components/SiteFooter'
 import MeetingRequestForm from '../../../components/MeetingRequestForm'
 import JsonLd from '../../../components/JsonLd'
-import { SITE_URL, breadcrumbJsonLd } from '../../../lib/seo'
+import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../../lib/seo'
 import { COST_FAQ, faqJsonLd } from '../../../lib/faq'
 import { AREAS, findArea, type Area } from '../areas'
 
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<{ pref: str
   const area = findArea(pref)
   if (!area) return {}
   return {
-    title: { absolute: `${area.name}でキッチンカーを呼ぶ費用｜手配・派遣なら出店コネクトナビ` },
+    title: { absolute: `${area.name}のキッチンカー手配・派遣 - 出店コネクトナビ` },
     description: `${area.name}でキッチンカーを呼びたい方へ。費用の相場、主催者の負担が0円になる条件、${area.name}に対応している出店者の数と募集中の案件をまとめています。1台からご相談可能、お見積りは無料です。`,
     alternates: { canonical: `/vendor/area/${area.slug}` },
     openGraph: {
@@ -37,6 +37,7 @@ export async function generateMetadata({ params }: { params: Promise<{ pref: str
       description: `${area.name}のイベント・施設へキッチンカーを手配します。費用の相場と、対応できる出店者の数をご覧いただけます。`,
       url: `/vendor/area/${area.slug}`,
       type: 'website',
+      images: [OG_DEFAULT_IMAGE],
     },
   }
 }

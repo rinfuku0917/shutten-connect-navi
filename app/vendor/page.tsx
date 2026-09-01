@@ -5,7 +5,7 @@ import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import MeetingRequestForm from '../components/MeetingRequestForm'
 import JsonLd from '../components/JsonLd'
-import { SITE_URL } from '../lib/seo'
+import { SITE_URL, OG_DEFAULT_IMAGE } from '../lib/seo'
 import { VENDOR_FAQ, faqJsonLd } from '../lib/faq'
 
 // キッチンカーを呼びたい側（施設・イベント運営・企業・自治体）向けのページ。
@@ -14,7 +14,7 @@ import { VENDOR_FAQ, faqJsonLd } from '../lib/faq'
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-  title: { absolute: 'キッチンカーの手配・派遣｜イベント・施設に呼ぶなら出店コネクトナビ' },
+  title: { absolute: 'キッチンカーの手配・派遣 - 出店コネクトナビ' },
   description:
     'イベント・商業施設・オフィス・自治体の催しへ、キッチンカーの手配・派遣をご相談いただけます。出店者の募集から条件の調整、当日の運営までまとめてサポート。ご相談は無料、会員登録も不要です。',
   alternates: { canonical: '/vendor' },
@@ -23,6 +23,7 @@ export const metadata: Metadata = {
     description: 'イベント・施設へキッチンカーを呼びたい方へ。募集から当日の調整までまとめてサポートします。',
     url: '/vendor',
     type: 'website',
+    images: [OG_DEFAULT_IMAGE],
   },
 }
 
