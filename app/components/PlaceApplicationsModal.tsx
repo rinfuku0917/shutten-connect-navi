@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import ConfirmDialog from './ConfirmDialog'
+import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionXlsx'
 
 // 案件ごとの応募者一覧。
 //
@@ -86,6 +87,27 @@ export default function PlaceApplicationsModal({
   const [ask, setAsk] = useState<{ id: string; status: 'approved' | 'rejected'; who: string; when: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [askErr, setAskErr] = useState<string | null>(null)
+
+  // 提出用Excelの書き出し
+  const [xlsxBusy, setXlsxBusy] = useState<SubmissionFormat | null>(null)
+  const [xlsxMsg, setXlsxMsg] = useState<string | null>(null)
+
+  const downloadXlsx = async (format: SubmissionFormat) => {
+    setXlsxBusy(format)
+    setXlsxMsg(null)
+    try {
+      const n = await exportPlaceSubmission(supabase, placeId, placeTitle, format)
+      if (n === 0) {
+        setXlsxMsg('出店日の入った承認済みの申込がまだありません。承認するとExcelに載ります。')
+      } else {
+        setXlsxMsg(format === 'aeon' ? `${n}か月分のシートで保存しました。` : `${n}日分のシートで保存しました。`)
+      }
+    } catch (e) {
+      setXlsxMsg('作成できませんでした：' + (e instanceof Error ? e.message : '不明なエラー'))
+    } finally {
+      setXlsxBusy(null)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -255,6 +277,39 @@ export default function PlaceApplicationsModal({
                 <p style={{ fontSize: '12px', color: '#888', lineHeight: 1.9, margin: '0 0 14px' }}>
                   申込は出店希望日ごとに1件で数えます。1社が3日申し込むと3件になります。
                 </p>
+
+                {/* 施設・企業へ提出する出店者情報のExcel。承認済みの申込だけが載る */}
+                <div style={{ background: '#F8FBFE', border: '1px solid #DCE9F5', borderRadius: '10px', padding: '13px 15px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#1D4ED8', marginBottom: '3px' }}>📄 提出用Excelを作る</div>
+                  <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '10px' }}>
+                    承認済みの出店者を、普段ご提出いただいている様式で書き出します。施設に合わせて様式を選んでください。
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type='button'
+                      onClick={() => downloadXlsx('daily')}
+                      disabled={xlsxBusy !== null}
+                      title='開催日ごとに1シート。店舗名・Instagram・ジャンル・テイクアウト時／袋・利用可能決済・メニュー'
+                      style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: xlsxBusy ? 'wait' : 'pointer', minHeight: '36px', opacity: xlsxBusy && xlsxBusy !== 'daily' ? 0.5 : 1 }}
+                    >
+                      {xlsxBusy === 'daily' ? '作成中…' : '日付ごとの様式'}
+                    </button>
+                    <button
+                      type='button'
+                      onClick={() => downloadXlsx('aeon')}
+                      disabled={xlsxBusy !== null}
+                      title='月ごとに1シート。施設名と希望日程の欄あり。イオンモール系でご提出いただいている様式'
+                      style={{ background: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: xlsxBusy ? 'wait' : 'pointer', minHeight: '36px', opacity: xlsxBusy && xlsxBusy !== 'aeon' ? 0.5 : 1 }}
+                    >
+                      {xlsxBusy === 'aeon' ? '作成中…' : 'イオン様式（月ごと）'}
+                    </button>
+                  </div>
+                  {xlsxMsg && (
+                    <div style={{ marginTop: '10px', fontSize: '12px', color: xlsxMsg.includes('できませんでした') || xlsxMsg.includes('ありません') ? '#B45309' : '#047857', lineHeight: 1.8 }}>
+                      {xlsxMsg}
+                    </div>
+                  )}
+                </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {sellers.map(s => {
