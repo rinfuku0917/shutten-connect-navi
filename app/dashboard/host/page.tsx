@@ -7,6 +7,7 @@ import { exportPlaceSubmission } from '../../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../../lib/salesReportXlsx'
 import ClosedToggle from '../../components/ClosedToggle'
 import DuplicateButton from '../../components/DuplicateButton'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 type Place = {
   id: string
@@ -105,6 +106,12 @@ export default function HostDashboard() {
 
   useEffect(() => { load() }, [])
 
+  // 不採用は出店者にメールが届くので、必ず確認をはさむ。
+  // window.confirm はスマホのアプリ内ブラウザで無視されることがあるため使わない。
+  const [rejectAsk, setRejectAsk] = useState<{ id: string; seller: string; place: string } | null>(null)
+  const [rejectBusy, setRejectBusy] = useState(false)
+  const [rejectErr, setRejectErr] = useState<string | null>(null)
+
   const decide = async (id: string, status: 'approved' | 'rejected') => {
     await supabase.from('applications').update({ status }).eq('id', id)
     // 出店者へステータス通知（失敗しても処理は継続）
@@ -117,17 +124,7 @@ export default function HostDashboard() {
     } catch (e) {
       console.error('ステータス通知に失敗しました', e)
     }
-    // 出店者へステータス通知（失敗しても処理は継続）
-    try {
-      await fetch('/api/notify/application-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: id, status }),
-      })
-    } catch (e) {
-      console.error('ステータス通知に失敗しました', e)
-    }
-    showToast(status === 'approved' ? '承認しました' : '否認しました')
+    showToast(status === 'approved' ? '承認しました' : '不採用にしました')
     load()
   }
 
@@ -212,13 +209,13 @@ export default function HostDashboard() {
         {/* 届いた出店申込 */}
         <div style={{marginTop:'32px'}}>
           <h2 style={{fontSize:'18px',fontWeight:'900',color:'#1a1a1a',marginBottom:'4px'}}>届いた出店申込</h2>
-          <p style={{fontSize:'13px',color:'#888',marginBottom:'16px'}}>あなたの案件への出店申込を承認・否認できます</p>
+          <p style={{fontSize:'13px',color:'#888',marginBottom:'16px'}}>あなたの案件への出店申込を、承認または不採用にできます。どちらも出店者にメールでお知らせが届きます。</p>
           {apps.length === 0 ? (
             <div style={{textAlign:'center',color:'#999',padding:'32px',fontSize:'14px',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'8px'}}>まだ申込はありません。</div>
           ) : (
           <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
             {apps.map(a => {
-              const st = a.status === 'approved' ? {label:'承認済',c:'#16A34A',bg:'#ECFDF5'} : a.status === 'rejected' ? {label:'否認',c:'#DC2626',bg:'#FEE2E2'} : {label:'審査中',c:'#92400E',bg:'#FEF3C7'}
+              const st = a.status === 'approved' ? {label:'承認済',c:'#16A34A',bg:'#ECFDF5'} : a.status === 'rejected' ? {label:'不採用',c:'#DC2626',bg:'#FEE2E2'} : {label:'審査中',c:'#92400E',bg:'#FEF3C7'}
               return (
               <div key={a.id} style={{background:'#fff',border:'1px solid #e0e0e0',borderRadius:'8px',padding:'16px'}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px',flexWrap:'wrap'}}>
@@ -235,7 +232,7 @@ export default function HostDashboard() {
                 {a.status === 'pending' && (
                   <div style={{display:'flex',gap:'8px',justifyContent:'flex-end',marginTop:'12px'}}>
                     <button onClick={() => decide(a.id, 'approved')} style={{background:'#E8F5E9',color:'#2E7D32',border:'1px solid #A5D6A7',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer'}}>承認</button>
-                    <button onClick={() => { if(window.confirm('この申込を否認しますか？')) decide(a.id, 'rejected') }} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer'}}>否認</button>
+                    <button type='button' onClick={() => { setRejectErr(null); setRejectAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle }) }} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer',minHeight:'40px'}}>不採用</button>
                   </div>
                 )}
               </div>
@@ -245,6 +242,34 @@ export default function HostDashboard() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!rejectAsk}
+        busy={rejectBusy}
+        error={rejectErr}
+        danger
+        title='この申込を不採用にしますか？'
+        body={
+          rejectAsk
+            ? `${rejectAsk.seller}／${rejectAsk.place}\n\n不採用にすると申込は取り消され、出店者に「今回は見送りとなりました」というお知らせのメールが届きます。`
+            : ''
+        }
+        okLabel='不採用にする'
+        onOk={async () => {
+          if (!rejectAsk) return
+          setRejectBusy(true)
+          setRejectErr(null)
+          try {
+            await decide(rejectAsk.id, 'rejected')
+            setRejectAsk(null)
+          } catch {
+            setRejectErr('変更できませんでした。もう一度お試しください。')
+          } finally {
+            setRejectBusy(false)
+          }
+        }}
+        onCancel={() => { if (!rejectBusy) { setRejectAsk(null); setRejectErr(null) } }}
+      />
     </div>
   )
 }

@@ -8,7 +8,7 @@ import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionX
 // 案件ごとの応募者一覧。
 //
 // これまで応募者を見られるのは「出店承認」タブだけで、そこには
-// 承認待ちのものしか出ていなかった。承認・却下を済ませると一覧から
+// 承認待ちのものしか出ていなかった。承認・不採用を済ませると一覧から
 // 消えてしまい、「この案件に誰が応募したか」を後から確認できなかった。
 // ここでは状態を問わず、その案件のすべての応募を出す。
 //
@@ -48,7 +48,7 @@ type Seller = {
 const LABEL: Record<string, { text: string; bg: string; fg: string }> = {
   pending: { text: '承認待ち', bg: '#FFF7ED', fg: '#C2410C' },
   approved: { text: '承認済み', bg: '#ECFDF5', fg: '#047857' },
-  rejected: { text: '却下', bg: '#FEF2F2', fg: '#B91C1C' },
+  rejected: { text: '不採用', bg: '#FEF2F2', fg: '#B91C1C' },
 }
 
 function badge(status: string) {
@@ -86,7 +86,7 @@ export default function PlaceApplicationsModal({
   const [err, setErr] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
 
-  // 承認・却下は出店者にメールが飛ぶので、必ず確認をはさむ
+  // 承認・不採用は出店者にメールが飛ぶので、必ず確認をはさむ
   const [ask, setAsk] = useState<{ id: string; status: 'approved' | 'rejected'; who: string; when: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [askErr, setAskErr] = useState<string | null>(null)
@@ -281,7 +281,7 @@ export default function PlaceApplicationsModal({
                   <span style={{ ...chip, background: '#EBF6FD', color: '#1D4ED8' }}>申込 {total}件</span>
                   {pend > 0 && <span style={{ ...chip, background: LABEL.pending.bg, color: LABEL.pending.fg }}>承認待ち {pend}</span>}
                   {appr > 0 && <span style={{ ...chip, background: LABEL.approved.bg, color: LABEL.approved.fg }}>承認済み {appr}</span>}
-                  {rej > 0 && <span style={{ ...chip, background: LABEL.rejected.bg, color: LABEL.rejected.fg }}>却下 {rej}</span>}
+                  {rej > 0 && <span style={{ ...chip, background: LABEL.rejected.bg, color: LABEL.rejected.fg }}>不採用 {rej}</span>}
                 </div>
                 <p style={{ fontSize: '12px', color: '#888', lineHeight: 1.9, margin: '0 0 14px' }}>
                   申込は出店希望日ごとに1件で数えます。1社が3日申し込むと3件になります。
@@ -398,7 +398,7 @@ export default function PlaceApplicationsModal({
                                         onClick={() => { setAskErr(null); setAsk({ id: r.id, status: 'rejected', who: s.shopName, when: fmtDate(r.apply_date) }) }}
                                         style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
                                       >
-                                        却下
+                                        不採用
                                       </button>
                                     </span>
                                   )}
@@ -470,16 +470,16 @@ export default function PlaceApplicationsModal({
         busy={busy}
         error={askErr}
         danger={ask?.status === 'rejected'}
-        title={ask?.status === 'approved' ? 'この申込を承認しますか？' : 'この申込を却下しますか？'}
+        title={ask?.status === 'approved' ? 'この申込を承認しますか？' : 'この申込を不採用にしますか？'}
         body={
           ask
             ? `${ask.who}／${ask.when}\n\n` +
               (ask.status === 'approved'
                 ? '承認するとマッチングが成立し、出店者にお知らせのメールが送られます。'
-                : '却下すると申込は取り消され、出店者にお知らせのメールが送られます。')
+                : '不採用にすると申込は取り消され、出店者に「今回は見送りとなりました」というお知らせのメールが届きます。')
             : ''
         }
-        okLabel={ask?.status === 'approved' ? '承認する' : '却下する'}
+        okLabel={ask?.status === 'approved' ? '承認する' : '不採用にする'}
         onOk={apply}
         onCancel={() => { if (!busy) { setAsk(null); setAskErr(null) } }}
       />

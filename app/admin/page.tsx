@@ -12,6 +12,7 @@ import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import DuplicateButton from '../components/DuplicateButton'
 
 // ダミーデータ
@@ -81,6 +82,10 @@ export default function AdminPage() {
   const [docsLoading, setDocsLoading] = useState(false)
   // 応募者一覧の書類バッジから飛んできたとき、その出店者だけに絞り込む
   const [docSellerId, setDocSellerId] = useState<{ id: string; name: string } | null>(null)
+  // 不採用は出店者にメールが届くので、画面内のダイアログで確認をはさむ
+  const [rejectAsk, setRejectAsk] = useState<{ id: string; seller: string; place: string } | null>(null)
+  const [rejectBusy, setRejectBusy] = useState(false)
+  const [rejectErr, setRejectErr] = useState<string | null>(null)
   // 出店者名で書類を探す（人数が多く、目当ての人を見つけにくいため）
   const [docKw, setDocKw] = useState('')
   const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
@@ -2247,7 +2252,7 @@ const previewDoc = async (fileUrl: string) => {
             return (
             <div>
               <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#1D4ED8', display: 'flex', gap: '8px' }}>
-                <span>出店者からの応募を承認すると、マッチングが成立します。却下すると取り消されます。</span>
+                <span>出店者からの応募を承認すると、マッチングが成立します。不採用にすると取り消されます。どちらも出店者にメールでお知らせが届きます。</span>
               </div>
               {/* 施設・企業へ提出する「出店者情報」。承認済みの出店者を、
                   普段提出しているExcelと同じ様式（日付ごとのシート）で出力する */}
@@ -2351,7 +2356,7 @@ const previewDoc = async (fileUrl: string) => {
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <button onClick={() => setAppStatus(a.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
-                      <button onClick={() => { if (window.confirm('この応募を却下しますか？')) setAppStatus(a.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>却下</button>
+                      <button type='button' onClick={() => { setRejectErr(null); setRejectAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle }) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>不採用</button>
                       {a.sellerId && (
                         <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>プロフィールを見る</a>
                       )}
@@ -2782,6 +2787,34 @@ const previewDoc = async (fileUrl: string) => {
       )}
 
       {/* 案件一覧で申込数を押したときに出す、その案件の応募者一覧 */}
+      <ConfirmDialog
+        open={!!rejectAsk}
+        busy={rejectBusy}
+        error={rejectErr}
+        danger
+        title='この申込を不採用にしますか？'
+        body={
+          rejectAsk
+            ? `${rejectAsk.seller}／${rejectAsk.place}\n\n不採用にすると申込は取り消され、出店者に「今回は見送りとなりました」というお知らせのメールが届きます。`
+            : ''
+        }
+        okLabel='不採用にする'
+        onOk={async () => {
+          if (!rejectAsk) return
+          setRejectBusy(true)
+          setRejectErr(null)
+          try {
+            await setAppStatus(rejectAsk.id, 'rejected')
+            setRejectAsk(null)
+          } catch {
+            setRejectErr('変更できませんでした。もう一度お試しください。')
+          } finally {
+            setRejectBusy(false)
+          }
+        }}
+        onCancel={() => { if (!rejectBusy) { setRejectAsk(null); setRejectErr(null) } }}
+      />
+
       {appsFor && (
         <PlaceApplicationsModal
           placeId={appsFor.id}

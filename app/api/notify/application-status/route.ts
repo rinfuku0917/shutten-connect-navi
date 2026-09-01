@@ -45,15 +45,26 @@ export async function POST(req: Request) {
     const sellerName = seller.name || '出店者'
     const approved = status === 'approved'
 
+    // 申込は出店希望日ごとに1件なので、どの日の結果かを本文に入れる。
+    // 1社が複数日申し込むことがあり、日付が無いとどの申込か分からない。
+    const dayText = (() => {
+      if (!app.apply_date) return ''
+      const d = new Date(app.apply_date + 'T00:00:00')
+      if (Number.isNaN(d.getTime())) return String(app.apply_date)
+      const w = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${w}）`
+    })()
+
     const subject = approved
       ? '【出店コネクトナビ】「' + placeTitle + '」への申込が承認されました'
       : '【出店コネクトナビ】「' + placeTitle + '」への申込結果のお知らせ'
 
+    const forDay = dayText ? '（' + dayText + '）' : ''
     const lines = approved
       ? [
           sellerName + ' 様',
           '',
-          'ご申込いただいた「' + placeTitle + '」への出店が承認されました。',
+          'ご申込いただいた「' + placeTitle + '」' + forDay + 'への出店が承認されました。',
           '',
           '担当者とメッセージでやり取りを進め、当日に向けてご準備ください。',
           'https://app.connect-navi.com/dashboard/seller',
@@ -61,9 +72,11 @@ export async function POST(req: Request) {
       : [
           sellerName + ' 様',
           '',
-          'ご申込いただいた「' + placeTitle + '」への出店は、今回は見送りとなりました。',
+          'ご申込いただいた「' + placeTitle + '」' + forDay + 'への出店は、',
+          '誠に申し訳ございませんが、今回は見送りとなりました。',
           '',
-          'また他の案件へのご応募をお待ちしております。',
+          'ご応募いただきありがとうございました。',
+          '他の案件も掲載しておりますので、ぜひご覧ください。',
           'https://app.connect-navi.com/places',
         ]
     const text = lines.join('\n')
