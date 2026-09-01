@@ -11,6 +11,7 @@ import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 import ClosedToggle from '../components/ClosedToggle'
+import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import DuplicateButton from '../components/DuplicateButton'
 
 // ダミーデータ
@@ -994,6 +995,8 @@ export default function AdminPage() {
   }
   const [pendingApps, setPendingApps] = useState<PendingApp[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
+  // 案件一覧の申込数を押したときに開く、その案件の応募者一覧
+  const [appsFor, setAppsFor] = useState<{ id: string; title: string } | null>(null)
   // 施設へ提出するExcel用。承認済みの申込がある案件の一覧。
   const [approvedPlaces, setApprovedPlaces] = useState<{ placeId: string, title: string, count: number }[]>([])
   const [submitXlsxBusy, setSubmitXlsxBusy] = useState('')
@@ -1516,7 +1519,16 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{place.host}</td>
                         <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{place.area}</td>
                         <td style={{ padding: '12px 14px', color: '#64748B', fontSize: '12px' }}>{place.type}</td>
-                        <td style={{ padding: '12px 14px' }}><span style={{ background: '#EBF6FD', color: '#1D4ED8', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', fontSize: '11px' }}>{place.applies}件</span></td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <button
+                            type='button'
+                            onClick={() => setAppsFor({ id: place.id, title: place.title })}
+                            title={place.applies > 0 ? 'この案件に応募した出店者を見る' : 'まだ応募がありません'}
+                            style={{ background: '#EBF6FD', color: '#1D4ED8', fontWeight: '700', padding: '5px 10px', borderRadius: '20px', fontSize: '11px', border: '1px solid #BFDBFE', cursor: 'pointer', minHeight: '28px' }}
+                          >
+                            {place.applies}件
+                          </button>
+                        </td>
                         <td style={{ padding: '12px 14px' }}><span style={{ background: place.status === '公開中' ? '#ECFDF5' : '#F1F5F9', color: place.status === '公開中' ? '#16A34A' : '#64748B', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', fontSize: '11px' }}>{place.status}</span></td>
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
@@ -2748,6 +2760,15 @@ const previewDoc = async (fileUrl: string) => {
             />
           </div>
         </div>
+      )}
+
+      {/* 案件一覧で申込数を押したときに出す、その案件の応募者一覧 */}
+      {appsFor && (
+        <PlaceApplicationsModal
+          placeId={appsFor.id}
+          placeTitle={appsFor.title}
+          onClose={() => { setAppsFor(null); loadPendingApps() }}
+        />
       )}
     </div>
   )
