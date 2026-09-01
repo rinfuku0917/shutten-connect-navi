@@ -21,6 +21,39 @@ function stripTags(html: string): string {
     .trim()
 }
 
+export type FaqItem = { question: string; answer: string }
+
+// 本文の「よくある質問」から、質問と答えの組を取り出す。
+//
+// 構造化データ（FAQPage）に使う。AGENTS.md のSEOルールで
+// 「画面に出していない内容を構造化データにだけ書かない」と決めているため、
+// 本文に書いてあるものだけをここから拾う。本文にFAQがなければ空を返す。
+//
+// 記事の書き方は docs/blog/TEMPLATE.md に合わせている。
+//   ## よくある質問   ← この見出しから
+//   ### 質問          ← h3 が質問
+//   答え…             ← 次の見出しまでが答え
+export function extractFaq(html: string): FaqItem[] {
+  const head = html.match(/<h2[^>]*>(?:(?!<\/h2>)[\s\S])*?よくある質問(?:(?!<\/h2>)[\s\S])*?<\/h2>/)
+  if (!head) return []
+  const from = (head.index ?? 0) + head[0].length
+  // 次の h2 が来たらFAQの章は終わり
+  const rest = html.slice(from)
+  const nextH2 = rest.search(/<h2[\s>]/)
+  const section = nextH2 === -1 ? rest : rest.slice(0, nextH2)
+
+  const items: FaqItem[] = []
+  const re = /<h3[^>]*>([\s\S]*?)<\/h3>([\s\S]*?)(?=<h3[\s>]|$)/g
+  for (const m of section.matchAll(re)) {
+    const question = stripTags(m[1])
+    // 答えは段落をつなげて、1つの文にする
+    const answer = stripTags(m[2].replace(/<\/(p|li|div)>/g, ' ')).replace(/\s+/g, ' ').trim()
+    if (question && answer) items.push({ question, answer })
+  }
+  // 1問だけのFAQは構造化データにする意味が薄い
+  return items.length >= 2 ? items : []
+}
+
 export function preparePostBody(rawHtml: string): { html: string; toc: TocItem[] } {
   // 本文中の h1 を h2 に落とす（ページの h1 は記事タイトルだけにする）
   let html = rawHtml

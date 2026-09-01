@@ -9,7 +9,7 @@ import SiteFooter from '../../components/SiteFooter'
 import JsonLd from '../../components/JsonLd'
 import { SITE_URL, ORG, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../lib/seo'
 import { firstImage } from '../../lib/postImage'
-import { preparePostBody } from '../../lib/postBody'
+import { preparePostBody, extractFaq } from '../../lib/postBody'
 import RelatedPlaces, { fetchRelatedPlaces } from '../../components/RelatedPlaces'
 
 export const revalidate = 60
@@ -70,6 +70,8 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   raw = raw.split('</table>').join('</table></div>')
   // 本文中の h1 を h2 に落とし、h2 に id を振って目次を作る
   const { html, toc } = preparePostBody(raw)
+  // 本文に「よくある質問」があるときだけ FAQPage を出す
+  const faq = extractFaq(html)
   const dateStr = post.published_at ? new Date(post.published_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
   const image = firstImage(post.content)
 
@@ -103,6 +105,19 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           { name: post.title, path: `/blog/${post.slug}` },
         ])}
       />
+      {faq.length > 0 && (
+        <JsonLd
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            mainEntity: faq.map(f => ({
+              '@type': 'Question',
+              name: f.question,
+              acceptedAnswer: { '@type': 'Answer', text: f.answer },
+            })),
+          }}
+        />
+      )}
 
       <article style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 20px 60px' }}>
         <nav aria-label='パンくず' style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>

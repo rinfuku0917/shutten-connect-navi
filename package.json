@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "blog:sql": "node scripts/blog-sql.mjs"
   },
   "dependencies": {
     "@next/third-parties": "^16.3.3",
