@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
@@ -713,25 +714,34 @@ export default function SellerDashboard() {
 
   // 申込の辞退。承認済み（出店決定後）はボタンを出さず、サーバー側でも拒否している。
   const [cancelingId, setCancelingId] = useState<string | null>(null)
-  const cancelApplication = async (appId: string, statusLabel: string) => {
-    if (statusLabel === '承認済') return
-    const ok = window.confirm('この申込を辞退しますか？運営と募集者にお知らせが届きます。この操作は取り消せません。')
-    if (!ok) return
+  // 確認と失敗の知らせに window.confirm / alert を使っていたが、
+  // スマホのアプリ内ブラウザではどちらも無視される。押しても何も
+  // 起きず、辞退できたと思い込んでしまうため、画面内のダイアログにした。
+  const [cancelAsk, setCancelAsk] = useState<{ id: string; label: string } | null>(null)
+  const [cancelErr, setCancelErr] = useState<string | null>(null)
+
+  const runCancelApplication = async () => {
+    if (!cancelAsk) return
+    const appId = cancelAsk.id
     setCancelingId(appId)
+    setCancelErr(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
-      if (!token) { alert('ログインが必要です。再度ログインしてください。'); return }
+      if (!token) { setCancelErr('ログインの有効期限が切れています。一度ログインし直してください。'); return }
       const res = await fetch('/api/applications/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ applicationId: appId }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { alert('キャンセルに失敗しました: ' + (json.error || res.status)); return }
+      if (!res.ok) { setCancelErr(json.error || '辞退できませんでした（エラー ' + res.status + '）'); return }
+      setCancelAsk(null)
       await loadApplies()
       loadMyApprovedApps()
       loadMySales()
+    } catch {
+      setCancelErr('通信に失敗しました。電波の良いところでもう一度お試しください。')
     } finally {
       setCancelingId(null)
     }
@@ -1179,7 +1189,7 @@ export default function SellerDashboard() {
                       <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: a.statusBg, color: a.statusColor }}>{a.status}</span>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button onClick={() => { setTab('messages'); openThread(a.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>連絡</button>
-                        {a.status === '審査中' && <button onClick={() => cancelApplication(a.id, a.status)} disabled={cancelingId === a.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEF2F2', color: '#DC2626', cursor: cancelingId === a.id ? 'not-allowed' : 'pointer', minHeight: '30px' }}>{cancelingId === a.id ? '取消中...' : '辞退'}</button>}
+                        {a.status === '審査中' && <button type='button' onClick={() => { setCancelErr(null); setCancelAsk({ id: a.id, label: `${a.place}／${a.date || '日程調整中'}` }) }} disabled={cancelingId === a.id} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEF2F2', color: '#DC2626', cursor: cancelingId === a.id ? 'not-allowed' : 'pointer', minHeight: '30px' }}>{cancelingId === a.id ? '取消中...' : '辞退'}</button>}
                         {/* 出店が決まったあとは、この画面からは取り消せない。募集者が準備を進めているため */}
                         {a.status === '承認済' && <span style={{ fontSize: '11px', color: '#64748B' }}>出店決定（辞退は運営へご連絡ください）</span>}
                         {a.status === '否認' && <button style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #F5A623', borderRadius: '6px', background: '#FFF8E1', color: '#B45309', cursor: 'pointer' }}>再申込</button>}
@@ -2378,6 +2388,19 @@ export default function SellerDashboard() {
           </div>
         )
       })()}
+
+
+      <ConfirmDialog
+        open={!!cancelAsk}
+        busy={cancelingId !== null}
+        error={cancelErr}
+        danger
+        title='この申込を辞退しますか？'
+        body={cancelAsk ? `${cancelAsk.label}\n\n運営と募集者にお知らせが届きます。取り消したあとに元へ戻すことはできません。` : ''}
+        okLabel='辞退する'
+        onOk={runCancelApplication}
+        onCancel={() => { if (cancelingId === null) { setCancelAsk(null); setCancelErr(null) } }}
+      />
 
     </div>
   )

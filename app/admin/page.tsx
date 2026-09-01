@@ -218,13 +218,35 @@ export default function AdminPage() {
   }, [router])
 
   // 全出店者の提出書類を読み込む
-  const loadDocReviews = async () => {
+  // 提出書類を読み込む。
+  //
+  // 以前は件数の上限を指定しておらず、Supabase の既定（1000件）で
+  // 打ち切られていた。書類が1000件を超えると、古いものが一覧にも検索にも
+  // 出てこなくなる（応募者一覧のバッジは対象の出店者だけを数えるため
+  // 正しく、「バッジは3/3なのに一覧では0件」という食い違いが起きていた）。
+  // 1000件ずつ最後まで取るようにした。
+  //
+  // sellerId を渡した場合は、その出店者の分だけを直接引く。
+  // 応募者一覧のバッジから来たときに、件数に関係なく確実に出すため。
+  const DOC_CHUNK = 1000
+  const loadDocReviews = async (sellerId?: string) => {
     setDocsLoading(true)
-    const { data } = await supabase
-      .from('seller_documents')
-      .select('id, seller_id, doc_type, file_url, status, uploaded_at, reviewed_at, expiry_date, profiles(name, shop_name)')
-      .order('uploaded_at', { ascending: false })
-    const mapped: DocReview[] = (data || []).map((d: any) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = []
+    for (let from = 0; ; from += DOC_CHUNK) {
+      let q = supabase
+        .from('seller_documents')
+        .select('id, seller_id, doc_type, file_url, status, uploaded_at, reviewed_at, expiry_date, profiles(name, shop_name)')
+      if (sellerId) q = q.eq('seller_id', sellerId)
+      const { data, error } = await q
+        .order('uploaded_at', { ascending: false })
+        .range(from, from + DOC_CHUNK - 1)
+      if (error || !data || data.length === 0) break
+      rows.push(...data)
+      if (data.length < DOC_CHUNK) break
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mapped: DocReview[] = rows.map((d: any) => ({
       id: d.id, seller_id: d.seller_id, doc_type: d.doc_type, file_url: d.file_url,
       status: d.status, uploaded_at: d.uploaded_at, reviewed_at: d.reviewed_at || null, expiry_date: d.expiry_date || null,
       sellerName: d.profiles?.name || '(出店者)', sellerShop: d.profiles?.shop_name || ''
@@ -234,7 +256,7 @@ export default function AdminPage() {
   }
 
   // docsタブを開いたら読み込む
-  useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews() }, [tab, authChecked])
+  useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews(docSellerId?.id) }, [tab, authChecked, docSellerId])
 
   // ===== 売上管理（管理者） =====
   type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
@@ -1785,7 +1807,7 @@ const previewDoc = async (fileUrl: string) => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', gap: '12px' }}>
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者が提出した書類を確認し、承認または否認します。</p>
-                <button onClick={loadDocReviews} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>更新</button>
+                <button onClick={() => loadDocReviews(docSellerId?.id)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>更新</button>
               </div>
               {docSellerId && (
                 <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '11px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
@@ -1794,7 +1816,7 @@ const previewDoc = async (fileUrl: string) => {
                   </span>
                   <button
                     type='button'
-                    onClick={() => setDocSellerId(null)}
+                    onClick={() => { setDocSellerId(null); loadDocReviews() }}
                     style={{ background: '#fff', border: '1px solid #BFDBFE', color: '#1D4ED8', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', minHeight: '34px' }}
                   >
                     すべての出店者を表示

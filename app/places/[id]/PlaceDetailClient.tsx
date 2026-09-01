@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import SiteHeader from '../../components/SiteHeader'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import { perDayFeeRange, perDayFee } from '../../lib/placeFee'
@@ -120,26 +121,34 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
     setMyEntries((data || []) as MyEntry[])
   }
 
-  // 申込のキャンセル（出店者ダッシュボードと同じAPIを使う）
-  const cancelEntry = async (appId: string, status: string) => {
-    // 出店が決まったものはボタン自体を出していないが、
-    // 念のためここでも止める（サーバー側でも拒否している）
-    if (status === 'approved') return
-    const ok = window.confirm('この申込を辞退しますか？運営と募集者にお知らせが届きます。この操作は取り消せません。')
-    if (!ok) return
+  // 申込の辞退（出店者ダッシュボードと同じAPIを使う）。
+  //
+  // 確認と失敗の知らせに window.confirm / alert を使っていたが、
+  // スマホのアプリ内ブラウザではどちらも無視される。押しても何も
+  // 起きず、辞退できたと思い込んでしまうため、画面内のダイアログにした。
+  const [cancelAsk, setCancelAsk] = useState<{ id: string; date: string } | null>(null)
+  const [cancelErr, setCancelErr] = useState<string | null>(null)
+
+  const runCancel = async () => {
+    if (!cancelAsk) return
+    const appId = cancelAsk.id
     setCancelingId(appId)
+    setCancelErr(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
-      if (!token) { alert('ログインが必要です。再度ログインしてください。'); return }
+      if (!token) { setCancelErr('ログインの有効期限が切れています。一度ログインし直してください。'); return }
       const res = await fetch('/api/applications/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ applicationId: appId }),
       })
       const j = await res.json().catch(() => ({}))
-      if (!res.ok) { alert('キャンセルに失敗しました: ' + (j.error || res.status)); return }
+      if (!res.ok) { setCancelErr(j.error || '辞退できませんでした（エラー ' + res.status + '）'); return }
+      setCancelAsk(null)
       await loadMyEntries()
+    } catch {
+      setCancelErr('通信に失敗しました。電波の良いところでもう一度お試しください。')
     } finally {
       setCancelingId(null)
     }
@@ -461,7 +470,7 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                                   やむを得ない場合は運営までご連絡ください。
                                 </span>
                               ) : e.status !== 'rejected' ? (
-                                <button onClick={() => cancelEntry(e.id, e.status)} disabled={cancelingId === e.id}
+                                <button type='button' onClick={() => { setCancelErr(null); setCancelAsk({ id: e.id, date: e.apply_date ? e.apply_date.replace(/-/g, '/') : '日程調整中' }) }} disabled={cancelingId === e.id}
                                   style={{ marginLeft: 'auto', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: cancelingId === e.id ? 'not-allowed' : 'pointer', minHeight: '30px' }}>
                                   {cancelingId === e.id ? '取消中...' : '辞退する'}
                                 </button>
@@ -548,6 +557,18 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!cancelAsk}
+        busy={cancelingId !== null}
+        error={cancelErr}
+        danger
+        title='この申込を辞退しますか？'
+        body={cancelAsk ? `${cancelAsk.date}の申込を取り消します。\n\n運営と募集者にお知らせが届きます。取り消したあとに元へ戻すことはできません。` : ''}
+        okLabel='辞退する'
+        onOk={runCancel}
+        onCancel={() => { if (cancelingId === null) { setCancelAsk(null); setCancelErr(null) } }}
+      />
 
       <SiteFooter />
     </div>
