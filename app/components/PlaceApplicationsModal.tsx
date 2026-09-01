@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import ConfirmDialog from './ConfirmDialog'
+import NotifyChoice from './NotifyChoice'
 import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionXlsx'
 
 // 案件ごとの応募者一覧。
@@ -90,6 +91,8 @@ export default function PlaceApplicationsModal({
   const [ask, setAsk] = useState<{ id: string; status: 'approved' | 'rejected'; who: string; when: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [askErr, setAskErr] = useState<string | null>(null)
+  // 承認・不採用のときにメールを送るかどうか。既定は送る
+  const [notify, setNotify] = useState(true)
 
   // 提出用Excelの書き出し
   const [xlsxBusy, setXlsxBusy] = useState<SubmissionFormat | null>(null)
@@ -209,14 +212,17 @@ export default function PlaceApplicationsModal({
     try {
       const { error } = await supabase.from('applications').update({ status: ask.status }).eq('id', ask.id)
       if (error) { setAskErr('変更できませんでした：' + error.message); return }
-      // 出店者へのお知らせ（送れなくても変更自体は成功として扱う）
-      try {
-        await fetch('/api/notify/application-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ applicationId: ask.id, status: ask.status }),
-        })
-      } catch { /* メールが送れないだけなので進める */ }
+      // 出店者へのお知らせ。チェックを外した場合は送らない。
+      // 送れなかった場合でも、状態の変更自体は成功として扱う。
+      if (notify) {
+        try {
+          await fetch('/api/notify/application-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationId: ask.id, status: ask.status }),
+          })
+        } catch { /* メールが送れないだけなので進める */ }
+      }
       setAsk(null)
       await load()
     } catch {
@@ -388,14 +394,14 @@ export default function PlaceApplicationsModal({
                                     <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
                                       <button
                                         type='button'
-                                        onClick={() => { setAskErr(null); setAsk({ id: r.id, status: 'approved', who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        onClick={() => { setAskErr(null); setNotify(true); setAsk({ id: r.id, status: 'approved', who: s.shopName, when: fmtDate(r.apply_date) }) }}
                                         style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
                                       >
                                         承認
                                       </button>
                                       <button
                                         type='button'
-                                        onClick={() => { setAskErr(null); setAsk({ id: r.id, status: 'rejected', who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        onClick={() => { setAskErr(null); setNotify(true); setAsk({ id: r.id, status: 'rejected', who: s.shopName, when: fmtDate(r.apply_date) }) }}
                                         style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
                                       >
                                         不採用
@@ -475,9 +481,12 @@ export default function PlaceApplicationsModal({
           ask
             ? `${ask.who}／${ask.when}\n\n` +
               (ask.status === 'approved'
-                ? '承認するとマッチングが成立し、出店者にお知らせのメールが送られます。'
-                : '不採用にすると申込は取り消され、出店者に「今回は見送りとなりました」というお知らせのメールが届きます。')
+                ? '承認するとマッチングが成立します。'
+                : '不採用にすると、この申込は取り消されます。')
             : ''
+        }
+        extra={
+          ask ? <NotifyChoice checked={notify} onChange={setNotify} disabled={busy} approved={ask.status === 'approved'} /> : null
         }
         okLabel={ask?.status === 'approved' ? '承認する' : '不採用にする'}
         onOk={apply}

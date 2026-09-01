@@ -18,6 +18,7 @@ export default function ConfirmDialog({
   danger = false,
   busy = false,
   error = null,
+  extra,
   onOk,
   onCancel,
 }: {
@@ -29,6 +30,8 @@ export default function ConfirmDialog({
   danger?: boolean
   busy?: boolean
   error?: string | null
+  /** 本文とボタンの間に置く追加の操作。メールを送るかどうかの選択などに使う */
+  extra?: React.ReactNode
   onOk: () => void
   onCancel: () => void
 }) {
@@ -94,6 +97,8 @@ export default function ConfirmDialog({
         {body && (
           <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8, marginBottom: '18px', whiteSpace: 'pre-wrap' }}>{body}</div>
         )}
+
+        {extra && <div style={{ marginBottom: '16px' }}>{extra}</div>}
 
         {error && (
           <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', lineHeight: 1.7, marginBottom: '14px' }}>

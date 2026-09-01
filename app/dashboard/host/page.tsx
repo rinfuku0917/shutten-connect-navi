@@ -8,6 +8,7 @@ import { exportPlaceSalesReport } from '../../lib/salesReportXlsx'
 import ClosedToggle from '../../components/ClosedToggle'
 import DuplicateButton from '../../components/DuplicateButton'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import NotifyChoice from '../../components/NotifyChoice'
 
 type Place = {
   id: string
@@ -108,14 +109,16 @@ export default function HostDashboard() {
 
   // 不採用は出店者にメールが届くので、必ず確認をはさむ。
   // window.confirm はスマホのアプリ内ブラウザで無視されることがあるため使わない。
-  const [rejectAsk, setRejectAsk] = useState<{ id: string; seller: string; place: string } | null>(null)
+  const [rejectAsk, setRejectAsk] = useState<{ id: string; seller: string; place: string; status: 'approved' | 'rejected' } | null>(null)
+  const [notify, setNotify] = useState(true)
   const [rejectBusy, setRejectBusy] = useState(false)
   const [rejectErr, setRejectErr] = useState<string | null>(null)
 
-  const decide = async (id: string, status: 'approved' | 'rejected') => {
+  // notify=false のときは、状態だけ変えてメールは送らない
+  const decide = async (id: string, status: 'approved' | 'rejected', notify = true) => {
     await supabase.from('applications').update({ status }).eq('id', id)
     // 出店者へステータス通知（失敗しても処理は継続）
-    try {
+    if (notify) try {
       await fetch('/api/notify/application-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -231,8 +234,8 @@ export default function HostDashboard() {
                 </div>
                 {a.status === 'pending' && (
                   <div style={{display:'flex',gap:'8px',justifyContent:'flex-end',marginTop:'12px'}}>
-                    <button onClick={() => decide(a.id, 'approved')} style={{background:'#E8F5E9',color:'#2E7D32',border:'1px solid #A5D6A7',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer'}}>承認</button>
-                    <button type='button' onClick={() => { setRejectErr(null); setRejectAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle }) }} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer',minHeight:'40px'}}>不採用</button>
+                    <button type='button' onClick={() => { setRejectErr(null); setNotify(true); setRejectAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'approved' }) }} style={{background:'#E8F5E9',color:'#2E7D32',border:'1px solid #A5D6A7',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer',minHeight:'40px'}}>承認</button>
+                    <button type='button' onClick={() => { setRejectErr(null); setNotify(true); setRejectAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'rejected' }) }} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:'6px',padding:'8px 16px',fontSize:'13px',fontWeight:'700',cursor:'pointer',minHeight:'40px'}}>不採用</button>
                   </div>
                 )}
               </div>
@@ -247,20 +250,26 @@ export default function HostDashboard() {
         open={!!rejectAsk}
         busy={rejectBusy}
         error={rejectErr}
-        danger
-        title='この申込を不採用にしますか？'
+        danger={rejectAsk?.status === 'rejected'}
+        title={rejectAsk?.status === 'approved' ? 'この申込を承認しますか？' : 'この申込を不採用にしますか？'}
         body={
           rejectAsk
-            ? `${rejectAsk.seller}／${rejectAsk.place}\n\n不採用にすると申込は取り消され、出店者に「今回は見送りとなりました」というお知らせのメールが届きます。`
+            ? `${rejectAsk.seller}／${rejectAsk.place}\n\n` +
+              (rejectAsk.status === 'approved'
+                ? '承認するとマッチングが成立します。'
+                : '不採用にすると、この申込は取り消されます。')
             : ''
         }
-        okLabel='不採用にする'
+        extra={
+          rejectAsk ? <NotifyChoice checked={notify} onChange={setNotify} disabled={rejectBusy} approved={rejectAsk.status === 'approved'} /> : null
+        }
+        okLabel={rejectAsk?.status === 'approved' ? '承認する' : '不採用にする'}
         onOk={async () => {
           if (!rejectAsk) return
           setRejectBusy(true)
           setRejectErr(null)
           try {
-            await decide(rejectAsk.id, 'rejected')
+            await decide(rejectAsk.id, rejectAsk.status, notify)
             setRejectAsk(null)
           } catch {
             setRejectErr('変更できませんでした。もう一度お試しください。')

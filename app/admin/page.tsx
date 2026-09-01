@@ -13,6 +13,7 @@ import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import ConfirmDialog from '../components/ConfirmDialog'
+import NotifyChoice from '../components/NotifyChoice'
 import DuplicateButton from '../components/DuplicateButton'
 
 // ダミーデータ
@@ -83,9 +84,11 @@ export default function AdminPage() {
   // 応募者一覧の書類バッジから飛んできたとき、その出店者だけに絞り込む
   const [docSellerId, setDocSellerId] = useState<{ id: string; name: string } | null>(null)
   // 不採用は出店者にメールが届くので、画面内のダイアログで確認をはさむ
-  const [rejectAsk, setRejectAsk] = useState<{ id: string; seller: string; place: string } | null>(null)
   const [rejectBusy, setRejectBusy] = useState(false)
   const [rejectErr, setRejectErr] = useState<string | null>(null)
+  // 承認・不採用の確認。status で文面を切り替える
+  const [decideAsk, setDecideAsk] = useState<{ id: string; seller: string; place: string; status: 'approved' | 'rejected' } | null>(null)
+  const [decideNotify, setDecideNotify] = useState(true)
   // 出店者名で書類を探す（人数が多く、目当ての人を見つけにくいため）
   const [docKw, setDocKw] = useState('')
   const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
@@ -1113,16 +1116,20 @@ export default function AdminPage() {
     URL.revokeObjectURL(url)
   }
 
-  const setAppStatus = async (id: string, status: string) => {
+  // notify=false のときは、状態だけ変えてメールは送らない。
+  // 電話で先に伝えている場合など、送りたくない場面があるため。
+  const setAppStatus = async (id: string, status: string, notify = true) => {
     const { error } = await supabase.from('applications').update({ status }).eq('id', id)
     if (error) { alert('更新失敗: ' + error.message); return }
-    try {
-      await fetch('/api/notify/application-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: id, status }),
-      })
-    } catch {}
+    if (notify) {
+      try {
+        await fetch('/api/notify/application-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ applicationId: id, status }),
+        })
+      } catch {}
+    }
     loadPendingApps()
   }
 
@@ -2355,8 +2362,8 @@ const previewDoc = async (fileUrl: string) => {
                       })()}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <button onClick={() => setAppStatus(a.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
-                      <button type='button' onClick={() => { setRejectErr(null); setRejectAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle }) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>不採用</button>
+                      <button type='button' onClick={() => { setRejectErr(null); setDecideNotify(true); setDecideAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'approved' }) }} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>承認</button>
+                      <button type='button' onClick={() => { setRejectErr(null); setDecideNotify(true); setDecideAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'rejected' }) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>不採用</button>
                       {a.sellerId && (
                         <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>プロフィールを見る</a>
                       )}
@@ -2788,31 +2795,37 @@ const previewDoc = async (fileUrl: string) => {
 
       {/* 案件一覧で申込数を押したときに出す、その案件の応募者一覧 */}
       <ConfirmDialog
-        open={!!rejectAsk}
+        open={!!decideAsk}
         busy={rejectBusy}
         error={rejectErr}
-        danger
-        title='この申込を不採用にしますか？'
+        danger={decideAsk?.status === 'rejected'}
+        title={decideAsk?.status === 'approved' ? 'この申込を承認しますか？' : 'この申込を不採用にしますか？'}
         body={
-          rejectAsk
-            ? `${rejectAsk.seller}／${rejectAsk.place}\n\n不採用にすると申込は取り消され、出店者に「今回は見送りとなりました」というお知らせのメールが届きます。`
+          decideAsk
+            ? `${decideAsk.seller}／${decideAsk.place}\n\n` +
+              (decideAsk.status === 'approved'
+                ? '承認するとマッチングが成立します。'
+                : '不採用にすると、この申込は取り消されます。')
             : ''
         }
-        okLabel='不採用にする'
+        extra={
+          decideAsk ? <NotifyChoice checked={decideNotify} onChange={setDecideNotify} disabled={rejectBusy} approved={decideAsk.status === 'approved'} /> : null
+        }
+        okLabel={decideAsk?.status === 'approved' ? '承認する' : '不採用にする'}
         onOk={async () => {
-          if (!rejectAsk) return
+          if (!decideAsk) return
           setRejectBusy(true)
           setRejectErr(null)
           try {
-            await setAppStatus(rejectAsk.id, 'rejected')
-            setRejectAsk(null)
+            await setAppStatus(decideAsk.id, decideAsk.status, decideNotify)
+            setDecideAsk(null)
           } catch {
             setRejectErr('変更できませんでした。もう一度お試しください。')
           } finally {
             setRejectBusy(false)
           }
         }}
-        onCancel={() => { if (!rejectBusy) { setRejectAsk(null); setRejectErr(null) } }}
+        onCancel={() => { if (!rejectBusy) { setDecideAsk(null); setRejectErr(null) } }}
       />
 
       {appsFor && (
