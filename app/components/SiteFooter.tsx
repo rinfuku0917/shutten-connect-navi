@@ -8,6 +8,7 @@ const cols: { head: string; items: { href: string; label: string }[] }[] = [
   { head: 'キッチンカーを呼びたい方', items: [
     { href: '/vendor', label: 'キッチンカーの手配・派遣' },
     { href: '/vendor/event', label: 'イベント・マルシェ・お祭り' },
+    { href: '/vendor/cost', label: 'キッチンカーを呼ぶ費用' },
     { href: '/sellers', label: '登録キッチンカーを見る' },
   ] },
   { head: 'キッチンカーで出店したい方', items: [

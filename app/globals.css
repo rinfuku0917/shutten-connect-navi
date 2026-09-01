@@ -324,3 +324,10 @@ img[width='1'][height='1'] { display: inline !important; }
 @media (max-width: 420px) {
   .top3-footcols { gap: 22px 20px; }
 }
+
+/* 費用ページ・エリアページ: PC2列 → スマホ1列 */
+.cost-case-grid { max-width: 100%; }
+.cost-case-grid > * { min-width: 0; }
+@media (max-width: 720px) {
+  .cost-case-grid { grid-template-columns: 1fr !important; }
+}

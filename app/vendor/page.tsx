@@ -242,9 +242,15 @@ export default function VendorPage() {
               固定額での設定のほか、売上に対する割合（歩合）での設定もできます。
               平日と土日祝で金額を分けることも可能です。
             </p>
-            <p className='jp-text' style={{ color: '#666', fontSize: '13px', margin: 0 }}>
+            <p className='jp-text' style={{ color: '#666', fontSize: '13px', marginBottom: '16px' }}>
               ご相談・お見積りは無料です。会員登録をされる場合も、初期費用や登録料はいただきません。
             </p>
+            <Link
+              href='/vendor/cost'
+              style={{ display: 'inline-block', background: '#FFF8EC', border: '1px solid #F5D9A8', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}
+            >
+              キッチンカーを呼ぶ費用の相場とケース別の見積り例を見る →
+            </Link>
           </div>
         </div>
       </div>
