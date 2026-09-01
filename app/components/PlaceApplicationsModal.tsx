@@ -91,16 +91,22 @@ export default function PlaceApplicationsModal({
   // 提出用Excelの書き出し
   const [xlsxBusy, setXlsxBusy] = useState<SubmissionFormat | null>(null)
   const [xlsxMsg, setXlsxMsg] = useState<string | null>(null)
+  const [withPending, setWithPending] = useState(false)
 
   const downloadXlsx = async (format: SubmissionFormat) => {
     setXlsxBusy(format)
     setXlsxMsg(null)
     try {
-      const n = await exportPlaceSubmission(supabase, placeId, placeTitle, format)
+      const n = await exportPlaceSubmission(supabase, placeId, placeTitle, format, withPending)
       if (n === 0) {
-        setXlsxMsg('出店日の入った承認済みの申込がまだありません。承認するとExcelに載ります。')
+        setXlsxMsg(
+          withPending
+            ? '出店日の入った申込がまだありません。日程を選んで応募されるとExcelに載ります。'
+            : '出店日の入った承認済みの申込がまだありません。承認するか、下の「承認待ちも含める」をお使いください。',
+        )
       } else {
-        setXlsxMsg(format === 'aeon' ? `${n}か月分のシートで保存しました。` : `${n}日分のシートで保存しました。`)
+        const unit = format === 'aeon' ? `${n}か月分` : `${n}日分`
+        setXlsxMsg(withPending ? `${unit}のシートで保存しました。承認待ちの出店者が含まれています。` : `${unit}のシートで保存しました。`)
       }
     } catch (e) {
       setXlsxMsg('作成できませんでした：' + (e instanceof Error ? e.message : '不明なエラー'))
@@ -304,6 +310,21 @@ export default function PlaceApplicationsModal({
                       {xlsxBusy === 'aeon' ? '作成中…' : 'イオン様式（月ごと）'}
                     </button>
                   </div>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '11px', cursor: 'pointer', minHeight: '32px' }}>
+                    <input
+                      type='checkbox'
+                      checked={withPending}
+                      onChange={e => { setWithPending(e.target.checked); setXlsxMsg(null) }}
+                      style={{ width: '17px', height: '17px', marginTop: '2px', flexShrink: 0, accentColor: '#B45309', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.8 }}>
+                      <strong style={{ color: '#B45309' }}>承認待ちも含める</strong>
+                      <br />
+                      承認する前に中身を見比べたいときに。含めた出店者は見出しに「（承認待ち）」と入り、ファイル名も「_承認待ち含む」になります。
+                      <strong style={{ color: '#B45309' }}>このファイルはそのまま施設へ提出しないでください。</strong>
+                    </span>
+                  </label>
+
                   {xlsxMsg && (
                     <div style={{ marginTop: '10px', fontSize: '12px', color: xlsxMsg.includes('できませんでした') || xlsxMsg.includes('ありません') ? '#B45309' : '#047857', lineHeight: 1.8 }}>
                       {xlsxMsg}

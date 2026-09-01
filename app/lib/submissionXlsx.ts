@@ -22,6 +22,11 @@ export type SubmissionSeller = {
   menus: SubmissionMenuItem[]
   /** イオン様式でだけ使う。「8月18日（火）8月20日（木）」の形 */
   wishDates?: string
+  /**
+   * 承認待ちを含めて出したときだけ入る。「（承認待ち）」の形。
+   * そのまま施設へ提出すると事故になるため、見出しに必ず出す。
+   */
+  statusNote?: string
 }
 export type SubmissionSheet = { title: string; sellers: SubmissionSeller[] }
 
@@ -94,12 +99,21 @@ function isMenuHeading(name: string): boolean {
 // 管理画面・募集者ダッシュボード・応募者一覧から使う（中身は同じ）。
 // format で提出様式を選ぶ。戻り値: 出力したシート数（0 = 出力するものが無かった）
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function exportPlaceSubmission(supabase: any, placeId: string, placeTitle: string, format: SubmissionFormat = 'daily'): Promise<number> {
+export async function exportPlaceSubmission(
+  supabase: any,
+  placeId: string,
+  placeTitle: string,
+  format: SubmissionFormat = 'daily',
+  // 承認前の出店者も入れるかどうか。誰に来てもらうかを決める前に、
+  // 応募の中身をExcelで見比べたいときに使う。
+  includePending = false,
+): Promise<number> {
+  const wanted = includePending ? ['approved', 'pending'] : ['approved']
   const { data: apps, error } = await supabase
     .from('applications')
-    .select('apply_date, seller_id, profiles!applications_seller_id_fkey(shop_name, name, genre, takeout_bag, payment_methods)')
+    .select('apply_date, seller_id, status, profiles!applications_seller_id_fkey(shop_name, name, genre, takeout_bag, payment_methods)')
     .eq('place_id', placeId)
-    .eq('status', 'approved')
+    .in('status', wanted)
     .not('apply_date', 'is', null)
     .order('apply_date', { ascending: true })
   if (error) throw new Error('申込の取得に失敗しました: ' + error.message)
@@ -152,17 +166,22 @@ export async function exportPlaceSubmission(supabase: any, placeId: string, plac
   const safeTitle = placeTitle.replace(/[\\/:*?"<>|]/g, '')
   const allDates = Array.from(new Set(rows.map((a: { apply_date: string }) => a.apply_date))).sort() as string[]
   const months = Array.from(new Set(allDates.map(d => Number(d.slice(5, 7)) + '月'))).join('')
+  // 承認待ちを含めたファイルは、そのまま提出されないようファイル名でも分かるようにする
+  const suffix = includePending ? '_承認待ち含む' : ''
+  const note = (status: string) => (includePending && status === 'pending' ? '（承認待ち）' : '')
 
   if (format === 'aeon') {
     // 月ごとに1シート。出店者は月に1回だけ出し、申し込んだ日は「希望日程」にまとめる。
-    const byMonth = new Map<string, Map<string, { seller: SubmissionSeller; dates: string[] }>>()
+    const byMonth = new Map<string, Map<string, { seller: SubmissionSeller; dates: string[]; pending: boolean }>>()
     for (const a of rows) {
       const month = a.apply_date.slice(0, 7)
       let m = byMonth.get(month)
       if (!m) { m = new Map(); byMonth.set(month, m) }
       let e = m.get(a.seller_id)
-      if (!e) { e = { seller: sellerBase(a, true), dates: [] }; m.set(a.seller_id, e) }
+      if (!e) { e = { seller: sellerBase(a, true), dates: [], pending: false }; m.set(a.seller_id, e) }
       if (!e.dates.includes(a.apply_date)) e.dates.push(a.apply_date)
+      // 同じ月に承認済みと承認待ちが混ざることがあるので、1日でも残っていれば印を付ける
+      if (a.status === 'pending') e.pending = true
     }
     const monthKeys = Array.from(byMonth.keys()).sort()
     const sheets: SubmissionSheet[] = monthKeys.map(mk => ({
@@ -170,9 +189,10 @@ export async function exportPlaceSubmission(supabase: any, placeId: string, plac
       sellers: Array.from(byMonth.get(mk)!.values()).map(e => ({
         ...e.seller,
         wishDates: e.dates.sort().map(jaShortDate).join(''),
+        statusNote: e.pending ? '（承認待ちを含む）' : '',
       })),
     }))
-    await downloadAeonXlsx(sheets, safeTitle, `${safeTitle}_出店者情報_${months}.xlsx`)
+    await downloadAeonXlsx(sheets, safeTitle, `${safeTitle}_出店者情報_${months}${suffix}.xlsx`)
     return sheets.length
   }
 
@@ -184,15 +204,20 @@ export async function exportPlaceSubmission(supabase: any, placeId: string, plac
     if (seen.has(key)) continue
     seen.add(key)
     const list = byDate.get(a.apply_date) || []
-    list.push(sellerBase(a, false))
+    list.push({ ...sellerBase(a, false), statusNote: note(a.status) })
     byDate.set(a.apply_date, list)
+  }
+
+  // 承認済みを先に、承認待ちを後に並べる（そのまま上から確認できるように）
+  for (const list of byDate.values()) {
+    list.sort((x, y) => (x.statusNote ? 1 : 0) - (y.statusNote ? 1 : 0))
   }
 
   const dates = Array.from(byDate.keys()).sort()
   const sheets: SubmissionSheet[] = dates.map(d => ({ title: jaSheetName(d), sellers: byDate.get(d)! }))
 
   // ファイル名は「案件名_出店者情報_9月10月.xlsx」の形
-  await downloadSubmissionXlsx(sheets, `${safeTitle}_出店者情報_${months}.xlsx`)
+  await downloadSubmissionXlsx(sheets, `${safeTitle}_出店者情報_${months}${suffix}.xlsx`)
   return dates.length
 }
 
@@ -231,7 +256,7 @@ export async function buildSubmissionWorkbook(sheets: SubmissionSheet[]) {
     }
 
     sheet.sellers.forEach((s, i) => {
-      setRow([`出店者情報${marukakko(i + 1)}`, '', ''], { bold: true, fill: FILL_HEAD, mergeAll: true, tall: true })
+      setRow([`出店者情報${marukakko(i + 1)}${s.statusNote ?? ''}`, '', ''], { bold: true, fill: FILL_HEAD, mergeAll: true, tall: true })
       setRow(['店舗名', s.shopName, ''], { mergeBC: true })
       setRow(['Instagram', s.instagram, ''], { mergeBC: true })
       setRow(['ジャンル', s.genre, ''], { mergeBC: true })
@@ -295,7 +320,7 @@ export async function buildAeonWorkbook(sheets: SubmissionSheet[], facilityName:
 
     sheet.sellers.forEach((s, i) => {
       put(['', '', ''])                                   // 出店者ごとの区切りの空行
-      put([`出店者情報${marukakko(i + 1)}`, '', ''])
+      put([`出店者情報${marukakko(i + 1)}${s.statusNote ?? ''}`, '', ''])
       put(['施設名', facilityName, ''])
       put(['店舗名', s.shopName, ''])
       put(['Instagram', s.instagram, ''])
