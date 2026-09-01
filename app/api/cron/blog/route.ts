@@ -134,7 +134,14 @@ export async function GET(req: Request) {
     const { data: posts } = await db.from('posts').select('slug, title')
     const titles = (posts || []).map(p => p.title as string)
     const usedSlugs = new Set((posts || []).map(p => p.slug as string))
-    const pick = TOPICS.find(t => !usedSlugs.has(t.slug))
+    // 定期実行をやめる前に、無意味なURLで公開されてしまった記事。
+    // 中身は TOPICS のテーマそのものなので、URLが違っても「書いた」とみなす。
+    // これを見ないと、同じテーマの記事がもう一度作られる。
+    const ALREADY_WRITTEN: Record<string, string> = {
+      'regular-event-schedule': 'auto-mta8z1w9-vazfy1', // 定期開催の曜日と時間帯の決め方
+      'renting-parking-space': 'auto-mtgh64lh-jwwkxe',  // 駐車場の一角を貸すときの注意点
+    }
+    const pick = TOPICS.find(t => !usedSlugs.has(t.slug) && !usedSlugs.has(ALREADY_WRITTEN[t.slug] ?? ''))
     if (!pick) {
       // 以前はここで書いたことのあるテーマをもう一度選んでいた。
       // 同じ記事が増えるだけなので、何も作らずに終わる。
