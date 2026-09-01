@@ -49,34 +49,44 @@ function feeText(p: Place): string {
 
 // 案件の一覧はサーバー側（page.tsx）で取得して渡す。
 // そうしないと、検索エンジンが見るHTMLにカードが1枚も入らない。
-export default function PlacesBrowser({ initialPlaces }: { initialPlaces: Place[] }) {
+export default function PlacesBrowser({
+  initialPlaces,
+  initialPref = '',
+  initialGenre = '',
+  initialKw = '',
+  initialPage = 1,
+  initialSort = 'new',
+}: {
+  initialPlaces: Place[]
+  /** サーバー側で解釈した絞り込み。ここを初期値にすることで、
+   *  サーバーが返すHTMLも絞り込み済みになる（検索エンジンに伝わる）。 */
+  initialPref?: string
+  initialGenre?: string
+  initialKw?: string
+  initialPage?: number
+  initialSort?: 'new' | 'name'
+}) {
   const [places] = useState<Place[]>(initialPlaces)
   const loading = false
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(initialPage)
   // 料金はログイン済みなら表示する（出店者・募集者・管理者いずれも）
   const [canSeeFee, setCanSeeFee] = useState(false)
-  const [kw, setKw] = useState('')
+  const [kw, setKw] = useState(initialKw)
   // 並び順。既定は新着順（新しい案件を見つけてもらうため）。
   // 名前順にすると同じ系列（イオン、サンユーストアーなど）がまとまる。
-  const [sortBy, setSortBy] = useState<'new' | 'name'>('new')
-  const [pref, setPref] = useState('')
-  const [genre, setGenre] = useState('')
+  const [sortBy, setSortBy] = useState<'new' | 'name'>(initialSort)
+  const [pref, setPref] = useState(initialPref)
+  const [genre, setGenre] = useState(initialGenre)
 const [showMap, setShowMap] = useState(false)
   // 絞り込みとページ番号をURLに持たせる。
   // 持たせないと、再読み込みや戻る操作のたびに1ページ目に戻ってしまう。
   const [ready, setReady] = useState(false)
 
-  // 最初にURLから読み取る
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search)
-    const n = parseInt(q.get('page') || '1', 10)
-    if (Number.isFinite(n) && n > 1) setPage(n)
-    const pf = q.get('pref'); if (pf) setPref(pf)
-    const g = q.get('genre'); if (g) setGenre(g)
-    const k = q.get('q'); if (k) setKw(k)
-    const so = q.get('sort'); if (so === 'name' || so === 'new') setSortBy(so)
-    setReady(true)
-  }, [])
+  // 絞り込みはサーバー側で解釈して props で渡ってくるので、
+  // ここでURLを読み直す必要はない。
+  // 以前はここで読んでいたため、サーバーが返すHTMLは絞り込み前のままで、
+  // 「?pref=東京都」と「/places」の中身が完全に同じだった。
+  useEffect(() => { setReady(true) }, [])
 
   // ログインしているかだけを確かめる（料金の表示可否に使う）
   useEffect(() => {

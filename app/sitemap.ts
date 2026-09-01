@@ -53,6 +53,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/vendor/area/gunma`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${SITE_URL}/vendor/area/tochigi`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${SITE_URL}/vendor/area/hyogo`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${SITE_URL}/vendor/area/aichi`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${SITE_URL}/places`, lastModified: STATIC_UPDATED, changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE_URL}/sellers`, lastModified: STATIC_UPDATED, changeFrequency: 'daily', priority: 0.8 },
     { url: `${SITE_URL}/space`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
