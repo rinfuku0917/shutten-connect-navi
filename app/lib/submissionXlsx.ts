@@ -9,7 +9,7 @@
 // 見た目（フォント・色・罫線・列幅）は実際に提出しているファイルから
 // 読み取った値に合わせている。変えるときは元のExcelと見比べること。
 //   フォント: Hiragino Mincho ProN 12pt ／ 罫線: 全セル細線
-//   列幅: A=28 / B=38 / C=16 ／ 行高: 22（「出店者情報⑴」の見出し行のみ24）
+//   列幅: A=31.5 / B=38 / C=16 ／ 行高: 22（「出店者情報⑴」の見出し行のみ24）
 //   見出しの塗り: 出店者情報・販売メニュー = BDD7EE、メニュー表ヘッダ = DEEAF1
 
 export type SubmissionMenuItem = { name: string; detail: string; price: string }
@@ -141,7 +141,7 @@ export async function buildSubmissionWorkbook(sheets: SubmissionSheet[]) {
 
   for (const sheet of sheets) {
     const ws = wb.addWorksheet(sheet.title.slice(0, 31))
-    ws.columns = [{ width: 28 }, { width: 38 }, { width: 16 }]
+    ws.columns = [{ width: 31.5 }, { width: 38 }, { width: 16 }]
 
     let r = 1
     const setRow = (vals: [string, string, string], opts?: { bold?: boolean; fill?: typeof FILL_HEAD; mergeAll?: boolean; mergeBC?: boolean; tall?: boolean }) => {
