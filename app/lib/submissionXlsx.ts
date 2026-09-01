@@ -117,7 +117,7 @@ export async function exportPlaceSubmission(
   const wanted = includePending ? ['approved', 'pending'] : ['approved']
   const { data: apps, error } = await supabase
     .from('applications')
-    .select('apply_date, seller_id, status, profiles!applications_seller_id_fkey(shop_name, name, genre, takeout_bag, payment_methods)')
+    .select('apply_date, seller_id, status')
     .eq('place_id', placeId)
     .in('status', wanted)
     .not('apply_date', 'is', null)
@@ -128,15 +128,22 @@ export async function exportPlaceSubmission(
   const rows = (apps || []).filter((a: any) => a.apply_date && a.seller_id)
   if (rows.length === 0) return 0
 
-  // Instagram とメニューをまとめて引く
+  // 出店者の情報・Instagram・メニューをまとめて引く。
+  // 出店者の情報は公開用のビューから引く（profiles には連絡先が入っており、
+  // 募集者からは直接読ませないため）。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sellerIds = Array.from(new Set(rows.map((a: any) => a.seller_id)))
-  const [{ data: sns }, { data: menuRows }] = await Promise.all([
+  const [{ data: sellerRows }, { data: sns }, { data: menuRows }] = await Promise.all([
+    supabase.from('public_sellers').select('id, shop_name, name, genre, takeout_bag, payment_methods').in('id', sellerIds),
     supabase.from('sns_links').select('seller_id, url').eq('platform', 'instagram').in('seller_id', sellerIds),
     supabase.from('menus').select('seller_id, name, detail, price, sort_order, created_at')
       .in('seller_id', sellerIds)
       .order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
   ])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sellerById = new Map<string, any>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const x of (sellerRows ?? []) as any[]) sellerById.set(x.id, x)
   const instaBySeller = new Map<string, string>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const l of sns || []) if (l.url) instaBySeller.set(l.seller_id, l.url)
@@ -158,7 +165,7 @@ export async function exportPlaceSubmission(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sellerBase = (a: any, yen: boolean): SubmissionSeller => {
-    const p = a.profiles || {}
+    const p = sellerById.get(a.seller_id) || {}
     return {
       shopName: p.shop_name || p.name || '',
       instagram: instaBySeller.get(a.seller_id) || '',

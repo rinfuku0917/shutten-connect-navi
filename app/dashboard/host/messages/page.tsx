@@ -45,7 +45,9 @@ export default function HostMessages() {
     const sellerIds = Array.from(new Set(apps.map(a => a.seller_id).filter(Boolean)))
     const nameOf = new Map<string, string>()
     if (sellerIds.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, shop_name, name').in('id', sellerIds)
+      // 出店者の表示名は公開用のビューから引く。
+      // profiles には連絡先が入っているため、募集者からは直接読ませない。
+      const { data: profs } = await supabase.from('public_sellers').select('id, shop_name, name').in('id', sellerIds)
       for (const p of profs || []) nameOf.set(p.id, p.shop_name || p.name || '（名称未設定）')
     }
 

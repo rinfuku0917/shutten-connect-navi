@@ -84,11 +84,12 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews }: 
     const load = async () => {
       // 通常は公開済み（承認済み）の出店者のみ表示する。
       // 管理画面からの「プレビュー」だけは、承認前の内容も確認できるようにする。
-      let q = supabase
-        .from('profiles')
-        .select('id, name, shop_name, genre, areas, photos')
-        .eq('id', id)
-      if (!isPreview) q = q.eq('approval_status', 'approved')
+      // 通常は公開用のビューから読む（承認済みの出店者だけが入っている）。
+      // 管理画面からのプレビューだけは、承認前も見たいので profiles を直接読む
+      // （管理者は profiles を読めるポリシーがある）。
+      const q = isPreview
+        ? supabase.from('profiles').select('id, name, shop_name, genre, areas, photos').eq('id', id)
+        : supabase.from('public_sellers').select('id, name, shop_name, genre, areas, photos').eq('id', id)
       const { data: s } = await q.single()
       setSeller(s as Seller)
       await loadReviews()

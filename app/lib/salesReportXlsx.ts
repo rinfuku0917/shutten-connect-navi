@@ -94,18 +94,32 @@ export async function buildSalesReportWorkbook(sheets: SalesReportSheet[]) {
 export async function exportPlaceSalesReport(supabase: any, placeId: string, placeTitle: string): Promise<number> {
   const { data, error } = await supabase
     .from('sales')
-    .select('sale_date, revenue, items, weather, customers, note, seller_id, profiles!sales_seller_id_fkey(name, shop_name)')
+    .select('sale_date, revenue, items, weather, customers, note, seller_id')
     .eq('place_id', placeId)
     .order('sale_date', { ascending: true })
   if (error) throw new Error('売上の取得に失敗しました: ' + error.message)
   if (!data || data.length === 0) return 0
+
+  // 出店者の表示名は公開用のビューから引く。
+  // profiles には連絡先が入っているため、募集者からは直接読ませない。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sellerIds = Array.from(new Set((data as any[]).map(s => s.seller_id).filter(Boolean)))
+  const nameById = new Map<string, string>()
+  if (sellerIds.length > 0) {
+    const { data: sellers } = await supabase
+      .from('public_sellers').select('id, name, shop_name').in('id', sellerIds)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const x of (sellers ?? []) as any[]) {
+      nameById.set(x.id, x.shop_name || x.name || '(出店者)')
+    }
+  }
 
   const byDate = new Map<string, SalesReportSeller[]>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const s of data as any[]) {
     if (!s.sale_date) continue
     const seller: SalesReportSeller = {
-      shopName: s.profiles?.shop_name || s.profiles?.name || '(出店者)',
+      shopName: nameById.get(s.seller_id) || '(出店者)',
       revenue: s.revenue || 0,
       weather: s.weather || '',
       customers: s.customers ?? null,
