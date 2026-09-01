@@ -9,8 +9,14 @@
 // 見た目（フォント・色・罫線・列幅）は実際に提出しているファイルから
 // 読み取った値に合わせている。変えるときは元のExcelと見比べること。
 //   フォント: Hiragino Mincho ProN 12pt ／ 罫線: 全セル細線
-//   列幅: A=31.5 / B=38 / C=16 ／ 行高: 22（「出店者情報⑴」の見出し行のみ24）
-//   見出しの塗り: 出店者情報・販売メニュー = BDD7EE、メニュー表ヘッダ = DEEAF1
+//   行高: 22（「出店者情報⑴」の見出し行のみ24）
+//
+// 列幅と塗り色は、2つの様式で見た目が揃うようイオン様式に合わせている。
+//   列幅: A=30 / B=42.86 / C=16
+//   （C列だけイオン様式の10より広い。日付ごと様式の価格は「600円〜700円」と
+//     長く書くため、10だと表からはみ出してしまう）
+//   見出しの塗り: 出店者情報・販売メニュー = D9E1F2（イオン様式と同じ）
+//   メニュー表ヘッダ = EDF2F9（同じ色みの薄い方。見出しとの段差を残すため）
 
 export type SubmissionMenuItem = { name: string; detail: string; price: string }
 export type SubmissionSeller = {
@@ -230,13 +236,13 @@ export async function buildSubmissionWorkbook(sheets: SubmissionSheet[]) {
   const BOLD = { ...FONT, bold: true }
   const THIN = { style: 'thin' as const }
   const BORDER = { top: THIN, bottom: THIN, left: THIN, right: THIN }
-  const FILL_HEAD = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFBDD7EE' } }
-  const FILL_MENU = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFDEEAF1' } }
+  const FILL_HEAD = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD9E1F2' } }
+  const FILL_MENU = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFEDF2F9' } }
   const ALIGN = { horizontal: 'left' as const, vertical: 'middle' as const }
 
   for (const sheet of sheets) {
     const ws = wb.addWorksheet(sheet.title.slice(0, 31))
-    ws.columns = [{ width: 31.5 }, { width: 38 }, { width: 16 }]
+    ws.columns = [{ width: 30 }, { width: 42.86 }, { width: 16 }]
 
     let r = 1
     const setRow = (vals: [string, string, string], opts?: { bold?: boolean; fill?: typeof FILL_HEAD; mergeAll?: boolean; mergeBC?: boolean; tall?: boolean }) => {
@@ -281,7 +287,9 @@ export async function buildSubmissionWorkbook(sheets: SubmissionSheet[]) {
 //   見出しまわり: Hiragino Mincho ProN 12pt、塗りなし
 //   メニュー行: 游ゴシック 10pt、価格は右寄せで「¥600」
 //   【クレープ】のように括った行は区切りとして太字＋D9E1F2で塗る
-//   列幅: A=30 / B=42.86 / C=10 ／ 罫線: 全セル細線
+//   列幅: A=30 / B=42.86 / C=16
+//   （C列だけイオン様式の10より広い。日付ごと様式の価格は「600円〜700円」と
+//     長く書くため、10だと表からはみ出してしまう） ／ 罫線: 全セル細線
 export async function buildAeonWorkbook(sheets: SubmissionSheet[], facilityName: string) {
   const ExcelJS = (await import('exceljs')).default
   const wb = new ExcelJS.Workbook()
@@ -298,7 +306,7 @@ export async function buildAeonWorkbook(sheets: SubmissionSheet[], facilityName:
 
   for (const sheet of sheets) {
     const ws = wb.addWorksheet(sheet.title.slice(0, 31))
-    ws.columns = [{ width: 30 }, { width: 42.86 }, { width: 10 }]
+    ws.columns = [{ width: 30 }, { width: 42.86 }, { width: 16 }]
 
     let r = 1
     const put = (
