@@ -20,7 +20,7 @@
 
 | # | キーワード | 想定読者 | 誘導先 | ステータス |
 |---|---|---|---|---|
-| 1 | キッチンカー 出店場所 探し方 | 出店者 | 会員登録 | 既存記事あり（要整理・下記参照） |
+| 1 | キッチンカー 出店場所 探し方 | 出店者 | 会員登録 | 執筆済 → /blog/kitchen-car-location-guide |
 | 2 | キッチンカー 出店場所 募集 | 出店者 | 案件一覧 | 未着手 |
 | 3 | キッチンカー 出店依頼 もらうには | 出店者 | 会員登録 | 未着手 |
 | 4 | キッチンカー イベント出店 方法 | 出店者 | 案件一覧 | 未着手 |
@@ -191,9 +191,9 @@ Claude Code への記事作成指示は以下の型を使う：
 | /blog/kitchen-car-startup-cost | キッチンカー開業の費用はいくら？ | C系（開業費用） | そのまま |
 | /blog/kitchen-car-business-license | キッチンカーの営業許可の取り方は？ | C系（営業許可） | そのまま |
 | /blog/kitchen-car-profit-menu | キッチンカーは儲かる？ | ー | そのまま |
-| /blog/kitchen-car-location-guide | 出店場所の探し方は？ | **B-1** | **重複あり** |
-| /blog/how-to-find-food-truck-spots | 出店場所はどう探す？7つの方法 | **B-1** | **重複あり** |
-| /blog/choose-profitable-food-truck-location | 売上が伸びる出店場所の選び方 | B-1周辺 | 重複ぎみ |
+| /blog/kitchen-car-location-guide | **出店場所の探し方（実データ版に差し替え）** | **B-1** | 2026-09-02 統合先 |
+| /blog/how-to-find-food-truck-spots | 出店場所はどう探す？7つの方法 | B-1 | 2026-09-02 統合し301 |
+| /blog/choose-profitable-food-truck-location | 売上が伸びる出店場所の選び方 | B-1周辺 | 残す（探し方と別の疑問） |
 | /blog/food-truck-fee-guide | **出店料の相場は？（実データ版に差し替え）** | **B-5 / B-6** | 2026-09-02 書き直し |
 | /blog/kitchen-car-avoid-failure | 開業で失敗しない5つのコツ | ー | カテゴリ違い |
 | /blog/first-food-truck-checklist | 初めての出店 準備チェックリスト | ー | そのまま |
@@ -202,20 +202,31 @@ Claude Code への記事作成指示は以下の型を使う：
 | /blog/vacant-space-food-truck | 遊休スペースの活用 | D-33 / D-34 | カテゴリ違い |
 | /blog/host-fee-setting-guide | 商業施設・オフィスビルへの導入効果 | D-30 | カテゴリ違い |
 | /blog/host-fee-setting-guide2 | 出店料はどう決める？貸す側の設定ガイド | D-35 | カテゴリ違い |
-| /blog/auto-mta8z1w9-vazfy1 | 定期開催の曜日と時間帯の決め方 | D系 | **URLが意味不明** |
-| /blog/auto-mtarczbg-37pazo | 駐車場を貸す前に確認すべき注意点 | D-33 | **URLが意味不明・重複** |
-| /blog/auto-mtgh64lh-jwwkxe | 駐車場の一角を貸すときの注意点 | D-33 | **URLが意味不明・重複** |
+| /blog/auto-mta8z1w9-vazfy1 | 定期開催の曜日と時間帯の決め方 | D系 | URLが意味不明（未対応） |
+| /blog/auto-mtarczbg-37pazo | 駐車場を貸す前に確認すべき注意点 | D-33 | URLが意味不明・重複（未対応） |
+| /blog/auto-mtgh64lh-jwwkxe | 駐車場の一角を貸すときの注意点 | D-33 | URLが意味不明・重複（未対応） |
 
-### 先に片づけたい3点
+### 片づけた点（2026-09-02）
 
-1. **B-1（出店場所の探し方）に記事が3本ある。**
-   `kitchen-car-location-guide` と `how-to-find-food-truck-spots` は同じ検索語を取り合っている。
-   1本に統合し、もう1本は統合先へ301リダイレクトする
-2. **駐車場を貸す話の記事が2本ある。** `auto-mtarczbg-37pazo` と `auto-mtgh64lh-jwwkxe` は
-   タイトルがほぼ同じ。4日違いで自動生成されたもの
-3. **`auto-` で始まる3本のURLに意味がない。** `app/api/cron/blog/route.ts` が
-   ランダムな文字列で slug を作っている。記事の内容に沿った英語のURLにする。
-   すでに公開したURLは変えられないので、変えるなら301リダイレクトとセットで
+1. **B-1（出店場所の探し方）の3本を整理した。**
+   `kitchen-car-location-guide` に内容をまとめ、`how-to-find-food-truck-spots` は
+   下書きに戻して301で転送（`next.config.ts`）。
+   `choose-profitable-food-truck-location` は「選び方」で疑問が違うため残し、
+   統合先から内部リンクを張った
+2. **記事の自動生成を止めた。** `vercel.json` から定期実行を外し、
+   `app/api/cron/blog/route.ts` は下書きしか作らないようにした。
+   URLはテーマごとに決めた英語の固定文字列にし、同じテーマは二度選ばれない
+
+### 残っている点
+
+1. **`auto-` で始まる3本のURLに意味がない。**
+   `auto-mtgh64lh-jwwkxe` のような文字列で、内容が分からない。
+   直すなら、意味のあるURLに変えたうえで `next.config.ts` に301を足す
+2. **駐車場を貸す話が2本ある。** `auto-mtarczbg-37pazo` と `auto-mtgh64lh-jwwkxe` は
+   タイトルがほぼ同じ。1本にまとめて301を張る
+3. **カテゴリページ（/places/category/[tag]）はまだ作れない。**
+   `places.genres` が入っている案件が302件中8件しかない。
+   1カテゴリ10件を超えてから作る
 
 ### 募集者向けの記事が出店者向けのカテゴリに入っている
 

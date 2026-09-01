@@ -606,10 +606,12 @@ export default function AdminPage() {
     if (!removed || removed.length === 0) { alert('削除できませんでした（権限をご確認ください）'); return }
     loadPlacesList()
   }
-  // ブログの自動投稿を手動で1本試す（定期実行と同じ処理を呼ぶ）
+  // AIに記事の下書きを1本作らせる。
+  // 以前は毎週の定期実行でそのまま公開していたが、中身を読まないまま
+  // 公開ページが増えていたため、下書きを作るところまでに変えた。
   const [autoPosting, setAutoPosting] = useState(false)
   const runAutoPost = async () => {
-    if (!window.confirm('AIが記事を1本作成し、そのまま公開します。よろしいですか？')) return
+    if (!window.confirm('AIが記事の下書きを1本作ります。公開はされません。よろしいですか？')) return
     setAutoPosting(true)
     try {
       // 定期実行と同じAPIを呼ぶ。管理者であることを確かめられるよう
@@ -621,7 +623,7 @@ export default function AdminPage() {
       const j = await res.json()
       if (!res.ok) { alert('作成できませんでした: ' + (j.error || '不明なエラー')) }
       else {
-        alert('公開しました：' + (j.post?.title || '') + (j.hasImage ? '' : '\n※画像は生成できませんでした'))
+        alert('下書きを作りました：' + (j.post?.title || '') + '\n記事の一覧から中身を確かめて、問題なければ公開してください。' + (j.hasImage ? '' : '\n※画像は生成できませんでした'))
         loadPosts()
       }
     } catch (e) {
@@ -2683,7 +2685,7 @@ const previewDoc = async (fileUrl: string) => {
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button disabled={pSaving} onClick={() => savePost('published')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 700, cursor: pSaving ? 'default' : 'pointer', opacity: pSaving ? 0.6 : 1 }}>{pSaving ? '保存中...' : (editingPost ? '更新して公開' : '公開する')}</button>
                     <button disabled={autoPosting} onClick={runAutoPost} style={{ background: autoPosting ? '#ccc' : '#1D4ED8', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 20px', fontSize: '14px', fontWeight: 700, cursor: autoPosting ? 'default' : 'pointer' }}>
-                      {autoPosting ? 'AIが作成中...' : 'AIで1本作って公開'}
+                      {autoPosting ? 'AIが作成中...' : 'AIで下書きを1本作る'}
                     </button>
                     <button disabled={pSaving} onClick={() => savePost('draft')} style={{ background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 700, cursor: pSaving ? 'default' : 'pointer', opacity: pSaving ? 0.6 : 1 }}>下書き保存</button>
                   </div>

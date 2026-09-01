@@ -1,7 +1,31 @@
 import type { NextConfig } from "next";
 
+// 統合した記事の転送先。
+//
+// 同じ検索語を2本の記事で取り合っていたので、内容を1本にまとめた。
+// まとめる前のURLは、外部から張られたリンクや検索結果に残るため、
+// 消さずに統合先へ転送する（301＝恒久的な移動）。
+// こうすると、これまでの評価がまとめ先に引き継がれる。
+//
+// AGENTS.md のSEOルール「既存の公開URLを変更しない。やむを得ず変えるときは
+// 301リダイレクトを設定し sitemap も更新する」に沿った対応。
+// 転送元の記事は下書きに戻すので、sitemap と記事一覧からは自動で消える。
+//
+// 一度ここに書いた行は消さないこと。消すと転送が切れて404になる。
+const REDIRECTS = [
+  {
+    // 「出店場所の探し方」で3本が競合していたため、
+    // 内容を kitchen-car-location-guide にまとめた（2026-09-02）
+    source: '/blog/how-to-find-food-truck-spots',
+    destination: '/blog/kitchen-car-location-guide',
+    permanent: true,
+  },
+]
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async redirects() {
+    return REDIRECTS
+  },
 };
 
 export default nextConfig;

@@ -2,39 +2,46 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyCronCaller } from '../../../lib/cronAuth'
 
-// ブログの自動投稿。Vercel の定期実行（毎週 月・木の朝）から呼ばれる。
+// ブログの下書きをAIに1本作らせる。管理画面の「ブログ」から手動で呼ぶ。
 //
 //   記事の文章 … Claude（Anthropic）
 //   記事の画像 … OpenAI（画像生成）
 //
-// 生成した記事はそのまま公開する。過去に書いたテーマと重ならないよう、
-// 既存記事のタイトルを渡したうえで未使用のテーマを選ばせている。
+// 2026-09-02 に、定期実行（毎週 月・木）をやめた。理由は3つ。
+//   1. そのまま公開していたため、中身を誰も読まないまま公開ページが増えていた
+//   2. URLが auto-mtgh64lh-jwwkxe のような無意味な文字列になっていた
+//   3. 同じテーマが二度選ばれ、ほぼ同じ記事が2本できていた
+//      （「駐車場を貸す前に…」と「駐車場の一角を貸すときの…」）
 //
-// 手動で試したいときは、管理画面の「ブログ」から実行できる。
+// いまは次のようにしている。
+//   ・作るのは下書きだけ。公開は管理画面で中身を読んでから
+//   ・URLはテーマごとに決めた英語の固定文字列
+//   ・そのURLの記事が既にあれば作らない（同じ記事が二度できない）
+//
+// 記事を自分で書くときは docs/blog/TEMPLATE.md と npm run blog:sql を使う。
+// 自社のデータを載せた記事のほうが強いので、主な記事はそちらで書く。
 
 export const maxDuration = 300
 
 // 記事のテーマ候補。上から順に、まだ書いていないものが選ばれる。
+//
+// slug は記事のURLになる。一度公開したら変えないこと（変えるなら301が要る）。
+// cat は app/lib/postCategories.ts の4つから選ぶ。記事一覧の絞り込みに使う。
 const TOPICS = [
-  { cat: 'オーナー向け', theme: 'キッチンカーを呼びたい施設が最初に確認すべき設備条件（電源・給排水・搬入経路）' },
-  { cat: 'オーナー向け', theme: '商業施設でキッチンカーを定期開催するときの曜日と時間帯の決め方' },
-  { cat: 'オーナー向け', theme: 'キッチンカー誘致で失敗しないための出店者の選び方' },
-  { cat: 'オーナー向け', theme: '駐車場の一角をキッチンカーに貸すときの注意点と必要な手続き' },
-  { cat: '主催者向け', theme: 'イベントにキッチンカーを複数台呼ぶときのメニュー構成の考え方' },
-  { cat: '主催者向け', theme: '雨天時の対応をどう決めるか｜主催者と出店者で揉めないための取り決め' },
-  { cat: '主催者向け', theme: '来場者数からキッチンカーの適正台数を見積もる方法' },
-  { cat: '経営ノウハウ', theme: 'キッチンカーの売上を左右する立地の見極め方' },
-  { cat: '経営ノウハウ', theme: 'キッチンカーの原価率と価格設定の考え方' },
-  { cat: '経営ノウハウ', theme: 'リピーターがつくキッチンカーの共通点' },
-  { cat: '開業ガイド', theme: 'キッチンカー開業に必要な許可と保険を一から解説' },
-  { cat: '開業ガイド', theme: 'キッチンカーの車両選び｜軽トラック・バン・トレーラーの違い' },
-  { cat: '開業ガイド', theme: '開業前に押さえておきたい保健所の営業許可の取り方' },
+  { slug: 'venue-facility-requirements', cat: '募集者向け', theme: 'キッチンカーを呼びたい施設が最初に確認すべき設備条件（電源・給排水・搬入経路）' },
+  { slug: 'regular-event-schedule', cat: '募集者向け', theme: '商業施設でキッチンカーを定期開催するときの曜日と時間帯の決め方' },
+  { slug: 'choosing-food-truck-vendors', cat: '募集者向け', theme: 'キッチンカー誘致で失敗しないための出店者の選び方' },
+  { slug: 'renting-parking-space', cat: '募集者向け', theme: '駐車場の一角をキッチンカーに貸すときの注意点と必要な手続き' },
+  { slug: 'event-menu-mix', cat: '募集者向け', theme: 'イベントにキッチンカーを複数台呼ぶときのメニュー構成の考え方' },
+  { slug: 'rainy-day-policy', cat: '募集者向け', theme: '雨天時の対応をどう決めるか｜主催者と出店者で揉めないための取り決め' },
+  { slug: 'how-many-food-trucks', cat: '募集者向け', theme: '来場者数からキッチンカーの適正台数を見積もる方法' },
+  { slug: 'location-sales-factors', cat: '出店場所の探し方', theme: 'キッチンカーの売上を左右する立地の見極め方' },
+  { slug: 'food-cost-and-pricing', cat: '出店場所の探し方', theme: 'キッチンカーの原価率と価格設定の考え方' },
+  { slug: 'repeat-customers', cat: '出店場所の探し方', theme: 'リピーターがつくキッチンカーの共通点' },
+  { slug: 'permits-and-insurance', cat: '書類・保険', theme: 'キッチンカー開業に必要な許可と保険を一から解説' },
+  { slug: 'choosing-a-vehicle', cat: '開業・許可', theme: 'キッチンカーの車両選び｜軽トラック・バン・トレーラーの違い' },
+  { slug: 'health-center-license', cat: '開業・許可', theme: '開業前に押さえておきたい保健所の営業許可の取り方' },
 ]
-
-function slugify(base: string) {
-  const rand = Math.random().toString(36).slice(2, 8)
-  return `${base}-${Date.now().toString(36)}-${rand}`
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function generateArticle(theme: string, category: string, avoid: string[]): Promise<any> {
@@ -48,7 +55,7 @@ async function generateArticle(theme: string, category: string, avoid: string[])
 カテゴリ: ${category}
 
 条件:
-- 読者は${category === '開業ガイド' || category === '経営ノウハウ' ? 'キッチンカーの出店者（事業者）' : '場所を貸す側の施設オーナー・イベント主催者'}です
+- 読者は${category === '募集者向け' ? '場所を貸す側の施設オーナー・イベント主催者' : 'キッチンカーの出店者（事業者）'}です
 - 本文は Markdown。見出しは ## と ### のみ使う（# は使わない）
 - 2000〜2500字程度
 - 具体的な数字や事例を交え、実務で使える内容にする
@@ -119,12 +126,22 @@ export async function GET(req: Request) {
     if (!sUrl || !sKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
     const db = createClient(sUrl, sKey, { auth: { autoRefreshToken: false, persistSession: false } })
 
-    // 既存記事のタイトルを集め、まだ書いていないテーマを選ぶ
-    const { data: posts } = await db.from('posts').select('title')
+    // まだ書いていないテーマを選ぶ。
+    //
+    // 以前は「生成されたタイトルにテーマの先頭8文字が含まれるか」で判定していたが、
+    // AIが少し違うタイトルを付けると書いたことに気づけず、同じテーマの記事が
+    // 二度できていた。テーマごとに決めたURLがあるかどうかで判定する。
+    const { data: posts } = await db.from('posts').select('slug, title')
     const titles = (posts || []).map(p => p.title as string)
-    const used = new Set(titles.map(t => t.replace(/\s/g, '')))
-    const pick = TOPICS.find(t => ![...used].some(u => u.includes(t.theme.slice(0, 8).replace(/\s/g, ''))))
-      || TOPICS[Math.floor(Date.now() / 86400000) % TOPICS.length]
+    const usedSlugs = new Set((posts || []).map(p => p.slug as string))
+    const pick = TOPICS.find(t => !usedSlugs.has(t.slug))
+    if (!pick) {
+      // 以前はここで書いたことのあるテーマをもう一度選んでいた。
+      // 同じ記事が増えるだけなので、何も作らずに終わる。
+      return NextResponse.json({
+        error: '用意したテーマをすべて書き終えています。app/api/cron/blog/route.ts の TOPICS に足してください。',
+      }, { status: 409 })
+    }
 
     const article = await generateArticle(pick.theme, pick.cat, titles.slice(0, 20))
 
@@ -141,17 +158,17 @@ export async function GET(req: Request) {
       }
     }
 
-    const slug = slugify('auto')
+    // 下書きとして保存する。公開は管理画面で中身を読んでから。
+    // published_at は公開したときに入るので、ここでは入れない。
     const { data: ins, error } = await db.from('posts').insert({
-      slug,
+      slug: pick.slug,
       title: String(article.title || '').slice(0, 120),
       content,
       excerpt: String(article.excerpt || '').slice(0, 200),
       meta_description: String(article.meta_description || '').slice(0, 200),
       category: pick.cat,
       cover_emoji: String(article.cover_emoji || '📝').slice(0, 8),
-      status: 'published',
-      published_at: new Date().toISOString(),
+      status: 'draft',
     }).select('id, slug, title')
     if (error) return NextResponse.json({ error: '保存に失敗しました: ' + error.message }, { status: 500 })
 
