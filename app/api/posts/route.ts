@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     if (!admin) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
 
     const body = await req.json()
-    const { requesterId, slug, title, content, excerpt, category, cover_emoji, meta_description, status } = body
+    const { requesterId, slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category } = body
 
     if (!requesterId) return NextResponse.json({ error: '認証情報がありません' }, { status: 401 })
     if (!(await verifyAdmin(admin, requesterId))) {
@@ -83,6 +83,10 @@ export async function POST(req: Request) {
         category: category || null,
         cover_emoji: cover_emoji || '📝',
         meta_description: meta_description || null,
+        // SEO用（20260901_post_seo_columns.sql で追加）
+        target_keyword: target_keyword || null,
+        related_prefecture: related_prefecture || null,
+        related_category: related_category || null,
         status: status || 'draft',
         published_at: status === 'published' ? now : null,
       })
@@ -108,7 +112,7 @@ export async function PUT(req: Request) {
     if (!admin) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
 
     const body = await req.json()
-    const { requesterId, id, slug, title, content, excerpt, category, cover_emoji, meta_description, status } = body
+    const { requesterId, id, slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category } = body
 
     if (!requesterId) return NextResponse.json({ error: '認証情報がありません' }, { status: 401 })
     if (!(await verifyAdmin(admin, requesterId))) {
@@ -116,7 +120,7 @@ export async function PUT(req: Request) {
     }
     if (!id) return NextResponse.json({ error: 'id がありません' }, { status: 400 })
 
-    const updates: Record<string, unknown> = { slug, title, content, excerpt, category, cover_emoji, meta_description, status, updated_at: new Date().toISOString() }
+    const updates: Record<string, unknown> = { slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword: target_keyword || null, related_prefecture: related_prefecture || null, related_category: related_category || null, updated_at: new Date().toISOString() }
     if (status === 'published') {
       const { data: cur } = await admin.from('posts').select('published_at').eq('id', id).maybeSingle()
       if (cur && !cur.published_at) updates.published_at = new Date().toISOString()

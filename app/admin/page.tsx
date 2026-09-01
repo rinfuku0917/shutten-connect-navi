@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
+import { POST_CATEGORIES } from '../lib/postCategories'
+import { PREFECTURES } from '../lib/prefectures'
 import { geocodeAddress } from '../lib/geocode'
 import { formatVehicleSize } from '../lib/vehicleSize'
 import { exportPlaceSubmission } from '../lib/submissionXlsx'
@@ -96,7 +98,7 @@ export default function AdminPage() {
   const [adminUid, setAdminUid] = useState<string | null>(null)
 
   // ===== ブログ記事管理 =====
-  type BlogPost = { id: string; slug: string; title: string; content: string; excerpt: string | null; category: string | null; cover_emoji: string | null; meta_description: string | null; status: string; published_at: string | null; created_at: string }
+  type BlogPost = { id: string; slug: string; title: string; content: string; excerpt: string | null; category: string | null; cover_emoji: string | null; meta_description: string | null; status: string; published_at: string | null; created_at: string; target_keyword?: string | null; related_prefecture?: string | null; related_category?: string | null }
   const [posts, setPosts] = useState<BlogPost[]>([])
   const [postsLoading, setPostsLoading] = useState(false)
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null)
@@ -108,6 +110,10 @@ export default function AdminPage() {
   const [pMeta, setPMeta] = useState('')
   const [pContent, setPContent] = useState('')
   const [pStatus, setPStatus] = useState('draft')
+  // SEO用。docs/seo-keywords.md の設計に合わせて記事ごとに設定する
+  const [pKeyword, setPKeyword] = useState('')
+  const [pRelPref, setPRelPref] = useState('')
+  const [pRelCat, setPRelCat] = useState('')
   const [pSaving, setPSaving] = useState(false)
   const [pMsg, setPMsg] = useState('')
   const [pMsgOk, setPMsgOk] = useState(false)
@@ -146,12 +152,14 @@ export default function AdminPage() {
   const resetPostForm = () => {
     setEditingPost(null); setPTitle(''); setPSlug(''); setPCategory(''); setPEmoji('📝')
     setPExcerpt(''); setPMeta(''); setPContent(''); setPStatus('draft'); setPMsg('')
+    setPKeyword(''); setPRelPref(''); setPRelCat('')
   }
 
   const startEditPost = (p: BlogPost) => {
     setEditingPost(p); setPTitle(p.title); setPSlug(p.slug); setPCategory(p.category || '')
     setPEmoji(p.cover_emoji || '📝'); setPExcerpt(p.excerpt || ''); setPMeta(p.meta_description || '')
     setPContent(p.content); setPStatus(p.status); setPMsg('')
+    setPKeyword(p.target_keyword || ''); setPRelPref(p.related_prefecture || ''); setPRelCat(p.related_category || '')
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -164,6 +172,9 @@ export default function AdminPage() {
       slug: pSlug.trim(), title: pTitle.trim(), content: pContent,
       excerpt: pExcerpt.trim() || null, category: pCategory.trim() || null,
       cover_emoji: pEmoji || '📝', meta_description: pMeta.trim() || null, status: asStatus,
+      target_keyword: pKeyword.trim() || null,
+      related_prefecture: pRelPref || null,
+      related_category: pRelCat || null,
     }
     try {
       const res = await fetch('/api/posts', {
@@ -2602,7 +2613,11 @@ const previewDoc = async (fileUrl: string) => {
                     </div>
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>カテゴリ</label>
-                      <input type="text" value={pCategory} onChange={e => setPCategory(e.target.value)} placeholder="ガイド / インタビュー / トレンド など" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                      <select value={pCategory} onChange={e => setPCategory(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}>
+                        <option value=''>選択してください</option>
+                        {POST_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px' }}>記事一覧の絞り込みに使います</div>
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '12px' }}>
@@ -2618,6 +2633,41 @@ const previewDoc = async (fileUrl: string) => {
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>メタディスクリプション（SEO用・検索結果に出る説明文 120字程度）</label>
                     <textarea value={pMeta} onChange={e => setPMeta(e.target.value)} rows={2} placeholder="検索結果に表示される説明。キーワードを含めて120字程度で。" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+                    <div style={{ fontSize: '11px', color: pMeta.length > 130 ? '#DC2626' : '#94A3B8', marginTop: '3px' }}>{pMeta.length}字（120字前後が目安）</div>
+                  </div>
+
+                  {/* SEO用。docs/seo-keywords.md の設計に対応させる */}
+                  <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '14px 16px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 900, color: '#475569', marginBottom: '3px' }}>SEO設定</div>
+                    <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '12px', lineHeight: 1.7 }}>
+                      狙う検索語と、記事の下に出す「関連する出店場所」の絞り込みです。空欄でも公開できます。
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>狙う検索キーワード</label>
+                        <input type="text" value={pKeyword} onChange={e => setPKeyword(e.target.value)} placeholder="キッチンカー スーパー 出店" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                        <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px' }}>1記事1キーワード。docs/seo-keywords.md の行と対応させます</div>
+                      </div>
+                      <div className='admin-newplace-grid' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>関連する都道府県</label>
+                          <select value={pRelPref} onChange={e => setPRelPref(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}>
+                            <option value=''>指定しない</option>
+                            {PREFECTURES.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>関連する施設カテゴリ</label>
+                          <select value={pRelCat} onChange={e => setPRelCat(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}>
+                            <option value=''>指定しない</option>
+                            {PLACE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94A3B8', lineHeight: 1.7 }}>
+                        記事の下に、ここで指定した条件に合う募集中の案件が4件出ます。両方とも空欄なら、新着の案件が出ます。
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '6px' }}>
