@@ -137,6 +137,9 @@ export async function GET(req: Request) {
     // 定期実行をやめる前に、無意味なURLで公開されてしまった記事。
     // 中身は TOPICS のテーマそのものなので、URLが違っても「書いた」とみなす。
     // これを見ないと、同じテーマの記事がもう一度作られる。
+    //
+    // docs/blog/rename-auto-articles.sql を流すと、これらは TOPICS の slug に
+    // 改名されるので、この対応表は通らなくなる。流す前の取り違えを防ぐために残す。
     const ALREADY_WRITTEN: Record<string, string> = {
       'regular-event-schedule': 'auto-mta8z1w9-vazfy1', // 定期開催の曜日と時間帯の決め方
       'renting-parking-space': 'auto-mtgh64lh-jwwkxe',  // 駐車場の一角を貸すときの注意点

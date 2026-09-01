@@ -20,6 +20,24 @@ const REDIRECTS = [
     destination: '/blog/kitchen-car-location-guide',
     permanent: true,
   },
+  // 自動投稿が「auto-」＋時刻＋乱数でURLを作っていた記事（2026-09-02 に改名）。
+  // 中身の分かるURLに変えたので、古いURLからは新しいURLへ送る。
+  {
+    // 駐車場を貸す記事は2本できていたので、統合先へまとめて送る
+    source: '/blog/auto-mtarczbg-37pazo',
+    destination: '/blog/renting-parking-space',
+    permanent: true,
+  },
+  {
+    source: '/blog/auto-mtgh64lh-jwwkxe',
+    destination: '/blog/renting-parking-space',
+    permanent: true,
+  },
+  {
+    source: '/blog/auto-mta8z1w9-vazfy1',
+    destination: '/blog/regular-event-schedule',
+    permanent: true,
+  },
 ]
 
 const nextConfig: NextConfig = {
