@@ -10,6 +10,7 @@ import JsonLd from '../../components/JsonLd'
 import { SITE_URL, ORG, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../lib/seo'
 import { firstImage } from '../../lib/postImage'
 import { preparePostBody, extractFaq } from '../../lib/postBody'
+import { POST_IMAGE_SIZES } from '../../lib/postImageSizes'
 import RelatedPlaces, { fetchRelatedPlaces } from '../../components/RelatedPlaces'
 
 export const revalidate = 60
@@ -69,7 +70,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   raw = raw.split('<table>').join('<div class="table-wrap"><table>')
   raw = raw.split('</table>').join('</table></div>')
   // 本文中の h1 を h2 に落とし、h2 に id を振って目次を作る
-  const { html, toc } = preparePostBody(raw)
+  const { html, toc } = preparePostBody(raw, POST_IMAGE_SIZES)
   // 本文に「よくある質問」があるときだけ FAQPage を出す
   const faq = extractFaq(html)
   const dateStr = post.published_at ? new Date(post.published_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
@@ -176,6 +177,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         .post-body h2 { scroll-margin-top: 90px; font-size: 25px; font-weight: 900; color: #1a1a1a; margin: 52px 0 20px; padding: 14px 18px; background: #FFF3E0; border-left: 8px solid #F5A623; border-radius: 0 8px 8px 0; }
         .post-body h3 { font-size: 20px; font-weight: 800; color: #B45309; margin: 36px 0 14px; padding-left: 14px; border-left: 4px solid #F5A623; }
         .post-body p { margin: 0 0 18px; }
+        .post-body img { width: 100%; height: auto; border-radius: 10px; }
         .post-body ul, .post-body ol { margin: 0 0 18px; padding-left: 24px; }
         .post-body li { margin-bottom: 8px; }
         .post-body strong { color: #B45309; font-weight: 700; }

@@ -54,11 +54,58 @@ export function extractFaq(html: string): FaqItem[] {
   return items.length >= 2 ? items : []
 }
 
-export function preparePostBody(rawHtml: string): { html: string; toc: TocItem[] } {
+// 本文の画像を、軽くしてから表示するように書き換える。
+//
+// もともとは Supabase のストレージのURLをそのまま img に入れており、
+// 2688px の写真を760pxの幅で表示していた。1枚1〜3MB、公開記事ぶんで32MB。
+// スマホで記事を開くと、これを毎回まるごとダウンロードしていた。
+//
+// Next の画像変換（/_next/image）を通すと、表示する幅に合わせて縮め、
+// WebP で配信してくれる。ホストの許可は next.config.ts の images に書いてある。
+//
+// あわせて width と height を入れる。これが無いと、読み込むまで高さが0で、
+// 画像が出た瞬間に本文が下へ飛ぶ（読んでいる行を見失う）。
+// 大きさは app/lib/postImageSizes.ts に記録してある。一覧に無い画像は
+// これまでどおり大きさ無しで出す（表示は崩れない）。
+//
+// 1枚目だけは先に読み込む。記事の先頭にあり、最初に目に入る絵だから。
+// 2枚目以降は画面に近づいてから読み込む。
+
+// 記事本文の幅は760px。画面の細かい端末に合わせて3段階だけ用意する
+const WIDTHS = [828, 1200, 1920]
+const SIZES = '(max-width: 800px) 100vw, 760px'
+
+function optimized(src: string, w: number): string {
+  return `/_next/image?url=${encodeURIComponent(src)}&w=${w}&q=75`
+}
+
+function rewriteImages(html: string, sizes: Record<string, { w: number; h: number }>): string {
+  let n = 0
+  return html.replace(/<img\s([^>]*?)src="(https:\/\/[^"]+)"([^>]*?)>/g, (whole, before: string, src: string, after: string) => {
+    // 変換の対象は許可したホストだけ。それ以外はそのまま返す
+    if (!src.includes('.supabase.co/storage/v1/object/public/')) return whole
+    n += 1
+    const rest = (before + after).trim()
+    const size = sizes[src]
+    const dim = size ? ` width="${size.w}" height="${size.h}"` : ''
+    const srcset = WIDTHS.map(w => `${optimized(src, w)} ${w}w`).join(', ')
+    const loading = n === 1
+      ? ' loading="eager" fetchpriority="high"'
+      : ' loading="lazy" decoding="async"'
+    return `<img ${rest} src="${optimized(src, 1200)}" srcset="${srcset}" sizes="${SIZES}"${dim}${loading}>`
+  })
+}
+
+export function preparePostBody(
+  rawHtml: string,
+  imageSizes: Record<string, { w: number; h: number }> = {},
+): { html: string; toc: TocItem[] } {
   // 本文中の h1 を h2 に落とす（ページの h1 は記事タイトルだけにする）
   let html = rawHtml
     .replace(/<h1(\s[^>]*)?>/g, (_m, attr) => `<h2${attr ?? ''}>`)
     .replace(/<\/h1>/g, '</h2>')
+
+  html = rewriteImages(html, imageSizes)
 
   // h2 に連番の id を振りながら、目次の材料を集める
   const toc: TocItem[] = []

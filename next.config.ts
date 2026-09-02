@@ -41,6 +41,19 @@ const REDIRECTS = [
 ]
 
 const nextConfig: NextConfig = {
+  // 記事の本文に入っている画像は、Supabase のストレージから元の大きさのまま
+  // 配信されていた。1枚1〜3MB、公開記事ぶんで合わせて32MBある。
+  // 表示は760pxの幅なのに、2688px の写真をそのまま送っていた。
+  // ここでホストを許可すると、Next が幅に合わせて縮めて WebP で配信できる。
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'mieflxcdthcpyrysfahs.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+  },
   async redirects() {
     return REDIRECTS
   },
