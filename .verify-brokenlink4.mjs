@@ -1,0 +1,7 @@
+const h = await (await fetch('https://app.connect-navi.com/blog/kitchen-car-required-documents')).text()
+console.log('HTML長:', h.length)
+console.log('<a 出現数:', (h.match(/<a\s/g)||[]).length)
+console.log('href出現数:', (h.match(/href=/g)||[]).length)
+const txt = h.replace(/<script[\s\S]*?<\/script>/g,'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim()
+console.log('本文テキスト:', txt.slice(0,400))
+console.log('「出店場所を探す」を含む:', h.includes('出店場所を探す'))
