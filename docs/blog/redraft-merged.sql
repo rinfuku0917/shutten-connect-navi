@@ -32,7 +32,7 @@ where slug in (
   'event-food-truck-guide'
 ) and status = 'published';
 
--- 実行後：公開中は15本になる
+-- 実行後：公開中は16本になる（いま18本。公開に戻っていた2本が下書きに戻る）
 select count(*) as 公開中の記事 from posts where status = 'published';
 select slug, status from posts
 where slug in (
