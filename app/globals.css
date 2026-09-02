@@ -190,6 +190,11 @@ img[width='1'][height='1'] { display: inline !important; }
   .top3-stat:nth-child(even)::after { display: none; }
 }
 
+/* トップの主題（h1）。中央寄せで、下に短い線を引く */
+.top3-lead { position: relative; padding-bottom: 16px; }
+.top3-lead::after { content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 88px; height: 4px; border-radius: 2px; background: #f5a623; }
+@media (max-width: 560px) { .top3-lead { padding-bottom: 14px; } .top3-lead::after { width: 64px; height: 3px; } }
+
 .top3-sechead-bar { position: relative; padding-left: 16px; }
 .top3-sechead-bar::before { content: ""; position: absolute; left: 0; top: 8%; height: 84%; width: 6px; border-radius: 3px; background: #f5a623; }
 

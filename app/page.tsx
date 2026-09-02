@@ -197,11 +197,6 @@ export default async function Home() {
       {/* HERO: イラスト画像1枚敷き（PC=横 / スマホ=縦を picture で出し分け） */}
       <header style={{ background: C.cream }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '16px 16px 0' }}>
-          {/* ページの主題。ヒーロー画像に文字が焼き込まれていて
-              検索エンジンには読めないため、テキストとしても置いている */}
-          <h1 className='jp-head' style={{ fontSize: '15px', fontWeight: 700, color: C.ink, textAlign: 'center', lineHeight: 1.8, margin: '0 0 12px' }}>
-            キッチンカーの手配・派遣と、出店場所探しをつなぐ「出店コネクトナビ」
-          </h1>
           {/* 幅と高さを書いておくと、写真が読み込まれる前から場所を確保できる。
               入れないと読み込み時にページが伸び、ページ内リンクの飛び先がずれる */}
           <picture>
@@ -237,8 +232,19 @@ export default async function Home() {
         </div>
       </header>
 
+      {/* ページの主題。ヒーロー画像に文字が焼き込まれていて検索エンジンには
+          読めないため、テキストとしても置いている。
+          もとはヒーローの上にあったが、ファーストビューの見え方を優先して、
+          メインビジュアルと2つの導線の下へ移した（2026-09-02）。
+          h1 はページに1つだけ。位置を変えても検索での扱いは変わらない。 */}
+      <div style={{ ...wrap, padding: '40px 20px 0' }}>
+        <h1 className={maru.className + ' top3-lead'} style={{ ...h2Style, textAlign: 'center', margin: 0 }}>
+          キッチンカーの手配・派遣と、出店場所探しをつなぐ「出店コネクトナビ」
+        </h1>
+      </div>
+
       {/* STATS */}
-      <div style={{ ...wrap, padding: '36px 20px' }}>
+      <div style={{ ...wrap, padding: '28px 20px 36px' }}>
         <div className='top3-stats'>
           {([
             { img: '/ic-top-sellers.webp', value: 3521, label: '登録出店者' },
