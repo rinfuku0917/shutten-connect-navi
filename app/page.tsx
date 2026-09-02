@@ -5,6 +5,7 @@ import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
 import { firstImage, thumbnailUrl } from './lib/postImage'
+import { MERGED_SLUGS_FILTER } from './lib/mergedPosts'
 import JsonLd from './components/JsonLd'
 import { SITE_URL, SITE_NAME, ORG } from './lib/seo'
 import CountUp from './components/CountUp'
@@ -144,6 +145,8 @@ async function loadTop(): Promise<{ newPlaces: NewPlace[]; works: WorkPlace[]; p
       client.from('posts')
         .select('id,slug,title,category,cover_emoji,published_at,content')
         .eq('status', 'published')
+        // 別の記事に統合したものは出さない（app/lib/mergedPosts.ts）
+        .not('slug', 'in', MERGED_SLUGS_FILTER)
         .order('published_at', { ascending: false })
         .limit(3),
     ])

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { createClient } from '@supabase/supabase-js'
+import { isMergedAway } from './lib/mergedPosts'
 import { SITE_URL } from './lib/seo'
 
 // Google に「このサイトにはどのページがあるか」を伝える一覧。
@@ -100,6 +101,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .eq('status', 'published')
       for (const p of data || []) {
         if (!p.slug) continue
+        // 別の記事に統合したものは、公開に戻っていても申告しない
+        if (isMergedAway(p.slug)) continue
         urls.push({
           url: `${SITE_URL}/blog/${p.slug}`,
           lastModified: when(p.updated_at, p.published_at) ?? now,

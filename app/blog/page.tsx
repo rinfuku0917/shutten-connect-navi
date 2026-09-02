@@ -6,6 +6,7 @@ import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import { firstImage, thumbnailUrl } from '../lib/postImage'
 import { POST_CATEGORIES } from '../lib/postCategories'
+import { MERGED_SLUGS_FILTER } from '../lib/mergedPosts'
 
 export const revalidate = 60
 
@@ -31,7 +32,10 @@ async function getPosts(page: number, category: string | null): Promise<{ posts:
   const sb = createClient(url, key)
   const start = (page - 1) * PER_PAGE
   const end = start + PER_PAGE - 1
-  let q = sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content', { count: 'exact' }).eq('status', 'published')
+  let q = sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content', { count: 'exact' })
+    .eq('status', 'published')
+    // 別の記事に統合したものは出さない。公開に戻っていても一覧には並べない
+    .not('slug', 'in', MERGED_SLUGS_FILTER)
   // 絞り込みはサーバー側で行う（クライアントで絞ると、その分もHTMLに出ないため）
   if (category) q = q.eq('category', category)
   const { data, count } = await q.order('published_at', { ascending: false }).range(start, end)

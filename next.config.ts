@@ -12,53 +12,20 @@ import type { NextConfig } from "next";
 // 転送元の記事は下書きに戻すので、sitemap と記事一覧からは自動で消える。
 //
 // 一度ここに書いた行は消さないこと。消すと転送が切れて404になる。
-const REDIRECTS = [
-  {
-    // 「出店場所の探し方」で3本が競合していたため、
-    // 内容を kitchen-car-location-guide にまとめた（2026-09-02）
-    source: '/blog/how-to-find-food-truck-spots',
-    destination: '/blog/kitchen-car-location-guide',
-    permanent: true,
-  },
-  // 自動投稿が「auto-」＋時刻＋乱数でURLを作っていた記事（2026-09-02 に改名）。
-  // 中身の分かるURLに変えたので、古いURLからは新しいURLへ送る。
-  {
-    // 駐車場を貸す記事は2本できていたので、統合先へまとめて送る
-    source: '/blog/auto-mtarczbg-37pazo',
-    destination: '/blog/renting-parking-space',
-    permanent: true,
-  },
-  {
-    source: '/blog/auto-mtgh64lh-jwwkxe',
-    destination: '/blog/renting-parking-space',
-    permanent: true,
-  },
-  {
-    source: '/blog/auto-mta8z1w9-vazfy1',
-    destination: '/blog/regular-event-schedule',
-    permanent: true,
-  },
-  // 同じ検索語を取り合っていた記事の統合（2026-09-02）。
-  // 内容は転送先に入っているので、古いURLからはそちらへ送る。
-  {
-    // 「選び方」の5つの視点のうち3つが、新しい7本に吸収されていた
-    source: '/blog/choose-profitable-food-truck-location',
-    destination: '/blog/kitchen-car-location-guide',
-    permanent: true,
-  },
-  {
-    // 「貸す側の料金設定」は、駐車場を貸す記事が実データつきで扱っている
-    source: '/blog/host-fee-setting-guide2',
-    destination: '/blog/renting-parking-space',
-    permanent: true,
-  },
-  {
-    // イベントに呼ぶ話が2本あった。当日の運営の章は転送先に取り込み済み
-    source: '/blog/event-food-truck-guide',
-    destination: '/blog/how-to-invite-kitchen-car',
-    permanent: true,
-  },
-]
+import { MERGED_POSTS } from './app/lib/mergedPosts'
+
+// 統合した記事の転送先。対応表は app/lib/mergedPosts.ts にまとめてある
+// （サイトマップと記事一覧も同じ表を見るので、書く場所を1か所にしている）。
+//
+// まとめる前のURLは、外部から張られたリンクや検索結果に残るため、
+// 消さずに統合先へ転送する（301＝恒久的な移動。Next は308を返すが、
+// 検索エンジンの扱いは同じ）。こうすると、これまでの評価が引き継がれる。
+const REDIRECTS = MERGED_POSTS.map(m => ({
+  source: `/blog/${m.from}`,
+  destination: `/blog/${m.to}`,
+  permanent: true,
+}))
+
 
 const nextConfig: NextConfig = {
   // 記事の本文に入っている画像は、Supabase のストレージから元の大きさのまま
