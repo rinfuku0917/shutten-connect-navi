@@ -18,7 +18,7 @@
 // q（品質）は 75 のみ。Next 16 は設定した値以外を 400 で弾く。
 // 既定は 75 だけなので、70 などにすると画像が出なくなる。
 export function thumbnailUrl(src: string, width = 256): string {
-  if (!src.includes('.supabase.co/storage/v1/object/public/')) return src
+  if (!src.includes('.supabase.co/storage/v1/object/public/') && !src.includes('app.connect-navi.com/covers/')) return src
   return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=75`
 }
 

@@ -8,7 +8,9 @@
 
 update posts set
   title = 'キッチンカーの出店依頼をもらうには？1,386店舗を見てわかった差',
-  content = '出店先を毎回自分で探すのは大変です。**声をかけてもらえる側になりたい**、というのは多くの出店者が思うことでしょう。
+  content = '![キッチンカーの出店依頼をもらうには](https://app.connect-navi.com/covers/get-food-truck-offers.webp)
+
+出店先を毎回自分で探すのは大変です。**声をかけてもらえる側になりたい**、というのは多くの出店者が思うことでしょう。
 
 「実績を積む」「SNSで発信する」といった説明はよく見かけますが、**時間がかかるうえに、いつ効くのか分かりません。** もっと早く、確実に効くことがあります。
 
@@ -171,7 +173,9 @@ update posts set
 where slug = 'get-food-truck-offers';
 
 insert into posts (slug, title, content, excerpt, category, cover_emoji, meta_description, target_keyword, related_prefecture, related_category, status)
-select 'get-food-truck-offers', 'キッチンカーの出店依頼をもらうには？1,386店舗を見てわかった差', '出店先を毎回自分で探すのは大変です。**声をかけてもらえる側になりたい**、というのは多くの出店者が思うことでしょう。
+select 'get-food-truck-offers', 'キッチンカーの出店依頼をもらうには？1,386店舗を見てわかった差', '![キッチンカーの出店依頼をもらうには](https://app.connect-navi.com/covers/get-food-truck-offers.webp)
+
+出店先を毎回自分で探すのは大変です。**声をかけてもらえる側になりたい**、というのは多くの出店者が思うことでしょう。
 
 「実績を積む」「SNSで発信する」といった説明はよく見かけますが、**時間がかかるうえに、いつ効くのか分かりません。** もっと早く、確実に効くことがあります。
 

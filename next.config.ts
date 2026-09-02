@@ -52,6 +52,14 @@ const nextConfig: NextConfig = {
         hostname: 'mieflxcdthcpyrysfahs.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      {
+        // 記事の表紙（public/covers）。本文には絶対URLで書く必要があるため
+        // （og:image と一覧のサムネイルが本文の1枚目の画像を使う）、
+        // 自サイトのホストもここに書いておく
+        protocol: 'https',
+        hostname: 'app.connect-navi.com',
+        pathname: '/covers/**',
+      },
     ],
   },
   async redirects() {

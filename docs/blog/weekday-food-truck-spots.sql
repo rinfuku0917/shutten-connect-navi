@@ -8,7 +8,9 @@
 
 update posts set
   title = 'キッチンカーの平日の出店場所は？週末より出店料が安い理由',
-  content = 'キッチンカーの出店というと土日のイメージがありますが、**週末だけでは営業日が埋まりません。** 車の維持費もリース料も、動いていない平日にもかかっています。
+  content = '![キッチンカーの平日の出店場所](https://app.connect-navi.com/covers/weekday-food-truck-spots.webp)
+
+キッチンカーの出店というと土日のイメージがありますが、**週末だけでは営業日が埋まりません。** 車の維持費もリース料も、動いていない平日にもかかっています。
 
 とはいえ「平日はどこに出ればいいのか」は、探してもなかなか出てきません。この記事では、出店コネクトナビで募集中の**110件**を数えて、平日の出店場所の実際をまとめます。
 
@@ -180,7 +182,9 @@ update posts set
 where slug = 'weekday-food-truck-spots';
 
 insert into posts (slug, title, content, excerpt, category, cover_emoji, meta_description, target_keyword, related_prefecture, related_category, status)
-select 'weekday-food-truck-spots', 'キッチンカーの平日の出店場所は？週末より出店料が安い理由', 'キッチンカーの出店というと土日のイメージがありますが、**週末だけでは営業日が埋まりません。** 車の維持費もリース料も、動いていない平日にもかかっています。
+select 'weekday-food-truck-spots', 'キッチンカーの平日の出店場所は？週末より出店料が安い理由', '![キッチンカーの平日の出店場所](https://app.connect-navi.com/covers/weekday-food-truck-spots.webp)
+
+キッチンカーの出店というと土日のイメージがありますが、**週末だけでは営業日が埋まりません。** 車の維持費もリース料も、動いていない平日にもかかっています。
 
 とはいえ「平日はどこに出ればいいのか」は、探してもなかなか出てきません。この記事では、出店コネクトナビで募集中の**110件**を数えて、平日の出店場所の実際をまとめます。
 

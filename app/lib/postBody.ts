@@ -83,7 +83,7 @@ function rewriteImages(html: string, sizes: Record<string, { w: number; h: numbe
   let n = 0
   return html.replace(/<img\s([^>]*?)src="(https:\/\/[^"]+)"([^>]*?)>/g, (whole, before: string, src: string, after: string) => {
     // 変換の対象は許可したホストだけ。それ以外はそのまま返す
-    if (!src.includes('.supabase.co/storage/v1/object/public/')) return whole
+    if (!src.includes('.supabase.co/storage/v1/object/public/') && !src.includes('app.connect-navi.com/covers/')) return whole
     n += 1
     const rest = (before + after).trim()
     const size = sizes[src]

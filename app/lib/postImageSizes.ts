@@ -8,6 +8,10 @@
 export type ImageSize = { w: number; h: number }
 
 export const POST_IMAGE_SIZES: Record<string, ImageSize> = {
+  'https://app.connect-navi.com/covers/food-truck-fee-guide.webp': { w: 1200, h: 630 },
+  'https://app.connect-navi.com/covers/weekday-food-truck-spots.webp': { w: 1200, h: 630 },
+  'https://app.connect-navi.com/covers/get-food-truck-offers.webp': { w: 1200, h: 630 },
+  'https://app.connect-navi.com/covers/kitchen-car-required-documents.webp': { w: 1200, h: 630 },
   'https://mieflxcdthcpyrysfahs.supabase.co/storage/v1/object/public/blog-images/posts/1782943028892-dc5tmy.jpg': { w: 2688, h: 1536 },
   'https://mieflxcdthcpyrysfahs.supabase.co/storage/v1/object/public/blog-images/posts/1782943446667-quxx2b.jpg': { w: 2688, h: 1536 },
   'https://mieflxcdthcpyrysfahs.supabase.co/storage/v1/object/public/blog-images/posts/1782943520884-i1k4i1.jpg': { w: 2688, h: 1536 },

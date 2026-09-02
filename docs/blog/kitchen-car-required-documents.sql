@@ -8,7 +8,9 @@
 
 update posts set
   title = 'キッチンカーの出店に必要な書類は？審査する側が実際に見ているところ',
-  content = 'キッチンカーで出店先に応募するとき、必ず求められるのが書類です。ところが**「何を出せばいいのか」を、審査する側の目線で書いた記事はほとんどありません。**
+  content = '![キッチンカーの出店に必要な書類](https://app.connect-navi.com/covers/kitchen-car-required-documents.webp)
+
+キッチンカーで出店先に応募するとき、必ず求められるのが書類です。ところが**「何を出せばいいのか」を、審査する側の目線で書いた記事はほとんどありません。**
 
 出店コネクトナビは、出店者から書類を預かって1件ずつ審査しています。この記事では、**実際に何を求めていて、提出されたものの何を見ているのか**を書きます。
 
@@ -159,7 +161,9 @@ update posts set
 where slug = 'kitchen-car-required-documents';
 
 insert into posts (slug, title, content, excerpt, category, cover_emoji, meta_description, target_keyword, related_prefecture, related_category, status)
-select 'kitchen-car-required-documents', 'キッチンカーの出店に必要な書類は？審査する側が実際に見ているところ', 'キッチンカーで出店先に応募するとき、必ず求められるのが書類です。ところが**「何を出せばいいのか」を、審査する側の目線で書いた記事はほとんどありません。**
+select 'kitchen-car-required-documents', 'キッチンカーの出店に必要な書類は？審査する側が実際に見ているところ', '![キッチンカーの出店に必要な書類](https://app.connect-navi.com/covers/kitchen-car-required-documents.webp)
+
+キッチンカーで出店先に応募するとき、必ず求められるのが書類です。ところが**「何を出せばいいのか」を、審査する側の目線で書いた記事はほとんどありません。**
 
 出店コネクトナビは、出店者から書類を預かって1件ずつ審査しています。この記事では、**実際に何を求めていて、提出されたものの何を見ているのか**を書きます。
 
