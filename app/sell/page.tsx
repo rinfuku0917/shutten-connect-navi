@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 export default function SellPage() {
   const features = [
     {img:'/ic2-truck.webp',title:'無料で掲載',desc:'車両の掲載は完全無料です'},
-    {img:'/ic2-camera.webp',title:'写真で魅力を伝える',desc:'複数枚の写真を掲載できます'},
-    {img:'/ic2-message.webp',title:'直接交渉',desc:'買い手と直接メッセージでやり取り'},
-    {img:'/ic2-deal.webp',title:'安心取引',desc:'本人確認済みユーザーのみ'},
+    {img:'/ic2-photo.webp',title:'写真で魅力を伝える',desc:'複数枚の写真を掲載できます'},
+    {img:'/ic2-nego.webp',title:'直接交渉',desc:'買い手と直接メッセージでやり取り'},
+    {img:'/ic2-safe.webp',title:'安心取引',desc:'本人確認済みユーザーのみ'},
   ]
   return (
     <div>

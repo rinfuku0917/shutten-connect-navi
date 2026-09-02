@@ -238,10 +238,10 @@ export default async function Home() {
       <div style={{ ...wrap, padding: '36px 20px' }}>
         <div className='top3-stats'>
           {([
-            { img: '/ic-chef.webp', value: 3521, label: '登録出店者' },
-            { img: '/ic-pin.webp', value: 301, suffix: '+', label: '出店場所' },
-            { img: '/ic-phone.webp', value: 2000, suffix: '+', label: 'LINE登録' },
-            { img: '/ic-globe.webp', text: '全国対応', label: '対応エリア拡大中', small: true },
+            { img: '/ic-top-sellers.webp', value: 3521, label: '登録出店者' },
+            { img: '/ic-top-places.webp', value: 301, suffix: '+', label: '出店場所' },
+            { img: '/ic-top-line.webp', value: 2000, suffix: '+', label: 'LINE登録' },
+            { img: '/ic-top-area.webp', text: '全国対応', label: '対応エリア拡大中', small: true },
           ] as { img: string; value?: number; suffix?: string; text?: string; label: string; small?: boolean }[]).map(s => (
             <div key={s.label} className='top3-stat'>
               <img src={s.img} alt='' style={{ height: '52px', width: '52px', objectFit: 'contain', display: 'block', margin: '0 auto 8px' }} />

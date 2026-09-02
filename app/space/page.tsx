@@ -13,10 +13,10 @@ export const metadata: Metadata = {
 
 export default function SpacePage() {
   const merits = [
-    {img:'/ic-pin.webp',title:'好立地の場所を簡単発見',desc:'駅前・商業施設・イベントスペースなど多数掲載'},
-    {img:'/ic-money.webp',title:'費用を比較して選べる',desc:'日額・月額・売上歩合など多様なプランを比較'},
-    {img:'/ic-handshake.webp',title:'安心のマッチング',desc:'実績・口コミ付きの信頼できる場所オーナーと繋がれる'},
-    {img:'/ic-phone.webp',title:'スマホで完結',desc:'申込から契約まで全てオンラインで完結します'},
+    {img:'/ic-space-location.webp',title:'好立地の場所を簡単発見',desc:'駅前・商業施設・イベントスペースなど多数掲載'},
+    {img:'/ic-space-cost.webp',title:'費用を比較して選べる',desc:'日額・月額・売上歩合など多様なプランを比較'},
+    {img:'/ic-space-match.webp',title:'安心のマッチング',desc:'実績・口コミ付きの信頼できる場所オーナーと繋がれる'},
+    {img:'/ic-space-mobile.webp',title:'スマホで完結',desc:'申込から契約まで全てオンラインで完結します'},
   ]
 
   return (
