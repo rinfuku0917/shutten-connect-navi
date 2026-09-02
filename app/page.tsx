@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
-import { firstImage } from './lib/postImage'
+import { firstImage, thumbnailUrl } from './lib/postImage'
 import JsonLd from './components/JsonLd'
 import { SITE_URL, SITE_NAME, ORG } from './lib/seo'
 import CountUp from './components/CountUp'
@@ -408,7 +408,7 @@ export default async function Home() {
                     {(() => {
                       const img = firstImage(b.content)
                       return img
-                        ? <img src={img} alt='' style={{ width: '96px', height: '64px', flexShrink: 0, objectFit: 'cover', display: 'block' }} />
+                        ? <img src={thumbnailUrl(img)} alt='' width={96} height={64} loading='lazy' decoding='async' style={{ width: '96px', height: '64px', flexShrink: 0, objectFit: 'cover', display: 'block' }} />
                         : <div style={{ width: '96px', height: '64px', flexShrink: 0, background: 'linear-gradient(135deg,#dfe8ef,#c9d6e2)', display: 'grid', placeItems: 'center', fontSize: '24px' }}>{b.cover_emoji || '📄'}</div>
                     })()}
                     <div style={{ padding: '8px 12px 8px 0', minWidth: 0 }}>

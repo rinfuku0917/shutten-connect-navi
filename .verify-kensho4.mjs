@@ -1,24 +1,19 @@
-import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
-const env = Object.fromEntries(fs.readFileSync('.env.local','utf8').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(), l.slice(i+1).trim().replace(/^"|"$/g,'')]}))
-const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-const {data:all} = await sb.from('posts').select('slug,title,content')
-const g2 = all.find(p=>p.slug==='host-fee-setting-guide2')
-const rp = all.find(p=>p.slug==='renting-parking-space')
-const c=(s,re)=>((s.match(re)||[]).length)
-console.log('--- guide2 の数字系 ---')
-console.log('円の実数（数字＋円）:', (g2.content.match(/[0-9０-９,]+\s*円/g)||[]))
-console.log('％の実数:', (g2.content.match(/[0-9０-９.]+\s*[%％]/g)||[]))
-console.log('「相場」出現:', c(g2.content,/相場/g), '「％」出現:', c(g2.content,/[%％]/g), '「◯円」:', c(g2.content,/◯\s*円/g))
-console.log('\n--- 内部リンク ---')
-for(const p of [g2,rp]) console.log(p.slug, '→', (p.content.match(/\]\((\/[^)]*)\)/g)||[]))
-console.log('\n--- 互いへの言及 ---')
-console.log('guide2 が renting-parking-space に触れる:', g2.content.includes('renting-parking-space')||g2.content.includes('駐車場'))
-console.log('rp が host-fee-setting-guide2 に触れる:', rp.content.includes('host-fee-setting-guide2'))
-console.log('\n--- 他記事から guide2 へのリンク ---')
-for(const p of all) if(p.slug!=='host-fee-setting-guide2' && p.content.includes('host-fee-setting-guide2')) console.log('  ', p.slug)
-console.log('\n--- 「固定＋歩合」の有無 ---')
-for(const p of all) if(/固定\s*[＋+]\s*歩合/.test(p.content)) console.log('  ', p.slug, c(p.content,/固定\s*[＋+]\s*歩合/g),'回')
-console.log('\n--- rp の料金セクション以外に「集客力」「税込」 ---')
-console.log('rp に「集客力」:', c(rp.content,/集客力/g), '「税込」:', c(rp.content,/税込/g), '「固定＋歩合」:', c(rp.content,/固定\s*[＋+]\s*歩合/g))
-console.log('g2 に「集客力」:', c(g2.content,/集客力/g), '「税込」:', c(g2.content,/税込/g))
+import fs from 'node:fs'
+const pub = JSON.parse(fs.readFileSync(new URL('./.verify-kensho-dump.json', import.meta.url), 'utf8'))
+
+console.log('=== 全110件の fee 本文 ===')
+pub.forEach((p, i) => {
+  const fee = (p.fee ?? '(null)').replace(/\r?\n/g, ' ⏎ ')
+  console.log(`${String(i + 1).padStart(3)} | ${p.prefecture} | ${p.place_type} | ${p.title}`)
+  console.log(`    ${fee}`)
+})
+
+console.log('\n=== 都道府県別 ===')
+const byPref = {}
+for (const p of pub) byPref[p.prefecture] = (byPref[p.prefecture] || 0) + 1
+console.log(Object.entries(byPref).sort((a, b) => b[1] - a[1]))
+
+console.log('\n=== サンユーストアーの都道府県 ===')
+for (const p of pub.filter(p => p.title.includes('サンユー'))) console.log(` ${p.prefecture} | ${p.title} | ${p.fee}`)
+
+console.log('\n=== fee が空の件数 ===', pub.filter(p => !p.fee || !p.fee.trim()).length)

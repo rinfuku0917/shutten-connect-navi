@@ -4,7 +4,7 @@ import type { Metadata } from 'next'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
-import { firstImage } from '../lib/postImage'
+import { firstImage, thumbnailUrl } from '../lib/postImage'
 import { POST_CATEGORIES } from '../lib/postCategories'
 
 export const revalidate = 60
@@ -94,7 +94,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
                   {(() => {
                     const img = firstImage(post.content)
                     return img
-                      ? <img src={img} alt="" style={{ width: '96px', height: '96px', objectFit: 'cover', borderRadius: '10px', flexShrink: 0 }} />
+                      ? <img src={thumbnailUrl(img)} alt="" width={96} height={96} loading="lazy" decoding="async" style={{ width: '96px', height: '96px', objectFit: 'cover', borderRadius: '10px', flexShrink: 0 }} />
                       : <div style={{ fontSize: '40px', flexShrink: 0 }}>{post.cover_emoji || '📝'}</div>
                   })()}
                   <div style={{ minWidth: 0 }}>

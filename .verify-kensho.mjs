@@ -3,34 +3,40 @@ import fs from 'node:fs'
 
 const env = Object.fromEntries(
   fs.readFileSync(new URL('./.env.local', import.meta.url), 'utf8')
-    .split('\n').filter(l => l.includes('=') && !l.trim().startsWith('#'))
-    .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, '')] })
+    .split('\n')
+    .filter(l => l.includes('=') && !l.trim().startsWith('#'))
+    .map(l => {
+      const i = l.indexOf('=')
+      return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^"|"$/g, '')]
+    })
 )
 
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
-async function all(table, cols) {
+async function all(table, cols, apply = q => q) {
   const out = []
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from(table).select(cols).range(from, from + 999)
-    if (error) { console.log('ERR', table, error.message); return out }
+    let q = sb.from(table).select(cols).range(from, from + 999)
+    q = apply(q)
+    const { data, error } = await q
+    if (error) throw new Error(table + ': ' + error.message)
     out.push(...data)
     if (data.length < 1000) break
   }
   return out
 }
 
-const posts = await all('posts', '*')
-console.log('=== posts total:', posts.length)
-console.log('columns:', posts.length ? Object.keys(posts[0]).join(', ') : '(none)')
-for (const p of posts) {
-  console.log([
-    p.slug,
-    'status=' + p.status,
-    'pub=' + (p.published_at ?? '-'),
-    'kw=' + JSON.stringify(p.target_keyword ?? null),
-    'cat=' + JSON.stringify(p.category ?? null),
-    'len=' + (p.content ? p.content.length : 0),
-    'title=' + (p.title ?? '').slice(0, 40),
-  ].join(' | '))
-}
+const places = await all(
+  'places',
+  'id,title,prefecture,place_type,status,closed,fee,price_fixed,price_share_pct,place_fixed_unit,company_fixed_amount,company_fixed_unit,company_share_pct,day_type_fees,schedule,genres,created_at'
+)
+
+console.log('places total rows:', places.length)
+const pub = places.filter(p => p.status === 'published' && !p.closed)
+console.log('published & not closed:', pub.length)
+
+fs.writeFileSync(
+  new URL('./.verify-kensho-dump.json', import.meta.url),
+  JSON.stringify(pub, null, 2)
+)
+console.log('dumped to .verify-kensho-dump.json')
