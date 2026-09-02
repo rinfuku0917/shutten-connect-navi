@@ -32,6 +32,9 @@ const COVERS = [
   ['kitchen-car-required-documents',
    '車両を売りたい方へのフォルダ②/直接交渉アイコン③.png',
    ['#EDF5EF', '#CFE6D6']],
+  ['supermarket-food-truck',
+   '新サイト上部の4つのアイコンフォルダ①/登録出店者アイコン①.png',
+   ['#FFF1F0', '#F7D6D2']],
 ]
 
 fs.mkdirSync(OUT, { recursive: true })
