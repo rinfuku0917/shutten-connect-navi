@@ -43,9 +43,14 @@ for (const [slug, rel, [c1, c2]] of COVERS) {
   const src = path.join(SRC, rel)
   if (!fs.existsSync(src)) { console.error(`  素材が見つからない: ${rel}`); continue }
 
-  // 透明の余白を切り、高さの7割ほどに収める
+  // 透明の余白を切り、高さいっぱいに近づける。
+  //
+  // 一覧のサムネイルは 96px の正方形で、中央を切り出して表示する
+  // （objectFit: cover）。1200x630 の中央 630x630 だけが見える計算なので、
+  // 絵が小さいとサムネイルがほぼ背景色になってしまう。
+  // 高さの9割まで大きくして、中央の正方形が絵で埋まるようにする。
   const art = await sharp(src).trim({ threshold: 10 })
-    .resize({ width: Math.round(W * 0.52), height: Math.round(H * 0.72), fit: 'inside' })
+    .resize({ width: Math.round(H * 0.92), height: Math.round(H * 0.92), fit: 'inside' })
     .toBuffer()
   const m = await sharp(art).metadata()
 
@@ -55,7 +60,7 @@ for (const [slug, rel, [c1, c2]] of COVERS) {
       <stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/>
     </linearGradient></defs>
     <rect width="${W}" height="${H}" fill="url(#g)"/>
-    <circle cx="${W / 2}" cy="${H / 2}" r="${H * 0.42}" fill="#ffffff" opacity="0.42"/>
+    <circle cx="${W / 2}" cy="${H / 2}" r="${H * 0.52}" fill="#ffffff" opacity="0.5"/>
   </svg>`
 
   const dest = path.join(OUT, `${slug}.webp`)
