@@ -38,6 +38,26 @@ const REDIRECTS = [
     destination: '/blog/regular-event-schedule',
     permanent: true,
   },
+  // 同じ検索語を取り合っていた記事の統合（2026-09-02）。
+  // 内容は転送先に入っているので、古いURLからはそちらへ送る。
+  {
+    // 「選び方」の5つの視点のうち3つが、新しい7本に吸収されていた
+    source: '/blog/choose-profitable-food-truck-location',
+    destination: '/blog/kitchen-car-location-guide',
+    permanent: true,
+  },
+  {
+    // 「貸す側の料金設定」は、駐車場を貸す記事が実データつきで扱っている
+    source: '/blog/host-fee-setting-guide2',
+    destination: '/blog/renting-parking-space',
+    permanent: true,
+  },
+  {
+    // イベントに呼ぶ話が2本あった。当日の運営の章は転送先に取り込み済み
+    source: '/blog/event-food-truck-guide',
+    destination: '/blog/how-to-invite-kitchen-car',
+    permanent: true,
+  },
 ]
 
 const nextConfig: NextConfig = {
