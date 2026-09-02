@@ -239,8 +239,12 @@ export default async function Home() {
           h1 はページに1つだけ。位置を変えても検索での扱いは変わらない。 */}
       <div style={{ ...wrap, padding: '40px 20px 0' }}>
         <h1 className={maru.className + ' top3-lead'} style={{ ...h2Style, textAlign: 'center', margin: 0 }}>
-          キッチンカーの手配・派遣と、出店場所探しをつなぐ「出店コネクトナビ」
+          キッチンカーの出店場所探し・手配なら出店コネクトナビ
         </h1>
+        <p className='top3-lead-desc' style={{ textAlign: 'center', color: C.muted, lineHeight: 1.9, margin: '16px auto 0', maxWidth: '760px' }}>
+          出店コネクトナビは、キッチンカー・移動販売の出店場所を探している方と、
+          イベント・商業施設などで出店者を募集したい方をつなぐマッチングサービスです。
+        </p>
       </div>
 
       {/* STATS */}
