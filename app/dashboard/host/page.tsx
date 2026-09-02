@@ -88,13 +88,29 @@ export default function HostDashboard() {
     if (placeIds.length > 0) {
       const { data: appData } = await supabase
         .from('applications')
-        .select('id,apply_date,format,status,place_id,seller_id,places(title),profiles(name,shop_name)')
+        .select('id,apply_date,format,status,place_id,seller_id,places(title)')
         .in('place_id', placeIds)
         .order('created_at', { ascending: false })
+
+      // 出店者の名前は public_sellers から引く。
+      //
+      // 以前は profiles(name,shop_name) を一緒に取っていたが、
+      // 2026-09-02 に profiles の閲覧を「自分の行と管理者だけ」に絞ったため、
+      // 募集者からは他人の profiles が読めなくなり、応募者が全員
+      // 「(出店者)」と表示されるようになっていた。
+      // public_sellers は公開してよい項目だけを出すビューなので、こちらを使う。
+      const sellerIds = [...new Set((appData || []).map((a: any) => a.seller_id).filter(Boolean))]
+      const nameById = new Map<string, string>()
+      if (sellerIds.length > 0) {
+        const { data: sellers } = await supabase
+          .from('public_sellers').select('id, shop_name, name').in('id', sellerIds)
+        for (const s of sellers || []) nameById.set(s.id, s.shop_name || s.name || '')
+      }
+
       const mapped: HostApp[] = (appData || []).map((a: any) => ({
         id: a.id,
         placeTitle: a.places?.title || '(案件名なし)',
-        sellerName: a.profiles?.shop_name || a.profiles?.name || '(出店者)',
+        sellerName: nameById.get(a.seller_id) || '(出店者)',
         date: a.apply_date || '日付未定',
         format: a.format || '-',
         status: a.status || 'pending',

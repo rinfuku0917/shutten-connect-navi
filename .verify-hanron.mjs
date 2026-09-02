@@ -3,67 +3,83 @@ import fs from 'node:fs'
 
 const env = Object.fromEntries(
   fs.readFileSync(new URL('./.env.local', import.meta.url), 'utf8')
-    .split('\n').filter(l => l.includes('=') && !l.trim().startsWith('#'))
-    .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, '')] })
+    .split('\n')
+    .filter(l => l.includes('=') && !l.trim().startsWith('#'))
+    .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^"|"$/g, '')] })
 )
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
-async function fetchAll(table, cols) {
+// 1000行打ち切り対策：必ず range でページングする
+async function all(cols) {
   const out = []
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from(table).select(cols).range(from, from + 999)
-    if (error) { console.log('ERR', table, error.message); return out }
+  let from = 0
+  const step = 500
+  for (;;) {
+    const { data, error } = await sb.from('places').select(cols).order('id').range(from, from + step - 1)
+    if (error) throw error
     out.push(...data)
-    if (data.length < 1000) break
+    if (data.length < step) break
+    from += step
   }
   return out
 }
 
-const posts = await fetchAll('posts', '*')
-const A = posts.find(p => p.slug === 'kitchen-car-business-license')
-const B = posts.find(p => p.slug === 'kitchen-car-required-documents')
+const rows = await all('id,title,status,closed,fee,day_type_fees,price_fixed,price_share_pct,place_fixed_unit,company_fixed_amount,company_fixed_unit,company_share_pct,schedule,prefecture,place_type,host_id')
+console.log('places 全行:', rows.length)
 
-for (const [name, p] of [['A business-license', A], ['B required-documents', B]]) {
-  console.log('\n##########', name)
-  console.log('  status      :', p.status)
-  console.log('  published_at:', p.published_at)
-  console.log('  category    :', JSON.stringify(p.category))
-  console.log('  target_kw   :', JSON.stringify(p.target_keyword))
-  console.log('  title       :', p.title)
-  console.log('  meta_desc   :', p.meta_description)
-  console.log('  excerpt     :', p.excerpt)
-  console.log('  content len :', p.content.length)
+const pub = rows.filter(r => r.status === 'published' && !r.closed)
+console.log('公開中(published かつ closed でない):', pub.length)
+
+const sup = pub.filter(r => String(r.place_type || '').includes('スーパー') || String(r.place_type || '').includes('食品'))
+console.log('スーパー・食品店:', sup.length)
+console.log('place_type の値:', [...new Set(pub.map(r => r.place_type))].join(' / '))
+
+const money = x => (typeof x === 'number' ? x : null)
+const side = (d, k) => (d && typeof d === 'object' && d[k]) ? d[k] : null
+
+console.log('\n===== スーパー35件の生データ =====')
+for (const r of sup) {
+  const d = r.day_type_fees
+  const wd = side(d, 'weekday'), we = side(d, 'weekend')
+  console.log([
+    r.title,
+    '| price_fixed=' + r.price_fixed,
+    'company_fixed=' + r.company_fixed_amount,
+    'unit=' + r.place_fixed_unit + '/' + r.company_fixed_unit,
+    'share=' + r.price_share_pct + '%/' + r.company_share_pct + '%',
+    'dtf=' + JSON.stringify(d),
+    'fee=' + JSON.stringify(r.fee),
+    'host=' + String(r.host_id || '').slice(0, 8)
+  ].join(' '))
 }
 
-// --- 独自の重なり測定: 見出し単位 + 語の出現回数 ---
-const headings = s => s.split('\n').filter(l => /^#{2,3} /.test(l)).map(l => l.trim())
-console.log('\n=== A の見出し ===');  headings(A.content).forEach(h => console.log('  ' + h))
-console.log('\n=== B の見出し ===');  headings(B.content).forEach(h => console.log('  ' + h))
-
-const terms = ['営業許可', '保健所', '必要書類', '書類', 'PL保険', '損害賠償', '検体', '検便',
-               '食品衛生責任者', '申請', '手数料', '費用', '応募', '審査', '設備', '車両', 'シンク', '給水']
-console.log('\n=== 語の出現回数 (A=営業許可 / B=必要書類) ===')
-console.log('  語'.padEnd(20), 'A', ' B')
-for (const t of terms) {
-  const ca = (A.content.match(new RegExp(t, 'g')) || []).length
-  const cb = (B.content.match(new RegExp(t, 'g')) || []).length
-  console.log('  ' + t.padEnd(18), String(ca).padStart(2), String(cb).padStart(3))
+// day_type_fees を持つ案件だけ、placeFee / companyFee の分解を集計
+console.log('\n===== day_type_fees を持つスーパー案件の分解 =====')
+const dtfRows = sup.filter(r => {
+  const d = r.day_type_fees
+  return d && typeof d === 'object' && ['weekday','weekend'].some(k => side(d,k) && (typeof side(d,k).placeFee === 'number' || typeof side(d,k).companyFee === 'number'))
+})
+console.log('day_type_fees あり:', dtfRows.length, '件')
+const byPattern = new Map()
+for (const r of dtfRows) {
+  const key = JSON.stringify(r.day_type_fees)
+  if (!byPattern.has(key)) byPattern.set(key, [])
+  byPattern.get(key).push(r.title)
+}
+for (const [k, titles] of byPattern) {
+  const d = JSON.parse(k)
+  const t = s => s ? ((money(s.placeFee) || 0) + (money(s.companyFee) || 0)) : null
+  console.log(`\n  パターン: ${k}`)
+  console.log(`  合計 平日=${t(d.weekday)} 週末=${t(d.weekend)}  / 場所の取り分 平日=${d.weekday?.placeFee} 週末=${d.weekend?.placeFee}`)
+  console.log(`  ${titles.length}件: ${titles.slice(0,20).join(', ')}`)
 }
 
-// --- 相互リンクの有無（本文中の /blog/ リンクを全部出す）---
-const links = s => [...s.matchAll(/\]\((\/[^)]*)\)/g)].map(m => m[1])
-console.log('\n=== A の内部リンク ==='); console.log('  ', JSON.stringify(links(A.content)))
-console.log('=== B の内部リンク ==='); console.log('  ', JSON.stringify(links(B.content)))
-
-// --- 他記事から2本へのリンク（回遊の実態）---
-console.log('\n=== 他記事から business-license / required-documents へのリンク ===')
-for (const p of posts) {
-  const l = links(p.content).filter(u => /business-license|required-documents/.test(u))
-  if (l.length) console.log(`  ${p.slug} [${p.status}] -> ${JSON.stringify(l)}`)
+// 公開ページ(feeText)が出す金額 = price_fixed + company_fixed_amount
+console.log('\n===== 公開ページの表示額(price_fixed+company_fixed_amount)の分布 =====')
+const dist = new Map()
+for (const r of sup) {
+  const fixed = (r.price_fixed || 0) + (r.company_fixed_amount || 0)
+  const key = `${fixed}円 (place=${r.price_fixed} + company=${r.company_fixed_amount})`
+  dist.set(key, (dist.get(key) || 0) + 1)
 }
-
-// --- A の本文で「必要書類」がどう使われているか（前後の文脈）---
-console.log('\n=== A 本文中の「書類」周辺 ===')
-for (const m of A.content.matchAll(/書類/g)) {
-  console.log('  …' + A.content.slice(Math.max(0, m.index - 45), m.index + 45).replace(/\n/g, '⏎') + '…')
-}
+for (const [k, v] of [...dist].sort()) console.log(' ', k, '->', v, '件')
