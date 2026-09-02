@@ -14,9 +14,12 @@
 //
 // 許可しているのは next.config.ts の images に書いたホストだけなので、
 // それ以外のURLはそのまま返す（変換に出すと400になるため）。
+//
+// q（品質）は 75 のみ。Next 16 は設定した値以外を 400 で弾く。
+// 既定は 75 だけなので、70 などにすると画像が出なくなる。
 export function thumbnailUrl(src: string, width = 256): string {
   if (!src.includes('.supabase.co/storage/v1/object/public/')) return src
-  return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=70`
+  return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=75`
 }
 
 export function firstImage(content: string | null | undefined): string | null {
