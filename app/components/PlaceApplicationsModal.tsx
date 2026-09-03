@@ -55,6 +55,7 @@ const LABEL: Record<string, { text: string; bg: string; fg: string }> = {
   pending: { text: '承認待ち', bg: '#FFF7ED', fg: '#C2410C' },
   approved: { text: '承認済み', bg: '#ECFDF5', fg: '#047857' },
   rejected: { text: '不採用', bg: '#FEF2F2', fg: '#B91C1C' },
+  cancelled: { text: '取消し', bg: '#F1F5F9', fg: '#475569' },
 }
 
 function badge(status: string) {
@@ -98,6 +99,50 @@ export default function PlaceApplicationsModal({
   const [askErr, setAskErr] = useState<string | null>(null)
   // 承認・不採用のときにメールを送るかどうか。既定は送る
   const [notify, setNotify] = useState(true)
+
+  // 承認済みの出店の取消し。
+  // この一覧は管理画面からしか開かれないため、ここに置いている。
+  // 出店者・募集者の画面には取消しの入口を作らない方針
+  // （「連絡すれば消せる」と分かるとキャンセルが増えるため、
+  //   運営が連絡を受けて処理する形を守る）。
+  // 念のためAPI側でも role='admin' を確かめている。
+  const [cxAsk, setCxAsk] = useState<{ id: string; who: string; when: string } | null>(null)
+  const [cxBusy, setCxBusy] = useState(false)
+  const [cxErr, setCxErr] = useState<string | null>(null)
+  const [cxReason, setCxReason] = useState('')
+
+  const REASONS = ['体調不良', '車両の故障', '日程の重複', '天候', '出店者の都合', 'その他']
+
+  const runCancel = async () => {
+    if (!cxAsk) return
+    setCxBusy(true)
+    setCxErr(null)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const token = sess.session?.access_token
+      if (!token) { setCxErr('ログインしなおしてからお試しください。'); return }
+      const res = await fetch('/api/applications/cancel-approved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ applicationId: cxAsk.id, reason: cxReason }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        // お金の記録で止まった場合は、何が引っかかったのかを並べて出す
+        const blockers: string[] = Array.isArray(json?.blockers) ? json.blockers : []
+        setCxErr((json?.error || '取り消せませんでした。') +
+          (blockers.length ? '\n\n・' + blockers.join('\n・') : ''))
+        return
+      }
+      setCxAsk(null)
+      setCxReason('')
+      await load()
+    } catch {
+      setCxErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setCxBusy(false)
+    }
+  }
 
   // 提出用Excelの書き出し。
   // 出す資料は2種類あり、必要になる場面が違うので選べるようにしている。
@@ -481,6 +526,18 @@ export default function PlaceApplicationsModal({
                                   <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>{fmtDate(r.apply_date)}</span>
                                   {r.format && <span style={{ fontSize: '11px', color: '#888' }}>{r.format}</span>}
                                   <span style={{ ...chip, background: b.bg, color: b.fg }}>{b.text}</span>
+                                  {r.status === 'approved' && (
+                                    <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setCxErr(null); setCxReason(''); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        title='出店者から連絡を受けて、この出店を取り消します'
+                                        style={{ background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        出店取消し
+                                      </button>
+                                    </span>
+                                  )}
                                   {r.status === 'pending' && (
                                     <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
                                       <button
@@ -582,6 +639,55 @@ export default function PlaceApplicationsModal({
         okLabel={ask?.status === 'approved' ? '承認する' : '不採用にする'}
         onOk={apply}
         onCancel={() => { if (!busy) { setAsk(null); setAskErr(null) } }}
+      />
+
+      <ConfirmDialog
+        open={!!cxAsk}
+        busy={cxBusy}
+        error={cxErr}
+        danger
+        title='この出店を取り消しますか？'
+        body={
+          cxAsk
+            ? `${cxAsk.who}／${cxAsk.when}\n\n` +
+              '出店者・募集者・運営にお知らせのメールが届きます。\n' +
+              '確定後の取消しはキャンセル料の対象です（キャンセルポリシー）。\n' +
+              '売上の報告や請求書がある出店は取り消せません。'
+            : ''
+        }
+        extra={
+          cxAsk ? (
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                取消しの理由（任意・あとから見返せます）
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                {REASONS.map(v => {
+                  const on = cxReason === v
+                  return (
+                    <button
+                      key={v} type='button' disabled={cxBusy}
+                      onClick={() => setCxReason(on ? '' : v)}
+                      style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '999px', cursor: cxBusy ? 'not-allowed' : 'pointer', border: '1px solid ' + (on ? '#B45309' : '#E2E8F0'), background: on ? '#FFF8E1' : '#fff', color: on ? '#B45309' : '#64748B', fontWeight: on ? 700 : 400 }}
+                    >
+                      {v}
+                    </button>
+                  )
+                })}
+              </div>
+              <input
+                value={cxReason} disabled={cxBusy}
+                onChange={e => setCxReason(e.target.value)}
+                placeholder='そのまま書くこともできます'
+                aria-label='取消しの理由'
+                style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 11px', fontSize: '13px', color: '#1a1a1a' }}
+              />
+            </div>
+          ) : null
+        }
+        okLabel='出店を取り消す'
+        onOk={runCancel}
+        onCancel={() => { if (!cxBusy) { setCxAsk(null); setCxErr(null) } }}
       />
     </>
   )

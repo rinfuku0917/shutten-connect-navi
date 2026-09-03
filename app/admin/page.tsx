@@ -504,6 +504,8 @@ export default function AdminPage() {
     const { data } = await supabase
       .from('places')
       .select('id, title, prefecture, place_type, status, closed, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, day_type_fees, fee, genres, profiles(name), applications(count)')
+      // 取り消された申込は応募数に入れない
+      .neq('applications.status', 'cancelled')
       .order('created_at', { ascending: false })
     const mapped: AdminPlace[] = (data || []).map((p: any) => ({
       id: p.id,
@@ -1281,15 +1283,15 @@ const previewDoc = async (fileUrl: string) => {
     const sellerRes = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'seller')
     const hostRes = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'host')
     const placeRes = await supabase.from('places').select('id', { count: 'exact', head: true })
-    const monthRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).gte('apply_date', monthStart.toISOString())
+    const monthRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).neq('status', 'cancelled').gte('apply_date', monthStart.toISOString())
     const salesRes = await supabase.from('sales').select('revenue, fee')
     const gmv = (salesRes.data || []).reduce((sum: number, s: any) => sum + (s.revenue || 0), 0)
     const feeTotal = (salesRes.data || []).reduce((sum: number, s: any) => sum + (s.fee || 0), 0)
-    const totalAppsRes = await supabase.from('applications').select('id', { count: 'exact', head: true })
+    const totalAppsRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).neq('status', 'cancelled')
     const approvedAppsRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).eq('status', 'approved')
     setStatCounts({ sellers: sellerRes.count || 0, hosts: hostRes.count || 0, places: placeRes.count || 0, monthApps: monthRes.count || 0, gmv, fee: feeTotal, totalApps: totalAppsRes.count || 0, approvedApps: approvedAppsRes.count || 0 })
     const { data: apps } = await supabase.from('applications').select('id, status, apply_date, places(title), profiles(name)').order('apply_date', { ascending: false }).limit(3)
-    const statusJa = (s: string) => s === 'approved' ? '承認済' : s === 'rejected' ? '否認' : '審査中'
+    const statusJa = (s: string) => s === 'approved' ? '承認済' : s === 'rejected' ? '否認' : s === 'cancelled' ? '取消し' : '審査中'
     setRecentApps((apps || []).map((a: any) => ({ id: a.id, name: a.profiles?.name || '(出店者)', place: a.places?.title || '(案件名なし)', date: a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '', status: statusJa(a.status) })))
   }
   const stats = [

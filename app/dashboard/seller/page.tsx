@@ -348,6 +348,8 @@ export default function SellerDashboard() {
     pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' },
     approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' },
     rejected: { label: '否認', color: '#DC2626', bg: '#FEE2E2' },
+    // 承認後に運営が取り消したもの。断られたのではないので赤にしない
+    cancelled: { label: '取消し', color: '#475569', bg: '#F1F5F9' },
   }
 
   // ===== 売上（出店者） =====

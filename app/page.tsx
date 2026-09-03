@@ -132,6 +132,8 @@ async function loadTop(): Promise<{ newPlaces: NewPlace[]; works: WorkPlace[]; p
       client.from('places')
         .select('id,title,prefecture,image_url,posted_at,schedule,open_days,urgent,applications(count)')
         .eq('status', 'published')
+        // 取り消された申込は「人気」の判定に入れない
+        .neq('applications.status', 'cancelled')
         .order('pinned', { ascending: false })
         .order('posted_at', { ascending: false })
         .limit(4),

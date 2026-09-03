@@ -234,7 +234,7 @@ export default function HostDashboard() {
           ) : (
           <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
             {apps.map(a => {
-              const st = a.status === 'approved' ? {label:'承認済',c:'#16A34A',bg:'#ECFDF5'} : a.status === 'rejected' ? {label:'不採用',c:'#DC2626',bg:'#FEE2E2'} : {label:'審査中',c:'#92400E',bg:'#FEF3C7'}
+              const st = a.status === 'approved' ? {label:'承認済',c:'#16A34A',bg:'#ECFDF5'} : a.status === 'rejected' ? {label:'不採用',c:'#DC2626',bg:'#FEE2E2'} : a.status === 'cancelled' ? {label:'取消し',c:'#475569',bg:'#F1F5F9'} : {label:'審査中',c:'#92400E',bg:'#FEF3C7'}
               return (
               <div key={a.id} style={{background:'#fff',border:'1px solid #e0e0e0',borderRadius:'8px',padding:'16px'}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px',flexWrap:'wrap'}}>

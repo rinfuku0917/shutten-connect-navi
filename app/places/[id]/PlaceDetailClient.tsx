@@ -454,7 +454,9 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                             ? { label: '承認済', color: '#16A34A' }
                             : e.status === 'rejected'
                               ? { label: '不採用', color: '#DC2626' }
-                              : { label: '審査中', color: '#B45309' }
+                              : e.status === 'cancelled'
+                                ? { label: '取消し', color: '#475569' }
+                                : { label: '審査中', color: '#B45309' }
                           return (
                             <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', background: '#fff', borderRadius: '6px', padding: '8px 10px' }}>
                               <span style={{ color: st.color, border: `1px solid ${st.color}`, borderRadius: '4px', padding: '1px 8px', fontSize: '11px', fontWeight: 700 }}>{st.label}</span>
