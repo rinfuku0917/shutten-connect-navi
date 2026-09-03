@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import JsonLd from '../../components/JsonLd'
 import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../lib/seo'
-import SellerDetailClient, { type Seller, type MenuItem, type Review } from './SellerDetailClient'
+import SellerDetailClient, { type Seller, type MenuItem, type Review, type SnsLink } from './SellerDetailClient'
 
 // 出店者の詳細ページ。
 //
@@ -36,7 +36,7 @@ async function fetchSeller(id: string): Promise<Seller | null> {
   if (!db) return null
   const { data } = await db
     .from('profiles')
-    .select('id, name, shop_name, genre, areas, photos')
+    .select('id, name, shop_name, genre, areas, photos, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods')
     .eq('id', id)
     .eq('role', 'seller')
     .eq('approval_status', 'approved')
@@ -44,16 +44,22 @@ async function fetchSeller(id: string): Promise<Seller | null> {
   return (data as Seller) ?? null
 }
 
-async function fetchMenusAndReviews(id: string): Promise<{ menus: MenuItem[]; reviews: Review[] }> {
+async function fetchMenusAndReviews(id: string): Promise<{ menus: MenuItem[]; reviews: Review[]; sns: SnsLink[] }> {
   const db = client()
-  if (!db) return { menus: [], reviews: [] }
-  const [{ data: menus }, { data: reviews }] = await Promise.all([
-    db.from('menus').select('id, name, price, photo_url, sort_order').eq('seller_id', id)
+  if (!db) return { menus: [], reviews: [], sns: [] }
+  const [{ data: menus }, { data: reviews }, { data: sns }] = await Promise.all([
+    // detail はトッピングや内容量の補足（例「2本」「ミルク・ソーダ選べます」）
+    db.from('menus').select('id, name, price, photo_url, sort_order, detail').eq('seller_id', id)
       .order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
     db.from('reviews').select('id, reviewer_name, rating, comment, created_at').eq('seller_id', id)
       .eq('status', 'approved').order('created_at', { ascending: false }),
+    db.from('sns_links').select('platform, url').eq('seller_id', id),
   ])
-  return { menus: (menus as MenuItem[]) ?? [], reviews: (reviews as Review[]) ?? [] }
+  return {
+    menus: (menus as MenuItem[]) ?? [],
+    reviews: (reviews as Review[]) ?? [],
+    sns: ((sns as SnsLink[]) ?? []).filter(x => x.url),
+  }
 }
 
 // genre は文字列の配列だったり、配列を文字列にしたものだったりする
@@ -75,8 +81,18 @@ function displayName(s: Seller): string {
 }
 
 // 検索結果に出す説明文。120字前後に収める。
+//
+// 出店者が紹介文（bio）を書いていれば、それを使う。
+// 以前は必ず下の定型文を組み立てていたため、1,300を超えるページの
+// 説明文がほぼ同じ形になっていた。本人の言葉があるならそちらが良い。
 function summarize(s: Seller, menus: MenuItem[]): string {
   const name = displayName(s)
+  const bio = (s.bio ?? '').replace(/\s+/g, ' ').trim()
+  if (bio.length >= 30) {
+    const head = `${name}｜`
+    const body = bio.length + head.length > 120 ? bio.slice(0, 119 - head.length) + '…' : bio
+    return head + body
+  }
   const genres = toArray(s.genre)
   const areas = (s.areas ?? []).map(x => String(x).trim()).filter(Boolean)
   const parts: string[] = [`${name}のプロフィールです。`]
@@ -121,7 +137,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function SellerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const seller = await fetchSeller(id)
-  const { menus, reviews } = seller ? await fetchMenusAndReviews(id) : { menus: [], reviews: [] }
+  const { menus, reviews, sns } = seller ? await fetchMenusAndReviews(id) : { menus: [], reviews: [], sns: [] }
 
   const name = seller ? displayName(seller) : ''
   const genres = seller ? toArray(seller.genre) : []
@@ -164,7 +180,7 @@ export default async function SellerDetailPage({ params }: { params: Promise<{ i
         </>
       )}
 
-      <SellerDetailClient id={id} initialSeller={seller} initialMenus={menus} initialReviews={reviews} />
+      <SellerDetailClient id={id} initialSeller={seller} initialMenus={menus} initialReviews={reviews} initialSns={sns} />
     </>
   )
 }

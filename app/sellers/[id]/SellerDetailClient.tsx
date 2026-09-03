@@ -6,16 +6,41 @@ import SiteFooter from '../../components/SiteFooter'
 import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { formatVehicleSize } from '../../lib/vehicleSize'
 
-export type Seller = { id: string; name: string | null; shop_name: string | null; genre: string[] | string | null; areas: string[] | null; photos: string[] | null }
+export type Seller = {
+  id: string; name: string | null; shop_name: string | null
+  genre: string[] | string | null; areas: string[] | null; photos: string[] | null
+  // 出店者がマイページで入力しているのに、これまで公開ページに出ていなかった項目
+  bio?: string | null
+  sales_type?: string | null
+  vehicle_type?: string | null
+  size_length?: number | null
+  size_width?: number | null
+  size_height?: number | null
+  equipment?: string | null
+  menu?: string | null
+  takeout_bag?: string | null
+  payment_methods?: string[] | string | null
+}
 export type Review = { id: string; reviewer_name: string | null; rating: number; comment: string | null; created_at: string }
-export type MenuItem = { id: string; name: string; price: number | null; photo_url: string | null; sort_order: number }
+export type MenuItem = { id: string; name: string; price: number | null; photo_url: string | null; sort_order: number; detail?: string | null }
+export type SnsLink = { platform: string; url: string }
 
 type Props = {
   id: string
   initialSeller: Seller | null
   initialMenus: MenuItem[]
   initialReviews: Review[]
+  initialSns?: SnsLink[]
+}
+
+// 公開ページで出す列。サーバー側（page.tsx）と同じ並びにしておく
+const SELLER_COLUMNS =
+  'id, name, shop_name, genre, areas, photos, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods'
+
+const SNS_LABEL: Record<string, string> = {
+  instagram: 'Instagram', twitter: 'X（Twitter）', youtube: 'YouTube', tiktok: 'TikTok',
 }
 
 const BRAND = '#F5A623'
@@ -50,12 +75,13 @@ const Stars = ({ n }: { n: number }) => (
   </span>
 )
 
-function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews }: Props) {
+function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, initialSns = [] }: Props) {
   // サーバーで取ったものを最初から表示する。読み込み中の空白が出ず、
   // 検索エンジンにも中身が渡る。
   const [seller, setSeller] = useState<Seller | null>(initialSeller)
   const [reviews, setReviews] = useState<Review[]>(initialReviews)
   const [menus, setMenus] = useState<MenuItem[]>(initialMenus)
+  const [sns, setSns] = useState<SnsLink[]>(initialSns)
   const [loading, setLoading] = useState(initialSeller === null)
   const [rname, setRname] = useState('')
   const [rrating, setRrating] = useState(0)
@@ -88,18 +114,21 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews }: 
       // 管理画面からのプレビューだけは、承認前も見たいので profiles を直接読む
       // （管理者は profiles を読めるポリシーがある）。
       const q = isPreview
-        ? supabase.from('profiles').select('id, name, shop_name, genre, areas, photos').eq('id', id)
-        : supabase.from('public_sellers').select('id, name, shop_name, genre, areas, photos').eq('id', id)
+        ? supabase.from('profiles').select(SELLER_COLUMNS).eq('id', id)
+        : supabase.from('public_sellers').select(SELLER_COLUMNS).eq('id', id)
       const { data: s } = await q.single()
-      setSeller(s as Seller)
+      setSeller(s as unknown as Seller)
       await loadReviews()
-      const { data: menuData } = await supabase
-        .from('menus')
-        .select('id, name, price, photo_url, sort_order')
-        .eq('seller_id', id)
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true })
+      const [{ data: menuData }, { data: snsData }] = await Promise.all([
+        supabase.from('menus')
+          .select('id, name, price, photo_url, sort_order, detail')
+          .eq('seller_id', id)
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true }),
+        supabase.from('sns_links').select('platform, url').eq('seller_id', id),
+      ])
       setMenus((menuData || []) as MenuItem[])
+      setSns(((snsData || []) as SnsLink[]).filter(x => x.url))
       setLoading(false)
     }
     load()
@@ -161,6 +190,57 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews }: 
           </div>
         </div>
 
+        {/* 紹介文。出店者が自分の言葉で書いた説明なので、いちばん上に置く */}
+        {(seller.bio ?? '').trim() && (
+          <div style={{ ...card, padding: '20px 22px', marginTop: '16px' }}>
+            <p style={{ margin: 0, fontSize: '14px', lineHeight: 2, color: '#44403C', whiteSpace: 'pre-wrap' }}>{seller.bio}</p>
+          </div>
+        )}
+
+        {/* お店について。出店者がマイページで入力した内容のうち、
+            書かれているものだけを並べる（空欄は行ごと出さない） */}
+        {(() => {
+          const size = formatVehicleSize(
+            seller.size_length != null ? String(seller.size_length) : null,
+            seller.size_width != null ? String(seller.size_width) : null,
+            seller.size_height != null ? String(seller.size_height) : null,
+          )
+          const pays = Array.isArray(seller.payment_methods)
+            ? seller.payment_methods.filter(Boolean).join('・')
+            : (seller.payment_methods ?? '')
+          const rows: { label: string; value: string }[] = [
+            { label: '販売形態', value: (seller.sales_type ?? '').trim() },
+            { label: '車種', value: (seller.vehicle_type ?? '').trim() },
+            { label: '車両サイズ', value: size },
+            { label: '設備', value: (seller.equipment ?? '').trim() },
+            { label: 'テイクアウトの袋', value: (seller.takeout_bag ?? '').trim() },
+            { label: '利用できる決済', value: String(pays).trim() },
+          ].filter(r => r.value)
+          if (rows.length === 0) return null
+          return (
+            <div style={{ marginTop: '28px' }}>
+              <h2 style={sectionTitle}>お店について</h2>
+              <div style={{ ...card, overflow: 'hidden' }}>
+                {rows.map((r, i) => (
+                  <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '128px 1fr', gap: '14px', padding: '12px 18px', borderTop: i === 0 ? 'none' : '1px solid #F1EBE2', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: '12px', color: '#78716C' }}>{r.label}</span>
+                    <span style={{ fontSize: '14px', color: '#1C1917', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+
+        {(seller.menu ?? '').trim() && (
+          <div style={{ marginTop: '28px' }}>
+            <h2 style={sectionTitle}>取り扱い品目</h2>
+            <div style={{ ...card, padding: '18px 20px' }}>
+              <p style={{ margin: 0, fontSize: '14px', lineHeight: 2, color: '#44403C', whiteSpace: 'pre-wrap' }}>{seller.menu}</p>
+            </div>
+          </div>
+        )}
+
         {seller.photos && seller.photos.length > 0 && (
           <div style={{ marginTop: '28px' }}>
             <h2 style={sectionTitle}>店舗・商品写真</h2>
@@ -185,9 +265,26 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews }: 
                   )}
                   <div style={{ padding: '10px 12px' }}>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: '#1C1917' }}>{m.name}</div>
+                    {(m.detail ?? '').trim() && (
+                      <div style={{ fontSize: '12px', color: '#78716C', marginTop: '3px', lineHeight: 1.7 }}>{m.detail}</div>
+                    )}
                     <div style={{ fontSize: '14px', fontWeight: 700, color: BRAND, marginTop: '4px' }}>{m.price != null ? m.price.toLocaleString() + '円' : '価格応相談'}</div>
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {sns.length > 0 && (
+          <div style={{ marginTop: '28px' }}>
+            <h2 style={sectionTitle}>SNS</h2>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {sns.map(l => (
+                <a key={l.platform} href={l.url} target='_blank' rel='noopener noreferrer nofollow'
+                  style={{ ...card, padding: '9px 16px', fontSize: '13px', fontWeight: 700, color: '#9A5B0A', textDecoration: 'none' }}>
+                  {SNS_LABEL[l.platform] ?? l.platform} ↗
+                </a>
               ))}
             </div>
           </div>
