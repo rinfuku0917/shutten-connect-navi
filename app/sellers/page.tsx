@@ -5,6 +5,7 @@ import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
 import SellersBrowser, { type Seller } from './SellersBrowser'
+import { sortForListing } from './sellerName'
 
 const EXCLUDED_SHOP_NAMES = ['株式会社nav', '株式会社アーク']
 
@@ -22,13 +23,20 @@ async function fetchSellers(): Promise<Seller[]> {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) throw new Error('Supabase の環境変数が設定されていません')
 
+  // 読み先は public_sellers（公開してよい項目だけを出すビュー）。
+  //
+  // 以前は profiles を直接読んでいたが、2026-09-02 に profiles の閲覧を
+  // 「自分の行と管理者だけ」に絞ったため、サービスロールキーが無い環境では
+  // 一覧が丸ごと落ちるようになっていた。
+  // public_sellers ならどちらの鍵でも読めるので、鍵が変わっても止まらない。
+
   const supabase = createClient(url, key, { auth: { persistSession: false } })
 
   const CHUNK = 1000
   const all: Seller[] = []
   for (let from = 0; ; from += CHUNK) {
     const { data, error } = await supabase
-      .from('profiles')
+      .from('public_sellers')
       .select('id, shop_name, genre, areas, photos')
       .eq('role', 'seller')
       .eq('approval_status', 'approved')
@@ -49,7 +57,11 @@ export default async function SellersPage() {
 
   try {
     const all = await fetchSellers()
-    sellers = all.filter((s) => !EXCLUDED_SHOP_NAMES.includes((s.shop_name ?? '').trim()))
+    // 写真と店名がそろっているものを前に、どちらも無いものを後ろに並べる。
+    // 一覧は画像の並びなので、絵も名前も無いカードが混ざると空いて見える。
+    sellers = sortForListing(
+      all.filter((s) => !EXCLUDED_SHOP_NAMES.includes((s.shop_name ?? '').trim())),
+    )
   } catch (e) {
     errorMessage = e instanceof Error ? e.message : '不明なエラーが発生しました'
   }

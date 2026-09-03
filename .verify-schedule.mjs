@@ -1,52 +1,101 @@
 import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
-const env = Object.fromEntries(fs.readFileSync('.env.local','utf8').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(), l.slice(i+1).trim()]}))
-const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
-// paging to avoid the 1000-row cap
-let all = [], from = 0
-for(;;){
-  const { data, error } = await sb.from('places').select('*').range(from, from+499)
-  if (error) { console.log('ERR', error); process.exit(1) }
-  all = all.concat(data)
-  if (data.length < 500) break
-  from += 500
-}
-console.log('places 全行:', all.length)
+const env = Object.fromEntries(
+  fs.readFileSync('.env.local', 'utf8').split('\n').filter(l => l.includes('='))
+    .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]),
+)
+const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+  auth: { persistSession: false },
+})
 
-const pub = all.filter(p => p.status === 'published' && !p.closed)
-console.log('募集中 (published かつ closed が真でない):', pub.length)
-
-// 詳細ページ PlaceDetailClient.tsx の scheduleText と同じロジックを再現
-function scheduleText(p){
-  const hasSched = Array.isArray(p.schedule) && p.schedule.filter(d => d && d.date).length > 0
-  if (hasSched) return p.schedule.filter(d=>d.date).map(d=>d.date+' '+d.start+'〜'+d.end).join(' / ')
-  const od = (Array.isArray(p.open_days) ? p.open_days : []).map(x=>(x||'').trim()).filter(Boolean)[0]
-  return od || '要相談'
+async function all(table) {
+  const out = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from(table).select('*').range(from, from + 999)
+    if (error) throw new Error(`${table}: ${error.message}`)
+    out.push(...data)
+    if (data.length < 1000) break
+  }
+  return out
 }
 
-let bySched=0, byOpenDays=0, sou=0, both=0
-const shown=[]
-for (const p of pub){
-  const hasSched = Array.isArray(p.schedule) && p.schedule.filter(d=>d&&d.date).length>0
-  const hasOD = (Array.isArray(p.open_days)?p.open_days:[]).map(x=>(x||'').trim()).filter(Boolean).length>0
-  if (hasSched && hasOD) both++
-  const t = scheduleText(p)
-  if (t === '要相談') { sou++; continue }
-  if (hasSched) bySched++; else byOpenDays++
-  shown.push({id:p.id, title:p.title, text:t, src: hasSched?'schedule':'open_days'})
+const places = await all('places')
+const live = places.filter(p => p.status === 'published' && !p.closed)
+console.log('全places:', places.length, '/ 募集中:', live.length)
+
+// --- 画面表示ロジックを PlaceDetailClient.tsx:251-253 のとおり再現 ---
+const displayed = p => {
+  const hasDate = Array.isArray(p.schedule) && p.schedule.filter(d => d && d.date).length > 0
+  if (hasDate) return { kind: 'date', text: p.schedule.filter(d => d.date).map(d => d.date + ' ' + d.start + '〜' + d.end).join(' / ') }
+  const od = (p.open_days || []).map(x => (x || '').trim()).filter(Boolean)
+  if (od.length === 0) return { kind: 'placeholder', text: '要相談' }
+  return { kind: 'open_days', text: od[0], rest: od.length }
 }
-console.log('\n--- 詳細ページの「日程」欄 ---')
-console.log('schedule に日付あり(表示に採用):', bySched)
-console.log('open_days の文字を表示:', byOpenDays)
-console.log('日程欄に何か出る 合計:', shown.length)
-console.log('「要相談」と出る:', sou)
-console.log('（参考）schedule と open_days の両方を持つ:', both)
 
-// 「相談」等を含む表示
-const vague = shown.filter(s => /相談|応相|問い合わせ|問合|未定|要確認|応談/.test(s.text))
-console.log('\n表示テキストに相談系の語を含む:', vague.length)
-vague.forEach(v=>console.log('   ['+v.src+']', JSON.stringify(v.text), '←', v.title))
-console.log('\n厳しく数えた場合（相談系を除く）:', shown.length - vague.length)
+const WEEK = /曜|毎週|毎月|平日|土日|週末|祝/
 
-fs.writeFileSync('/private/tmp/claude-501/-Users-hidekifukusada-Desktop--------shutten-connect-navi/db7d6515-4023-44ab-9971-494a02f7a39c/scratchpad/shown.json', JSON.stringify(shown,null,1))
+let date = 0, placeholder = 0, odWeek = 0, odOther = 0
+const otherSamples = []
+const multi = []
+for (const p of live) {
+  const d = displayed(p)
+  if (d.kind === 'date') date++
+  else if (d.kind === 'placeholder') placeholder++
+  else if (WEEK.test(d.text)) odWeek++
+  else { odOther++; if (otherSamples.length < 25) otherSamples.push(d.text) }
+  if (d.kind === 'open_days' && d.rest > 1) multi.push({ title: p.title, days: (p.open_days || []).filter(Boolean) })
+}
+console.log('\n== 画面の「日程」欄に何が出るか（110件） ==')
+console.log('  日付が出る          :', date)
+console.log('  要相談（未記載）    :', placeholder)
+console.log('  open_days[0]が曜日系:', odWeek)
+console.log('  open_days[0]がその他:', odOther)
+console.log('  合計:', date + placeholder + odWeek + odOther)
+console.log('\n  その他の中身の例:', JSON.stringify(otherSamples, null, 1))
+console.log('\n  open_days が2行以上ある案件:', multi.length)
+console.log(JSON.stringify(multi.slice(0, 12), null, 1))
+
+// --- 常設だけ ---
+const reg = live.filter(p => p.place_type === 'regular')
+let rDate = 0, rPh = 0, rWeek = 0, rOther = 0
+for (const p of reg) {
+  const d = displayed(p)
+  if (d.kind === 'date') rDate++
+  else if (d.kind === 'placeholder') rPh++
+  else if (WEEK.test(d.text)) rWeek++
+  else rOther++
+}
+console.log('\n== 常設', reg.length, '件だけ ==')
+console.log('  日付', rDate, '/ 要相談', rPh, '/ 曜日系', rWeek, '/ その他', rOther)
+
+// --- open_days の生データの実態（1行目に限らず全行 + schedule も含めて） ---
+let anyWeekAnywhere = 0, anyDateAnywhere = 0, nothingAtAll = 0, otherOnly = 0
+const nothingSamples = []
+for (const p of live) {
+  const od = (p.open_days || []).map(x => (x || '').trim()).filter(Boolean)
+  const sch = Array.isArray(p.schedule) ? p.schedule.filter(d => d && d.date) : []
+  const joined = od.join(' ')
+  const hasWeek = WEEK.test(joined)
+  const hasDate = sch.length > 0 || /\d{1,2}\s*[\/月]\s*\d{1,2}/.test(joined)
+  if (hasWeek) anyWeekAnywhere++
+  if (hasDate) anyDateAnywhere++
+  if (od.length === 0 && sch.length === 0) { nothingAtAll++; if (nothingSamples.length < 10) nothingSamples.push(p.title) }
+  else if (!hasWeek && !hasDate) otherOnly++
+}
+console.log('\n== 日程データの実態（open_days全行 + schedule） ==')
+console.log('  曜日系の記載がどこかにある:', anyWeekAnywhere)
+console.log('  日付の記載がどこかにある  :', anyDateAnywhere)
+console.log('  日程データが完全に空      :', nothingAtAll)
+console.log('  何か書いてあるが曜日でも日付でもない:', otherOnly)
+console.log('  空の例:', JSON.stringify(nothingSamples, null, 1))
+
+// --- open_days / schedule のカラム型の確認 ---
+const s = live.find(p => (p.open_days || []).length > 0)
+console.log('\nopen_days のサンプル:', JSON.stringify(s?.open_days))
+const s2 = live.find(p => Array.isArray(p.schedule) && p.schedule.length > 0)
+console.log('schedule のサンプル:', JSON.stringify(s2?.schedule))
+
+// --- schedule はあるが date が空、というケース ---
+const schedNoDate = live.filter(p => Array.isArray(p.schedule) && p.schedule.length > 0 && p.schedule.filter(d => d && d.date).length === 0)
+console.log('\nschedule はあるが date が全部空:', schedNoDate.length)

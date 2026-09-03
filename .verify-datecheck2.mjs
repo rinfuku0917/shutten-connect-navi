@@ -1,30 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
-import fs from 'node:fs'
-const env = Object.fromEntries(fs.readFileSync('.env.local','utf8').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(), l.slice(i+1).trim()]}))
-const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-// 1000行打ち切り対策: range で全件回す
-let all = [], from = 0
-for (;;) {
-  const { data, error } = await sb.from('places').select('*').range(from, from + 499)
-  if (error) { console.log('ERR', error); process.exit(1) }
-  all = all.concat(data)
-  if (data.length < 500) break
-  from += 500
+import fs from 'fs'
+const env = Object.fromEntries(fs.readFileSync('.env.local','utf8').split('\n').filter(l=>l.includes('=')).map(l=>[l.slice(0,l.indexOf('=')).trim(),l.slice(l.indexOf('=')+1).trim()]))
+const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY,{auth:{persistSession:false}})
+const out=[]; for(let f=0;;f+=500){const{data,error}=await db.from('places').select('*').range(f,f+499); if(error)throw error; out.push(...data); if(data.length<500)break}
+for (const col of ['created_at','posted_at','closed_at']) {
+  const rows = out.filter(p=>p[col] && String(p[col]) >= '2026-09-01')
+  console.log(`${col} >= 2026-09-01: ${rows.length} 件`)
+  for (const r of rows) console.log('   ', r[col], r.status, 'closed=', r.closed, String(r.title).slice(0,30))
 }
-console.log('places 総行数:', all.length)
-console.log('列:', Object.keys(all[0]).join(','))
-const pub = all.filter(p => p.status === 'published' && !p.closed)
-console.log('公開中(status=published かつ closed偽):', pub.length)
-// created_at / updated_at の分布
-const key = 'created_at'
-const buckets = {}
-for (const p of pub) { const d = (p[key]||'').slice(0,7); buckets[d] = (buckets[d]||0)+1 }
-console.log('公開中案件の created_at 月別:', JSON.stringify(buckets))
-const after715 = pub.filter(p => p.created_at && p.created_at >= '2026-07-15')
-console.log('2026-07-15以降に作られた公開中案件:', after715.length)
-const upd = pub.filter(p => p.updated_at && p.updated_at >= '2026-07-15')
-console.log('2026-07-15以降に更新された公開中案件:', upd.length)
-// 終了/非公開になったもののうち 7/15 以降に更新されたもの
-const gone = all.filter(p => !(p.status === 'published' && !p.closed))
-console.log('非公開or終了:', gone.length, '/ うち7/15以降更新:', gone.filter(p=>p.updated_at&&p.updated_at>='2026-07-15').length)
-fs.writeFileSync('.verify-datecheck-places.json', JSON.stringify(pub, null, 1))
+const max = c => out.map(p=>p[c]).filter(Boolean).sort().slice(-3)
+console.log('created_at 最新3:', max('created_at'))
+console.log('posted_at  最新3:', max('posted_at'))
+console.log('closed_at  最新3:', max('closed_at'))
+// メニューの作成時刻（時分まで）
+const ms=[]; for(let f=0;;f+=1000){const{data,error}=await db.from('menus').select('id,created_at,price,photo_url').range(f,f+999); if(error)throw error; ms.push(...data); if(data.length<1000)break}
+console.log('menus 最新8件の created_at:', ms.map(m=>m.created_at).filter(Boolean).sort().slice(-8))
+console.log('menus 合計:', ms.length, '価格あり:', ms.filter(m=>m.price!=null).length)

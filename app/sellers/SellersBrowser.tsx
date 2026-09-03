@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { displayShopName } from './sellerName'
 
 export type Seller = {
   id: string
@@ -37,17 +38,8 @@ function toArray(v: string[] | string | null): string[] {
     .filter(Boolean)
 }
 
-const CORPORATE_MARKERS = ['株式会社', '合同会社', '有限会社', '合資会社', '合名会社', '(株)', '（株）', '(有)', '（有）']
-
-function isCorporateName(name: string): boolean {
-  return CORPORATE_MARKERS.some((m) => name.includes(m))
-}
-
-function displayShopName(s: Seller): string | null {
-  const name = (s.shop_name ?? '').trim()
-  if (!name || isCorporateName(name)) return null
-  return name
-}
+// 店名の判定と並び順は ./sellerName に集めてある。
+// カードの表示と並び替えで判定がずれないようにするため。
 
 function matchesSeller(s: Seller, q: string, g: string, a: string): boolean {
   if (q && !(displayShopName(s) ?? '').toLowerCase().includes(q.toLowerCase())) return false
