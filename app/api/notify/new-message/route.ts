@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
     const dashUrl = recipientIsHost
       ? 'https://app.connect-navi.com/dashboard/host/messages'
-      : 'https://app.connect-navi.com/dashboard/seller'
+      : 'https://app.connect-navi.com/dashboard/seller?tab=messages'
 
     const subject = '【出店コネクトナビ】「' + placeTitle + '」に新しいメッセージが届きました'
     const text = [
@@ -77,7 +77,9 @@ export async function POST(req: Request) {
       '',
       '「' + placeTitle + '」のやり取りに、新しいメッセージが届きました。',
       '',
-      'ログインしてご確認ください。',
+      recipientIsHost
+        ? 'ログインしてご確認ください。'
+        : '下のリンクを開くと、マイページの「メッセージ」が開きます。',
       dashUrl,
     ].join('\n')
 

@@ -54,7 +54,10 @@ export async function POST(req: Request) {
       reasonText,
       '',
       'お手数ですが、内容をご確認のうえ、再度ご提出をお願いいたします。',
-      'https://app.connect-navi.com/dashboard/seller',
+      '',
+      '下のリンクを開くと、マイページの「書類管理」が開きます。',
+      'そこから同じ書類をもう一度アップロードしてください。',
+      'https://app.connect-navi.com/dashboard/seller?tab=docs',
     ].join('\n')
 
     const resend = new Resend(apiKey)

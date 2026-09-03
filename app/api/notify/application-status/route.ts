@@ -67,7 +67,9 @@ export async function POST(req: Request) {
           'ご申込いただいた「' + placeTitle + '」' + forDay + 'への出店が承認されました。',
           '',
           '担当者とメッセージでやり取りを進め、当日に向けてご準備ください。',
-          'https://app.connect-navi.com/dashboard/seller',
+          '',
+          '下のリンクを開くと、マイページの「メッセージ」が開きます。',
+          'https://app.connect-navi.com/dashboard/seller?tab=messages',
         ]
       : [
           sellerName + ' 様',

@@ -1095,6 +1095,32 @@ export default function SellerDashboard() {
             </div>
           )}
 
+          {/* 未読メッセージのお知らせ。
+              通知メールから来た方が、この画面（ホーム）に着いてしまっても
+              「どこを見ればいいのか」で迷わないように、案件名と開くボタンを出す。
+              左メニューの赤い数字だけでは気づかれず、
+              「内容をお確かめの上ご連絡くださいとあるが、どこで確認するのか」
+              というお問い合わせが実際に届いた。 */}
+          {unread > 0 && tab !== 'messages' && (
+            <div style={{ background: '#EFF6FF', border: '1.5px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#1D4ED8', marginBottom: '6px' }}>
+                読んでいないメッセージが{unread}件あります
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {threads.filter(t => t.unread > 0).slice(0, 5).map(t => (
+                  <div key={t.application_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '12px', color: '#1E3A8A' }}>{t.placeTitle}</span>
+                    <button onClick={() => { setTab('messages'); openThread(t.application_id) }}
+                      style={{ background: '#1D4ED8', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', minHeight: '28px' }}>開く</button>
+                  </div>
+                ))}
+                {threads.filter(t => t.unread > 0).length > 5 && (
+                  <div style={{ fontSize: '11px', color: '#1E40AF' }}>ほか{threads.filter(t => t.unread > 0).length - 5}件</div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ホーム */}
           {tab === 'home' && (
             <>

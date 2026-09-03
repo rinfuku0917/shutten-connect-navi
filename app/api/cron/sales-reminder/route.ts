@@ -97,8 +97,8 @@ export async function GET(req: Request) {
 
 ${lines.join('\n')}
 
-▼ 売上報告はこちら
-https://app.connect-navi.com/dashboard/seller
+▼ 売上報告はこちら（開くと「売上報告」の画面が出ます）
+https://app.connect-navi.com/dashboard/seller?tab=sales
 
 すでにご報告いただいている場合は、行き違いですのでご容赦ください。
 ご不明な点がございましたら、このメールにご返信ください。
