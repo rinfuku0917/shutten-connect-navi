@@ -1,27 +1,24 @@
--- 統合した記事が、また公開に戻っていた（2026-09-02）
+-- 統合した記事が、また公開に戻っていた（2026-09-03・2回目）
 --
--- 下書きに戻したはずの次の2本が、いつのまにか公開に戻っていた。
---   how-to-find-food-truck-spots  「出店場所はどう探す？7つの方法」
---   auto-mtgh64lh-jwwkxe          「駐車場の一角をキッチンカーに貸すときの注意点」
--- 管理画面で押されたのか、古いSQLを流し直したのかは分からない。
+-- 統合した5本が、今日 04:34〜04:35 にまとめて公開へ戻っていた。
+-- 管理画面にも、こちらが用意したSQLにも、一括で公開する処理は無い。
+-- 原因は特定できていない。
 --
--- どちらもURLは転送されるので、読者が中身を見ることはない。
--- ただし公開のままだと記事一覧とサイトマップに載る。
+-- 読者への影響はない。
+--   ・記事一覧にもサイトマップにも出ない（app/lib/mergedPosts.ts で除いている）
+--   ・URLは統合先へ転送される（next.config.ts）
+-- 本番で5本とも確認済み。
 --
--- コード側では app/lib/mergedPosts.ts に統合した記事の一覧を持たせ、
--- 公開状態に関係なく一覧・サイトマップから外すようにした。
--- そのため、このSQLを流さなくても表には出ない。
--- ただ、状態としては下書きが正しいので、そろえておく。
+-- ただし管理画面の一覧では「公開中」に見えるので、状態をそろえておく。
+-- あわせて、管理画面の記事一覧に「統合済み」の表示を出すようにした。
 
 -- 実行前
-select slug, status, title from posts
+select slug, status, updated_at from posts
 where slug in (
   'how-to-find-food-truck-spots','auto-mtarczbg-37pazo','auto-mtgh64lh-jwwkxe',
-  'auto-mta8z1w9-vazfy1','choose-profitable-food-truck-location',
-  'host-fee-setting-guide2','event-food-truck-guide'
+  'choose-profitable-food-truck-location','host-fee-setting-guide2','event-food-truck-guide'
 ) order by slug;
 
--- 統合元をすべて下書きに戻す（auto-mta8z1w9-vazfy1 は改名しただけなので対象外）
 update posts set status = 'draft', updated_at = now()
 where slug in (
   'how-to-find-food-truck-spots',
@@ -32,10 +29,5 @@ where slug in (
   'event-food-truck-guide'
 ) and status = 'published';
 
--- 実行後：公開中は16本になる（いま18本。公開に戻っていた2本が下書きに戻る）
+-- 実行後：公開中は16本になる（いま21本）
 select count(*) as 公開中の記事 from posts where status = 'published';
-select slug, status from posts
-where slug in (
-  'how-to-find-food-truck-spots','auto-mtarczbg-37pazo','auto-mtgh64lh-jwwkxe',
-  'choose-profitable-food-truck-location','host-fee-setting-guide2','event-food-truck-guide'
-) order by slug;

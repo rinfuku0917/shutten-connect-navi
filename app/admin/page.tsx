@@ -14,6 +14,7 @@ import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
+import { MERGED_POSTS } from '../lib/mergedPosts'
 import ConfirmDialog from '../components/ConfirmDialog'
 import NotifyChoice from '../components/NotifyChoice'
 import DuplicateButton from '../components/DuplicateButton'
@@ -606,6 +607,9 @@ export default function AdminPage() {
     if (!removed || removed.length === 0) { alert('削除できませんでした（権限をご確認ください）'); return }
     loadPlacesList()
   }
+  // 別の記事にまとめた記事かどうか。まとめ先の slug を返す
+  const mergedTo = (slug: string) => MERGED_POSTS.find(m => m.from === slug)?.to ?? null
+
   // AIに記事の下書きを1本作らせる。
   // 以前は毎週の定期実行でそのまま公開していたが、中身を読まないまま
   // 公開ページが増えていたため、下書きを作るところまでに変えた。
@@ -2704,7 +2708,20 @@ const previewDoc = async (fileUrl: string) => {
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '999px', background: p.status === 'published' ? '#DCFCE7' : '#FEF3C7', color: p.status === 'published' ? '#16A34A' : '#B45309' }}>{p.status === 'published' ? '公開中' : '下書き'}</span>
                         {p.category && <span style={{ fontSize: '11px', color: '#64748B' }}>{p.category}</span>}
+                        {/* 別の記事にまとめた記事。公開に戻しても一覧・サイトマップには出ない
+                            （app/lib/mergedPosts.ts）。過去に2度、気づかないうちに
+                            公開へ戻っていたので、ここで分かるようにしている */}
+                        {mergedTo(p.slug) && (
+                          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '999px', background: '#F1F5F9', color: '#475569' }}>
+                            統合済み → /blog/{mergedTo(p.slug)}
+                          </span>
+                        )}
                       </div>
+                      {mergedTo(p.slug) && (
+                        <div style={{ fontSize: '11px', color: '#B45309', marginTop: '4px' }}>
+                          この記事は別の記事にまとめました。公開にしても読者には出ません（URLは統合先へ転送されます）。
+                        </div>
+                      )}
                       <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a1a', lineHeight: 1.5 }}>{p.title}</div>
                       <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px', fontFamily: 'monospace' }}>/blog/{p.slug}</div>
                     </div>
