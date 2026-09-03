@@ -1726,6 +1726,21 @@ export default function SellerDashboard() {
                     </div>
                     <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px' }}>{st.sub}</div>
                   </div>
+                  {/* 公開ページの見え方を、出店者本人が確かめられるようにする。
+                      入力した内容が公開ページに出ているかを確かめる手段がこれまで無く、
+                      「入力したのに載っていない」ことに本人が気づけなかった。
+                      ?preview=1 は承認前でも中身を出すので、申請前から確認できる。 */}
+                  {myUid && (
+                    <a
+                      href={'/sellers/' + myUid + '?preview=1'}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      title='入力した内容が、お客様からどう見えるかを別のタブで開きます'
+                      style={{ background: '#fff', color: '#B45309', border: '1.5px solid #F5A623', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                    >
+                      公開ページを確認する ↗
+                    </a>
+                  )}
                   {(approvalStatus === 'unsubmitted' || approvalStatus === 'rejected') && (
                     <button onClick={requestPublish} disabled={publishSaving} style={{ background: publishSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: publishSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{publishSaving ? '送信中...' : (approvalStatus === 'rejected' ? '再申請する' : '公開を申請する')}</button>
                   )}

@@ -181,7 +181,12 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
             {!cover && <span style={{ fontSize: '30px', fontWeight: 700, color: BRAND }}>{initial}</span>}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1C1917', margin: '0 0 8px', lineHeight: 1.3 }}>{shopName || <span style={{ color: '#A8A29E' }}>（店名未登録）</span>}</h1>
+            {/* 見出しは法人名でも出す。
+                一覧では「株式会社◯◯」を屋号ではないとみなして伏せているが、
+                その規則を詳細ページにも当てると、全項目を埋めた出店者のページに
+                「（店名未登録）」と出てしまう。ページのタイトルとSNS共有では
+                元から法人名を出しているので、見出しだけが食い違っていた。 */}
+            <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1C1917', margin: '0 0 8px', lineHeight: 1.3 }}>{shopName || (seller.shop_name ?? '').trim() || (seller.name ?? '').trim() || <span style={{ color: '#A8A29E' }}>（店名未登録）</span>}</h1>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {genres.length > 0 ? genres.map((g) => (<span key={g} style={chip('#FEF3E2', '#9A5B0A')}>{g}</span>)) : <span style={{ fontSize: '13px', color: '#A8A29E' }}>ジャンル未設定</span>}
             </div>
