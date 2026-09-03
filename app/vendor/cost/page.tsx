@@ -9,6 +9,15 @@ import { SITE_URL, breadcrumbJsonLd, OG_DEFAULT_IMAGE } from '../../lib/seo'
 import { COST_FAQ, faqJsonLd } from '../../lib/faq'
 import { AREAS } from '../area/areas'
 
+// エリアを地方でまとめる。
+// いまページがあるのは10都府県だけなので、該当する地方だけを出す
+// （中身が空の地方を並べても、開いた人をがっかりさせるだけ）。
+const REGIONS: { name: string; slugs: string[] }[] = [
+  { name: '関東', slugs: ['tokyo', 'kanagawa', 'saitama', 'chiba', 'ibaraki', 'tochigi', 'gunma'] },
+  { name: '中部', slugs: ['aichi'] },
+  { name: '関西', slugs: ['osaka', 'hyogo'] },
+]
+
 // 「キッチンカー 呼ぶ 費用」「キッチンカー 呼びたい 費用」「キッチンカー 手配 料金」
 // などで検索した主催者・施設担当者が着く想定のページ。
 //
@@ -396,16 +405,37 @@ export default function VendorCostPage() {
           <p className='jp-text' style={LEAD}>
             エリアごとに、登録している出店者の数と、いま募集中の案件を掲載しています。
           </p>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            {AREAS.map(a => (
-              <Link
-                key={a.slug}
-                href={`/vendor/area/${a.slug}`}
-                style={{ background: '#fff', border: '1px solid #E7DCC8', borderRadius: '999px', padding: '10px 20px', fontSize: '14px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}
-              >
-                {a.name}のキッチンカー手配
-              </Link>
-            ))}
+          {/* 地方ごとに畳む。
+              10個のリンクを横に並べていたため、スマホでは折り返して散らかっていた。
+              プラスを押すとその地方の都府県が出る形にする。
+
+              details を使うのは、閉じていてもHTMLの中にリンクが残るため。
+              JavaScriptで出し入れすると、検索エンジンからリンクが見えなくなる。 */}
+          <div style={{ maxWidth: '620px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {REGIONS.map(r => {
+              const areas = AREAS.filter(a => r.slugs.includes(a.slug))
+              if (areas.length === 0) return null
+              return (
+                <details key={r.name} className='top3-faq' style={{ background: '#fff', border: '1px solid #E7DCC8', borderRadius: '12px' }}>
+                  <summary style={{ cursor: 'pointer', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 800, fontSize: '15px', color: '#111' }}>
+                    {r.name}
+                    <span style={{ fontSize: '12px', fontWeight: 400, color: '#8A8178' }}>{areas.length}件</span>
+                    <span className='top3-pl' style={{ marginLeft: 'auto', fontSize: '22px', color: '#B45309', lineHeight: 1 }}>+</span>
+                  </summary>
+                  <div style={{ padding: '0 18px 16px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {areas.map(a => (
+                      <Link
+                        key={a.slug}
+                        href={`/vendor/area/${a.slug}`}
+                        style={{ background: '#FDF6E8', border: '1px solid #F0DDBA', borderRadius: '999px', padding: '9px 18px', fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none' }}
+                      >
+                        {a.name}
+                      </Link>
+                    ))}
+                  </div>
+                </details>
+              )
+            })}
           </div>
         </div>
       </div>
