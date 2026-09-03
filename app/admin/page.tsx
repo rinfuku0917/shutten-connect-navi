@@ -96,6 +96,23 @@ export default function AdminPage() {
   // 出店者名で書類を探す（人数が多く、目当ての人を見つけにくいため）
   const [docKw, setDocKw] = useState('')
   const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
+
+  // 書類審査タブを「その出店者で絞った状態」で開く。
+  //
+  // 以前は応募者一覧のモーダルからだけ出店者IDを渡しており、
+  // 出店承認タブの「書類を確認」は setTab('docs') だけで誰の書類かを渡していなかった。
+  // そのため誰を押しても同じ動きになり、さらに前回の絞り込み（docSellerId）が
+  // 残っていると別人の書類だけが出る状態になっていた。
+  // 開く経路が増えても食い違わないよう、ここに1本化する。
+  const openSellerDocs = (sellerId: string, sellerName: string) => {
+    // IDが取れないときは絞り込みを外す。前の人の書類が残るほうが危ない
+    setDocSellerId(sellerId ? { id: sellerId, name: sellerName } : null)
+    setDocKw('')
+    setDocFilter('all')
+    setTab('docs')
+    try { localStorage.setItem('adminTab', 'docs') } catch { /* 保存できなくても動く */ }
+    window.scrollTo({ top: 0 })
+  }
   const [authChecked, setAuthChecked] = useState(false)
   const [adminUid, setAdminUid] = useState<string | null>(null)
 
@@ -2442,7 +2459,7 @@ const previewDoc = async (fileUrl: string) => {
                       {a.sellerId && (
                         <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>プロフィールを見る</a>
                       )}
-                      <button onClick={() => setTab('docs')} style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>書類を確認</button>
+                      <button onClick={() => openSellerDocs(a.sellerId, a.sellerName)} title={a.sellerName + ' の書類を開きます'} style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>書類を確認</button>
                       <button onClick={() => exportPendingCsv([a], a.sellerName)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>社内確認用CSV</button>
                     </div>
                   </div>
@@ -2970,12 +2987,7 @@ const previewDoc = async (fileUrl: string) => {
           onClose={() => { setAppsFor(null); loadPendingApps() }}
           onOpenDocs={(sellerId, sellerName) => {
             setAppsFor(null)
-            setDocSellerId({ id: sellerId, name: sellerName })
-            setDocKw('')
-            setDocFilter('all')
-            setTab('docs')
-            try { localStorage.setItem('adminTab', 'docs') } catch { /* 保存できなくても動く */ }
-            window.scrollTo({ top: 0 })
+            openSellerDocs(sellerId, sellerName)
           }}
         />
       )}

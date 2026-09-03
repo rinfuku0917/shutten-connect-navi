@@ -550,6 +550,12 @@ export default function SellerDashboard() {
   const [saleRevenue, setSaleRevenue] = useState('')
   const [saleSaving, setSaleSaving] = useState(false)
   const [saleTaxOv, setSaleTaxOv] = useState('')
+  // 天候・来客数・所感。出店報告のモーダルにはあったが、
+  // 売上報告タブの常時表示のフォームには欄が無く、
+  // こちらから報告すると施設へ出すExcelで「—」になっていた
+  const [saleWeather, setSaleWeather] = useState('')
+  const [saleCustomers, setSaleCustomers] = useState('')
+  const [saleNote, setSaleNote] = useState('')
   // 税率ごとに分けて入力するモード（任意）。フードは8%・お酒や物販は10%など混在するイベント向け
   const [saleSplit, setSaleSplit] = useState(false)
   const [saleRev8, setSaleRev8] = useState('')
@@ -671,9 +677,14 @@ export default function SellerDashboard() {
       .map(it => ({ name: it.name.trim(), qty: parseInt(it.qty, 10) || 0, price: it.price.trim() === '' ? null : (parseInt(it.price.replace(/[^0-9]/g, ''), 10) || 0) }))
       .filter(it => it.name && it.qty > 0)
     if (items.length > 0) row.items = items
+    if (saleWeather) row.weather = saleWeather
+    const cust = parseInt(saleCustomers, 10)
+    if (!isNaN(cust) && cust > 0) row.customers = cust
+    if (saleNote.trim()) row.note = saleNote.trim()
     const { error } = await supabase.from('sales').insert(row)
     if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
     setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleRev8(''); setSaleRev10(''); setSaleItems([]); setSaleSaving(false)
+    setSaleWeather(''); setSaleCustomers(''); setSaleNote('')
     loadMySales()
     loadUnreported()
     loadCalSales()
@@ -2137,6 +2148,32 @@ export default function SellerDashboard() {
                   <input type='checkbox' checked={saleSplit} onChange={e => setSaleSplit(e.target.checked)} style={{ accentColor: '#F5A623', cursor: 'pointer' }} />
                   税率ごとに分けて入力する（任意）
                 </label>
+
+                {/* 天候・来客数・所感。
+                    施設へ出す「売上報告」のExcelに載る項目なので、
+                    こちらのフォームから報告したときも入るようにする。 */}
+                <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px dashed #E2E8F0' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                    当日の状況（任意）
+                    <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>施設へ出す報告書に載ります</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    {WEATHERS.map(w => (
+                      <button key={w} type='button' onClick={() => setSaleWeather(saleWeather === w ? '' : w)}
+                        style={{ border: saleWeather === w ? '1.5px solid #1D4ED8' : '1.5px solid #E2E8F0', background: saleWeather === w ? '#EFF6FF' : '#fff', color: '#1a1a1a', borderRadius: '999px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>{w}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <input value={saleCustomers} inputMode='numeric' aria-label='来客数'
+                      onChange={e => setSaleCustomers(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder='来客数' style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', width: '120px', textAlign: 'right' }} />
+                    <span style={{ fontSize: '12px', color: '#64748B' }}>組・人（任意）</span>
+                  </div>
+                  <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2}
+                    aria-label='所感・特記事項'
+                    placeholder='所感・特記事項（任意）'
+                    style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', resize: 'vertical' }} />
+                </div>
 
                 {/* 品目別の内訳（任意）。施設・企業から「何が何食売れたか」を
                     求められることがあるため、品目と食数を記録できるようにする */}
