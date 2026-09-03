@@ -86,7 +86,9 @@ function rewriteImages(html: string, sizes: Record<string, { w: number; h: numbe
     if (!src.includes('.supabase.co/storage/v1/object/public/') && !src.includes('app.connect-navi.com/covers/')) return whole
     n += 1
     const rest = (before + after).trim()
-    const size = sizes[src]
+    // AIで作った表紙は 1536x1024 で固定。一覧に無くても大きさを入れられる
+    const generated = /\/blog-images\/covers\//.test(src) ? { w: 1536, h: 1024 } : null
+    const size = sizes[src] ?? generated
     const dim = size ? ` width="${size.w}" height="${size.h}"` : ''
     const srcset = WIDTHS.map(w => `${optimized(src, w)} ${w}w`).join(', ')
     const loading = n === 1

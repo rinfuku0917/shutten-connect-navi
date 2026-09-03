@@ -607,6 +607,29 @@ export default function AdminPage() {
     if (!removed || removed.length === 0) { alert('削除できませんでした（権限をご確認ください）'); return }
     loadPlacesList()
   }
+  // 記事の表紙をAIに作り直させる。
+  // 実写風の絵を1枚つくり、本文の1枚目の画像を差し替える。
+  // 生成に30秒ほどかかるので、押している間はボタンを止める。
+  const [coverBusy, setCoverBusy] = useState('')
+  const makeCover = async (p: { slug: string; title: string }) => {
+    if (!adminUid) { alert('認証情報がありません。再ログインしてください'); return }
+    if (!window.confirm(`「${p.title}」の表紙をAIで作り直します。\n\nいまの表紙は置き換わります。よろしいですか？`)) return
+    setCoverBusy(p.slug)
+    try {
+      const res = await fetch('/api/blog-cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId: adminUid, slug: p.slug }),
+      })
+      const j = await res.json()
+      if (!res.ok) alert('作れませんでした: ' + (j.error || '不明なエラー'))
+      else { alert('表紙を作りました。記事を開いて確かめてください。'); loadPosts() }
+    } catch {
+      alert('通信エラーが発生しました')
+    }
+    setCoverBusy('')
+  }
+
   // 別の記事にまとめた記事かどうか。まとめ先の slug を返す
   const mergedTo = (slug: string) => MERGED_POSTS.find(m => m.from === slug)?.to ?? null
 
@@ -2727,6 +2750,7 @@ const previewDoc = async (fileUrl: string) => {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
                       {p.status === 'published' && <button onClick={() => window.open('/blog/' + p.slug, '_blank')} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>見る</button>}
+                      <button onClick={() => makeCover(p)} disabled={coverBusy === p.slug} style={{ background: coverBusy === p.slug ? '#ccc' : '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: coverBusy === p.slug ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{coverBusy === p.slug ? '作成中...' : '表紙をAIで'}</button>
                       <button onClick={() => startEditPost(p)} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>編集</button>
                       <button onClick={() => deletePost(p)} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
                     </div>
