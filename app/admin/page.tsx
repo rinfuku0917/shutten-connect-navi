@@ -1166,8 +1166,16 @@ export default function AdminPage() {
       ['書類提出状況', a => a.docsTotal > 0 ? `${a.docsOk}/${a.docsTotal}件 承認済` : '未提出'],
     ]
     const esc = (v: string) => '"' + String(v ?? '').replace(/"/g, '""') + '"'
+    // Excelは "047336013" のように引用符で囲んだ数字も数値と見なし、先頭の0を落とす。
+    // ="047336013" の形にすると文字列のまま開く。電話番号はこれで書き出す。
+    // （値に " や , が混じっていれば、崩れないよう普通の書き方に戻す）
+    const escTel = (v: string) => {
+      const s = String(v ?? '').trim()
+      if (!s || /["',\r\n=]/.test(s)) return esc(s)
+      return '="' + s + '"'
+    }
     const csv = [cols.map(c => esc(c[0])).join(',')]
-      .concat(rows.map(r => cols.map(c => esc(c[1](r))).join(',')))
+      .concat(rows.map(r => cols.map(c => (c[0] === '電話番号' ? escTel : esc)(c[1](r))).join(',')))
       .join('\r\n')
     // Excelで開いたときに日本語が化けないようBOMを付ける
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
@@ -2828,8 +2836,15 @@ const previewDoc = async (fileUrl: string) => {
                 <button
                   onClick={() => {
                     const esc = (v: string) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'
+                    // 電話番号だけ ="0..." の形にする。引用符で囲むだけだと
+                    // Excelが数値と見なして先頭の0を落としてしまうため
+                    const escTel = (v: string) => {
+                      const s = String(v == null ? '' : v).trim()
+                      if (!s || /["',\r\n=]/.test(s)) return esc(s)
+                      return '="' + s + '"'
+                    }
                     const header = ['出店者名', '店舗名', 'メール', '電話番号', 'ジャンル', 'エリア'].join(',')
-                    const rows = sellers.map(s => [s.name, s.shop, s.email, s.phone, s.genre, s.area].map(esc).join(','))
+                    const rows = sellers.map(s => [esc(s.name), esc(s.shop), esc(s.email), escTel(s.phone), esc(s.genre), esc(s.area)].join(','))
                     const csv = [header, ...rows].join('\n')
                     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
                     const url = URL.createObjectURL(blob)
