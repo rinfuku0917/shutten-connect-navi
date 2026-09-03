@@ -152,7 +152,7 @@ const SAVE: [string, string][] = [
 
 export default function VendorCostPage() {
   const H2: React.CSSProperties = {
-    fontSize: 'clamp(21px,6.4vw,26px)',
+    fontSize: 'clamp(20px,5.6vw,26px)',
     fontWeight: 900,
     textAlign: 'center',
     marginBottom: '10px',
@@ -224,10 +224,10 @@ export default function VendorCostPage() {
       {/* ヒーロー */}
       <div style={{ background: 'linear-gradient(rgba(0,0,0,0.55),rgba(0,0,0,0.55)),url(/hero-bg.webp) center/cover no-repeat', padding: '52px 24px', textAlign: 'center' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto 24px' }}>
-          <h1 className='jp-head' style={{ fontSize: 'clamp(21px,5.6vw,31px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
-            キッチンカーを呼ぶ費用はいくら？
+          <h1 className='jp-head' style={{ fontSize: 'clamp(19px,5.1vw,31px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
+            <span className='u'>キッチンカーを呼ぶ</span><wbr /><span className='u'>費用はいくら？</span>
             <br />
-            料金の相場と決まり方
+            <span className='u'>料金の相場と決まり方</span>
           </h1>
           <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
             イベントの形によって、主催者のご負担は0円にも十数万円にもなります。
@@ -247,7 +247,7 @@ export default function VendorCostPage() {
       {/* 結論 */}
       <div style={{ background: '#FFFDF8', padding: '44px 24px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>結論：費用は3つの形のどれかで決まります</h2>
+          <h2 className='jp-head' style={H2}><span className='u'>結論：費用は</span><wbr /><span className='u'>3つの形のどれかで決まります</span></h2>
           <p className='jp-text' style={LEAD}>
             「1台いくら」という決まった料金表はありません。
             <br />

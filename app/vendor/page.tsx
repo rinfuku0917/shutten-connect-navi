@@ -65,7 +65,10 @@ const SETSUBI = [
 ]
 
 export default function VendorPage() {
-  const H2: React.CSSProperties = { fontSize: 'clamp(21px,6.4vw,26px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
+  // スマホでの文字の大きさを 24px → 21px に落とす。
+  // 24px だと1行に13文字しか入らず、「出店コネクトナビでできること」が
+  // 「出店コネクトナ / ビでできること」と割れていた。21px なら15文字入る。
+  const H2: React.CSSProperties = { fontSize: 'clamp(20px,5.6vw,26px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
   const LEAD: React.CSSProperties = { fontSize: '14px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '32px' }
   const CARD: React.CSSProperties = { background: '#fff', border: '1px solid #EEE', borderRadius: '14px', padding: '20px 18px' }
 
@@ -95,10 +98,10 @@ export default function VendorPage() {
       <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-bg.webp) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
         {/* 背景写真が明るいので、文字の下に暗い面を敷いて読めるようにする */}
         <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px clamp(14px,4vw,26px)' }}>
-          <h1 className='jp-head' style={{ fontSize: 'clamp(20px,5.6vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
-            キッチンカーの手配・派遣
+          <h1 className='jp-head' style={{ fontSize: 'clamp(19px,5.1vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
+            <span className='u'>キッチンカーの手配・派遣</span>
             <br />
-            イベント・施設に呼ぶなら
+            <span className='u'>イベント・施設に呼ぶなら</span>
           </h1>
           <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
             キッチンカーを呼びたい、出店を依頼したい、出張販売を手配したい。
@@ -259,7 +262,9 @@ export default function VendorPage() {
       {/* 設備・条件 */}
       <div id='setsubi' style={{ background: '#fff', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>事前にご確認いただきたい設備・条件</h2>
+          {/* 17文字あり、スマホでは1行に入らない。
+              「〜いただ / きたい設備・条件」と割れないよう、切る位置を指定する */}
+          <h2 className='jp-head' style={H2}><span className='u'>事前にご確認いただきたい</span><wbr /><span className='u'>設備・条件</span></h2>
           <p className='jp-text' style={LEAD}>
             募集を出す前に、次の項目を決めていただきます。分からない項目はご相談の中で一緒に整理します。
           </p>

@@ -100,7 +100,7 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
     // 数字が取れなくても、ページ自体は出す
   }
 
-  const H2: React.CSSProperties = { fontSize: 'clamp(20px,6vw,25px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
+  const H2: React.CSSProperties = { fontSize: 'clamp(20px,5.6vw,25px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
   const LEAD: React.CSSProperties = { fontSize: '14px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '30px' }
   const CARD: React.CSSProperties = { background: '#fff', border: '1px solid #EEE', borderRadius: '14px', padding: '20px 18px' }
 
@@ -145,10 +145,10 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
       {/* ヒーロー */}
       <div style={{ background: 'linear-gradient(rgba(0,0,0,0.55),rgba(0,0,0,0.55)),url(/hero-bg.webp) center/cover no-repeat', padding: '50px 24px', textAlign: 'center' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto 22px' }}>
-          <h1 className='jp-head' style={{ fontSize: 'clamp(21px,5.6vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '14px', lineHeight: 1.45 }}>
-            {area.name}でキッチンカーを呼ぶ費用
+          <h1 className='jp-head' style={{ fontSize: 'clamp(19px,5.1vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '14px', lineHeight: 1.45 }}>
+            <span className='u'>{area.name}で</span><wbr /><span className='u'>キッチンカーを呼ぶ費用</span>
             <br />
-            手配・派遣のご相談を承ります
+            <span className='u'>手配・派遣の</span><wbr /><span className='u'>ご相談を承ります</span>
           </h1>
           <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '8px', lineHeight: 1.9 }}>
             イベント、商業施設、オフィス、学校行事まで。1台からご相談いただけます。
@@ -191,7 +191,7 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
       {/* 費用の目安 */}
       <div style={{ background: '#fff', padding: '48px 24px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>{area.name}でキッチンカーを呼ぶ費用の目安</h2>
+          <h2 className='jp-head' style={H2}><span className='u'>{area.name}で</span><wbr /><span className='u'>キッチンカーを呼ぶ費用の目安</span></h2>
           <p className='jp-text' style={LEAD}>
             費用はイベントの形で決まります。地域によって大きく変わるのは、会場までの距離にかかる出張費です。
           </p>
@@ -254,7 +254,7 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
       {places.length > 0 && (
         <div style={{ background: '#fff', padding: '48px 24px' }}>
           <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-            <h2 className='jp-head' style={H2}>{area.name}でいま募集中の出店場所</h2>
+            <h2 className='jp-head' style={H2}><span className='u'>{area.name}で</span><wbr /><span className='u'>いま募集中の出店場所</span></h2>
             <p className='jp-text' style={LEAD}>
               実際に掲載中の案件です。逆に「出店したい」方は、ここから応募いただけます。
             </p>
@@ -329,7 +329,7 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
       {/* 相談フォーム */}
       <div id='soudan' style={{ background: '#FFF8EC', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>{area.name}でのご相談はこちらから</h2>
+          <h2 className='jp-head' style={H2}><span className='u'>{area.name}での</span><wbr /><span className='u'>ご相談はこちらから</span></h2>
           <p className='jp-text' style={LEAD}>
             開催日・場所・想定来場者数の3つが分かれば、おおよその金額をお伝えできます。
             <br />

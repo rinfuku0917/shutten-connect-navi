@@ -105,7 +105,7 @@ const PREP = [
 ]
 
 export default function EventVendorPage() {
-  const H2: React.CSSProperties = { fontSize: 'clamp(21px,6.4vw,26px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
+  const H2: React.CSSProperties = { fontSize: 'clamp(20px,5.6vw,26px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
   const LEAD: React.CSSProperties = { fontSize: '14px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '32px' }
   const CARD: React.CSSProperties = { background: '#fff', border: '1px solid #EEE', borderRadius: '14px', padding: '20px 18px' }
   const faqAll = [...EVENT_FAQ, ...VENDOR_FAQ]
@@ -150,10 +150,10 @@ export default function EventVendorPage() {
       {/* ヒーロー */}
       <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-poster.webp) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
         <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px clamp(14px,4vw,26px)' }}>
-          <h1 className='jp-head' style={{ fontSize: 'clamp(20px,5.6vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
-            イベントでの出店にお困りの方へ
+          <h1 className='jp-head' style={{ fontSize: 'clamp(19px,5.1vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
+            <span className='u'>イベントでの出店に</span><wbr /><span className='u'>お困りの方へ</span>
             <br />
-            フード出店を手配します
+            <span className='u'>フード出店を手配します</span>
           </h1>
           <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
             小さなマルシェ、地元のお祭り、商店街や自治会の催し、学校行事、社内イベント。
@@ -189,7 +189,7 @@ export default function EventVendorPage() {
       {/* お困りごと */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>イベントの出店でよくあるお困りごと</h2>
+          <h2 className='jp-head' style={H2}><span className='u'>イベントの出店で</span><wbr /><span className='u'>よくあるお困りごと</span></h2>
           <p className='jp-text' style={LEAD}>ひとつでも当てはまるものがあれば、お力になれます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {TROUBLES.map(c => (
@@ -205,7 +205,7 @@ export default function EventVendorPage() {
       {/* いつまでに */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>いつまでにご相談いただくとよいか</h2>
+          <h2 className='jp-head' style={H2}><span className='u'>いつまでに</span><wbr /><span className='u'>ご相談いただくとよいか</span></h2>
           <p className='jp-text' style={LEAD}>開催日の2週間前までを目安にご相談ください。</p>
           <div style={{ ...CARD, fontSize: '14px', color: '#333', lineHeight: 2 }}>
             <p style={{ marginBottom: '14px' }}>

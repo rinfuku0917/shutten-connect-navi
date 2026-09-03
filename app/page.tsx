@@ -238,8 +238,8 @@ export default async function Home() {
           メインビジュアルと2つの導線の下へ移した（2026-09-02）。
           h1 はページに1つだけ。位置を変えても検索での扱いは変わらない。 */}
       <div style={{ ...wrap, padding: '40px 20px 0' }}>
-        <h1 className={maru.className + ' top3-lead'} style={{ ...h2Style, textAlign: 'center', margin: 0 }}>
-          キッチンカーの出店場所探し・手配なら出店コネクトナビ
+        <h1 className={maru.className + ' top3-lead jp-head'} style={{ ...h2Style, fontSize: 'clamp(18px,4.8vw,29px)', textAlign: 'center', margin: 0 }}>
+          <span className='u'>キッチンカーの出店場所探し・手配なら</span><wbr /><span className='u'>出店コネクトナビ</span>
         </h1>
         <p className='top3-lead-desc' style={{ textAlign: 'center', color: C.muted, lineHeight: 1.9, margin: '16px auto 0', maxWidth: '760px' }}>
           出店コネクトナビは、キッチンカー・移動販売の出店場所を探している方と、
@@ -302,7 +302,7 @@ export default async function Home() {
       {/* WHICH ARE YOU */}
       <section style={{ padding: '54px 0', background: C.grayBg }}>
         <div style={wrap}>
-          <h2 className={maru.className} style={{ ...h2Style, textAlign: 'center', marginBottom: '30px' }}>あなたはどちらですか？</h2>
+          <h2 className={maru.className + ' top3-sechead-bar'} style={{ ...h2Style, marginBottom: '30px' }}>あなたはどちらですか？</h2>
           <div className='top3-which'>
             <div className='top3-wbox-seller' style={{ background: '#fff', borderRadius: '16px', padding: '28px 26px', border: '1px solid ' + C.line }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
@@ -337,7 +337,7 @@ export default async function Home() {
       {/* FLOW */}
       <section style={{ padding: '54px 0' }}>
         <div style={wrap}>
-          <h2 className={maru.className} style={{ ...h2Style, textAlign: 'center', marginBottom: '30px' }}>ご利用の流れ</h2>
+          <h2 className={maru.className + ' top3-sechead-bar'} style={{ ...h2Style, marginBottom: '30px' }}>ご利用の流れ</h2>
           <div className='top3-flow'>
             {[
               { n: '1', img: '/ic-member.webp', h: '会員登録', p: '無料で簡単登録' },
@@ -381,7 +381,7 @@ export default async function Home() {
           <div className='top3-fb'>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
-                <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900 }}>よくある質問</h2>
+                <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900, lineHeight: 1.3 }}>よくある質問</h2>
                 <img src='/ic-mikan.webp' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
               </div>
               {([
@@ -410,7 +410,7 @@ export default async function Home() {
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
-                <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900 }}>最新記事</h2>
+                <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900, lineHeight: 1.3 }}>最新記事</h2>
                 <img src='/ic-camera.webp' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
               </div>
               {posts.length === 0 && <div style={{ color: C.muted, fontSize: '13px', padding: '8px 0' }}>記事は準備中です。</div>}

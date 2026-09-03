@@ -307,15 +307,36 @@ img[width='1'][height='1'] { display: inline !important; }
 
    word-break: auto-phrase … 文節の切れ目で改行する
    text-wrap: balance      … 各行の長さをそろえる（見出し向け）
-   text-wrap: pretty       … 最後の行に1文字だけ残さない（本文向け） */
+   text-wrap: pretty       … 最後の行に1文字だけ残さない（本文向け）
+
+   balance / pretty は @supports で囲っている。理由:
+     balance は「行の長さをそろえる」ための指定で、どこで切ってよいかは
+     ブラウザ任せになる。日本語はどの文字の間でも改行できる扱いなので、
+     文節を理解しないブラウザ（Safari は auto-phrase に未対応）では
+     長さをそろえるために語の途中で切ってしまう。
+     つまり balance だけが効くと、付けない場合よりかえって汚くなる。
+     実際 iPhone の Safari で「キッチンカーの手 / 配・派遣」と割れていた。
+   auto-phrase が効くブラウザでだけ balance を掛ける、という形にしてある。 */
 .jp-head {
   word-break: auto-phrase;
-  text-wrap: balance;
 }
 .jp-text {
   word-break: auto-phrase;
-  text-wrap: pretty;
 }
+@supports (word-break: auto-phrase) {
+  .jp-head { text-wrap: balance; }
+  .jp-text { text-wrap: pretty; }
+}
+
+/* 見出しの中の「ここでは切らない」まとまり。
+   <span class="u">事前にご確認いただきたい</span><span class="u">設備・条件</span>
+   と囲むと、まとまりの中では改行されず、境目だけで折り返す。
+   ブラウザの対応に関係なく、狙った位置で切れる。
+
+   注意: まとまり1つが画面幅より長いとはみ出す。
+   スマホ幅（およそ335px）に収まる長さで区切ること。 */
+.jp-head .u,
+.jp-text .u { display: inline-block; }
 
 /* フッターのリンク列。
    横並びの折り返しにすると、画面幅によって1列だけ次の行に落ちて
