@@ -133,12 +133,16 @@ export async function exportPlaceSubmission(
   // 募集者からは直接読ませないため）。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sellerIds = Array.from(new Set(rows.map((a: any) => a.seller_id)))
-  const [{ data: sellerRows }, { data: sns }, { data: menuRows }] = await Promise.all([
+  const [{ data: sellerRows }, { data: sns }, { data: menuRows }, { data: subRows }] = await Promise.all([
     supabase.from('public_sellers').select('id, shop_name, name, genre, takeout_bag, payment_methods').in('id', sellerIds),
     supabase.from('sns_links').select('seller_id, url').eq('platform', 'instagram').in('seller_id', sellerIds),
     supabase.from('menus').select('seller_id, name, detail, price, sort_order, created_at')
       .in('seller_id', sellerIds)
       .order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+    // この案件のために出店者が入力した内容。あればプロフィールより優先する
+    supabase.from('application_submissions')
+      .select('seller_id, shop_name, instagram, genre, takeout_bag, payment_methods, menus')
+      .eq('place_id', placeId).in('seller_id', sellerIds),
   ])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sellerById = new Map<string, any>()
@@ -156,16 +160,51 @@ export async function exportPlaceSubmission(
     list.push({ name: m.name || '', detail: m.detail || '', price: m.price ?? null })
     menusBySeller.set(m.seller_id, list)
   }
-  const menusFor = (sellerId: string, yen: boolean): SubmissionMenuItem[] =>
-    (menusBySeller.get(sellerId) || []).map(m => ({
+  // この案件のために入力された内容。案件×出店者で1件
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const subBySeller = new Map<string, any>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const s of (subRows ?? []) as any[]) subBySeller.set(s.seller_id, s)
+
+  const priceText = (price: number | null, yen: boolean) =>
+    yen ? menuPriceYen(price) : menuPriceLabel(price)
+
+  const menusFor = (sellerId: string, yen: boolean): SubmissionMenuItem[] => {
+    // 現場ごとに入力されたメニューがあればそちらを使う。
+    // 空配列を入れた場合（この現場ではメニューを出さない）も、その意図どおり空で出す。
+    const sub = subBySeller.get(sellerId)
+    if (sub && Array.isArray(sub.menus)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (sub.menus as any[]).map(m => ({
+        name: m?.name || '',
+        detail: m?.detail || '',
+        price: priceText(m?.price ?? null, yen),
+      })).filter(m => m.name || m.detail || m.price)
+    }
+    return (menusBySeller.get(sellerId) || []).map(m => ({
       name: m.name,
       detail: m.detail,
-      price: yen ? menuPriceYen(m.price) : menuPriceLabel(m.price),
+      price: priceText(m.price, yen),
     }))
+  }
 
+  // 出店者情報は「この案件のための入力 → プロフィール」の順に見る。
+  // 入力の1項目だけが空欄のときにプロフィールへ戻ると、
+  // 現場ごとに変えたつもりの内容が混ざるため、項目ごとの穴埋めはしない。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sellerBase = (a: any, yen: boolean): SubmissionSeller => {
     const p = sellerById.get(a.seller_id) || {}
+    const sub = subBySeller.get(a.seller_id)
+    if (sub) {
+      return {
+        shopName: sub.shop_name || p.shop_name || p.name || '',
+        instagram: sub.instagram || '',
+        genre: genreLabel(sub.genre),
+        takeoutBag: sub.takeout_bag || '',
+        payments: paymentsLabel(sub.payment_methods),
+        menus: menusFor(a.seller_id, yen),
+      }
+    }
     return {
       shopName: p.shop_name || p.name || '',
       instagram: instaBySeller.get(a.seller_id) || '',

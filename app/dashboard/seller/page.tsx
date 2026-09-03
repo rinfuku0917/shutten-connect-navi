@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
 import DashboardFooter from '../../components/DashboardFooter'
 import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
 import { perDayFee, dayTypeFee } from '../../lib/placeFee'
+import OnsiteSteps from './OnsiteSteps'
+import SiteSubmissionForm from './SiteSubmissionForm'
 
 type DbMessage = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, file_url?: string | null }
 
@@ -76,6 +78,10 @@ export default function SellerDashboard() {
   type MyApply = { id: string, placeId: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
   const [myApplies, setMyApplies] = useState<MyApply[]>([])
   const [appliesError, setAppliesError] = useState('')
+  // 現場ごとの出店者情報。入力を済ませた案件のIDと、開いているフォーム
+  const [subDone, setSubDone] = useState<Set<string>>(new Set())
+  const [subForm, setSubForm] = useState<{ placeId: string, placeTitle: string } | null>(null)
+  const [myUid, setMyUid] = useState('')
   // この画面を見ているアカウントの種別（seller / host / admin / none）
   const [viewerRole, setViewerRole] = useState<string>('')
   const [viewerName, setViewerName] = useState('')
@@ -712,6 +718,17 @@ export default function SellerDashboard() {
     setMyApplies(mapped)
   }
 
+  // 現場ごとの出店者情報を、どの案件で入力済みか読み込む
+  const loadSubmissions = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    setMyUid(uid)
+    const { data } = await supabase
+      .from('application_submissions').select('place_id').eq('seller_id', uid)
+    setSubDone(new Set((data ?? []).map((r: { place_id: string }) => r.place_id)))
+  }
+
   // 申込の辞退。承認済み（出店決定後）はボタンを出さず、サーバー側でも拒否している。
   const [cancelingId, setCancelingId] = useState<string | null>(null)
   // 確認と失敗の知らせに window.confirm / alert を使っていたが、
@@ -929,7 +946,7 @@ export default function SellerDashboard() {
     openThread(appId)
   }
 
-  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile(); loadUnreported(); loadMyApprovedApps(); loadMyInvoices() }, [])
+  useEffect(() => { loadMessages(); loadApplies(); loadDocs(); loadProfile(); loadUnreported(); loadMyApprovedApps(); loadMyInvoices(); loadSubmissions() }, [])
 
   // 別のタブで申込や承認をしたあとに戻ってきたとき、古い表示のままにならないよう読み直す。
   // 画面を開いたときに一度読むだけだと「承認したのに反映されない」ように見えてしまう。
@@ -950,6 +967,7 @@ export default function SellerDashboard() {
   // タブを切り替えたときも最新にする
   useEffect(() => {
     if (tab === 'calendar' || tab === 'applies') loadApplies()
+    if (tab === 'applies') loadSubmissions()
     if (tab === 'calendar') { loadCalSales(); loadMyApprovedApps() }
     if (tab === 'messages') loadMessages()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1080,6 +1098,8 @@ export default function SellerDashboard() {
           {/* ホーム */}
           {tab === 'home' && (
             <>
+              {/* 今日と明日の出店だけを、進める順に並べて出す */}
+              <OnsiteSteps supabase={supabase} onGoSales={() => setTab('sales')} />
               {(() => {
                 const today = new Date(); today.setHours(0,0,0,0)
                 const soon = myApplies
@@ -1170,6 +1190,41 @@ export default function SellerDashboard() {
           {/* 申込一覧 */}
           {tab === 'applies' && (
             <>
+              {/* 現場ごとの出店者情報。
+                  提出用の資料は現場ごとに中身が変わるため、案件ごとに1回入力してもらう。
+                  申込は日付ごとに1件あるので、ここは案件でまとめて並べる。 */}
+              {(() => {
+                const places = Array.from(
+                  new Map(myApplies.filter(a => a.placeId).map(a => [a.placeId, a.place])).entries(),
+                )
+                if (places.length === 0) return null
+                return (
+                  <section aria-label='現場ごとの出店者情報' style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px 18px', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '14px', fontWeight: 800, margin: '0 0 4px' }}>現場ごとの出店者情報</h2>
+                    <p style={{ fontSize: '12px', color: '#64748B', margin: '0 0 12px', lineHeight: 1.7 }}>
+                      施設へ提出する資料に載る内容です。現場ごとに店舗名・ジャンル・メニュー・価格などを変えられます。未入力のときはプロフィールの内容が使われます。
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {places.map(([pid, title]) => {
+                        const done = subDone.has(pid)
+                        return (
+                          <div key={pid} style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', padding: '10px 12px', borderRadius: '9px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, flex: 1, minWidth: '160px' }}>{title}</span>
+                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: done ? '#ECFDF5' : '#FEF3C7', color: done ? '#15803D' : '#92400E' }}>
+                              {done ? '入力済み' : '未入力'}
+                            </span>
+                            <button type='button' onClick={() => setSubForm({ placeId: pid, placeTitle: title })}
+                              style={{ fontSize: '12px', fontWeight: 700, padding: '7px 14px', borderRadius: '8px', border: '1.5px solid #F5A623', background: '#FFF8E1', color: '#B45309', cursor: 'pointer', minHeight: '34px' }}>
+                              {done ? '内容を見る・直す' : '入力する'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )
+              })()}
+
               <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                 {['すべて', '審査中', '承認済', '否認'].map((f, i) => (
                   <button key={f} style={{ padding: '6px 16px', borderRadius: '999px', border: '1.5px solid', borderColor: i === 0 ? '#F5A623' : '#E2E8F0', background: i === 0 ? '#FFF8E1' : '#fff', color: i === 0 ? '#B45309' : '#64748B', fontSize: '12px', fontWeight: i === 0 ? '700' : '400', cursor: 'pointer' }}>{f}</button>
@@ -2253,6 +2308,17 @@ export default function SellerDashboard() {
       {/* ===== 出店報告フォーム =====
           出店が終わったら、企業へ提出できる形で報告してもらう。
           品目は登録済みメニューが並ぶので、売れた数を入れるだけで済む。 */}
+      {subForm && myUid && (
+        <SiteSubmissionForm
+          supabase={supabase}
+          placeId={subForm.placeId}
+          placeTitle={subForm.placeTitle}
+          sellerId={myUid}
+          onClose={() => setSubForm(null)}
+          onSaved={loadSubmissions}
+        />
+      )}
+
       {reportFor && (() => {
         const app = myApprovedApps.find(x => x.application_id === reportFor.application_id)
         const rev = parseInt(rpRevenue.replace(/[^0-9]/g, ''), 10) || 0

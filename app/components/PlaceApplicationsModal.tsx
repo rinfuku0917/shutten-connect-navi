@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import ConfirmDialog from './ConfirmDialog'
 import NotifyChoice from './NotifyChoice'
 import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionXlsx'
+import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 
 // 案件ごとの応募者一覧。
 //
@@ -44,6 +45,10 @@ type Seller = {
   docsOk: number
   docsTotal: number
   rows: Row[]
+  /** この案件のために出店者が入力したかどうか。提出用Excelはその内容で作られる */
+  hasSubmission: boolean
+  /** 出店者がこの案件あてに書いた連絡事項。提出用Excelには載せない */
+  siteNote: string
 }
 
 const LABEL: Record<string, { text: string; bg: string; fg: string }> = {
@@ -94,10 +99,30 @@ export default function PlaceApplicationsModal({
   // 承認・不採用のときにメールを送るかどうか。既定は送る
   const [notify, setNotify] = useState(true)
 
-  // 提出用Excelの書き出し
+  // 提出用Excelの書き出し。
+  // 出す資料は2種類あり、必要になる場面が違うので選べるようにしている。
+  //   出店者情報 … 出店の前に施設・企業へ出す（誰が何をいくらで売るか）
+  //   売上報告   … 出店が終わったあとに企業から求められることがある
+  const [xlsxKind, setXlsxKind] = useState<'submission' | 'sales'>('submission')
   const [xlsxBusy, setXlsxBusy] = useState<SubmissionFormat | null>(null)
+  const [salesBusy, setSalesBusy] = useState(false)
   const [xlsxMsg, setXlsxMsg] = useState<string | null>(null)
   const [withPending, setWithPending] = useState(false)
+
+  const downloadSalesReport = async () => {
+    setSalesBusy(true)
+    setXlsxMsg(null)
+    try {
+      const n = await exportPlaceSalesReport(supabase, placeId, placeTitle)
+      setXlsxMsg(n === 0
+        ? '売上の報告がまだ届いていません。出店者が報告すると、ここから書き出せます。'
+        : `${n}日分のシートで保存しました。`)
+    } catch (e) {
+      setXlsxMsg('作成できませんでした：' + (e instanceof Error ? e.message : '不明なエラー'))
+    } finally {
+      setSalesBusy(false)
+    }
+  }
 
   const downloadXlsx = async (format: SubmissionFormat) => {
     setXlsxBusy(format)
@@ -151,6 +176,15 @@ export default function PlaceApplicationsModal({
       }
     }
 
+    // この案件のために入力された出店者情報。入っていればExcelはその内容で作られる
+    const subs = new Map<string, string>()
+    if (ids.length > 0) {
+      const { data: sb } = await supabase
+        .from('application_submissions').select('seller_id, note')
+        .eq('place_id', placeId).in('seller_id', ids)
+      for (const x of sb ?? []) subs.set(x.seller_id, x.note || '')
+    }
+
     // 出店者ごとにまとめる
     const map = new Map<string, Seller>()
     for (const r of rows) {
@@ -177,6 +211,8 @@ export default function PlaceApplicationsModal({
           docsOk: dc.ok,
           docsTotal: dc.total,
           rows: [],
+          hasSubmission: subs.has(r.seller_id),
+          siteNote: subs.get(r.seller_id) || '',
         }
         map.set(r.seller_id, cur)
       }
@@ -293,46 +329,84 @@ export default function PlaceApplicationsModal({
                   申込は出店希望日ごとに1件で数えます。1社が3日申し込むと3件になります。
                 </p>
 
-                {/* 施設・企業へ提出する出店者情報のExcel。承認済みの申込だけが載る */}
+                {/* 施設・企業へ提出するExcel。出店の前後で必要な資料が違うので選べるようにしている */}
                 <div style={{ background: '#F8FBFE', border: '1px solid #DCE9F5', borderRadius: '10px', padding: '13px 15px', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#1D4ED8', marginBottom: '3px' }}>📄 提出用Excelを作る</div>
-                  <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '10px' }}>
-                    承認済みの出店者を、普段ご提出いただいている様式で書き出します。施設に合わせて様式を選んでください。
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#1D4ED8', marginBottom: '9px' }}>📄 提出用Excelを作る</div>
+
+                  <div role='tablist' aria-label='書き出す資料' style={{ display: 'flex', gap: '6px', marginBottom: '11px', flexWrap: 'wrap' }}>
+                    {([
+                      { key: 'submission' as const, label: '出店者情報', hint: '出店の前に施設へ出す資料' },
+                      { key: 'sales' as const, label: '売上などの報告', hint: '出店が終わったあとに出す資料' },
+                    ]).map(t => {
+                      const on = xlsxKind === t.key
+                      return (
+                        <button
+                          key={t.key} type='button' role='tab' aria-selected={on} title={t.hint}
+                          onClick={() => { setXlsxKind(t.key); setXlsxMsg(null) }}
+                          style={{ background: on ? '#1D4ED8' : '#fff', color: on ? '#fff' : '#475569', border: '1px solid ' + (on ? '#1D4ED8' : '#DCE9F5'), borderRadius: '999px', padding: '7px 16px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                        >
+                          {t.label}
+                        </button>
+                      )
+                    })}
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      type='button'
-                      onClick={() => downloadXlsx('daily')}
-                      disabled={xlsxBusy !== null}
-                      title='開催日ごとに1シート。店舗名・Instagram・ジャンル・テイクアウト時／袋・利用可能決済・メニュー'
-                      style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: xlsxBusy ? 'wait' : 'pointer', minHeight: '36px', opacity: xlsxBusy && xlsxBusy !== 'daily' ? 0.5 : 1 }}
-                    >
-                      {xlsxBusy === 'daily' ? '作成中…' : '日付ごとの様式'}
-                    </button>
-                    <button
-                      type='button'
-                      onClick={() => downloadXlsx('aeon')}
-                      disabled={xlsxBusy !== null}
-                      title='月ごとに1シート。施設名と希望日程の欄あり。イオンモール系でご提出いただいている様式'
-                      style={{ background: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: xlsxBusy ? 'wait' : 'pointer', minHeight: '36px', opacity: xlsxBusy && xlsxBusy !== 'aeon' ? 0.5 : 1 }}
-                    >
-                      {xlsxBusy === 'aeon' ? '作成中…' : 'イオン様式（月ごと）'}
-                    </button>
-                  </div>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '11px', cursor: 'pointer', minHeight: '32px' }}>
-                    <input
-                      type='checkbox'
-                      checked={withPending}
-                      onChange={e => { setWithPending(e.target.checked); setXlsxMsg(null) }}
-                      style={{ width: '17px', height: '17px', marginTop: '2px', flexShrink: 0, accentColor: '#B45309', cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.8 }}>
-                      <strong style={{ color: '#B45309' }}>承認待ちも含める</strong>
-                      <br />
-                      承認する前に中身を見比べたいときに。含めた出店者は見出しに「（承認待ち）」と入り、ファイル名も「_承認待ち含む」になります。
-                      <strong style={{ color: '#B45309' }}>このファイルはそのまま施設へ提出しないでください。</strong>
-                    </span>
-                  </label>
+
+                  {xlsxKind === 'submission' ? (
+                    <>
+                      <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '10px' }}>
+                        承認済みの出店者を、普段ご提出いただいている様式で書き出します。施設に合わせて様式を選んでください。出店者が現場ごとに入力していれば、その内容が載ります。
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type='button'
+                          onClick={() => downloadXlsx('daily')}
+                          disabled={xlsxBusy !== null}
+                          title='開催日ごとに1シート。店舗名・Instagram・ジャンル・テイクアウト時／袋・利用可能決済・メニュー'
+                          style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: xlsxBusy ? 'wait' : 'pointer', minHeight: '36px', opacity: xlsxBusy && xlsxBusy !== 'daily' ? 0.5 : 1 }}
+                        >
+                          {xlsxBusy === 'daily' ? '作成中…' : '日付ごとの様式'}
+                        </button>
+                        <button
+                          type='button'
+                          onClick={() => downloadXlsx('aeon')}
+                          disabled={xlsxBusy !== null}
+                          title='月ごとに1シート。施設名と希望日程の欄あり。イオンモール系でご提出いただいている様式'
+                          style={{ background: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: xlsxBusy ? 'wait' : 'pointer', minHeight: '36px', opacity: xlsxBusy && xlsxBusy !== 'aeon' ? 0.5 : 1 }}
+                        >
+                          {xlsxBusy === 'aeon' ? '作成中…' : 'イオン様式（月ごと）'}
+                        </button>
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '11px', cursor: 'pointer', minHeight: '32px' }}>
+                        <input
+                          type='checkbox'
+                          checked={withPending}
+                          onChange={e => { setWithPending(e.target.checked); setXlsxMsg(null) }}
+                          style={{ width: '17px', height: '17px', marginTop: '2px', flexShrink: 0, accentColor: '#B45309', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.8 }}>
+                          <strong style={{ color: '#B45309' }}>承認待ちも含める</strong>
+                          <br />
+                          承認する前に中身を見比べたいときに。含めた出店者は見出しに「（承認待ち）」と入り、ファイル名も「_承認待ち含む」になります。
+                          <strong style={{ color: '#B45309' }}>このファイルはそのまま施設へ提出しないでください。</strong>
+                        </span>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '10px' }}>
+                        出店者から届いた報告（売上金額・販売食数・天候・来客数・所感）を、開催日ごとにまとめます。
+                      </div>
+                      <button
+                        type='button'
+                        onClick={downloadSalesReport}
+                        disabled={salesBusy}
+                        title='開催日ごとに1シート。店舗名・売上金額・販売食数・天候・来客数・品目別の販売実績'
+                        style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: salesBusy ? 'wait' : 'pointer', minHeight: '36px' }}
+                      >
+                        {salesBusy ? '作成中…' : '売上報告を書き出す'}
+                      </button>
+                    </>
+                  )}
 
                   {xlsxMsg && (
                     <div style={{ marginTop: '10px', fontSize: '12px', color: xlsxMsg.includes('できませんでした') || xlsxMsg.includes('ありません') ? '#B45309' : '#047857', lineHeight: 1.8 }}>
@@ -379,7 +453,24 @@ export default function PlaceApplicationsModal({
                                 <span style={{ ...chip, background: '#FEF2F2', color: '#B91C1C' }}>書類 未提出</span>
                               )
                             )}
+                            {/* この案件のために入力があれば、Excelはその内容で作られる。
+                                入力が無ければプロフィールが使われるので、そこも見えるようにする */}
+                            <span
+                              style={{ ...chip, background: s.hasSubmission ? '#EFF6FF' : '#F8FAFC', color: s.hasSubmission ? '#1D4ED8' : '#94A3B8' }}
+                              title={s.hasSubmission
+                                ? 'この案件のための出店者情報が入力されています。提出用Excelにはこの内容が載ります'
+                                : 'この案件のための入力がありません。提出用Excelにはプロフィールの内容が載ります'}
+                            >
+                              {s.hasSubmission ? '現場ごとの入力あり' : 'プロフィールの内容'}
+                            </span>
                           </div>
+
+                          {s.siteNote && (
+                            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '9px 11px', marginBottom: '8px' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 800, color: '#B45309', marginBottom: '3px' }}>出店者からの連絡事項</div>
+                              <div style={{ fontSize: '12px', color: '#475569', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{s.siteNote}</div>
+                            </div>
+                          )}
 
                           {/* 申込んだ日と、その状態 */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

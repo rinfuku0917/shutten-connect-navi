@@ -14,6 +14,7 @@ import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
+import TodayCheckins from './TodayCheckins'
 import { MERGED_POSTS } from '../lib/mergedPosts'
 import ConfirmDialog from '../components/ConfirmDialog'
 import NotifyChoice from '../components/NotifyChoice'
@@ -1405,6 +1406,8 @@ const previewDoc = async (fileUrl: string) => {
           {/* ===== ダッシュボード ===== */}
           {tab === 'dashboard' && (
             <>
+              {/* 当日の受付状況。いちばん上に置いて、開いたら最初に目に入るようにする */}
+              <TodayCheckins />
               <div className='admin-stats' style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '20px' }}>
                 {stats.map(s => (
                   <div key={s.label} style={{ background: '#fff', borderRadius: '12px', padding: '18px', border: '1px solid #E2E8F0' }}>
