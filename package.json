@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "blog:sql": "node scripts/blog-sql.mjs",
-    "blog:images": "node scripts/blog-image-sizes.mjs"
+    "blog:images": "node scripts/blog-image-sizes.mjs",
+    "blog:check": "node scripts/blog-metrics.mjs"
   },
   "dependencies": {
     "@next/third-parties": "^16.3.3",
