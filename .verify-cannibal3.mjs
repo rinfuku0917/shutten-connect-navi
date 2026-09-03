@@ -1,58 +1,66 @@
-import fs from 'node:fs';
-const SP = '/private/tmp/claude-501/-Users-hidekifukusada-Desktop--------shutten-connect-navi/db7d6515-4023-44ab-9971-494a02f7a39c/scratchpad';
-const posts = JSON.parse(fs.readFileSync(`${SP}/posts.json`, 'utf8'));
-const sm = fs.readFileSync('docs/blog/supermarket-food-truck.md', 'utf8').replace(/^---[\s\S]*?\n---\n/, '');
-posts.push({ slug: 'supermarket-food-truck', content: sm });
-const by = Object.fromEntries(posts.map(p => [p.slug, p.content || '']));
+// スーパー × 商業施設 の重なりを、章ごと・文ごとに洗い出す
+import fs from 'fs'
+const read = s => fs.readFileSync(`docs/blog/${s}.md`, 'utf8').replace(/^---\n[\s\S]*?\n---\n/, '')
+const A = read('supermarket-food-truck'), B = read('mall-food-truck-event')
 
-const norm = s => s.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[#*|>`\-\s\n\r]/g, '');
-const grams = (s, n = 4) => { const t = new Set(); for (let i = 0; i + n <= s.length; i++) t.add(s.slice(i, i + n)); return t; };
-function score(a, b) {
-  const ga = grams(norm(by[a])), gb = grams(norm(by[b]));
-  let inter = 0; for (const x of ga) if (gb.has(x)) inter++;
-  return { jac: inter / (ga.size + gb.size - inter), cA: inter / ga.size, cB: inter / gb.size };
-}
+const strip = t => t.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .replace(/<[^>]+>/g, ' ').replace(/[#*>`|:\-—–…「」『』（）()【】\[\]"'\/]/g, ' ')
+  .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+  .replace(/[，、]/g, '、').replace(/％/g, '%').replace(/\s+/g, '')
 
-console.log('### 指定ペアの重なり');
-const pairs = [
-  ['kitchen-car-location-guide', 'weekday-food-truck-spots'],
-  ['renting-parking-space', 'supermarket-food-truck'],
-  ['choose-profitable-food-truck-location', 'kitchen-car-location-guide'],
-  ['choose-profitable-food-truck-location', 'weekday-food-truck-spots'],
-  ['choose-profitable-food-truck-location', 'how-to-find-food-truck-spots'],
-  ['host-fee-setting-guide2', 'renting-parking-space'],
-  ['host-fee-setting-guide2', 'supermarket-food-truck'],
-  ['host-fee-setting-guide2', 'food-truck-fee-guide'],
-  ['host-fee-setting-guide2', 'vacant-space-food-truck'],
-  ['host-fee-setting-guide2', 'host-fee-setting-guide'],
-  ['vacant-space-food-truck', 'renting-parking-space'],
-  ['regular-event-schedule', 'supermarket-food-truck'],
-  ['event-food-truck-guide', 'how-to-invite-kitchen-car'],
-];
-for (const [a, b] of pairs) {
-  const s = score(a, b);
-  console.log(`${(s.jac * 100).toFixed(1).padStart(5)}%  ${a} × ${b}  (含有 ${(s.cA * 100).toFixed(0)}%/${(s.cB * 100).toFixed(0)}%)`);
-}
+const shing = (s, n) => { const S = new Set(); for (let i = 0; i + n <= s.length; i++) S.add(s.slice(i, i + n)); return S }
+const dice = (a, b) => { const X = shing(a, 3), Y = shing(b, 3); let i = 0; for (const x of X) if (Y.has(x)) i++; return (2 * i) / (X.size + Y.size) }
 
-// 共通する長い文字列（丸ごと共有している箇所）を探す
-function commonChunks(a, b, min = 14) {
-  const A = norm(by[a]), B = norm(by[b]);
-  const out = [];
-  const seen = new Set();
-  for (let i = 0; i < A.length; i++) {
-    let len = 0;
-    while (i + len < A.length && B.includes(A.slice(i, i + len + 1))) len++;
-    if (len >= min) {
-      const s = A.slice(i, i + len);
-      if (![...seen].some(x => x.includes(s))) { out.push(s); seen.add(s); }
-      i += len - 1;
-    }
+// 章に割る
+function chapters(md) {
+  const out = []; let cur = { h: '(前書き)', body: '' }
+  for (const line of md.split('\n')) {
+    const m = line.match(/^(#{2,3})\s+(.*)$/)
+    if (m) { out.push(cur); cur = { h: `${'  '.repeat(m[1].length - 2)}${m[2]}`, body: '' } }
+    else cur.body += line + '\n'
   }
-  return out;
+  out.push(cur); return out.filter(c => strip(c.body).length > 0)
 }
-for (const [a, b] of [['kitchen-car-location-guide', 'weekday-food-truck-spots'], ['renting-parking-space', 'supermarket-food-truck'], ['host-fee-setting-guide2', 'renting-parking-space']]) {
-  console.log(`\n### ${a} と ${b} で丸ごと一致する14文字以上の並び`);
-  const c = commonChunks(a, b);
-  console.log(`件数: ${c.length} / 一致文字数合計: ${c.reduce((s, x) => s + x.length, 0)}`);
-  for (const x of c.sort((p, q) => q.length - p.length).slice(0, 25)) console.log(`  [${x.length}] ${x}`);
+const CA = chapters(A), CB = chapters(B)
+console.log('=== 章の対応（Dice 本文どうし） ===')
+console.log('\n[supermarket-food-truck の章]  → 商業施設側でいちばん近い章')
+for (const a of CA) {
+  let best = 0, bh = ''
+  for (const b of CB) { const d = dice(strip(a.body), strip(b.body)); if (d > best) { best = d; bh = b.h } }
+  const mark = best >= 0.5 ? '★重複' : best >= 0.3 ? '△似' : '  '
+  console.log(`  ${mark} ${(best).toFixed(2)}  ${a.h.padEnd(34)} ${strip(a.body).length}字  → ${bh}`)
 }
+console.log('\n[mall-food-truck-event の章]  → スーパー側でいちばん近い章')
+for (const b of CB) {
+  let best = 0, bh = ''
+  for (const a of CA) { const d = dice(strip(b.body), strip(a.body)); if (d > best) { best = d; bh = a.h } }
+  const mark = best >= 0.5 ? '★重複' : best >= 0.3 ? '△似' : '  '
+  console.log(`  ${mark} ${(best).toFixed(2)}  ${b.h.padEnd(34)} ${strip(b.body).length}字  → ${bh}`)
+}
+
+// 文レベルで一致度0.6以上を全部出す
+const sents = md => md.replace(/!\[[^\]]*\]\([^)]*\)/g, '\n').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .split(/\n+/).flatMap(l => l.split(/(?<=[。！？])/)).map(strip).filter(s => s.length >= 12)
+const SA = sents(A), SB = sents(B)
+console.log('\n\n=== ほぼ同じ文（Dice>=0.6）の全件 ===')
+let cov = 0, tot = SA.reduce((s, x) => s + x.length, 0)
+const seen = []
+for (const a of SA) {
+  let best = 0, bm = ''
+  for (const b of SB) { const d = dice(a, b); if (d > best) { best = d; bm = b } }
+  if (best >= 0.6) { cov += a.length; seen.push([best, a, bm]) }
+}
+for (const [d, a, b] of seen.sort((x, y) => y[0] - x[0])) {
+  console.log(` ${d.toFixed(2)} S: ${a}`)
+  console.log(`      M: ${b}`)
+}
+console.log(`\nスーパー記事の ${(cov / tot * 100).toFixed(1)}%（${cov}/${tot}字）が、商業施設記事にほぼ同じ文として存在`)
+
+// 数字の一致（同じ統計を両方が引いているか）
+console.log('\n=== 両方に出てくる数値表現 ===')
+const nums = t => new Set((strip(t).match(/\d[\d,\.]*(?:件|円|%|店|台|割|か月|年|日)/g) ?? []))
+const na = nums(A), nb = nums(B)
+const both = [...na].filter(x => nb.has(x))
+console.log('  共通:', both.join(' / '))
+console.log('  スーパーのみ:', [...na].filter(x => !nb.has(x)).join(' / '))
+console.log('  商業施設のみ:', [...nb].filter(x => !na.has(x)).join(' / '))
