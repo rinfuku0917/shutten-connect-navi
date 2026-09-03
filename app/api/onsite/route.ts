@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-// 当日の進行（前日確認・受付完了・営業準備完了）を記録する。
+// 当日の進行（前日確認・車両の搬入・営業準備中・営業開始・営業終了・撤収）を記録する。
 //
 // なぜサーバー経由なのか:
 //   出店者に applications の UPDATE を直接許すと、同じ行の status も
@@ -10,11 +10,17 @@ import { NextResponse } from 'next/server'
 //
 // 押した時刻を消す（取り消す）操作も同じ入口で受ける。押し間違いは必ず起きるため。
 
-// 出店者が押せる段階。値は applications の列名
+// 出店者が押せる段階。値は applications の列名。
+// 画面上の呼び名は 前日確認 / 車両の搬入 / 営業準備中 / 営業開始 / 営業終了 / 撤収。
+// checked_in は昨夜「受付完了」と呼んでいたが、運営が押す「受付完了」と
+// 名前がぶつかるため「車両の搬入」に改めた（列名はそのまま）。
 const SELLER_STEPS = {
   confirmed: 'confirmed_at',
   checked_in: 'checked_in_at',
   ready: 'ready_at',
+  opened: 'opened_at',
+  closed: 'closed_at',
+  left: 'left_at',
 } as const
 type SellerStep = keyof typeof SELLER_STEPS
 
@@ -49,15 +55,36 @@ export async function POST(req: Request) {
       .single()
     if (aErr || !app) return NextResponse.json({ error: '申込が見つかりません' }, { status: 404 })
 
-    // 受付完了を運営が見た印。管理画面の点滅を消すためのもので、押せるのは運営だけ
+    // 運営の「受付完了」。押すと出店者の画面にも「運営が受付を完了しました」と出る。
+    // 出店者側の全工程がそろうまでは押せない（そろっていないのに完了にすると、
+    // 撤収まで終わったのかどうかが分からなくなる）。
     if (step === 'seen') {
       const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
       if (me?.role !== 'admin') {
         return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 })
       }
+      const { data: prog } = await db
+        .from('applications')
+        .select('checked_in_at, ready_at, opened_at, closed_at, left_at')
+        .eq('id', applicationId).single()
+      const missing: string[] = []
+      if (prog) {
+        if (!prog.checked_in_at) missing.push('車両の搬入')
+        if (!prog.ready_at) missing.push('営業準備中')
+        if (!prog.opened_at) missing.push('営業開始')
+        if (!prog.closed_at) missing.push('営業終了')
+        if (!prog.left_at) missing.push('撤収')
+      }
+      // undo のときは、そろっていなくても取り消せる
+      if (!undo && missing.length > 0) {
+        return NextResponse.json(
+          { error: 'まだ済んでいない工程があります：' + missing.join('、'), missing },
+          { status: 409 },
+        )
+      }
       const { error } = await db
         .from('applications')
-        .update({ checkin_seen_at: new Date().toISOString() })
+        .update({ checkin_seen_at: undo ? null : new Date().toISOString() })
         .eq('id', applicationId)
       if (error) return NextResponse.json({ error: '更新に失敗しました: ' + error.message }, { status: 500 })
       return NextResponse.json({ success: true })
@@ -76,8 +103,9 @@ export async function POST(req: Request) {
 
     const column = SELLER_STEPS[step as SellerStep]
     const patch: Record<string, string | null> = { [column]: undo ? null : new Date().toISOString() }
-    // 受付完了を取り消したら、運営が見た印も戻す（もう一度押されたときに気付けるように）
-    if (step === 'checked_in') patch.checkin_seen_at = null
+    // 出店者側の工程を取り消したら、運営の受付完了も戻す。
+    // そろっていない状態で「受付完了」だけが残ってしまわないようにする
+    if (undo) patch.checkin_seen_at = null
 
     const { error } = await db.from('applications').update(patch).eq('id', applicationId)
     if (error) return NextResponse.json({ error: '更新に失敗しました: ' + error.message }, { status: 500 })

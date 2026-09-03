@@ -1487,6 +1487,16 @@ export default function SellerDashboard() {
                             )}
                             <button onClick={() => setTab('applies')} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>申込一覧で見る</button>
                           </div>
+
+                          {/* 出店管理。当日の進行をこの場から押せるようにする。
+                              ホームにも同じものを出しているが、カレンダーで日付を選んで
+                              そのまま報告できるほうが、当日の動きに合っている。 */}
+                          {a.status === '承認済' && (
+                            <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #E2E8F0' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 800, color: '#B45309', marginBottom: '10px' }}>出店管理</div>
+                              <OnsiteSteps supabase={supabase} onGoSales={() => setTab('sales')} applicationId={a.id} heading={false} />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
