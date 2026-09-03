@@ -144,6 +144,8 @@ const menus = await all('menus')
 
 const kinds = live.map(feeKindOf)
 const cnt = (arr, v) => arr.filter(x => x === v).length
+// 場所の種類 × 出店料の決め方
+const kindIn = (venue, kind) => live.filter(p => venueOf(p) === venue && feeKindOf(p) === kind).length
 const venues = live.map(venueOf)
 const prefs = {}
 for (const p of live) prefs[p.prefecture ?? '-'] = (prefs[p.prefecture ?? '-'] ?? 0) + 1
@@ -204,6 +206,18 @@ const M = [
   ['うち同額', both.filter(x => x.wd === x.we).length, ['fee', 'weekday']],
   ['うち平日が高い', both.filter(x => x.wd > x.we).length, ['fee', 'weekday']],
   ['税の明記', live.filter(p => /税/.test(norm(p.fee))).length, ['fee']],
+  // 場所の種類ごとの決め方。スーパーと商業施設の記事が並べて比べている
+  ['スーパー:固定', kindIn('スーパー・食品店', '固定'), ['supermarket', 'mall']],
+  ['スーパー:歩合', kindIn('スーパー・食品店', '歩合'), ['supermarket', 'mall']],
+  ['スーパー:併用', kindIn('スーパー・食品店', '併用'), ['supermarket', 'mall']],
+  ['商業施設:固定', kindIn('商業施設・モール', '固定'), ['supermarket', 'mall']],
+  ['商業施設:歩合', kindIn('商業施設・モール', '歩合'), ['supermarket', 'mall']],
+  ['商業施設:併用', kindIn('商業施設・モール', '併用'), ['supermarket', 'mall']],
+  ['商業施設:応相談', kindIn('商業施設・モール', '応相談'), ['supermarket', 'mall']],
+  ['商業施設:常設', live.filter(p => venueOf(p) === '商業施設・モール' && p.place_type === 'regular').length, ['mall']],
+  ['商業施設:千葉県', live.filter(p => venueOf(p) === '商業施設・モール' && p.prefecture === '千葉県').length, ['mall']],
+  ['商業施設:埼玉県', live.filter(p => venueOf(p) === '商業施設・モール' && p.prefecture === '埼玉県').length, ['mall']],
+  ['学校:歩合', kindIn('学校・専門学校・大学', '歩合'), ['supermarket', 'mall']],
   ['公開中の出店者', sellers.length, ['offers', 'supermarket']],
   ['写真あり', sellers.filter(s => (s.photos ?? []).length > 0).length, ['offers']],
   ['メニューあり', sellers.filter(s => menuBySeller.has(s.id)).length, ['offers']],
@@ -232,6 +246,7 @@ const ARTICLES = {
   parking: 'renting-parking-space（駐車場を貸す）',
   supermarket: 'supermarket-food-truck（スーパーに誘致する）',
   documents: 'kitchen-car-required-documents（必要書類）',
+  mall: 'mall-food-truck-event（商業施設の催事）',
 }
 
 const now = Object.fromEntries(M.map(([k, v]) => [k, v]))

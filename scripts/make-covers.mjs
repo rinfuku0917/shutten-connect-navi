@@ -35,6 +35,9 @@ const COVERS = [
   ['supermarket-food-truck',
    '新サイト上部の4つのアイコンフォルダ①/登録出店者アイコン①.png',
    ['#FFF1F0', '#F7D6D2']],
+  ['mall-food-truck-event',
+   '車両を売りたい方へのフォルダ②/安心取引アイコン④.png',
+   ['#F1F0FA', '#D6D4EE']],
 ]
 
 fs.mkdirSync(OUT, { recursive: true })

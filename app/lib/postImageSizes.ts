@@ -8,6 +8,7 @@
 export type ImageSize = { w: number; h: number }
 
 export const POST_IMAGE_SIZES: Record<string, ImageSize> = {
+  'https://app.connect-navi.com/covers/mall-food-truck-event.webp': { w: 1200, h: 630 },
   'https://app.connect-navi.com/covers/supermarket-food-truck.webp': { w: 1200, h: 630 },
   'https://app.connect-navi.com/covers/food-truck-fee-guide.webp': { w: 1200, h: 630 },
   'https://app.connect-navi.com/covers/weekday-food-truck-spots.webp': { w: 1200, h: 630 },
