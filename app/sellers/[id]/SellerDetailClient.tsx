@@ -44,6 +44,25 @@ const SNS_LABEL: Record<string, string> = {
 }
 
 const BRAND = '#F5A623'
+// アイコンの色。サイトのオレンジと白を基調に、アイコンだけ緑で差す
+const ICON = '#0F766E'
+
+// 「お店について」の各行に付ける絵。線だけの簡単なものにそろえる。
+// 文字のラベルを絵に置き換えると、狭い画面でも中身に幅を使える。
+const icons: Record<string, React.ReactNode> = {
+  sales: (<><rect x='2' y='7' width='13' height='9' rx='1.5' /><path d='M15 10h4l3 3v3h-7z' /><circle cx='6.5' cy='18' r='2' /><circle cx='17.5' cy='18' r='2' /></>),
+  car:   (<><path d='M3 13l2-5.5A2 2 0 0 1 6.9 6h10.2a2 2 0 0 1 1.9 1.5L21 13v5h-3v-2H6v2H3z' /><circle cx='7' cy='13' r='1' /><circle cx='17' cy='13' r='1' /></>),
+  size:  (<><rect x='2' y='8' width='20' height='8' rx='1.5' /><path d='M7 8v3M12 8v4M17 8v3' /></>),
+  gear:  (<><path d='M4 14h4l2-4 3 7 2-3h5' /><rect x='2' y='5' width='20' height='14' rx='2' /></>),
+  bag:   (<><path d='M4 8h16l-1.4 11.2A2 2 0 0 1 16.6 21H7.4a2 2 0 0 1-2-1.8z' /><path d='M9 8V6a3 3 0 0 1 6 0v2' /></>),
+  card:  (<><rect x='2' y='5' width='20' height='14' rx='2' /><path d='M2 10h20M6 15h4' /></>),
+}
+const Icon = ({ k }: { k: string }) => (
+  <svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke={ICON} strokeWidth='1.6'
+       strokeLinecap='round' strokeLinejoin='round' aria-hidden='true' style={{ flexShrink: 0 }}>
+    {icons[k]}
+  </svg>
+)
 const CORPORATE_MARKERS = ['株式会社', '合同会社', '有限会社', '合資会社', '合名会社', '(株)', '（株）', '(有)', '（有）']
 
 const toArray = (v: string[] | string | null): string[] => {
@@ -213,13 +232,13 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
           const pays = Array.isArray(seller.payment_methods)
             ? seller.payment_methods.filter(Boolean).join('・')
             : (seller.payment_methods ?? '')
-          const rows: { label: string; value: string }[] = [
-            { label: '販売形態', value: (seller.sales_type ?? '').trim() },
-            { label: '車種', value: (seller.vehicle_type ?? '').trim() },
-            { label: '車両サイズ', value: size },
-            { label: '設備', value: (seller.equipment ?? '').trim() },
-            { label: 'テイクアウトの袋', value: (seller.takeout_bag ?? '').trim() },
-            { label: '利用できる決済', value: String(pays).trim() },
+          const rows: { k: string; label: string; value: string }[] = [
+            { k: 'sales', label: '販売形態', value: (seller.sales_type ?? '').trim() },
+            { k: 'car', label: '車種', value: (seller.vehicle_type ?? '').trim() },
+            { k: 'size', label: '車両サイズ', value: size },
+            { k: 'gear', label: '設備', value: (seller.equipment ?? '').trim() },
+            { k: 'bag', label: 'テイクアウトの袋', value: (seller.takeout_bag ?? '').trim() },
+            { k: 'card', label: '利用できる決済', value: String(pays).trim() },
           ].filter(r => r.value)
           if (rows.length === 0) return null
           return (
@@ -227,35 +246,18 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
               <h2 style={sectionTitle}>お店について</h2>
               <div style={{ ...card, overflow: 'hidden' }}>
                 {rows.map((r, i) => (
-                  <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '128px 1fr', gap: '14px', padding: '12px 18px', borderTop: i === 0 ? 'none' : '1px solid #F1EBE2', alignItems: 'baseline' }}>
-                    <span style={{ fontSize: '12px', color: '#78716C' }}>{r.label}</span>
-                    <span style={{ fontSize: '14px', color: '#1C1917', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{r.value}</span>
+                  <div key={r.label} style={{ display: 'flex', gap: '14px', padding: '13px 18px', borderTop: i === 0 ? 'none' : '1px solid #F1EBE2', alignItems: 'flex-start' }}>
+                    <span title={r.label} style={{ display: 'flex', paddingTop: '2px' }}><Icon k={r.k} /></span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: '14px', color: '#1C1917', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                      {r.value}
+                      <span style={{ display: 'block', fontSize: '11px', color: '#A8A29E', marginTop: '1px' }}>{r.label}</span>
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
           )
         })()}
-
-        {(seller.menu ?? '').trim() && (
-          <div style={{ marginTop: '28px' }}>
-            <h2 style={sectionTitle}>取り扱い品目</h2>
-            <div style={{ ...card, padding: '18px 20px' }}>
-              <p style={{ margin: 0, fontSize: '14px', lineHeight: 2, color: '#44403C', whiteSpace: 'pre-wrap' }}>{seller.menu}</p>
-            </div>
-          </div>
-        )}
-
-        {seller.photos && seller.photos.length > 0 && (
-          <div style={{ marginTop: '28px' }}>
-            <h2 style={sectionTitle}>店舗・商品写真</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: seller.photos.length === 1 ? '1fr' : 'repeat(2, 1fr)', gap: '12px' }}>
-              {seller.photos.slice(0, 8).map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', aspectRatio: seller.photos!.length === 1 ? '16 / 10' : '4 / 3', borderRadius: '14px', overflow: 'hidden', border: '1px solid #EDE7DE', background: 'center/cover url(' + url + ')' }} />
-              ))}
-            </div>
-          </div>
-        )}
 
         {menus.length > 0 && (
           <div style={{ marginTop: '28px' }}>
@@ -276,6 +278,17 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
                     <div style={{ fontSize: '14px', fontWeight: 700, color: BRAND, marginTop: '4px' }}>{m.price != null ? m.price.toLocaleString() + '円' : '価格応相談'}</div>
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {seller.photos && seller.photos.length > 0 && (
+          <div style={{ marginTop: '28px' }}>
+            <h2 style={sectionTitle}>店舗・商品写真</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: seller.photos.length === 1 ? '1fr' : 'repeat(2, 1fr)', gap: '12px' }}>
+              {seller.photos.slice(0, 8).map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', aspectRatio: seller.photos!.length === 1 ? '16 / 10' : '4 / 3', borderRadius: '14px', overflow: 'hidden', border: '1px solid #EDE7DE', background: 'center/cover url(' + url + ')' }} />
               ))}
             </div>
           </div>

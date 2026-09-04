@@ -1806,12 +1806,6 @@ export default function SellerDashboard() {
                         <div style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a' }}>{fld.value}</div>
                       </div>
                     ))}
-                    {profile.menu && (
-                      <div style={{ padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
-                        <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>メニュー</div>
-                        <div style={{ fontSize: '13px', color: '#1a1a1a', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{profile.menu}</div>
-                      </div>
-                    )}
                     <button onClick={startProfileEdit} style={{ marginTop: '16px', width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>編集する</button>
                   </>
                 ) : (
@@ -2027,10 +2021,12 @@ export default function SellerDashboard() {
                       </div>
                     </div>
 
-                    <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>メニュー</div>
-                      <textarea value={profileForm.menu} onChange={e => setProfileForm({ ...profileForm, menu: e.target.value })} placeholder='例：まぜそば 850円 / 台湾まぜそば 950円' rows={2} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
-                    </div>
+                    {/* メニューの自由記述の欄は外した。
+                        同じ画面の下に「提供メニュー」（名前・詳細・価格・写真を1品ずつ）があり、
+                        同じことを二度書かせる形になっていた。公開ページにも両方出ていた。
+                        公開中1,386人のうち自由記述だけを書いている人は0人だったため、
+                        外しても失われる情報は無い（両方書いているのは5人）。
+                        列（profiles.menu）は消していないので、過去の内容は管理画面から見られる。 */}
 
                     <div style={{ marginBottom: '12px' }}>
                       <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>ジャンル（複数選択できます）</div>
