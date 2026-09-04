@@ -52,10 +52,13 @@ function EditPlacePageInner() {
   // そちらへ飛ばすと空の画面に着いてしまう。
   const searchParams = useSearchParams()
   const backTo = searchParams.get('from') === 'admin' ? '/admin' : '/dashboard/host'
+  // 申込を受け付ける期間の上限は、施設との取り決めで決まるもの。
+  // 募集者が自分で狭めてしまわないよう、運営が開いたときだけ出す
+  const fromAdmin = searchParams.get('from') === 'admin'
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
-    fee:'', feeFixed:'', feePct:'', feeUnit:'per_day', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
+    fee:'', feeFixed:'', feePct:'', feeUnit:'per_day', reminderDays:'7', applyWithinMonths:'', visitors:'', loadIn:'', loadOut:'',
     menuWant:'', menuNG:'', menuOther:'', power:'yes', gas:'yes', water:'yes',
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
@@ -112,6 +115,7 @@ function EditPlacePageInner() {
         feePct: data.company_share_pct ? String(data.company_share_pct) : '',
         feeUnit: data.company_fixed_unit === 'per_event' ? 'per_event' : 'per_day',
         reminderDays: data.reminder_days != null ? String(data.reminder_days) : '7',
+        applyWithinMonths: data.apply_within_months != null ? String(data.apply_within_months) : '',
       }))
       // 詳細項目を復元する（未保存の案件は初期値のまま）
       if(data.details && typeof data.details === 'object') {
@@ -170,6 +174,8 @@ function EditPlacePageInner() {
       place_type: form.type,
       ...buildFeeColumns(form),
       reminder_days: parseInt(form.reminderDays, 10) || 7,
+      // 運営が開いたときだけ書き込む。募集者の保存でうっかり消えないようにする
+      ...(fromAdmin ? { apply_within_months: form.applyWithinMonths ? parseInt(form.applyWithinMonths, 10) : null } : {}),
       map_url: form.mapUrl,
       recruit: form['募集内容'],
       schedule: schedule,
@@ -410,6 +416,21 @@ async function refreshPublicPages(placeId?: string) {
               <input type='number' min='0' value={form.reminderDays} onChange={e=>set('reminderDays',e.target.value)} placeholder='例：7' style={{...inputStyle, maxWidth:'200px'}}/>
               <div style={{fontSize:'12px',color:'#64748B',marginTop:'4px'}}>未入力の場合は7日前から表示されます。急ぎの案件は短め（3日など）に設定できます。</div>
             </div>
+
+            {fromAdmin && (
+              <div style={{marginBottom:'20px'}}>
+                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>申し込みを受け付ける期間</label>
+                <select value={form.applyWithinMonths} onChange={e=>set('applyWithinMonths',e.target.value)} style={{...inputStyle, maxWidth:'240px'}}>
+                  <option value=''>上限なし</option>
+                  <option value='1'>1ヶ月先まで</option>
+                  <option value='2'>2ヶ月先まで</option>
+                  <option value='3'>3ヶ月先まで</option>
+                  <option value='6'>6ヶ月先まで</option>
+                  <option value='12'>12ヶ月先まで</option>
+                </select>
+                <div style={{fontSize:'12px',color:'#64748B',marginTop:'4px'}}>これより先の日付は、出店者の画面で選べなくなります。施設が先の予定に答えられない場合に設定してください。イオン系は1ヶ月、Olympic・ドンキは3ヶ月です。</div>
+              </div>
+            )}
 
             <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'}}>
               <div>

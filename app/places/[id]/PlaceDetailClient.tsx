@@ -38,6 +38,8 @@ export type Place = {
   close_time: string | null
   max_slots: number | null
   details: Record<string, string> | null
+  // 何ヶ月先まで申し込めるか。null は上限なし
+  apply_within_months: number | null
 }
 
 // 案件フォームで選んだ値を、画面に出す日本語に直す
@@ -170,6 +172,24 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
   // 今日（YYYY-MM-DD）。自由入力日程の下限・過去日付チェックに使う
   const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
+  // 何ヶ月先まで申し込めるかの上限（places.apply_within_months）。
+  // 施設が先の予定に答えられないため、イオン系は1ヶ月、Olympic系は3ヶ月に絞っている。
+  // 未設定の案件は null＝上限なしで、これまでどおりどの日でも選べる。
+  //
+  // 月末は暦どおりに丸める（1月31日の1ヶ月先は2月28日）。
+  // Postgres の interval と同じ数え方にして、
+  // 画面で選べた日がサーバ側のトリガーで弾かれることがないようにする。
+  const applyLimitStr = (() => {
+    const m = place?.apply_within_months
+    if (!m) return null
+    const base = new Date()
+    const d = new Date(base.getFullYear(), base.getMonth(), 1)
+    d.setMonth(d.getMonth() + m)
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+    d.setDate(Math.min(base.getDate(), lastDay))
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  })()
+
   const submitEntry = async () => {
     setEntryErr('')
     if (!format) { setEntryErr('出店形式を選択してください'); return }
@@ -182,6 +202,13 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
       if (!entryDate) { setEntryErr('出店希望日を選択してください'); return }
       if (entryDate < todayStr()) { setEntryErr('過去の日付は選択できません'); return }
     }
+    // 上限より先の日付。日付欄の max とチェックの disabled で選べないようにしてあるが、
+    // 手入力や画面を開いたまま日をまたいだ場合に通ってしまうため、送信前にも見る。
+    // ここで止めておくと、データベース側のトリガーの文言が出店者に出ずに済む
+    if (applyLimitStr && dates.some(d => d > applyLimitStr)) {
+      setEntryErr(`この案件は ${applyLimitStr.replaceAll('-', '/')} までのお申し込みとなります`)
+      return
+    }
     setSubmitting(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setEntryErr('ログインが必要です'); setSubmitting(false); return }
@@ -191,7 +218,15 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
         ? dates.map(d => ({ place_id: id, seller_id: user.id, format, apply_date: d, status: 'pending' }))
         : [{ place_id: id, seller_id: user.id, format, apply_date: null, status: 'pending' }]
     const { error } = await supabase.from('applications').insert(rows)
-    if (error) { const msg = error.message.includes('duplicate key') ? 'この案件には既に申込済みの日があります。' : 'エントリー失敗: ' + error.message; setEntryErr(msg); setSubmitting(false); return }
+    if (error) {
+      const msg = error.message.includes('duplicate key')
+        ? 'この案件には既に申込済みの日があります。'
+        // 申込期間の上限で弾かれた場合。トリガーが日本語の文面を返すのでそのまま出す
+        : error.message.includes('お申し込みとなります')
+          ? error.message
+          : 'エントリー失敗: ' + error.message
+      setEntryErr(msg); setSubmitting(false); return
+    }
     setSubmitting(false)
     setEntryDone(true)
     await loadMyEntries()
@@ -514,9 +549,13 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                     {place.schedule && place.schedule.filter(d => d.date).length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
                         <div style={{ fontSize: '12px', color: '#888' }}>出店したい日にチェックを入れてください（複数選択可）</div>
-                        {place.schedule.filter(d => d.date).map(d => (
-                          <label key={d.date} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', border: selectedDates.includes(d.date) ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#1a1a1a', background: selectedDates.includes(d.date) ? '#FFFBEB' : '#fff' }}>
-                            <input type="checkbox" checked={selectedDates.includes(d.date)} onChange={() => toggleDate(d.date)} style={{ accentColor: '#F5A623' }} />
+                        {place.schedule.filter(d => d.date).map(d => {
+                          // 申込の上限より先の日は選べない。日程そのものは案件の情報なので消さず、
+                          // チェックだけできない形にして残す
+                          const over = !!applyLimitStr && d.date > applyLimitStr
+                          return (
+                          <label key={d.date} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: over ? 'default' : 'pointer', border: selectedDates.includes(d.date) ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: over ? '#AAA' : '#1a1a1a', background: over ? '#FAFAFA' : (selectedDates.includes(d.date) ? '#FFFBEB' : '#fff') }}>
+                            <input type="checkbox" disabled={over} checked={selectedDates.includes(d.date)} onChange={() => toggleDate(d.date)} style={{ accentColor: '#F5A623' }} />
                             <span>
                               {d.date}（{d.start}〜{d.end}）
                               {/* 日ごとに金額が決まっている案件は、その日の額も出す */}
@@ -528,12 +567,13 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                               })()}
                             </span>
                           </label>
-                        ))}
+                          )
+                        })}
                       </div>
                     ) : (
                       <div style={{ marginBottom: '16px' }}>
                         <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>この案件は出店日が未設定です。ご希望の日付を入力してください（過去の日付は選べません）。</div>
-                        <input type="date" value={entryDate} min={todayStr()} onChange={e => setEntryDate(e.target.value)} style={{ width: '100%', border: '1px solid #E5C07B', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box', color: '#1a1a1a', background: '#fff' }} />
+                        <input type="date" value={entryDate} min={todayStr()} max={applyLimitStr ?? undefined} onChange={e => setEntryDate(e.target.value)} style={{ width: '100%', border: '1px solid #E5C07B', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box', color: '#1a1a1a', background: '#fff' }} />
                       </div>
                     )}
                     {entryErr && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px', fontSize: '13px', color: '#DC2626', marginBottom: '12px' }}>{entryErr}</div>}
