@@ -204,16 +204,16 @@ export default function VendorCostPage() {
           provider: { '@type': 'Organization', name: '株式会社nav', url: SITE_URL },
           areaServed: { '@type': 'Country', name: '日本' },
           url: `${SITE_URL}/vendor/cost`,
+          // 金額は画面上でも「応相談」としているため、構造化データにも数値を入れない。
+          // 画面に出していない値を Google にだけ伝える形は避ける（AGENTS.md）
           offers: {
             '@type': 'Offer',
             description: '出店者の選定・お声がけ・条件のとりまとめ・当日の運営・書類の確認と申請',
             priceCurrency: 'JPY',
-            price: '5500',
             priceSpecification: {
               '@type': 'PriceSpecification',
               priceCurrency: 'JPY',
-              minPrice: '5500',
-              description: '1台あたり5,500円（税込）から。台数・日数・会場の条件により変わります。',
+              description: '応相談。台数・開催日数・会場の条件により変わるため、内容をうかがったうえでお見積りします。',
             },
           },
         }}
@@ -387,7 +387,7 @@ export default function VendorCostPage() {
             </div>
             <div style={{ ...CARD, background: '#FFF8EC', borderColor: '#F5D9A8' }}>
               <div style={{ fontSize: '13px', fontWeight: 800, color: '#B45309', marginBottom: '6px' }}>運営までお任せ</div>
-              <div style={{ fontSize: '20px', fontWeight: 900, color: '#111', marginBottom: '8px', lineHeight: 1.4 }}>1台あたり<br />5,500円（税込）〜</div>
+              <div style={{ fontSize: '26px', fontWeight: 900, color: '#111', marginBottom: '8px' }}>応相談</div>
               <p className='jp-text' style={{ fontSize: '13px', color: '#444', lineHeight: 1.9, margin: 0 }}>
                 出店者の選定、お声がけ、条件のとりまとめ、当日の運営、書類の確認と申請までを承ります。
               </p>

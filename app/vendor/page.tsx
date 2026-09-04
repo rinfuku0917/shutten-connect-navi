@@ -217,7 +217,7 @@ export default function VendorPage() {
               <div style={{ background: '#FFF8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '12px' }}>
                 <div style={{ fontSize: '12px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
                 <div style={{ fontSize: '20px', fontWeight: 900, color: '#111' }}>
-                  1台あたり 5,500円（税込）〜
+                  応相談
                 </div>
               </div>
               <ul className='jp-text' style={{ fontSize: '13px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
