@@ -129,7 +129,7 @@ export async function POST(req: Request) {
     if (action === 'list') {
       const { data, error } = await db
         .from('invoices')
-        .select('id, invoice_no, seller_id, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_memo')
+        .select('id, invoice_no, seller_id, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_memo, kind')
         .order('issued_on', { ascending: false })
         .limit(300)
       if (error) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })

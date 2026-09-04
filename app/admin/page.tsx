@@ -686,6 +686,8 @@ export default function AdminPage() {
     issued_on: string, due_on: string | null, total: number, paid_status: string,
     paid_on: string | null, paid_name: string | null,
     paid_reported_at: string | null, paid_confirmed_at: string | null, paid_memo: string | null,
+    // sales=売上から作った請求 / advance=出店日の前に出した出店料の請求
+    kind?: string | null,
   }
   const [payRows, setPayRows] = useState<PayRow[]>([])
   const [payLoading, setPayLoading] = useState(false)
@@ -2085,6 +2087,13 @@ const previewDoc = async (fileUrl: string) => {
                             <span style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: '999px', padding: '2px 10px', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>{st.label}</span>
                             <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a' }}>{r.sellerName}</span>
                             <span style={{ fontSize: '11px', color: '#94A3B8' }}>{r.invoice_no}</span>
+                            {/* 事前請求か、売上からの請求かを見分けられるようにする。
+                                同じ月に2本並ぶことがあるため */}
+                            {r.kind === 'advance' && (
+                              <span title='出店日の前に出した出店料の請求です' style={{ background: '#FFF8E1', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '999px', padding: '2px 9px', fontSize: '10px', fontWeight: 800 }}>
+                                事前請求
+                              </span>
+                            )}
                           </div>
                           <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginBottom: '8px' }}>
                             <div>
@@ -2160,7 +2169,25 @@ const previewDoc = async (fileUrl: string) => {
                         <tbody>
                           {[...byS.entries()].map(([sid, v]) => (
                             <tr key={sid}>
-                              <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9' }}>{v.name}</td>
+                              <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9' }}>
+                                {v.name}
+                                {/* 同じ出店者・同じ月に事前請求が出ていたら知らせる。
+                                    出店料を先にいただいている場合、ここで請求書を作ると
+                                    同じ分をもう一度請求してしまうことがある。
+                                    ただし「固定を先に、歩合をあとに」で2本立てるのが
+                                    正しい場合もあるので、金額は自動で引かず、事実だけ出す。 */}
+                                {payRows.some(x => x.kind === 'advance' && x.seller_id === sid && x.period === saleMonth) && (
+                                  <div style={{ fontSize: '11px', color: '#B45309', marginTop: '3px', fontWeight: 700 }}>
+                                    ⚠ この月に事前請求が出ています（
+                                    {payRows.filter(x => x.kind === 'advance' && x.seller_id === sid && x.period === saleMonth)
+                                      .map(x => x.invoice_no + '／¥' + x.total.toLocaleString()).join('、')}
+                                    ）
+                                    <span style={{ fontWeight: 400, color: '#94A3B8', display: 'block' }}>
+                                      同じ分を二重に請求していないか、明細をご確認ください。
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
                               <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', whiteSpace: 'nowrap' }}>{v.count}件</td>
                               <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', whiteSpace: 'nowrap' }}>¥{v.amount.toLocaleString()}</td>
                               <td style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', whiteSpace: 'nowrap', fontWeight: 700 }}>¥{(v.amount + Math.floor(v.amount * 0.1)).toLocaleString()}</td>
