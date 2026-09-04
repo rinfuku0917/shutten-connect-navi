@@ -7,6 +7,7 @@ import MeetingRequestForm from '../components/MeetingRequestForm'
 import JsonLd from '../components/JsonLd'
 import { SITE_URL, OG_DEFAULT_IMAGE } from '../lib/seo'
 import { VENDOR_FAQ, faqJsonLd } from '../lib/faq'
+import FaqList from '../components/FaqList'
 
 // キッチンカーを呼びたい側（施設・イベント運営・企業・自治体）向けのページ。
 // 「キッチンカー 手配」「キッチンカー 派遣」などで検索した方が最初に着く想定。
@@ -303,14 +304,7 @@ export default function VendorPage() {
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>よくあるご質問</h2>
           <p className='jp-text' style={LEAD}>キッチンカーを呼びたい方からよくいただくご質問です。</p>
-          <div>
-            {VENDOR_FAQ.map((f, i) => (
-              <div key={f.q} style={{ padding: '18px 0', borderTop: i === 0 ? 'none' : '1px solid #F0F0F0' }}>
-                <h3 className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{f.q}</h3>
-                <p className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.9 }}>{f.a}</p>
-              </div>
-            ))}
-          </div>
+          <FaqList items={VENDOR_FAQ} />
         </div>
       </div>
 

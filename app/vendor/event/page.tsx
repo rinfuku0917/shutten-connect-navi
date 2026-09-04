@@ -7,6 +7,7 @@ import MeetingRequestForm from '../../components/MeetingRequestForm'
 import JsonLd from '../../components/JsonLd'
 import { SITE_URL, breadcrumbJsonLd, OG_DEFAULT_IMAGE } from '../../lib/seo'
 import { EVENT_FAQ, VENDOR_FAQ, faqJsonLd } from '../../lib/faq'
+import FaqList from '../../components/FaqList'
 
 // イベント・マルシェ・お祭りにフード出店を手配したい方向けのページ。
 // 「イベント キッチンカー 手配」「フード出店 手配」「マルシェ 出店者 募集」
@@ -317,14 +318,7 @@ export default function EventVendorPage() {
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>よくあるご質問</h2>
           <p className='jp-text' style={LEAD}>イベントの主催者からよくいただくご質問です。</p>
-          <div>
-            {faqAll.map((f, i) => (
-              <div key={f.q} style={{ padding: '18px 0', borderTop: i === 0 ? 'none' : '1px solid #E8E8E8' }}>
-                <h3 className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{f.q}</h3>
-                <p className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.9 }}>{f.a}</p>
-              </div>
-            ))}
-          </div>
+          <FaqList items={faqAll} />
         </div>
       </div>
 

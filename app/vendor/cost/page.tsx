@@ -7,6 +7,7 @@ import MeetingRequestForm from '../../components/MeetingRequestForm'
 import JsonLd from '../../components/JsonLd'
 import { SITE_URL, breadcrumbJsonLd, OG_DEFAULT_IMAGE } from '../../lib/seo'
 import { COST_FAQ, faqJsonLd } from '../../lib/faq'
+import FaqList from '../../components/FaqList'
 import { AREAS } from '../area/areas'
 
 // エリアを地方でまとめる。
@@ -445,14 +446,7 @@ export default function VendorCostPage() {
         <div style={{ maxWidth: '820px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>費用についてよくある質問</h2>
           <p className='jp-text' style={LEAD}>ここに無いことも、お気軽にお尋ねください。</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {COST_FAQ.map(f => (
-              <details key={f.q} className='top3-faq' style={{ background: '#FBF7F1', borderRadius: '12px', padding: '14px 18px' }}>
-                <summary style={{ fontSize: '14px', fontWeight: 800, color: '#111', cursor: 'pointer', lineHeight: 1.7 }}>{f.q}</summary>
-                <p className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 2, margin: '10px 0 0' }}>{f.a}</p>
-              </details>
-            ))}
-          </div>
+          <FaqList items={COST_FAQ} />
           <div style={{ textAlign: 'center', marginTop: '24px' }}>
             <Link href='/vendor' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>
               手配の流れやサービス全体については、キッチンカーを呼びたい方へ →
