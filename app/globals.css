@@ -59,9 +59,33 @@ img[width='1'][height='1'] { display: inline !important; }
   .admin-stats { grid-template-columns: repeat(2, 1fr) !important; }
   .admin-two-col { grid-template-columns: 1fr !important; }
 }
-.admin-table-wrap { overflow-x: auto; }
+.admin-table-wrap { overflow-x: auto; max-width: 100%; }
 .admin-table-wrap table { min-width: 640px; }
 .admin-table-wrap td, .admin-table-wrap th { white-space: nowrap; }
+
+/* スマホで表を横に送ったとき、1列目（誰の行か）だけは残す。
+   これが無いと、右へ送った時点で出店者名が画面の外に消えて
+   「¥10,000」が誰のものか分からなくなる。
+   1列目は名前や注意書きが入るので、折り返しも許す。 */
+@media (max-width: 640px) {
+  .admin-table-wrap table { min-width: 520px; }
+  .admin-table-wrap th:first-child,
+  .admin-table-wrap td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: #fff;
+    box-shadow: 1px 0 0 #E2E8F0;
+    white-space: normal;
+    min-width: 116px;
+    max-width: 150px;
+  }
+  .admin-table-wrap thead th:first-child { background: #F8FAFC; }
+}
+
+/* 人名や店名が「ベイビーカステラ　カ／ワカミ」のように
+   途中で割れないようにする。まとまりごと次の行へ送る。 */
+.nowrap-unit { display: inline-block; }
 
 
 /* 登録フォームのグリッド: スマホで1列に畳む */

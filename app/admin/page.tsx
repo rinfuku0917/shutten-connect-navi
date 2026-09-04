@@ -2045,7 +2045,9 @@ const previewDoc = async (fileUrl: string) => {
                     {reportPlaces.map(pl => (
                       <button key={pl.placeId} onClick={() => downloadSalesReportXlsx(pl.placeId, pl.title)} disabled={repXlsxBusy === pl.placeId}
                         style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: repXlsxBusy === pl.placeId ? 'wait' : 'pointer' }}>
-                        {repXlsxBusy === pl.placeId ? '作成中…' : `${pl.title}（${pl.count}件）`}
+                        {repXlsxBusy === pl.placeId
+                          ? '作成中…'
+                          : <>{pl.title}<span className='nowrap-unit'>（{pl.count}件）</span></>}
                       </button>
                     ))}
                   </div>
@@ -2114,7 +2116,7 @@ const previewDoc = async (fileUrl: string) => {
                           {r.paid_status !== 'unpaid' && (
                             <div style={{ fontSize: '11px', color: '#475569', marginBottom: '8px' }}>
                               振込の報告：{r.paid_on ? r.paid_on.replace(/-/g, '/') : '日付なし'}
-                              {r.paid_name && <>／名義 {r.paid_name}</>}
+                              {r.paid_name && <>／名義 <span className='nowrap-unit'>{r.paid_name}</span></>}
                             </div>
                           )}
                           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
