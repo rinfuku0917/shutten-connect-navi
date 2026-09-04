@@ -116,7 +116,7 @@ export default function PlaceApplicationsModal({
   // 事前請求。大きなイベントでは出店料を先に払ってもらい、
   // 当日の売上の◯％はそのあと別に請求する。ここは前者を作る。
   // 売上が無くても発行できる（まだ出店していないので当然無い）。
-  const [advAsk, setAdvAsk] = useState<{ id: string; sellerId: string; who: string; when: string } | null>(null)
+  const [advAsk, setAdvAsk] = useState<{ id: string; sellerId: string; who: string; when: string; date: string | null } | null>(null)
   const [advBusy, setAdvBusy] = useState(false)
   const [advErr, setAdvErr] = useState<string | null>(null)
   const [advAmount, setAdvAmount] = useState('')
@@ -142,9 +142,11 @@ export default function PlaceApplicationsModal({
           action: 'advance',
           sellerId: advAsk.sellerId,
           applicationId: advAsk.id,
-          // 対象月は出店日の月。売上からの請求と並んでも取り違えない
-          period: (advAsk.when.match(/^(\d{4})\/(\d{1,2})/) || []).slice(1, 3).length === 2
-            ? advAsk.when.replace(/^(\d{4})\/(\d{1,2}).*$/, (_m, y, mo) => y + '-' + String(mo).padStart(2, '0'))
+          // 対象月は出店日の月。日付が入っていない申込のときだけ今月にする。
+          // 画面用に整えた文字列（「9月4日（金）」）からは年が取れないので、
+          // 生の apply_date（2026-10-05 の形）を使う
+          period: (advAsk.date && /^\d{4}-\d{2}/.test(advAsk.date))
+            ? advAsk.date.slice(0, 7)
             : new Date().toISOString().slice(0, 7),
           amount: yen,
           dueOn: advDue || undefined,
@@ -595,7 +597,7 @@ export default function PlaceApplicationsModal({
                                           setAdvErr(null)
                                           setAdvAmount(placeFixed > 0 ? String(placeFixed) : '')
                                           setAdvDue('')
-                                          setAdvAsk({ id: r.id, sellerId: s.id, who: s.shopName, when: fmtDate(r.apply_date) })
+                                          setAdvAsk({ id: r.id, sellerId: s.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date })
                                         }}
                                         title='出店日の前に、出店料の請求書を発行します'
                                         style={{ background: '#FFF8E1', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
