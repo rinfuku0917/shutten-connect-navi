@@ -63,6 +63,21 @@ function detailText(key: string, raw: string | undefined): string {
   return CHOICE[key]?.[v] ?? v
 }
 
+// 申込がデータベース側のトリガー（check_apply_window）で弾かれたかどうか。
+//
+// 申込は画面から直接 insert していてサーバを経由しないため、
+// 募集終了・応募締切・申込期間の3つはテーブル側で止めている。
+// トリガーは出店者がそのまま読める日本語で返すので、
+// それと分かったらエラー文言を作り直さず、そのまま画面に出す。
+//
+// 文面を変えるときは、トリガー側（supabase/migrations の
+// 20260904_apply_window_gate.sql）と、この目印を一緒に直すこと。
+function fromApplyWindow(message: string): boolean {
+  return message.includes('募集を終了')       // 募集終了の案件
+    || message.includes('応募締切')            // 締切を過ぎた案件
+    || message.includes('お申し込みとなります') // 申込期間の上限より先の日付
+}
+
 function feeText(p: Place): string {
   const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
   // 日ごとに金額が決まっている案件は、その幅を出す（例：2,000円〜3,000円/日）
@@ -221,8 +236,10 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
     if (error) {
       const msg = error.message.includes('duplicate key')
         ? 'この案件には既に申込済みの日があります。'
-        // 申込期間の上限で弾かれた場合。トリガーが日本語の文面を返すのでそのまま出す
-        : error.message.includes('お申し込みとなります')
+        // データベース側のトリガー（check_apply_window）で弾かれた場合。
+        // 募集終了・応募締切・申込期間の3つがここに来る。
+        // どれも出店者がそのまま読める日本語で返しているので、加工せずに出す。
+        : fromApplyWindow(error.message)
           ? error.message
           : 'エントリー失敗: ' + error.message
       setEntryErr(msg); setSubmitting(false); return
