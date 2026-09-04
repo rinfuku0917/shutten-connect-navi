@@ -40,7 +40,7 @@ function feeLabel(place: any, saleDate?: string | null): string {
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, sellerId, period, action, dueOn, edited } = await req.json()
+    const { requesterId, sellerId, period, action, dueOn, edited, amount, label, applicationId } = await req.json()
     if (!requesterId || !sellerId || !period) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
@@ -66,6 +66,88 @@ export async function POST(req: Request) {
     const { data: seller } = await admin
       .from('profiles').select('id, shop_name, name').eq('id', sellerId).maybeSingle()
     if (!seller) return NextResponse.json({ error: '出店者が見つかりませんでした' }, { status: 404 })
+
+    // ===== 事前請求: 出店日の前に出す出店料 =====
+    //
+    // 大きなイベントでは、出店料を先に払ってもらって出店が確定し、
+    // 当日の売上の◯％はそのあと別に請求する。この入口は前者を作る。
+    // 売上の記録は見ない（まだ出店していないので当然無い）。
+    //
+    // 金額は手で決める。案件に固定額の設定があれば画面側で初期値に使うが、
+    // 交渉で決まることが多いため、ここでは渡された額をそのまま使う。
+    if (action === 'advance') {
+      const yen = Math.floor(Number(amount))
+      if (!Number.isFinite(yen) || yen <= 0) {
+        return NextResponse.json({ error: '金額を1円以上で入力してください' }, { status: 400 })
+      }
+
+      // どの出店に対するものかを控えておく（売上に紐づかないため）
+      let appId: string | null = null
+      let placeTitle = ''
+      let applyDate = ''
+      if (applicationId) {
+        const { data: ap } = await admin
+          .from('applications')
+          .select('id, seller_id, apply_date, places(title)')
+          .eq('id', applicationId).maybeSingle()
+        if (!ap) return NextResponse.json({ error: '申込が見つかりませんでした' }, { status: 404 })
+        if (ap.seller_id !== sellerId) {
+          return NextResponse.json({ error: 'この申込は選んだ出店者のものではありません' }, { status: 400 })
+        }
+        appId = ap.id
+        applyDate = ap.apply_date || ''
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        placeTitle = (ap as any).places?.title || ''
+      }
+
+      // 同じ申込に事前請求を二重に出さないようにする
+      if (appId) {
+        const { data: dup } = await admin
+          .from('invoices').select('invoice_no')
+          .eq('application_id', appId).eq('kind', 'advance').limit(1)
+        if (dup && dup.length > 0) {
+          return NextResponse.json(
+            { error: 'この出店には、すでに事前請求（' + dup[0].invoice_no + '）を発行しています' },
+            { status: 409 },
+          )
+        }
+      }
+
+      const md = applyDate ? `${parseInt(applyDate.slice(5, 7), 10)}/${parseInt(applyDate.slice(8, 10), 10)}` : ''
+      const title = (typeof label === 'string' && label.trim())
+        ? label.trim()
+        : `${placeTitle || '出店'} 出店料（事前）`
+      const advItems = [{ no: 1, saleId: null, date: md, title, amount: yen }]
+      const advTax = Math.floor(yen * 0.1)
+
+      const yearA = String(new Date().getFullYear())
+      const { data: lastA } = await admin
+        .from('invoices').select('invoice_no')
+        .like('invoice_no', yearA + '-%')
+        .order('invoice_no', { ascending: false }).limit(1)
+      const lastSeqA = lastA && lastA.length > 0 ? parseInt(lastA[0].invoice_no.split('-')[1], 10) : 0
+      const noA = `${yearA}-${String(Math.max(lastSeqA + 1, NUMBER_START[yearA] ?? 1)).padStart(4, '0')}`
+
+      const dueA = typeof dueOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueOn) ? dueOn : null
+      const { error: aErr } = await admin.from('invoices').insert({
+        invoice_no: noA, seller_id: sellerId, period, kind: 'advance',
+        application_id: appId,
+        subtotal: yen, tax: advTax, total: yen + advTax, item_count: 1,
+        sale_ids: null, items: advItems, due_on: dueA,
+        to_name: edited?.toName ?? null,
+        to_person: edited?.toPerson ?? null,
+        note: edited?.note ?? null,
+      })
+      if (aErr) {
+        return NextResponse.json({ error: '事前請求の記録に失敗しました: ' + aErr.message }, { status: 500 })
+      }
+      return NextResponse.json({
+        success: true, kind: 'advance', invoiceNo: noA, dueOn: dueA,
+        seller: { shopName: seller.shop_name || '', personName: seller.name || '' },
+        period, periodLabel: `${period.slice(0, 4)}年${parseInt(period.slice(5, 7), 10)}月分`,
+        items: advItems, subtotal: yen, tax: advTax, total: yen + advTax, itemCount: 1,
+      })
+    }
 
     const { data: sales, error: sErr } = await admin
       .from('sales')
@@ -138,7 +220,7 @@ export async function POST(req: Request) {
         note: edited.note ?? null,
         due_on: /^\d{4}-\d{2}-\d{2}$/.test(edited.dueOn || '') ? edited.dueOn : null,
         subtotal: sub, tax: tx, total: sub + tx, item_count: (edited.items || []).length,
-      }).eq('seller_id', sellerId).eq('period', period).select('invoice_no')
+      }).eq('seller_id', sellerId).eq('period', period).eq('kind', 'sales').select('invoice_no')
       if (uErr) return NextResponse.json({ error: '保存に失敗しました: ' + uErr.message }, { status: 500 })
       if (!upd || upd.length === 0) return NextResponse.json({ error: '対象の請求書が見つかりませんでした' }, { status: 404 })
       return NextResponse.json({ success: true })
@@ -148,7 +230,7 @@ export async function POST(req: Request) {
       // 既に発行済みなら、その番号もあわせて返す
       const { data: exist } = await admin
         .from('invoices').select('invoice_no, issued_on, due_on, items, to_name, to_person, note')
-        .eq('seller_id', sellerId).eq('period', period)
+        .eq('seller_id', sellerId).eq('period', period).eq('kind', 'sales')
         .order('created_at', { ascending: false })
       const saved = exist && exist.length > 0 ? exist[0] : null
       // 一度修正して保存してある場合は、その内容を優先して返す
@@ -188,7 +270,7 @@ export async function POST(req: Request) {
     const sub2 = useItems.reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
     const tax2 = Math.floor(sub2 * 0.1)
     const { error: iErr } = await admin.from('invoices').insert({
-      invoice_no: invoiceNo, seller_id: sellerId, period,
+      invoice_no: invoiceNo, seller_id: sellerId, period, kind: 'sales',
       subtotal: sub2, tax: tax2, total: sub2 + tax2, item_count: useItems.length,
       sale_ids: items.map(i => i.saleId),
       due_on: due,

@@ -113,6 +113,54 @@ export default function PlaceApplicationsModal({
 
   const REASONS = ['体調不良', '車両の故障', '日程の重複', '天候', '出店者の都合', 'その他']
 
+  // 事前請求。大きなイベントでは出店料を先に払ってもらい、
+  // 当日の売上の◯％はそのあと別に請求する。ここは前者を作る。
+  // 売上が無くても発行できる（まだ出店していないので当然無い）。
+  const [advAsk, setAdvAsk] = useState<{ id: string; sellerId: string; who: string; when: string } | null>(null)
+  const [advBusy, setAdvBusy] = useState(false)
+  const [advErr, setAdvErr] = useState<string | null>(null)
+  const [advAmount, setAdvAmount] = useState('')
+  const [advDue, setAdvDue] = useState('')
+  // 案件に固定額の設定があれば、金額の初期値に使う
+  const [placeFixed, setPlaceFixed] = useState(0)
+
+  const runAdvance = async () => {
+    if (!advAsk) return
+    const yen = parseInt(advAmount.replace(/[^0-9]/g, ''), 10)
+    if (!yen || yen <= 0) { setAdvErr('金額を1円以上で入力してください。'); return }
+    setAdvBusy(true)
+    setAdvErr(null)
+    try {
+      const { data: u } = await supabase.auth.getUser()
+      const uid = u.user?.id
+      if (!uid) { setAdvErr('ログインしなおしてからお試しください。'); return }
+      const res = await fetch('/api/admin/invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requesterId: uid,
+          action: 'advance',
+          sellerId: advAsk.sellerId,
+          applicationId: advAsk.id,
+          // 対象月は出店日の月。売上からの請求と並んでも取り違えない
+          period: (advAsk.when.match(/^(\d{4})\/(\d{1,2})/) || []).slice(1, 3).length === 2
+            ? advAsk.when.replace(/^(\d{4})\/(\d{1,2}).*$/, (_m, y, mo) => y + '-' + String(mo).padStart(2, '0'))
+            : new Date().toISOString().slice(0, 7),
+          amount: yen,
+          dueOn: advDue || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setAdvErr(json?.error || '発行できませんでした。'); return }
+      setAdvAsk(null)
+      setXlsxMsg('事前請求（' + json.invoiceNo + '／¥' + (json.total ?? 0).toLocaleString() + '）を発行しました。')
+    } catch {
+      setAdvErr('通信に失敗しました。')
+    } finally {
+      setAdvBusy(false)
+    }
+  }
+
   const runCancel = async () => {
     if (!cxAsk) return
     setCxBusy(true)
@@ -220,6 +268,11 @@ export default function PlaceApplicationsModal({
         docs.set(x.seller_id, cur)
       }
     }
+
+    // 事前請求の金額の初期値に使う、案件の固定の出店料
+    const { data: pl } = await supabase
+      .from('places').select('price_fixed, company_fixed_amount').eq('id', placeId).maybeSingle()
+    setPlaceFixed((pl?.price_fixed || 0) + (pl?.company_fixed_amount || 0))
 
     // この案件のために入力された出店者情報。入っていればExcelはその内容で作られる
     const subs = new Map<string, string>()
@@ -536,6 +589,19 @@ export default function PlaceApplicationsModal({
                                       >
                                         出店取消し
                                       </button>
+                                      <button
+                                        type='button'
+                                        onClick={() => {
+                                          setAdvErr(null)
+                                          setAdvAmount(placeFixed > 0 ? String(placeFixed) : '')
+                                          setAdvDue('')
+                                          setAdvAsk({ id: r.id, sellerId: s.id, who: s.shopName, when: fmtDate(r.apply_date) })
+                                        }}
+                                        title='出店日の前に、出店料の請求書を発行します'
+                                        style={{ background: '#FFF8E1', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        事前請求
+                                      </button>
                                     </span>
                                   )}
                                   {r.status === 'pending' && (
@@ -639,6 +705,64 @@ export default function PlaceApplicationsModal({
         okLabel={ask?.status === 'approved' ? '承認する' : '不採用にする'}
         onOk={apply}
         onCancel={() => { if (!busy) { setAsk(null); setAskErr(null) } }}
+      />
+
+      <ConfirmDialog
+        open={!!advAsk}
+        busy={advBusy}
+        error={advErr}
+        title='出店日の前に、出店料を請求しますか？'
+        body={
+          advAsk
+            ? `${advAsk.who}／${advAsk.when}\n\n` +
+              'これは出店料（固定額）の請求です。\n' +
+              '当日の売上の◯％は、出店後に別の請求書で出します。'
+            : ''
+        }
+        extra={
+          advAsk ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  金額（税抜）
+                  {placeFixed > 0 && <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{placeFixed.toLocaleString()}円</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    value={advAmount} disabled={advBusy} inputMode='numeric' aria-label='金額'
+                    onChange={e => setAdvAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder='10000'
+                    style={{ width: '140px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 11px', fontSize: '14px', color: '#1a1a1a', textAlign: 'right' }}
+                  />
+                  <span style={{ fontSize: '13px', color: '#475569' }}>円</span>
+                  {advAmount && (
+                    <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+                      消費税10%を足して <strong style={{ color: '#B45309' }}>
+                        {(parseInt(advAmount, 10) + Math.floor(parseInt(advAmount, 10) * 0.1)).toLocaleString()}円
+                      </strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  振込期限（任意）
+                </div>
+                <input
+                  type='date' value={advDue} disabled={advBusy}
+                  onChange={e => setAdvDue(e.target.value)} aria-label='振込期限'
+                  style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 11px', fontSize: '13px', color: '#1a1a1a' }}
+                />
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
+                  出店日より前の日付にしておくと、入金の確認がしやすくなります。
+                </div>
+              </div>
+            </div>
+          ) : null
+        }
+        okLabel='請求書を発行する'
+        onOk={runAdvance}
+        onCancel={() => { if (!advBusy) { setAdvAsk(null); setAdvErr(null) } }}
       />
 
       <ConfirmDialog
