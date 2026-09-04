@@ -9,7 +9,8 @@ import { NextResponse } from 'next/server'
 //   action='report'  … 出店者が「振り込みました」と報告する → 運営へメール
 //   action='list'    … 管理者が入金状況の一覧を見る
 //   action='confirm' … 管理者が入金を確認する → 出店者へメール
-//   action='delete'  … 管理者が請求書を取り消す（テストで作ったものの片付け用）
+//   action='void'    … 管理者が請求書を取り消す（行は消さず、取り消した印を付ける）
+//   action='unvoid'  … 管理者が取り消しを取りやめる
 //
 // 呼び出し元はログイン中のアクセストークンで判定する（本人以外は触れない）。
 
@@ -55,6 +56,8 @@ export async function POST(req: Request) {
         .from('invoices')
         .select('id, invoice_no, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at')
         .eq('seller_id', uid)
+        // 取り消した請求書は出店者には見せない
+        .is('voided_at', null)
         .order('issued_on', { ascending: false })
       if (error) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })
       return NextResponse.json({ items: data || [] })
@@ -66,11 +69,16 @@ export async function POST(req: Request) {
       if (!invoiceId) return NextResponse.json({ error: '請求書が指定されていません' }, { status: 400 })
 
       const { data: inv, error: gErr } = await db
-        .from('invoices').select('id, invoice_no, seller_id, period, total, paid_status, paid_reported_at').eq('id', invoiceId).maybeSingle()
+        .from('invoices').select('id, invoice_no, seller_id, period, total, paid_status, paid_reported_at, voided_at').eq('id', invoiceId).maybeSingle()
       if (gErr || !inv) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
       // 本人の請求書だけ報告できる
       if (inv.seller_id !== uid) return NextResponse.json({ error: '権限がありません' }, { status: 403 })
       if (inv.paid_status === 'paid') return NextResponse.json({ error: 'この請求書はすでに入金確認済みです' }, { status: 409 })
+      // 取り消した請求書は出店者の一覧に出ないが、画面を開いたまま
+      // 取り消された場合にここへ来るため、念のため止める
+      if (inv.voided_at) {
+        return NextResponse.json({ error: 'この請求書は取り消されています。運営にご確認ください' }, { status: 409 })
+      }
 
       // 直前に同じ報告が来ていたら、記録は更新するがメールは送らない
       const now = Date.now()
@@ -129,7 +137,7 @@ export async function POST(req: Request) {
     if (action === 'list') {
       const { data, error } = await db
         .from('invoices')
-        .select('id, invoice_no, seller_id, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_memo, kind')
+        .select('id, invoice_no, seller_id, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_memo, kind, voided_at, void_reason')
         .order('issued_on', { ascending: false })
         .limit(300)
       if (error) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })
@@ -203,17 +211,54 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true })
     }
 
-    // ===== 管理者：請求書を削除する =====
-    // 誤って発行したものやテストで作ったものを片付けるため。
-    // 請求書の記録だけを消し、売上（sales）はそのまま残す。
-    if (action === 'delete') {
+    // ===== 管理者：請求書を取り消す =====
+    //
+    // 金額を間違えた、テストで作った、条件が変わった——出したものを
+    // 無かったことにしたい場面はある。ただし行は消さない。
+    //
+    // 番号は「その年でいちばん大きい番号 + 1」で採番しているため、
+    // 消すと次の発行で同じ番号が使い回される。先方に送ったあとだと、
+    // 同じ番号の請求書が2枚できてしまう。
+    // 取り消した印だけを付けて、番号と記録は残す。
+    //
+    // 取り消すと、出店者の「お支払い」欄からは消え、入金の集計からも外れる。
+    if (action === 'void') {
+      const { invoiceId, reason } = body
+      if (!invoiceId) return NextResponse.json({ error: '請求書が指定されていません' }, { status: 400 })
+      const { data: inv } = await db
+        .from('invoices').select('id, invoice_no, paid_status, voided_at').eq('id', invoiceId).maybeSingle()
+      if (!inv) return NextResponse.json({ error: '対象が見つかりませんでした' }, { status: 404 })
+      if (inv.voided_at) {
+        return NextResponse.json({ error: 'この請求書は既に取り消されています' }, { status: 409 })
+      }
+      // 入金済みのものを黙って取り消すと、受け取った金額の説明がつかなくなる。
+      // 先に入金確認を取り消してもらう
+      if (inv.paid_status === 'paid') {
+        return NextResponse.json(
+          { error: '入金確認済みの請求書は取り消せません。先に「確認を取り消す」を押してください' },
+          { status: 409 },
+        )
+      }
+      const { error: vErr } = await db.from('invoices').update({
+        voided_at: new Date().toISOString(),
+        voided_by: uid,
+        void_reason: typeof reason === 'string' && reason.trim() ? reason.trim() : null,
+      }).eq('id', invoiceId)
+      if (vErr) return NextResponse.json({ error: '取り消しに失敗しました: ' + vErr.message }, { status: 500 })
+      return NextResponse.json({ success: true, invoiceNo: inv.invoice_no })
+    }
+
+    // ===== 管理者：取り消しを取りやめる =====
+    // 押し間違いを戻せるようにする。番号は変わらない。
+    if (action === 'unvoid') {
       const { invoiceId } = body
       if (!invoiceId) return NextResponse.json({ error: '請求書が指定されていません' }, { status: 400 })
-      const { data: del, error: dErr } = await db
-        .from('invoices').delete().eq('id', invoiceId).select('invoice_no')
-      if (dErr) return NextResponse.json({ error: '削除に失敗しました: ' + dErr.message }, { status: 500 })
-      if (!del || del.length === 0) return NextResponse.json({ error: '対象が見つかりませんでした' }, { status: 404 })
-      return NextResponse.json({ success: true, invoiceNo: del[0].invoice_no })
+      const { data: up, error: rErr } = await db.from('invoices').update({
+        voided_at: null, voided_by: null, void_reason: null,
+      }).eq('id', invoiceId).select('invoice_no')
+      if (rErr) return NextResponse.json({ error: '戻せませんでした: ' + rErr.message }, { status: 500 })
+      if (!up || up.length === 0) return NextResponse.json({ error: '対象が見つかりませんでした' }, { status: 404 })
+      return NextResponse.json({ success: true, invoiceNo: up[0].invoice_no })
     }
 
     return NextResponse.json({ error: '不明な操作です' }, { status: 400 })

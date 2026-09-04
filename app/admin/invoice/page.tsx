@@ -43,6 +43,9 @@ type Invoice = {
   sellerId?: string
   period?: string
   issuedOn?: string
+  // 取り消された請求書。送ってしまわないよう、画面で強く知らせる
+  voidedAt?: string | null
+  voidReason?: string | null
 }
 
 const yen = (n: number) => '¥' + n.toLocaleString()
@@ -314,6 +317,21 @@ function InvoiceInner() {
         </button>
         <button onClick={() => window.print()} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>印刷</button>
       </div>
+
+      {/* 取り消した請求書。開けてしまうこと自体は残しておくが、
+          そのまま印刷して送られては困るので、いちばん上で強く知らせる */}
+      {inv.voidedAt && (
+        <div className='no-print' style={{ maxWidth: '596pt', margin: '0 auto 12px', background: '#FEF2F2', border: '2px solid #FCA5A5', borderRadius: '8px', padding: '12px 16px', color: '#B91C1C' }}>
+          <div style={{ fontSize: '14px', fontWeight: 900, marginBottom: '4px' }}>
+            この請求書は取り消されています
+          </div>
+          <div style={{ fontSize: '12px', lineHeight: 1.8 }}>
+            {inv.voidReason && <>理由：{inv.voidReason}<br /></>}
+            出店者の画面には表示されず、入金の集計にも入りません。
+            <strong>この内容のまま先方へ送らないでください。</strong>
+          </div>
+        </div>
+      )}
 
       {!inv.invoiceNo && (inv.alreadyIssued?.length ?? 0) > 0 && (
         <div className='no-print' style={{ maxWidth: '596pt', margin: '0 auto 12px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#92400E' }}>

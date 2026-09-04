@@ -710,6 +710,9 @@ export default function AdminPage() {
     paid_reported_at: string | null, paid_confirmed_at: string | null, paid_memo: string | null,
     // sales=売上から作った請求 / advance=出店日の前に出した出店料の請求
     kind?: string | null,
+    // 取り消した請求書。行は残したまま印だけ付けている
+    voided_at?: string | null,
+    void_reason?: string | null,
   }
   const [payRows, setPayRows] = useState<PayRow[]>([])
   const [payLoading, setPayLoading] = useState(false)
@@ -769,21 +772,42 @@ export default function AdminPage() {
     setRepXlsxBusy('')
   }
 
-  // 請求書を削除する。テストで作ったものや、誤って発行したものの片付け用。
-  // 売上（sales）は消さないので、必要ならあらためて発行し直せる。
-  const deleteInvoice = async (row: PayRow) => {
-    if (!window.confirm(
-      row.invoice_no + '（' + row.sellerName + ' さん・¥' + row.total.toLocaleString() + '）の請求書を削除します。\n\n'
-      + '・出店者の「お支払い」欄からも消えます\n'
-      + '・売上の記録は残るので、必要なら発行し直せます\n'
-      + '・すでに送信したメールは取り消せません\n\nよろしいですか？'
-    )) return
+  // 請求書を取り消す。金額を間違えた、テストで作った、条件が変わったとき用。
+  //
+  // 行は消さない。番号は「その年でいちばん大きい番号 + 1」で採番しているため、
+  // 消すと次の発行で同じ番号が使い回される。先方に送ったあとだと、
+  // 同じ番号の請求書が2枚できてしまう。
+  const voidInvoice = async (row: PayRow) => {
+    const reason = window.prompt(
+      row.invoice_no + '（' + row.sellerName + ' さん・¥' + row.total.toLocaleString() + '）を取り消します。\n\n'
+      + '・出店者の「お支払い」欄から消えます\n'
+      + '・入金の集計からも外れます\n'
+      + '・番号（' + row.invoice_no + '）は残り、使い回されません\n'
+      + '・すでに送信したメールは取り消せません\n\n'
+      + '理由を入れてください（あとで見返すため。空欄でも進めます）',
+      '',
+    )
+    // キャンセルを押したときは null。空欄のままOKなら理由なしで進める
+    if (reason === null) return
     setPayBusy(row.id)
     try {
-      await callPayApi({ action: 'delete', invoiceId: row.id })
+      await callPayApi({ action: 'void', invoiceId: row.id, reason })
       await loadPayments()
     } catch (e) {
-      alert(e instanceof Error ? e.message : '削除に失敗しました')
+      alert(e instanceof Error ? e.message : '取り消しに失敗しました')
+    }
+    setPayBusy('')
+  }
+
+  // 取り消しを戻す。押し間違えたとき用。番号は変わらない
+  const unvoidInvoice = async (row: PayRow) => {
+    if (!window.confirm(row.invoice_no + ' の取り消しを戻します。\n\n出店者の「お支払い」欄に、また表示されるようになります。よろしいですか？')) return
+    setPayBusy(row.id)
+    try {
+      await callPayApi({ action: 'unvoid', invoiceId: row.id })
+      await loadPayments()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '戻せませんでした')
     }
     setPayBusy('')
   }
@@ -2122,7 +2146,7 @@ const previewDoc = async (fileUrl: string) => {
                       // 日付はローカル（日本時間）で見る。UTCで比べると朝9時まで1日ずれる
                       const nd = new Date()
                       const todayLocal = nd.getFullYear() + '-' + String(nd.getMonth() + 1).padStart(2, '0') + '-' + String(nd.getDate()).padStart(2, '0')
-                      const overdue = r.paid_status !== 'paid' && r.due_on && r.due_on < todayLocal
+                      const overdue = !r.voided_at && r.paid_status !== 'paid' && r.due_on && r.due_on < todayLocal
                       return (
                         <div key={r.id} style={{ border: `1px solid ${overdue ? '#FECACA' : '#E2E8F0'}`, borderRadius: '10px', padding: '12px 14px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
@@ -2134,6 +2158,12 @@ const previewDoc = async (fileUrl: string) => {
                             {r.kind === 'advance' && (
                               <span title='出店日の前に出した出店料の請求です' style={{ background: '#FFF8E1', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '999px', padding: '2px 9px', fontSize: '10px', fontWeight: 800 }}>
                                 事前請求
+                              </span>
+                            )}
+                            {/* 取り消した請求書。行は残るが、出店者には見えず集計にも入らない */}
+                            {r.voided_at && (
+                              <span title={r.void_reason ? '理由: ' + r.void_reason : '取り消された請求書です'} style={{ background: '#F1F5F9', color: '#64748B', border: '1px solid #CBD5E1', borderRadius: '999px', padding: '2px 9px', fontSize: '10px', fontWeight: 800 }}>
+                                取消済み
                               </span>
                             )}
                             <div style={{ flex: 1 }} />
@@ -2180,9 +2210,15 @@ const previewDoc = async (fileUrl: string) => {
                                 {payBusy === r.id ? '…' : '入金を確認'}
                               </button>
                             )}
-                            {/* テストで作った請求書などを消せるようにする */}
-                            <button onClick={() => deleteInvoice(r)} disabled={payBusy === r.id}
-                              style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>この請求書を削除</button>
+                            {/* 間違えて出した請求書を取り消す。行は消さず、番号も残す */}
+                            {r.voided_at ? (
+                              <button onClick={() => unvoidInvoice(r)} disabled={payBusy === r.id}
+                                style={{ background: '#fff', color: '#64748B', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>取り消しを戻す</button>
+                            ) : (
+                              <button onClick={() => voidInvoice(r)} disabled={payBusy === r.id}
+                                title='番号と記録は残したまま、この請求書を無効にします'
+                                style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>この請求書を取り消す</button>
+                            )}
                           </div>
                         </div>
                       )
@@ -2229,10 +2265,10 @@ const previewDoc = async (fileUrl: string) => {
                                     同じ分をもう一度請求してしまうことがある。
                                     ただし「固定を先に、歩合をあとに」で2本立てるのが
                                     正しい場合もあるので、金額は自動で引かず、事実だけ出す。 */}
-                                {payRows.some(x => x.kind === 'advance' && x.seller_id === sid && x.period === saleMonth) && (
+                                {payRows.some(x => x.kind === 'advance' && !x.voided_at && x.seller_id === sid && x.period === saleMonth) && (
                                   <div style={{ fontSize: '11px', color: '#B45309', marginTop: '3px', fontWeight: 700 }}>
                                     ⚠ この月に事前請求が出ています（
-                                    {payRows.filter(x => x.kind === 'advance' && x.seller_id === sid && x.period === saleMonth)
+                                    {payRows.filter(x => x.kind === 'advance' && !x.voided_at && x.seller_id === sid && x.period === saleMonth)
                                       .map(x => x.invoice_no + '／¥' + x.total.toLocaleString()).join('、')}
                                     ）
                                     <span style={{ fontWeight: 400, color: '#94A3B8', display: 'block' }}>

@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       }
       const { data: row } = await adminO
         .from('invoices')
-        .select('invoice_no, seller_id, period, kind, items, subtotal, tax, total, item_count, due_on, to_name, to_person, note, created_at')
+        .select('invoice_no, seller_id, period, kind, items, subtotal, tax, total, item_count, due_on, to_name, to_person, note, created_at, voided_at, void_reason')
         .eq('invoice_no', no).maybeSingle()
       if (!row) {
         return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
@@ -94,6 +94,8 @@ export async function POST(req: Request) {
         note: row.note ?? null,
         kind: row.kind,
         issuedOn: row.created_at,
+        voidedAt: row.voided_at,
+        voidReason: row.void_reason,
       })
     }
 
@@ -166,6 +168,8 @@ export async function POST(req: Request) {
         const { data: dup } = await admin
           .from('invoices').select('invoice_no, total, due_on, created_at')
           .eq('application_id', appId).eq('kind', 'advance')
+          // 取り消した請求書は「既にある」に数えない。取り消したなら出し直せるべき
+          .is('voided_at', null)
           .order('created_at', { ascending: false })
         if (dup && dup.length > 0) {
           return NextResponse.json({
