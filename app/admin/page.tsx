@@ -49,6 +49,9 @@ const dummyPlaces = [
 
 export default function AdminPage() {
   const router = useRouter()
+  // 管理画面のタブ。URLと履歴の出し入れに使うため、一覧をここに持つ
+  const ADMIN_TABS = ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings'] as const
+
   const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
@@ -111,6 +114,10 @@ export default function AdminPage() {
     setDocFilter('all')
     setTab('docs')
     try { localStorage.setItem('adminTab', 'docs') } catch { /* 保存できなくても動く */ }
+    // 履歴に積む。書類を見たあと、戻るで元のタブへ帰れるようにする
+    const u = new URL(window.location.href)
+    u.searchParams.set('tab', 'docs')
+    window.history.pushState({ tab: 'docs' }, '', u.toString())
     window.scrollTo({ top: 0 })
   }
   const [authChecked, setAuthChecked] = useState(false)
@@ -236,12 +243,16 @@ export default function AdminPage() {
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role !== 'admin') { router.push('/admin/login'); return }
       setAdminUid(user.id)
+      // URLの ?tab= を優先し、無ければ前回開いていたタブに戻す。
+      // URLに入れておかないと、戻るボタンで管理画面そのものから出てしまう
+      // （ログアウトしたように見えていた原因）。
       try {
-        const saved = localStorage.getItem('adminTab')
-        if (saved && ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog'].includes(saved)) {
+        const fromUrl = new URLSearchParams(window.location.search).get('tab')
+        const saved = fromUrl || localStorage.getItem('adminTab')
+        if (saved && (ADMIN_TABS as readonly string[]).includes(saved)) {
           setTab(saved as typeof tab)
         }
-      } catch {}
+      } catch { /* 読めなくても既定のタブで動く */ }
       setAuthChecked(true)
     }
     checkAdmin()
@@ -286,6 +297,17 @@ export default function AdminPage() {
   }
 
   // docsタブを開いたら読み込む
+  // 戻る・進むが押されたら、URLに合わせてタブも戻す
+  useEffect(() => {
+    const onPop = () => {
+      const t = new URLSearchParams(window.location.search).get('tab')
+      if (t && (ADMIN_TABS as readonly string[]).includes(t)) setTab(t as typeof tab)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews(docSellerId?.id) }, [tab, authChecked, docSellerId])
 
   // ===== 売上管理（管理者） =====
@@ -1388,7 +1410,15 @@ const previewDoc = async (fileUrl: string) => {
           ].map((item) => (
             <div
               key={item.key}
-              onClick={() => { const k = item.key as typeof tab; setTab(k); try { localStorage.setItem('adminTab', k) } catch {} }}
+              onClick={() => {
+                const k = item.key as typeof tab
+                setTab(k)
+                try { localStorage.setItem('adminTab', k) } catch { /* 保存できなくても動く */ }
+                // 履歴に積む。これで戻るボタンが一つ前のタブに戻る
+                const url = new URL(window.location.href)
+                url.searchParams.set('tab', k)
+                if (url.toString() !== window.location.href) window.history.pushState({ tab: k }, '', url.toString())
+              }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', cursor: 'pointer',
                 color: tab === item.key ? '#fff' : 'rgba(255,255,255,0.6)',
@@ -1410,6 +1440,16 @@ const previewDoc = async (fileUrl: string) => {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* トップバー */}
         <div style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 24px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* 一つ前の画面に戻る。タブの移動も履歴に積んでいるので、
+              書類を見たあとに元のタブへ帰れる */}
+          <button
+            type='button'
+            onClick={() => window.history.back()}
+            title='一つ前の画面に戻ります'
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: '999px', padding: '5px 14px', fontSize: '12px', fontWeight: 700, color: '#475569', cursor: 'pointer', marginRight: '12px', flexShrink: 0 }}
+          >
+            <span style={{ fontSize: '14px', lineHeight: 1 }}>←</span>戻る
+          </button>
           <div style={{ fontWeight: '700', fontSize: '15px' }}>
             {tab === 'dashboard' && 'ダッシュボード'}
             {tab === 'places' && '案件管理'}

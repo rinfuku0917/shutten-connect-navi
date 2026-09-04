@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
@@ -877,12 +877,34 @@ export default function SellerDashboard() {
     loadMessages()
   }
 
-  // タブが変わったらURLの ?tab= を更新（リロードしても同じタブを保つ）
+  // タブが変わったらURLの ?tab= を更新する。
+  //
+  // 以前は replaceState を使っており、URLは変わるが履歴が増えなかった。
+  // そのため戻るボタンを押すとマイページそのものから出てしまい、
+  // 「一つ前のタブに戻れず、最初からやり直しになる」状態だった。
+  // pushState に変えて、タブの移動を戻るで辿れるようにする。
+  //
+  // 最初の表示では積まない（積むと1回目の戻るが空振りする）。
+  const tabPushed = useRef(false)
   useEffect(() => {
     const url = new URL(window.location.href)
+    if (url.searchParams.get('tab') === tab) { tabPushed.current = true; return }
     url.searchParams.set('tab', tab)
-    window.history.replaceState(null, '', url.toString())
+    if (tabPushed.current) window.history.pushState({ tab }, '', url.toString())
+    else { window.history.replaceState({ tab }, '', url.toString()); tabPushed.current = true }
   }, [tab])
+
+  // 戻る・進むが押されたら、URLに合わせて画面も戻す。
+  // これが無いとURLだけ変わって画面が動かない。
+  useEffect(() => {
+    const onPop = () => {
+      const t = new URLSearchParams(window.location.search).get('tab')
+      if (t && validTabs.includes(t as TabKey)) setTab(t as TabKey)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (tab === 'messages') { loadMessages(); setChatOpen(null) }
@@ -1070,6 +1092,16 @@ export default function SellerDashboard() {
       {/* メイン */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 24px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* 一つ前の画面に戻る。タブの移動も履歴に積んでいるので、
+              書類を見たあとに元のタブへ帰れる */}
+          <button
+            type='button'
+            onClick={() => window.history.back()}
+            title='一つ前の画面に戻ります'
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: '999px', padding: '5px 14px', fontSize: '12px', fontWeight: 700, color: '#475569', cursor: 'pointer', marginRight: '12px', flexShrink: 0 }}
+          >
+            <span style={{ fontSize: '14px', lineHeight: 1 }}>←</span>戻る
+          </button>
           <div style={{ fontWeight: '700', fontSize: '15px' }}>
             {tab === 'home' && 'ダッシュボード'}
             {tab === 'applies' && '申込一覧'}
