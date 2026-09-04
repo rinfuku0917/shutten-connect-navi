@@ -38,6 +38,11 @@ type Invoice = {
   dueOn?: string | null
   note?: string | null
   alreadyIssued?: { invoice_no: string; issued_on: string }[]
+  // 番号で開き直したときに返る。sales=売上からの請求 / advance=事前請求
+  kind?: string
+  sellerId?: string
+  period?: string
+  issuedOn?: string
 }
 
 const yen = (n: number) => '¥' + n.toLocaleString()
@@ -58,6 +63,10 @@ function InvoiceInner() {
   const sellerId = params.get('seller') || ''
   const period = params.get('period') || ''
   const dueParam = params.get('due') || ''
+  // ?no=2026-0042 で、発行済みの請求書をそのまま開き直す。
+  // 事前請求は売上に紐づかないため、出店者と対象月からは組み立て直せない。
+  // 番号で開けば、売上からの請求も事前請求も同じように何度でもPDFにできる
+  const openNo = params.get('no') || ''
   const [inv, setInv] = useState<Invoice | null>(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
@@ -65,13 +74,17 @@ function InvoiceInner() {
   const [issuedOn, setIssuedOn] = useState('')
   const [dueOn, setDueOn] = useState('')
 
-  const call = async (action: 'preview' | 'issue', due?: string) => {
+  const call = async (action: 'preview' | 'issue' | 'open', due?: string) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setErr('ログインが必要です'); setLoading(false); return }
     const res = await fetch('/api/admin/invoice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requesterId: user.id, sellerId, period, action, dueOn: due, edited: action === 'issue' ? editedPayload() : undefined }),
+      body: JSON.stringify({
+        requesterId: user.id, sellerId, period, action, dueOn: due,
+        invoiceNo: openNo || undefined,
+        edited: action === 'issue' ? editedPayload() : undefined,
+      }),
     })
     const j = await res.json()
     if (!res.ok) { setErr(j.error || '請求書を作成できませんでした'); setLoading(false); return }
@@ -79,18 +92,25 @@ function InvoiceInner() {
     setInv(j)
     // 最初の読み込みのときだけ保存済みの期限を入れる。
     // 画面で日付を直したあとに上書きされてしまうため、以降は触らない。
-    if (j.dueOn && action === 'preview') setDueOn(j.dueOn)
+    if (j.dueOn && action !== 'issue') setDueOn(j.dueOn)
+    // 発行済みを開いたときは、そのときの発行日を出す（今日ではない）
+    if (action === 'open' && j.issuedOn) {
+      const d = new Date(j.issuedOn)
+      setIssuedOn(`${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`)
+    }
     setLoading(false)
   }
 
   useEffect(() => {
-    if (!sellerId || !period) { setErr('出店者と対象月が指定されていません'); setLoading(false); return }
     const d = new Date()
     setIssuedOn(`${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`)
+    // 番号を指定して開くときは、出店者と対象月は要らない
+    if (openNo) { call('open'); return }
+    if (!sellerId || !period) { setErr('出店者と対象月が指定されていません'); setLoading(false); return }
     setDueOn(/^\d{4}-\d{2}-\d{2}$/.test(dueParam) ? dueParam : defaultDue(period))
     call('preview')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sellerId, period])
+  }, [sellerId, period, openNo])
 
   // ===== 管理画面での修正 =====
   // 明細の文言・金額・宛先・備考を直せるようにする。合計は自動で計算し直す。
@@ -133,7 +153,14 @@ function InvoiceInner() {
     setSaving(true)
     const res = await fetch('/api/admin/invoice', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requesterId: user.id, sellerId, period, action: 'save', edited: editedPayload() }),
+      body: JSON.stringify({
+        requesterId: user.id,
+        // 番号で開いているときは、その1枚だけを直す
+        sellerId: sellerId || inv?.sellerId || '',
+        period: period || inv?.period || '',
+        invoiceNo: openNo || inv?.invoiceNo || undefined,
+        action: 'save', edited: editedPayload(),
+      }),
     })
     const j = await res.json()
     setSaving(false)

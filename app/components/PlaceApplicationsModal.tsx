@@ -124,12 +124,19 @@ export default function PlaceApplicationsModal({
   // 案件に固定額の設定があれば、金額の初期値に使う
   const [placeFixed, setPlaceFixed] = useState(0)
 
-  const runAdvance = async () => {
+  // 同じ出店に事前請求が既にある場合、その番号を受け取ってここに入れる。
+  // 「発行済みを開く」か「それでも出し直す」かを選べるようにするため
+  const [advDup, setAdvDup] = useState<{ invoiceNo: string; total: number; dueOn: string | null }[] | null>(null)
+  // 発行できたときの番号。PDFを開く導線を出すのに使う
+  const [advDone, setAdvDone] = useState<string | null>(null)
+
+  const runAdvance = async (force = false) => {
     if (!advAsk) return
     const yen = parseInt(advAmount.replace(/[^0-9]/g, ''), 10)
     if (!yen || yen <= 0) { setAdvErr('金額を1円以上で入力してください。'); return }
     setAdvBusy(true)
     setAdvErr(null)
+    if (force) setAdvDup(null)
     try {
       const { data: u } = await supabase.auth.getUser()
       const uid = u.user?.id
@@ -150,11 +157,19 @@ export default function PlaceApplicationsModal({
             : new Date().toISOString().slice(0, 7),
           amount: yen,
           dueOn: advDue || undefined,
+          force: force || undefined,
         }),
       })
       const json = await res.json()
-      if (!res.ok) { setAdvErr(json?.error || '発行できませんでした。'); return }
+      if (!res.ok) {
+        setAdvErr(json?.error || '発行できませんでした。')
+        // 既に出ている請求書の番号が返ってきたら、開く導線と出し直しを出す
+        if (json?.existing?.length) setAdvDup(json.existing)
+        return
+      }
       setAdvAsk(null)
+      setAdvDup(null)
+      setAdvDone(json.invoiceNo)
       setXlsxMsg('事前請求（' + json.invoiceNo + '／¥' + (json.total ?? 0).toLocaleString() + '）を発行しました。')
     } catch {
       setAdvErr('通信に失敗しました。')
@@ -511,6 +526,17 @@ export default function PlaceApplicationsModal({
                   {xlsxMsg && (
                     <div style={{ marginTop: '10px', fontSize: '12px', color: xlsxMsg.includes('できませんでした') || xlsxMsg.includes('ありません') ? '#B45309' : '#047857', lineHeight: 1.8 }}>
                       {xlsxMsg}
+                      {/* 発行しただけでは請求書を見られないため、開く導線をここに出す。
+                          この番号はあとからでも /admin/invoice?no=… で何度でも開ける */}
+                      {advDone && (
+                        <a
+                          href={'/admin/invoice?no=' + encodeURIComponent(advDone)}
+                          target='_blank' rel='noopener noreferrer'
+                          style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 700, color: '#fff', background: '#047857', borderRadius: '6px', padding: '5px 12px', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                        >
+                          請求書を開く
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>
@@ -759,12 +785,50 @@ export default function PlaceApplicationsModal({
                   出店日より前の日付にしておくと、入金の確認がしやすくなります。
                 </div>
               </div>
+
+              {/* 既に事前請求が出ている場合。
+                  番号は変わらないので、開き直しても二重請求にはならない。
+                  金額を間違えたときだけ、出し直しを選んでもらう */}
+              {advDup && advDup.length > 0 && (
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#92400E', marginBottom: '8px' }}>
+                    この出店には、すでに事前請求が出ています
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                    {advDup.map(d => (
+                      <div key={d.invoiceNo} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '12px', color: '#78350F', fontWeight: 700 }}>{d.invoiceNo}</span>
+                        <span style={{ fontSize: '12px', color: '#92400E' }}>¥{(d.total ?? 0).toLocaleString()}</span>
+                        <a
+                          href={'/admin/invoice?no=' + encodeURIComponent(d.invoiceNo)}
+                          target='_blank' rel='noopener noreferrer'
+                          style={{ fontSize: '11px', fontWeight: 700, color: '#fff', background: '#B45309', borderRadius: '6px', padding: '5px 12px', textDecoration: 'none' }}
+                        >
+                          開いてPDFにする
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#92400E', lineHeight: 1.8 }}>
+                    同じものをもう一度PDFにしたいだけなら、上の「開いてPDFにする」から何度でも出せます。
+                    番号は変わらないので、二重請求にはなりません。<br />
+                    金額や条件が変わって<strong>新しい番号で出し直す</strong>場合だけ、下のボタンを押してください。
+                  </div>
+                  <button
+                    onClick={() => runAdvance(true)}
+                    disabled={advBusy}
+                    style={{ marginTop: '10px', background: advBusy ? '#ccc' : '#fff', color: '#B45309', border: '1.5px solid #B45309', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: advBusy ? 'not-allowed' : 'pointer' }}
+                  >
+                    {advBusy ? '発行中…' : '新しい番号で発行し直す'}
+                  </button>
+                </div>
+              )}
             </div>
           ) : null
         }
         okLabel='請求書を発行する'
-        onOk={runAdvance}
-        onCancel={() => { if (!advBusy) { setAdvAsk(null); setAdvErr(null) } }}
+        onOk={() => runAdvance(false)}
+        onCancel={() => { if (!advBusy) { setAdvAsk(null); setAdvErr(null); setAdvDup(null) } }}
       />
 
       <ConfirmDialog

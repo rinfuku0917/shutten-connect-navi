@@ -2136,6 +2136,17 @@ const previewDoc = async (fileUrl: string) => {
                                 事前請求
                               </span>
                             )}
+                            <div style={{ flex: 1 }} />
+                            {/* 発行済みの請求書は、ここから何度でも開いてPDFにできる。
+                                番号は変わらないので二重請求にならない */}
+                            <a
+                              href={'/admin/invoice?no=' + encodeURIComponent(r.invoice_no)}
+                              target='_blank' rel='noopener noreferrer'
+                              title='この請求書を開いてPDFにする'
+                              style={{ background: '#1E2A3B', color: '#fff', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+                            >
+                              請求書を開く
+                            </a>
                           </div>
                           <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginBottom: '8px' }}>
                             <div>

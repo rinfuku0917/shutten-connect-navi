@@ -40,7 +40,63 @@ function feeLabel(place: any, saleDate?: string | null): string {
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, sellerId, period, action, dueOn, edited, amount, label, applicationId } = await req.json()
+    const { requesterId, sellerId, period, action, dueOn, edited, amount, label, applicationId, invoiceNo: invoiceNoParam, force } = await req.json()
+
+    const url0 = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key0 = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url0 || !key0) {
+      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    }
+
+    // ===== 発行済みの請求書を、番号だけで開き直す =====
+    //
+    // 一度発行した請求書は、何度でもPDFにできる必要がある。
+    // 印刷を失敗した、送り先を間違えた、控えを無くした——どれも普通に起きる。
+    // 番号は変わらないので、開き直しても二重請求にはならない。
+    //
+    // 売上からの請求（sales）と事前請求（advance）の両方をここで扱う。
+    // 事前請求は売上に紐づかないため、出店者と対象月から組み立て直すことができず、
+    // 記録した invoices の行をそのまま返すしかない。
+    if (action === 'open') {
+      const no = typeof invoiceNoParam === 'string' ? invoiceNoParam.trim() : ''
+      if (!requesterId || !no) {
+        return NextResponse.json({ error: '請求書番号が指定されていません' }, { status: 400 })
+      }
+      const adminO = createClient(url0, key0, { auth: { autoRefreshToken: false, persistSession: false } })
+      if (!(await verifyAdmin(adminO, requesterId))) {
+        return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
+      }
+      const { data: row } = await adminO
+        .from('invoices')
+        .select('invoice_no, seller_id, period, kind, items, subtotal, tax, total, item_count, due_on, to_name, to_person, note, created_at')
+        .eq('invoice_no', no).maybeSingle()
+      if (!row) {
+        return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
+      }
+      const { data: sl } = await adminO
+        .from('profiles').select('shop_name, name').eq('id', row.seller_id).maybeSingle()
+      const pm = parseInt(String(row.period).slice(5, 7), 10)
+      return NextResponse.json({
+        seller: {
+          shopName: row.to_name ?? sl?.shop_name ?? '',
+          personName: row.to_person ?? sl?.name ?? '',
+        },
+        sellerId: row.seller_id,
+        period: row.period,
+        periodLabel: `${String(row.period).slice(0, 4)}年${pm}月分`,
+        items: row.items || [],
+        subtotal: row.subtotal ?? 0,
+        tax: row.tax ?? 0,
+        total: row.total ?? 0,
+        itemCount: row.item_count ?? (row.items?.length ?? 0),
+        invoiceNo: row.invoice_no,
+        dueOn: row.due_on,
+        note: row.note ?? null,
+        kind: row.kind,
+        issuedOn: row.created_at,
+      })
+    }
+
     if (!requesterId || !sellerId || !period) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
@@ -100,16 +156,27 @@ export async function POST(req: Request) {
         placeTitle = (ap as any).places?.title || ''
       }
 
-      // 同じ申込に事前請求を二重に出さないようにする
-      if (appId) {
+      // 同じ申込に事前請求が既にあれば、いったん知らせる。
+      //
+      // ただし「もう出せない」にはしない。金額を間違えた、条件が変わった、
+      // 先方の求めで出し直す——やり直したい場面のほうが多い。
+      // 既にあることを伝えたうえで、force を付けて呼び直せば発行できる。
+      // 既存の番号も返すので、画面側で「発行済みを開く」を出せる。
+      if (appId && force !== true) {
         const { data: dup } = await admin
-          .from('invoices').select('invoice_no')
-          .eq('application_id', appId).eq('kind', 'advance').limit(1)
+          .from('invoices').select('invoice_no, total, due_on, created_at')
+          .eq('application_id', appId).eq('kind', 'advance')
+          .order('created_at', { ascending: false })
         if (dup && dup.length > 0) {
-          return NextResponse.json(
-            { error: 'この出店には、すでに事前請求（' + dup[0].invoice_no + '）を発行しています' },
-            { status: 409 },
-          )
+          return NextResponse.json({
+            error: 'この出店には、すでに事前請求（' + dup.map(d => d.invoice_no).join('、') + '）を発行しています',
+            existing: dup.map(d => ({
+              invoiceNo: d.invoice_no,
+              total: d.total,
+              dueOn: d.due_on,
+            })),
+            canReissue: true,
+          }, { status: 409 })
         }
       }
 
@@ -213,14 +280,21 @@ export async function POST(req: Request) {
       if (!edited) return NextResponse.json({ error: '保存する内容がありません' }, { status: 400 })
       const sub = (edited.items || []).reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
       const tx = Math.floor(sub * 0.1)
-      const { data: upd, error: uErr } = await admin.from('invoices').update({
+      const patch = {
         items: edited.items || null,
         to_name: edited.toName ?? null,
         to_person: edited.toPerson ?? null,
         note: edited.note ?? null,
         due_on: /^\d{4}-\d{2}-\d{2}$/.test(edited.dueOn || '') ? edited.dueOn : null,
         subtotal: sub, tax: tx, total: sub + tx, item_count: (edited.items || []).length,
-      }).eq('seller_id', sellerId).eq('period', period).eq('kind', 'sales').select('invoice_no')
+      }
+      // 番号で開いている場合はその1枚だけを直す。
+      // 事前請求は同じ出店者・同じ月に複数あり得るため、番号で特定しないと
+      // 関係のない請求書まで書き換えてしまう
+      const q = typeof invoiceNoParam === 'string' && invoiceNoParam.trim()
+        ? admin.from('invoices').update(patch).eq('invoice_no', invoiceNoParam.trim())
+        : admin.from('invoices').update(patch).eq('seller_id', sellerId).eq('period', period).eq('kind', 'sales')
+      const { data: upd, error: uErr } = await q.select('invoice_no')
       if (uErr) return NextResponse.json({ error: '保存に失敗しました: ' + uErr.message }, { status: 500 })
       if (!upd || upd.length === 0) return NextResponse.json({ error: '対象の請求書が見つかりませんでした' }, { status: 404 })
       return NextResponse.json({ success: true })
