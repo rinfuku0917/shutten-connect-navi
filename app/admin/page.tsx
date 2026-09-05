@@ -340,6 +340,13 @@ export default function AdminPage() {
   const [saleDate, setSaleDate] = useState('')
   const [saleRevenue, setSaleRevenue] = useState('')
   const [saleSaving, setSaleSaving] = useState(false)
+  // 運営が代理で売上を入れるときの、当日の状況。
+  // これまでこの3つの欄が無かったため、運営が入れた売上は必ず
+  // 天候・来客数・食数が空になり、施設へ出す報告書に「—」が並んでいた。
+  // 出店者側の報告では必須にしたので、こちらにも同じ欄を用意する。
+  const [saleWeather, setSaleWeather] = useState('')
+  const [saleCustomers, setSaleCustomers] = useState('')
+  const [saleQty, setSaleQty] = useState('')
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
 
   // 料金を計算（取引先分・弊社利益・お支払い総額を返す。per_event固定は日次では0扱い＝次フェーズ）
@@ -425,13 +432,25 @@ export default function AdminPage() {
     if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
     setSaleSaving(true)
     const { placeFee, companyFee, totalPay, basis, rate } = calcFees(revenue, app, saleTaxOv, saleDate)
-    const { error } = await supabase.from('sales').insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row: any = {
       application_id: app.application_id, place_id: app.place_id, seller_id: app.seller_id,
       sale_date: saleDate, revenue, fee: companyFee, place_fee: placeFee, company_fee: companyFee, total_pay: totalPay,
       tax_basis: basis, tax_rate: rate
-    })
+    }
+    // 当日の状況は、入っているものだけ送る。
+    // 出店者からの報告と同じ形で入れる（施設へ出す報告書がここを読む）
+    if (saleWeather) row.weather = saleWeather
+    if (saleCustomers.trim() !== '') row.customers = parseInt(saleCustomers, 10) || 0
+    // 食数は合計だけを預かる。運営は品目まで把握していないことが多いため、
+    // 品目名を「合計」として1件だけ入れ、報告書の合計食数に反映させる
+    const qty = parseInt(saleQty, 10) || 0
+    if (qty > 0) row.items = [{ name: '合計', qty, price: null }]
+    const { error } = await supabase.from('sales').insert(row)
     if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
-    setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleSaving(false)
+    setSaleAppId(''); setSaleDate(''); setSaleRevenue('')
+    setSaleWeather(''); setSaleCustomers(''); setSaleQty('')
+    setSaleSaving(false)
     loadSales()
   }
 
@@ -2363,6 +2382,37 @@ const previewDoc = async (fileUrl: string) => {
                     </select>
                   </div>
                   <button onClick={saveSale} disabled={saleSaving || !saleAppId} title={!saleAppId ? '先に案件・出店者を選んでください' : ''} style={{ background: (saleSaving || !saleAppId) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: (saleSaving || !saleAppId) ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{saleSaving ? '保存中...' : '記録する'}</button>
+                </div>
+
+                {/* 当日の状況。施設へお出しする報告書に載る欄。
+                    出店者からの報告では必須にしているが、こちらは運営が
+                    後から代理で入れる場面もあるため、入れられる形にとどめている。
+                    空のまま記録すると、報告書のその欄が「—」になる。 */}
+                <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed #E2E8F0' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    当日の状況
+                    <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>施設へ出す報告書に載ります。空のままだと「—」で出ます</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginTop: '8px' }}>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {['晴れ', 'くもり', '雨', '雪'].map(w => (
+                        <button key={w} type='button' onClick={() => setSaleWeather(saleWeather === w ? '' : w)}
+                          style={{ border: saleWeather === w ? '1.5px solid #1D4ED8' : '1.5px solid #E2E8F0', background: saleWeather === w ? '#EFF6FF' : '#fff', color: '#1a1a1a', borderRadius: '999px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>{w}</button>
+                      ))}
+                    </div>
+                    <div style={{ flex: '0 1 120px', minWidth: 0 }}>
+                      <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>来客数</label>
+                      <input value={saleCustomers} inputMode='numeric'
+                        onChange={e => setSaleCustomers(e.target.value.replace(/[^0-9]/g, ''))}
+                        placeholder='組・人' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', textAlign: 'right' }} />
+                    </div>
+                    <div style={{ flex: '0 1 120px', minWidth: 0 }}>
+                      <label style={{ fontSize: '12px', color: '#64748B', display: 'block', marginBottom: '4px' }}>販売食数（合計）</label>
+                      <input value={saleQty} inputMode='numeric'
+                        onChange={e => setSaleQty(e.target.value.replace(/[^0-9]/g, ''))}
+                        placeholder='食' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', textAlign: 'right' }} />
+                    </div>
+                  </div>
                 </div>
                 {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const { placeFee, companyFee, totalPay } = calcFees(rev, a, saleTaxOv, saleDate); return (
                   <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B', lineHeight: 1.9 }}>

@@ -62,6 +62,30 @@ const docTypes = [
 const docStatusLabel = (s: string | undefined) =>
   s === 'approved' ? '承認済' : s === 'pending' ? '審査中' : s === 'rejected' ? '否認' : '未提出'
 
+// 売上報告で必ず入れてもらう欄が埋まっているかを確かめる。
+//
+// 天候・来客数・販売食数の3つは、施設へお出しする報告書（salesReportXlsx.ts）に
+// そのまま載る欄で、施設側からご提出を求められている。
+// 未入力のまま送れると報告書に「—」が並び、施設へ出せないものになる。
+//
+// 足りないものをまとめて返す。一つずつ知らせると、直して送るたびに
+// また止められることになり、報告そのものをやめてしまうため。
+// 戻り値が空の配列なら、すべて埋まっている。
+function missingReportFields(
+  weather: string,
+  customers: string,
+  items: { name: string, qty: string }[],
+): string[] {
+  const miss: string[] = []
+  if (!weather) miss.push('・当日の天候をお選びください')
+  // 0人だった日もありうるので、「0」は正しい値として通す。空だけを止める
+  if (customers.trim() === '') miss.push('・来客数をご入力ください（0でも構いません）')
+  const qty = items.reduce((t, it) => t + (parseInt(it.qty, 10) || 0), 0)
+  if (qty <= 0) miss.push('・品目ごとの販売食数をご入力ください')
+  if (miss.length > 0) miss.unshift('施設へお出しする報告書に必要な項目が未入力です。\n')
+  return miss
+}
+
 export default function SellerDashboard() {
   const router = useRouter()
   type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'|'sales'|'payments'
@@ -385,6 +409,11 @@ export default function SellerDashboard() {
     setRpSaving(true)
     const revenue = parseInt(rpRevenue.replace(/[^0-9]/g, ''), 10)
     if (isNaN(revenue) || revenue < 0) { setRpSaving(false); alert('売上金額を入力してください'); return }
+    // 天候・来客数・販売食数は施設へ出す報告書に載る欄で、施設側から
+    // 提出を求められている。空のまま送られると報告書に「—」が並ぶため、
+    // ここで止める。何が足りないかをまとめて伝える（一つずつ怒られないように）
+    const miss = missingReportFields(rpWeather, rpCustomers, rpItems)
+    if (miss.length > 0) { setRpSaving(false); alert(miss.join('\n')); return }
     // ホームなど売上タブ以外から開いた場合は案件一覧をまだ読んでいないので、
     // 見つからなければここで読み直してから探す
     let app = myApprovedApps.find(x => x.application_id === reportFor.application_id)
@@ -646,6 +675,10 @@ export default function SellerDashboard() {
     if (saleSplit && (rev8 < 0 || rev10 < 0)) { alert('売上金額は0以上の数値で入力してください'); return }
     const revenue = saleSplit ? rev8 + rev10 : parseInt(saleRevenue, 10)
     if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
+    // 報告モーダル（saveReport）と同じ判定。どちらから報告しても、
+    // 施設へ出す報告書に必要な欄がそろっている状態にする
+    const miss = missingReportFields(saleWeather, saleCustomers, saleItems)
+    if (miss.length > 0) { alert(miss.join('\n')); return }
     const td = todayStr()
     if (app.apply_date && td < app.apply_date) { alert('この案件の出店日は ' + app.apply_date + ' です。出店日を過ぎてから売上を入力してください。'); return }
     if (app.apply_date && saleDate < app.apply_date) { alert('売上日は出店日（' + app.apply_date + '）以降を指定してください。'); return }
@@ -2207,7 +2240,7 @@ export default function SellerDashboard() {
                     こちらのフォームから報告したときも入るようにする。 */}
                 <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px dashed #E2E8F0' }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
-                    当日の状況（任意）
+                    当日の状況（必須）
                     <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>施設へ出す報告書に載ります</span>
                   </div>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
@@ -2220,7 +2253,7 @@ export default function SellerDashboard() {
                     <input value={saleCustomers} inputMode='numeric' aria-label='来客数'
                       onChange={e => setSaleCustomers(e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder='来客数' style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a', width: '120px', textAlign: 'right' }} />
-                    <span style={{ fontSize: '12px', color: '#64748B' }}>組・人（任意）</span>
+                    <span style={{ fontSize: '12px', color: '#64748B' }}>組・人（必須）</span>
                   </div>
                   <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2}
                     aria-label='所感・特記事項'
@@ -2232,7 +2265,7 @@ export default function SellerDashboard() {
                     求められることがあるため、品目と食数を記録できるようにする */}
                 <div style={{ marginTop: '14px', border: '1px dashed #CBD5E1', borderRadius: '10px', padding: '12px', background: '#F8FAFC' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', marginBottom: saleItems.length > 0 ? '10px' : 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#1a1a1a' }}>品目別の内訳（任意）</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#1a1a1a' }}>品目別の内訳（必須）</div>
                     <button type='button' onClick={() => setSaleItems([...saleItems, { name: '', qty: '', price: '' }])}
                       style={{ background: '#fff', color: '#B45309', border: '1.5px dashed #F5A623', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>＋ 品目を追加</button>
                   </div>
@@ -2480,11 +2513,11 @@ export default function SellerDashboard() {
                   <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>レジの合計（お客様からお預かりした金額）をご入力ください。</div>
                 </div>
 
-                {/* 品目ごとの食数 */}
+                {/* 品目ごとの食数。合計が施設の報告書の「販売食数（合計）」になる */}
                 <div style={{ marginBottom: '18px' }}>
-                  <div style={label}>品目ごとの販売食数</div>
+                  <div style={label}>品目ごとの販売食数（必須）</div>
                   <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '8px', lineHeight: 1.7 }}>
-                    売れた品目の数だけご入力ください（0や空欄の品目は報告されません）。企業から食数のご報告を求められることがあります。単価は登録済みメニューから入りますが、当日変更した場合は直せます。
+                    売れた品目の数だけご入力ください（0や空欄の品目は報告されません）。合計が、施設へお出しする報告書の「販売食数」になります。単価は登録済みメニューから入りますが、当日変更した場合は直せます。
                   </div>
                   {rpItems.length === 0 && (
                     <div style={{ fontSize: '12px', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 12px', marginBottom: '8px' }}>
@@ -2531,9 +2564,15 @@ export default function SellerDashboard() {
                   )}
                 </div>
 
-                {/* 当日の状況 */}
+                {/* 当日の状況。
+                    天候・来客数は施設へ出す報告書にそのまま載る欄で、
+                    施設側から提出を求められているため必須にしている。
+                    未入力だと報告書に「—」と印字されてしまう。 */}
                 <div style={{ marginBottom: '18px' }}>
-                  <div style={label}>当日の状況（任意）</div>
+                  <div style={label}>当日の状況（必須）</div>
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '8px', lineHeight: 1.7 }}>
+                    施設へお出しする報告書に載ります。天候と来客数は、施設側からご提出を求められている項目です。
+                  </div>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
                     {WEATHERS.map(w => (
                       <button key={w} type='button' onClick={() => setRpWeather(rpWeather === w ? '' : w)}
@@ -2544,7 +2583,7 @@ export default function SellerDashboard() {
                     <input value={rpCustomers} inputMode='numeric'
                       onChange={e => setRpCustomers(e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder='来客数' style={{ ...box, width: '120px', textAlign: 'right', fontSize: '13px' }} />
-                    <span style={{ fontSize: '12px', color: '#64748B' }}>組・人（任意）</span>
+                    <span style={{ fontSize: '12px', color: '#64748B' }}>組・人（必須）</span>
                   </div>
                 </div>
 
