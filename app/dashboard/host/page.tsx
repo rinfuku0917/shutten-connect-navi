@@ -8,6 +8,7 @@ import { exportPlaceSalesReport } from '../../lib/salesReportXlsx'
 import ClosedToggle from '../../components/ClosedToggle'
 import DuplicateButton from '../../components/DuplicateButton'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import Notice from '../../components/Notice'
 import NotifyChoice from '../../components/NotifyChoice'
 
 type Place = {
@@ -30,6 +31,15 @@ type HostApp = {
 }
 
 export default function HostDashboard() {
+  // 確認とお知らせを画面の中に出す。
+  // window.confirm / alert はアプリ内ブラウザ（LINE など）で黙って無視され、
+  // 押しても何も起きないように見える。管理画面と同じ作りにそろえる
+  const [askState, setAskState] = useState<{ title: string; body?: string; okLabel?: string; danger?: boolean; resolve: (ok: boolean) => void } | null>(null)
+  const ask = (o: { title: string; body?: string; okLabel?: string; danger?: boolean }) =>
+    new Promise<boolean>(resolve => setAskState({ ...o, resolve }))
+  const answerAsk = (ok: boolean) => { askState?.resolve(ok); setAskState(null) }
+  const [notice, setNotice] = useState<{ message: string; kind: 'error' | 'ok' | 'info' } | null>(null)
+  const showNotice = (message: string, kind: 'error' | 'ok' | 'info' = 'error') => setNotice({ message, kind })
   const [places, setPlaces] = useState<Place[]>([])
   const [apps, setApps] = useState<HostApp[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,9 +52,9 @@ export default function HostDashboard() {
     setRepBusy(placeId)
     try {
       const n = await exportPlaceSalesReport(supabase, placeId, title)
-      if (n === 0) alert('この案件には、まだ売上の報告がありません')
+      if (n === 0) showNotice('この案件には、まだ売上の報告がありません', 'info')
     } catch (e) {
-      alert(e instanceof Error ? e.message : '出力に失敗しました')
+      showNotice(e instanceof Error ? e.message : '出力に失敗しました')
     }
     setRepBusy('')
   }
@@ -55,9 +65,9 @@ export default function HostDashboard() {
     setXlsxBusy(placeId)
     try {
       const n = await exportPlaceSubmission(supabase, placeId, title)
-      if (n === 0) alert('この案件には、出店日が入った承認済みの申込がまだありません')
+      if (n === 0) showNotice('この案件には、出店日が入った承認済みの申込がまだありません', 'info')
     } catch (e) {
-      alert(e instanceof Error ? e.message : '出力に失敗しました')
+      showNotice(e instanceof Error ? e.message : '出力に失敗しました')
     }
     setXlsxBusy('')
   }
@@ -218,7 +228,7 @@ export default function HostDashboard() {
                 <ClosedToggle placeId={place.id} closed={!!place.closed} compact />
                 <button onClick={() => togglePin(place.id, place.pinned)} style={{background:place.pinned ? '#FFF8E1' : '#f6f6f6',color:place.pinned ? '#E08A00' : '#555',border:place.pinned ? '1px solid #FFD54F' : '1px solid #e0e0e0',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.pinned ? '上位解除' : '上位表示'}</button>
                 <button onClick={() => toggleStatus(place.id, place.status)} style={{background:place.status === 'published' ? '#FFF3E0' : '#E8F5E9',color:place.status === 'published' ? '#E65100' : '#2E7D32',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>{place.status === 'published' ? '非公開にする' : '公開する'}</button>
-                <button onClick={() => { if(window.confirm('削除しますか？')) deletePlace(place.id) }} style={{background:'#FEF2F2',color:'#DC2626',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>削除</button>
+                <button onClick={async () => { if (await ask({ title: 'この案件を削除しますか？', body: 'この操作は取り消せません。', okLabel: '削除する', danger: true })) deletePlace(place.id) }} style={{background:'#FEF2F2',color:'#DC2626',border:'none',borderRadius:'6px',padding:'7px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>削除</button>
               </div>
             </div>
           ))}
@@ -294,6 +304,16 @@ export default function HostDashboard() {
           }
         }}
         onCancel={() => { if (!rejectBusy) { setRejectAsk(null); setRejectErr(null) } }}
+      />
+      <Notice message={notice?.message ?? null} kind={notice?.kind} onClose={() => setNotice(null)} />
+      <ConfirmDialog
+        open={!!askState}
+        title={askState?.title || ''}
+        body={askState?.body}
+        okLabel={askState?.okLabel}
+        danger={askState?.danger}
+        onOk={() => answerAsk(true)}
+        onCancel={() => answerAsk(false)}
       />
     </div>
   )

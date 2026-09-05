@@ -1,5 +1,7 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
+import ConfirmDialog from '../../components/ConfirmDialog'
+import Notice from '../../components/Notice'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
@@ -62,6 +64,15 @@ const defaultDue = (period: string) => {
 }
 
 function InvoiceInner() {
+  // 確認とお知らせを画面の中に出す。
+  // window.confirm / alert はアプリ内ブラウザ（LINE など）で黙って無視され、
+  // 押しても何も起きないように見える。管理画面と同じ作りにそろえる
+  const [askState, setAskState] = useState<{ title: string; body?: string; okLabel?: string; danger?: boolean; resolve: (ok: boolean) => void } | null>(null)
+  const ask = (o: { title: string; body?: string; okLabel?: string; danger?: boolean }) =>
+    new Promise<boolean>(resolve => setAskState({ ...o, resolve }))
+  const answerAsk = (ok: boolean) => { askState?.resolve(ok); setAskState(null) }
+  const [notice, setNotice] = useState<{ message: string; kind: 'error' | 'ok' | 'info' } | null>(null)
+  const showNotice = (message: string, kind: 'error' | 'ok' | 'info' = 'error') => setNotice({ message, kind })
   const params = useSearchParams()
   const sellerId = params.get('seller') || ''
   const period = params.get('period') || ''
@@ -152,7 +163,7 @@ function InvoiceInner() {
   // 発行済みの請求書の修正を保存する
   const saveEdits = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { alert('ログインが必要です'); return }
+    if (!user) { showNotice('ログインが必要です'); return }
     setSaving(true)
     const res = await fetch('/api/admin/invoice', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -167,9 +178,9 @@ function InvoiceInner() {
     })
     const j = await res.json()
     setSaving(false)
-    if (!res.ok) { alert('保存できませんでした: ' + (j.error || '不明なエラー')); return }
+    if (!res.ok) { showNotice('保存できませんでした: ' + (j.error || '不明なエラー')); return }
     setEditing(false)
-    alert('修正内容を保存しました')
+    showNotice('修正内容を保存しました', 'ok')
   }
 
   // ブラウザの印刷機能では白紙になる環境があるため、
@@ -236,13 +247,13 @@ function InvoiceInner() {
       pdf.save(name)
     } catch (e) {
       console.error('PDFの作成に失敗しました', e)
-      alert('PDFの作成に失敗しました。お手数ですが「印刷」からお試しください。')
+      showNotice('PDFの作成に失敗しました。お手数ですが「印刷」からお試しください。')
     }
     setPdfMaking(false)
   }
 
   const issue = async () => {
-    if (!window.confirm('請求書番号を採番して発行します。よろしいですか？')) return
+    if (!(await ask({ title: '請求書を発行しますか？', body: '請求書番号を採番して発行します。', okLabel: '発行する' }))) return
     setIssuing(true)
     await call('issue', dueOn)
     setIssuing(false)
@@ -510,6 +521,17 @@ function InvoiceInner() {
         </div>
       </div>
 
+
+      <Notice message={notice?.message ?? null} kind={notice?.kind} onClose={() => setNotice(null)} />
+      <ConfirmDialog
+        open={!!askState}
+        title={askState?.title || ''}
+        body={askState?.body}
+        okLabel={askState?.okLabel}
+        danger={askState?.danger}
+        onOk={() => answerAsk(true)}
+        onCancel={() => answerAsk(false)}
+      />
     </div>
   )
 }

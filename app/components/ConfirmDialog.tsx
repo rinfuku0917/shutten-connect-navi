@@ -17,6 +17,7 @@ export default function ConfirmDialog({
   cancelLabel = 'キャンセル',
   danger = false,
   busy = false,
+  okDisabled = false,
   error = null,
   extra,
   onOk,
@@ -29,6 +30,9 @@ export default function ConfirmDialog({
   cancelLabel?: string
   danger?: boolean
   busy?: boolean
+  /** 実行できない状態のとき true。ボタンを灰色にして押せなくする。
+      サーバに弾かれた理由を error で見せながら、それでも押せてしまう状態を防ぐ */
+  okDisabled?: boolean
   error?: string | null
   /** 本文とボタンの間に置く追加の操作。メールを送るかどうかの選択などに使う */
   extra?: React.ReactNode
@@ -101,7 +105,7 @@ export default function ConfirmDialog({
         {extra && <div style={{ marginBottom: '16px' }}>{extra}</div>}
 
         {error && (
-          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', lineHeight: 1.7, marginBottom: '14px' }}>
+          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', lineHeight: 1.7, marginBottom: '14px', whiteSpace: 'pre-wrap' }}>
             {error}
           </div>
         )}
@@ -116,15 +120,17 @@ export default function ConfirmDialog({
           </button>
           <button
             onClick={onOk}
-            disabled={busy}
+            disabled={busy || okDisabled}
+            title={okDisabled ? '上の理由により実行できません' : undefined}
             style={{
               ...btn,
-              background: busy ? '#94A3B8' : danger ? '#DC2626' : '#F5A623',
+              background: (busy || okDisabled) ? '#94A3B8' : danger ? '#DC2626' : '#F5A623',
               color: '#fff',
               border: 'none',
+              cursor: okDisabled ? 'not-allowed' : btn.cursor,
             }}
           >
-            {busy ? '処理中…' : okLabel}
+            {busy ? '処理中…' : okDisabled ? '実行できません' : okLabel}
           </button>
         </div>
       </div>

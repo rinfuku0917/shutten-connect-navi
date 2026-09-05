@@ -95,6 +95,10 @@ export async function POST(req: Request) {
       const { data: invs } = await db
         .from('invoices').select('invoice_no, period, paid_status')
         .eq('seller_id', app.seller_id).eq('period', period)
+        // 取り消した請求書は数えない。数えると、誤発行して取り消しただけの月に
+        // 出店を一切取り消せなくなる（画面側はこの結果でボタンを押せなくするため、
+        // 行き止まりになる）。voided_at が null のものだけが有効な請求書
+        .is('voided_at', null)
       if (invs && invs.length > 0) {
         const label = (s: string) =>
           s === 'paid' ? '入金確認済み' : s === 'reported' ? '振込報告済み' : '未入金'

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import Notice from '../../components/Notice'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
@@ -87,6 +88,16 @@ function missingReportFields(
 }
 
 export default function SellerDashboard() {
+  // 確認とお知らせを画面の中に出す。
+  // window.confirm / alert は LINE などのアプリ内ブラウザで黙って無視され、
+  // 押しても何も起きないように見える。出店者はLINEから開くことが多いので、
+  // 管理画面・請求書・募集者側と同じ作りにそろえる
+  const [askState, setAskState] = useState<{ title: string; body?: string; okLabel?: string; danger?: boolean; resolve: (ok: boolean) => void } | null>(null)
+  const ask = (o: { title: string; body?: string; okLabel?: string; danger?: boolean }) =>
+    new Promise<boolean>(resolve => setAskState({ ...o, resolve }))
+  const answerAsk = (ok: boolean) => { askState?.resolve(ok); setAskState(null) }
+  const [notice, setNotice] = useState<{ message: string; kind: 'error' | 'ok' | 'info' } | null>(null)
+  const showNotice = (message: string, kind: 'error' | 'ok' | 'info' = 'error') => setNotice({ message, kind })
   const router = useRouter()
   type TabKey = 'home'|'applies'|'calendar'|'messages'|'docs'|'profile'|'sales'|'payments'
   const validTabs: TabKey[] = ['home','applies','calendar','messages','docs','profile','sales','payments']
@@ -218,7 +229,7 @@ export default function SellerDashboard() {
 
   // 写真アップロード（最大8枚, seller-photos バケット）
   const uploadPhoto = async (file: File) => {
-    if (photos.length >= 8) { alert('写真は最大8枚までです'); return }
+    if (photos.length >= 8) { showNotice('写真は最大8枚までです'); return }
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     if (!uid) return
@@ -226,12 +237,12 @@ export default function SellerDashboard() {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
     const path = uid + '/' + Date.now() + '.' + ext
     const up = await supabase.storage.from('seller-photos').upload(path, file, { upsert: true })
-    if (up.error) { alert('写真アップロード失敗: ' + up.error.message); setPhotoUploading(false); return }
+    if (up.error) { showNotice('写真アップロード失敗: ' + up.error.message); setPhotoUploading(false); return }
     const { data: pub } = supabase.storage.from('seller-photos').getPublicUrl(path)
     const newPhotos = [...photos, pub.publicUrl]
     setPhotos(newPhotos)
     const { error: dbErr } = await supabase.from('profiles').update({ photos: newPhotos }).eq('id', uid)
-    if (dbErr) { alert('写真の保存に失敗: ' + dbErr.message) }
+    if (dbErr) { showNotice('写真の保存に失敗: ' + dbErr.message) }
     setPhotoUploading(false)
   }
 
@@ -243,7 +254,7 @@ export default function SellerDashboard() {
     const newPhotos = photos.filter(p => p !== url)
     setPhotos(newPhotos)
     const { error: dbErr } = await supabase.from('profiles').update({ photos: newPhotos }).eq('id', uid)
-    if (dbErr) { alert('写真の削除に失敗: ' + dbErr.message); return }
+    if (dbErr) { showNotice('写真の削除に失敗: ' + dbErr.message); return }
     const marker = '/seller-photos/'
     const idx = url.indexOf(marker)
     if (idx !== -1) { const sp = url.substring(idx + marker.length); await supabase.storage.from('seller-photos').remove([sp]) }
@@ -258,7 +269,7 @@ export default function SellerDashboard() {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
     const filePath = uid + '/menu-' + Date.now() + '.' + ext
     const up = await supabase.storage.from('seller-photos').upload(filePath, file, { upsert: true })
-    if (up.error) { alert('写真アップロード失敗: ' + up.error.message); setMenuPhotoUploading(false); return }
+    if (up.error) { showNotice('写真アップロード失敗: ' + up.error.message); setMenuPhotoUploading(false); return }
     const { data: pub } = supabase.storage.from('seller-photos').getPublicUrl(filePath)
     setMenuPhotoUrl(pub.publicUrl)
     setMenuPhotoUploading(false)
@@ -269,7 +280,7 @@ export default function SellerDashboard() {
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     if (!uid) return
-    if (!menuName.trim()) { alert('メニュー名を入力してください'); return }
+    if (!menuName.trim()) { showNotice('メニュー名を入力してください'); return }
     setMenuSaving(true)
     const priceNum = menuPrice.trim() === '' ? null : parseInt(menuPrice.replace(/[^0-9]/g, ''), 10)
     const nextOrder = menus.length > 0 ? Math.max(...menus.map(m => m.sort_order)) + 1 : 0
@@ -281,7 +292,7 @@ export default function SellerDashboard() {
       photo_url: menuPhotoUrl || null,
       sort_order: nextOrder,
     })
-    if (error) { alert('メニューの追加に失敗: ' + error.message); setMenuSaving(false); return }
+    if (error) { showNotice('メニューの追加に失敗: ' + error.message); setMenuSaving(false); return }
     setMenuName(''); setMenuDetail(''); setMenuPrice(''); setMenuPhotoUrl('')
     await loadMenus(uid)
     setMenuSaving(false)
@@ -294,7 +305,7 @@ export default function SellerDashboard() {
     const uid = userData.user?.id
     if (!uid) return
     const { error } = await supabase.from('menus').delete().eq('id', m.id)
-    if (error) { alert('メニューの削除に失敗: ' + error.message); return }
+    if (error) { showNotice('メニューの削除に失敗: ' + error.message); return }
     if (m.photo_url) {
       const mk = '/seller-photos/'
       const idx = m.photo_url.indexOf(mk)
@@ -315,9 +326,9 @@ export default function SellerDashboard() {
       submitted_at: new Date().toISOString(),
     }).eq('id', uid)
     setPublishSaving(false)
-    if (error) { alert('申請に失敗しました: ' + error.message); return }
+    if (error) { showNotice('申請に失敗しました: ' + error.message); return }
     setApprovalStatus('pending')
-    alert('公開を申請しました。運営の承認をお待ちください。')
+    showNotice('公開を申請しました。運営の承認をお待ちください。')
   }
 
   // プロフィール保存
@@ -347,8 +358,8 @@ export default function SellerDashboard() {
       ])),
     }
     const { data: pData, error: pErr } = await supabase.from('profiles').update(payload).eq('id', uid).select()
-    if (pErr) { alert('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
-    if (!pData || pData.length === 0) { alert('保存できませんでした（権限設定をご確認ください）'); setProfileSaving(false); return }
+    if (pErr) { showNotice('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
+    if (!pData || pData.length === 0) { showNotice('保存できませんでした（権限設定をご確認ください）'); setProfileSaving(false); return }
     const platforms: { key: keyof SnsLinks, name: string }[] = [
       { key: 'instagram', name: 'instagram' }, { key: 'twitter', name: 'twitter' },
       { key: 'youtube', name: 'youtube' }, { key: 'tiktok', name: 'tiktok' },
@@ -356,16 +367,16 @@ export default function SellerDashboard() {
     for (const pf of platforms) {
       const url = snsForm[pf.key].trim()
       const { error: dErr } = await supabase.from('sns_links').delete().eq('seller_id', uid).eq('platform', pf.name)
-      if (dErr) { alert('SNS保存失敗(' + pf.name + '): ' + dErr.message); setProfileSaving(false); return }
+      if (dErr) { showNotice('SNS保存失敗(' + pf.name + '): ' + dErr.message); setProfileSaving(false); return }
       if (url) {
         const { error: iErr } = await supabase.from('sns_links').insert({ seller_id: uid, platform: pf.name, url })
-        if (iErr) { alert('SNS保存失敗(' + pf.name + '): ' + iErr.message); setProfileSaving(false); return }
+        if (iErr) { showNotice('SNS保存失敗(' + pf.name + '): ' + iErr.message); setProfileSaving(false); return }
       }
     }
     setProfileSaving(false)
     setProfileEdit(false)
     await loadProfile()
-    alert('プロフィールを保存しました')
+    showNotice('プロフィールを保存しました')
   }
 
   const statusMap: Record<string, { label: string, color: string, bg: string }> = {
@@ -408,12 +419,12 @@ export default function SellerDashboard() {
     // ここで先に閉じておかないと連打で二重に登録されてしまう。
     setRpSaving(true)
     const revenue = parseInt(rpRevenue.replace(/[^0-9]/g, ''), 10)
-    if (isNaN(revenue) || revenue < 0) { setRpSaving(false); alert('売上金額を入力してください'); return }
+    if (isNaN(revenue) || revenue < 0) { setRpSaving(false); showNotice('売上金額を入力してください'); return }
     // 天候・来客数・販売食数は施設へ出す報告書に載る欄で、施設側から
     // 提出を求められている。空のまま送られると報告書に「—」が並ぶため、
     // ここで止める。何が足りないかをまとめて伝える（一つずつ怒られないように）
     const miss = missingReportFields(rpWeather, rpCustomers, rpItems)
-    if (miss.length > 0) { setRpSaving(false); alert(miss.join('\n')); return }
+    if (miss.length > 0) { setRpSaving(false); showNotice(miss.join('\n')); return }
     // ホームなど売上タブ以外から開いた場合は案件一覧をまだ読んでいないので、
     // 見つからなければここで読み直してから探す
     let app = myApprovedApps.find(x => x.application_id === reportFor.application_id)
@@ -421,7 +432,7 @@ export default function SellerDashboard() {
       const fresh = await loadMyApprovedApps()
       app = fresh.find(x => x.application_id === reportFor.application_id)
     }
-    if (!app) { setRpSaving(false); alert('案件が見つかりません。画面を再読み込みしてお試しください。'); return }
+    if (!app) { setRpSaving(false); showNotice('案件が見つかりません。画面を再読み込みしてお試しください。'); return }
     const items = rpItems
       .map(it => ({ name: it.name.trim(), qty: parseInt(it.qty, 10) || 0, price: it.price.trim() === '' ? null : (parseInt(it.price.replace(/[^0-9]/g, ''), 10) || 0) }))
       .filter(it => it.name && it.qty > 0)
@@ -433,12 +444,12 @@ export default function SellerDashboard() {
       .from('sales').select('id').eq('application_id', app.application_id).limit(1)
     if (dupErr) {
       setRpSaving(false)
-      alert('通信に失敗しました。時間をおいてもう一度お試しください。')
+      showNotice('通信に失敗しました。時間をおいてもう一度お試しください。')
       return
     }
     if (dup && dup.length > 0) {
       setRpSaving(false)
-      alert('この出店はすでに報告済みです。内容を直す場合は、売上報告の一覧から一度削除したうえで、あらためてご報告ください。')
+      showNotice('この出店はすでに報告済みです。内容を直す場合は、売上報告の一覧から一度削除したうえで、あらためてご報告ください。')
       setReportFor(null)
       await loadMySales(); await loadUnreported(); await loadCalSales()
       return
@@ -458,12 +469,12 @@ export default function SellerDashboard() {
     if (rpNote.trim()) row.note = rpNote.trim()
     const { error } = await supabase.from('sales').insert(row)
     setRpSaving(false)
-    if (error) { alert('報告の保存に失敗しました: ' + error.message); return }
+    if (error) { showNotice('報告の保存に失敗しました: ' + error.message); return }
     setReportFor(null)
     await loadMySales()
     await loadUnreported()
     await loadCalSales()
-    alert('出店報告を送信しました。ありがとうございました。')
+    showNotice('出店報告を送信しました。ありがとうございました。')
   }
   // 品目別の内訳（任意）。施設から「何が何食売れたか」を求められることがある
   const [saleItems, setSaleItems] = useState<SaleItem[]>([])
@@ -548,9 +559,9 @@ export default function SellerDashboard() {
       await callPayApi({ action: 'report', invoiceId: payFor.id, paidOn: payOn || null, paidName: payName })
       setPayFor(null); setPayOn(''); setPayName('')
       await loadMyInvoices()
-      alert('お振込の報告を受け付けました。運営で確認のうえ、あらためてご連絡いたします。')
+      showNotice('お振込の報告を受け付けました。運営で確認のうえ、あらためてご連絡いたします。')
     } catch (e) {
-      alert(e instanceof Error ? e.message : '送信に失敗しました')
+      showNotice(e instanceof Error ? e.message : '送信に失敗しました')
     }
     setPaySaving(false)
   }
@@ -667,30 +678,30 @@ export default function SellerDashboard() {
 
   // 自分の売上を保存
   const saveMySale = async () => {
-    if (!saleAppId || !saleDate || (saleSplit ? (!saleRev8 && !saleRev10) : !saleRevenue)) { alert('案件・日付・売上金額をすべて入力してください'); return }
+    if (!saleAppId || !saleDate || (saleSplit ? (!saleRev8 && !saleRev10) : !saleRevenue)) { showNotice('案件・日付・売上金額をすべて入力してください'); return }
     const app = myApprovedApps.find(x => x.application_id === saleAppId)
-    if (!app) { alert('案件が選択されていません'); return }
+    if (!app) { showNotice('案件が選択されていません'); return }
     const rev8 = saleSplit ? (parseInt(saleRev8 || '0', 10) || 0) : 0
     const rev10 = saleSplit ? (parseInt(saleRev10 || '0', 10) || 0) : 0
-    if (saleSplit && (rev8 < 0 || rev10 < 0)) { alert('売上金額は0以上の数値で入力してください'); return }
+    if (saleSplit && (rev8 < 0 || rev10 < 0)) { showNotice('売上金額は0以上の数値で入力してください'); return }
     const revenue = saleSplit ? rev8 + rev10 : parseInt(saleRevenue, 10)
-    if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
+    if (isNaN(revenue) || revenue < 0) { showNotice('売上金額は0以上の数値で入力してください'); return }
     // 報告モーダル（saveReport）と同じ判定。どちらから報告しても、
     // 施設へ出す報告書に必要な欄がそろっている状態にする
     const miss = missingReportFields(saleWeather, saleCustomers, saleItems)
-    if (miss.length > 0) { alert(miss.join('\n')); return }
+    if (miss.length > 0) { showNotice(miss.join('\n')); return }
     const td = todayStr()
-    if (app.apply_date && td < app.apply_date) { alert('この案件の出店日は ' + app.apply_date + ' です。出店日を過ぎてから売上を入力してください。'); return }
-    if (app.apply_date && saleDate < app.apply_date) { alert('売上日は出店日（' + app.apply_date + '）以降を指定してください。'); return }
-    if (saleDate > td) { alert('未来の日付では売上を記録できません。'); return }
+    if (app.apply_date && td < app.apply_date) { showNotice('この案件の出店日は ' + app.apply_date + ' です。出店日を過ぎてから売上を入力してください。'); return }
+    if (app.apply_date && saleDate < app.apply_date) { showNotice('売上日は出店日（' + app.apply_date + '）以降を指定してください。'); return }
+    if (saleDate > td) { showNotice('未来の日付では売上を記録できません。'); return }
     // すでに報告済みの出店をもう一度登録すると請求も2件分になるため、
     // 気付かず重ねてしまわないように確認する（意図的な追加登録は通す）
     const { data: dup, error: dupErr } = await supabase
       .from('sales').select('id, sale_date').eq('application_id', app.application_id)
-    if (dupErr) { alert('通信に失敗しました。時間をおいてもう一度お試しください。'); return }
+    if (dupErr) { showNotice('通信に失敗しました。時間をおいてもう一度お試しください。'); return }
     if (dup && dup.length > 0) {
       const dates = dup.map(d => d.sale_date).join('、')
-      if (!window.confirm('この出店はすでに報告済みです（' + dates + '）。\nもう1件追加で登録すると、出店料も2件分の請求になります。\n続けますか？')) return
+      if (!(await ask({ title: 'すでに報告済みの出店です', body: '（' + dates + '）\nもう1件追加で登録すると、出店料も2件分の請求になります。\n続けますか？', okLabel: '追加で登録する' }))) return
     }
     setSaleSaving(true)
     const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv, null, saleDate)
@@ -715,7 +726,7 @@ export default function SellerDashboard() {
     if (!isNaN(cust) && cust > 0) row.customers = cust
     if (saleNote.trim()) row.note = saleNote.trim()
     const { error } = await supabase.from('sales').insert(row)
-    if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
+    if (error) { showNotice('保存失敗: ' + error.message); setSaleSaving(false); return }
     setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleRev8(''); setSaleRev10(''); setSaleItems([]); setSaleSaving(false)
     setSaleWeather(''); setSaleCustomers(''); setSaleNote('')
     loadMySales()
@@ -724,8 +735,15 @@ export default function SellerDashboard() {
   }
 
   const deleteMySale = async (id: string) => {
-    const { error } = await supabase.from('sales').delete().eq('id', id)
-    if (error) { alert('削除失敗: ' + error.message); return }
+    setDelSaleBusy(true)
+    setDelSaleErr(null)
+    // 消せた件数を受け取る。権限で弾かれると「エラー無しで0件」になり、
+    // 何も起きなかったように見えるため、その場合も知らせる
+    const { data, error } = await supabase.from('sales').delete().eq('id', id).select('id')
+    if (error) { setDelSaleErr('削除できませんでした：' + error.message); setDelSaleBusy(false); return }
+    if (!data || data.length === 0) { setDelSaleErr('削除できませんでした。すでに消えているか、この記録を消す権限がありません。'); setDelSaleBusy(false); return }
+    setDelSaleAsk(null)
+    setDelSaleBusy(false)
     loadMySales()
     // 消した分は「未報告」に戻るため、バナーも数え直す
     loadUnreported()
@@ -782,6 +800,10 @@ export default function SellerDashboard() {
   // 起きず、辞退できたと思い込んでしまうため、画面内のダイアログにした。
   const [cancelAsk, setCancelAsk] = useState<{ id: string; label: string } | null>(null)
   const [cancelErr, setCancelErr] = useState<string | null>(null)
+  // 売上記録の削除。window.confirm はアプリ内ブラウザで無視されるため、画面の中で確認する
+  const [delSaleAsk, setDelSaleAsk] = useState<string | null>(null)
+  const [delSaleErr, setDelSaleErr] = useState<string | null>(null)
+  const [delSaleBusy, setDelSaleBusy] = useState(false)
 
   const runCancelApplication = async () => {
     if (!cancelAsk) return
@@ -831,13 +853,13 @@ export default function SellerDashboard() {
     const ext = file.name.split('.').pop() || 'dat'
     const path = uid + '/' + docType + '_' + Date.now() + '.' + ext
     const up = await supabase.storage.from('seller-documents').upload(path, file, { upsert: true })
-    if (up.error) { alert('アップロード失敗: ' + up.error.message); setUploadingType(null); return }
+    if (up.error) { showNotice('アップロード失敗: ' + up.error.message); setUploadingType(null); return }
     // 既存の同種別レコードがあれば消してから作り直す（再提出対応）
     await supabase.from('seller_documents').delete().eq('seller_id', uid).eq('doc_type', docType)
     const ins = await supabase.from('seller_documents').insert({
       seller_id: uid, doc_type: docType, file_url: path, status: 'pending'
     })
-    if (ins.error) { alert('登録失敗: ' + ins.error.message); setUploadingType(null); return }
+    if (ins.error) { showNotice('登録失敗: ' + ins.error.message); setUploadingType(null); return }
     setUploadingType(null)
     loadDocs()
   }
@@ -973,16 +995,16 @@ export default function SellerDashboard() {
 
   // 自分が送ったメッセージを取り消す（打ち間違いの取り消し用）
   const retractMessage = async (messageId: string) => {
-    if (!window.confirm('このメッセージを取り消しますか？\n相手の画面からも削除されます。')) return
+    if (!(await ask({ title: 'このメッセージを取り消しますか？', body: '相手の画面からも削除されます。', okLabel: '取り消す', danger: true }))) return
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { alert('ログインが必要です'); return }
+    if (!user) { showNotice('ログインが必要です'); return }
     const res = await fetch('/api/messages/retract', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messageId, requesterId: user.id }),
     })
     const result = await res.json()
-    if (!res.ok) { alert('取り消せませんでした: ' + (result.error || '不明なエラー')); return }
+    if (!res.ok) { showNotice('取り消せませんでした: ' + (result.error || '不明なエラー')); return }
     if (appId) openThread(appId)
     loadMessages()
   }
@@ -992,8 +1014,8 @@ export default function SellerDashboard() {
     const text = msg.trim()
     if (!text && !msgFile) return
     // 送り先が決まっていないまま押されたときは、黙って何もしないのではなく理由を伝える
-    if (!appId) { alert('先に左のリストからやり取りする案件を選んでください。'); return }
-    if (!myId) { alert('ログイン情報を確認できませんでした。再度ログインしてください。'); return }
+    if (!appId) { showNotice('先に左のリストからやり取りする案件を選んでください。'); return }
+    if (!myId) { showNotice('ログイン情報を確認できませんでした。再度ログインしてください。'); return }
     setMsgUploading(true)
     let fileUrl = null
     if (msgFile) {
@@ -1001,13 +1023,13 @@ export default function SellerDashboard() {
       const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : 'dat'
       const path = myId + '/msg-' + Date.now() + '.' + ext
       const up = await supabase.storage.from('message-attachments').upload(path, msgFile, { upsert: true })
-      if (up.error) { alert('添付に失敗しました: ' + up.error.message); setMsgUploading(false); return }
+      if (up.error) { showNotice('添付に失敗しました: ' + up.error.message); setMsgUploading(false); return }
       fileUrl = path
     }
     const { error } = await supabase
       .from('messages')
       .insert({ application_id: appId, sender_id: myId, body: text, file_url: fileUrl })
-    if (error) { alert('送信に失敗しました: ' + error.message); setMsgUploading(false); return }
+    if (error) { showNotice('送信に失敗しました: ' + error.message); setMsgUploading(false); return }
     setMsg('')
     setMsgFile(null)
     setMsgUploading(false)
@@ -2405,7 +2427,7 @@ export default function SellerDashboard() {
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{s.fee.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.revenue - s.fee).toLocaleString()}</td>
                         <td style={{ padding: '10px 14px' }}>
-                          <button onClick={() => { if (window.confirm('この売上記録を削除しますか？')) deleteMySale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
+                          <button onClick={() => { setDelSaleErr(null); setDelSaleAsk(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
                         </td>
                       </tr>
                     ))}
@@ -2630,6 +2652,29 @@ export default function SellerDashboard() {
         okLabel='辞退する'
         onOk={runCancelApplication}
         onCancel={() => { if (cancelingId === null) { setCancelAsk(null); setCancelErr(null) } }}
+      />
+
+      <ConfirmDialog
+        open={!!delSaleAsk}
+        busy={delSaleBusy}
+        error={delSaleErr}
+        danger
+        title='この売上記録を削除しますか？'
+        body={'削除すると、この出店は「未報告」に戻ります。\n報告し直す場合は、あらためて入力してください。'}
+        okLabel='削除する'
+        onOk={() => { if (delSaleAsk) deleteMySale(delSaleAsk) }}
+        onCancel={() => { if (!delSaleBusy) { setDelSaleAsk(null); setDelSaleErr(null) } }}
+      />
+
+      <Notice message={notice?.message ?? null} kind={notice?.kind} onClose={() => setNotice(null)} />
+      <ConfirmDialog
+        open={!!askState}
+        title={askState?.title || ''}
+        body={askState?.body}
+        okLabel={askState?.okLabel}
+        danger={askState?.danger}
+        onOk={() => answerAsk(true)}
+        onCancel={() => answerAsk(false)}
       />
 
     </div>

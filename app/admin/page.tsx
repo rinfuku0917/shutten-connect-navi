@@ -19,6 +19,7 @@ import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import TodayCheckins from './TodayCheckins'
 import { MERGED_POSTS } from '../lib/mergedPosts'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Notice from '../components/Notice'
 import NotifyChoice from '../components/NotifyChoice'
 import DuplicateButton from '../components/DuplicateButton'
 
@@ -53,6 +54,33 @@ export default function AdminPage() {
   const router = useRouter()
   // 管理画面のタブ。URLと履歴の出し入れに使うため、一覧をここに持つ
   const ADMIN_TABS = ['dashboard','schedule','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings'] as const
+
+  // 確認ダイアログ。
+  // window.confirm は LINE や Instagram のアプリ内ブラウザで黙って無視され、
+  // 押しても何も起きないように見える（削除できない、という報告が実際に来た）。
+  // 出店者側は先に置き換えてあったが、管理画面には15か所残っていた。
+  // ask() は Promise を返すので、既存の関数の頭で
+  //   if (!(await ask({...}))) return
+  // と書くだけで、confirm と同じ流れのまま差し替えられる。
+  const [askState, setAskState] = useState<{
+    title: string; body?: string; okLabel?: string; danger?: boolean
+    // 入力欄つきのとき。window.prompt の置き換え（prompt もアプリ内ブラウザで無視される）
+    input?: { label: string; placeholder?: string }
+    resolve: (ok: boolean, text: string) => void
+  } | null>(null)
+  const [askText_, setAskText_] = useState('')
+  const ask = (o: { title: string; body?: string; okLabel?: string; danger?: boolean }) =>
+    new Promise<boolean>(resolve => { setAskText_(''); setAskState({ ...o, resolve: ok => resolve(ok) }) })
+  // 理由などを1行もらいたいとき。キャンセルなら ok=false、空欄のままOKなら text=''
+  const askText = (o: { title: string; body?: string; okLabel?: string; danger?: boolean; input: { label: string; placeholder?: string } }) =>
+    new Promise<{ ok: boolean; text: string }>(resolve => { setAskText_(''); setAskState({ ...o, resolve: (ok, text) => resolve({ ok, text }) }) })
+  const answerAsk = (ok: boolean) => { askState?.resolve(ok, askText_.trim()); setAskState(null); setAskText_('') }
+
+  // 短いお知らせ。alert() の置き換え。
+  // alert もアプリ内ブラウザでは無視されるため、失敗の知らせが
+  // 一切見えないままになっていた（51か所）。画面の中に出す。
+  const [notice, setNotice] = useState<{ message: string; kind: 'error' | 'ok' | 'info' } | null>(null)
+  const showNotice = (message: string, kind: 'error' | 'ok' | 'info' = 'error') => setNotice({ message, kind })
 
   const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
@@ -249,9 +277,9 @@ export default function AdminPage() {
         body: JSON.stringify({ requesterId: adminUid, id: p.id }),
       })
       const json = await res.json()
-      if (!res.ok) { alert('削除に失敗: ' + (json.error || '')); return }
+      if (!res.ok) { showNotice('削除に失敗: ' + (json.error || '')); return }
       loadPosts()
-    } catch { alert('通信エラー') }
+    } catch { showNotice('通信エラー') }
   }
   const docTypeLabels: Record<string, string> = { license_front: '運転免許証（表面）', license_back: '運転免許証（裏面）', food_hygiene: '食品衛生責任者証', liability_insurance: '損害賠償保険証書', business_permit: '営業許可証', pl_insurance: 'PL保険証券', inspection_sample: '検体（検査結果）', other_permit: 'その他許可証' }
 
@@ -427,11 +455,11 @@ export default function AdminPage() {
 
   // 売上を保存
   const saveSale = async () => {
-    if (!saleAppId || !saleDate || !saleRevenue) { alert('案件・日付・売上金額をすべて入力してください'); return }
+    if (!saleAppId || !saleDate || !saleRevenue) { showNotice('案件・日付・売上金額をすべて入力してください'); return }
     const app = approvedApps.find(a => a.application_id === saleAppId)
-    if (!app) { alert('対象の申込が見つかりません'); return }
+    if (!app) { showNotice('対象の申込が見つかりません'); return }
     const revenue = parseInt(saleRevenue, 10)
-    if (isNaN(revenue) || revenue < 0) { alert('売上金額は0以上の数値で入力してください'); return }
+    if (isNaN(revenue) || revenue < 0) { showNotice('売上金額は0以上の数値で入力してください'); return }
     setSaleSaving(true)
     const { placeFee, companyFee, totalPay, basis, rate } = calcFees(revenue, app, saleTaxOv, saleDate)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -449,7 +477,7 @@ export default function AdminPage() {
     const qty = parseInt(saleQty, 10) || 0
     if (qty > 0) row.items = [{ name: '合計', qty, price: null }]
     const { error } = await supabase.from('sales').insert(row)
-    if (error) { alert('保存失敗: ' + error.message); setSaleSaving(false); return }
+    if (error) { showNotice('保存失敗: ' + error.message); setSaleSaving(false); return }
     setSaleAppId(''); setSaleDate(''); setSaleRevenue('')
     setSaleWeather(''); setSaleCustomers(''); setSaleQty('')
     setSaleSaving(false)
@@ -457,8 +485,12 @@ export default function AdminPage() {
   }
 
   const deleteSale = async (id: string) => {
-    const { error } = await supabase.from('sales').delete().eq('id', id)
-    if (error) { alert('削除失敗: ' + error.message); return }
+    // 消せた件数を受け取る。権限で弾かれると「エラー無しで0件」になり、
+    // 何も起きなかったように見えるため、その場合も知らせる
+    const { data, error } = await supabase.from('sales').delete().eq('id', id).select('id')
+    if (error) { showNotice('削除失敗: ' + error.message); return }
+    if (!data || data.length === 0) { showNotice('削除できませんでした。すでに消えているか、権限がありません。'); return }
+    showNotice('売上記録を削除しました。', 'ok')
     loadSales()
   }
 
@@ -540,13 +572,13 @@ export default function AdminPage() {
       const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : 'dat'
       const path = adminUid + '/msg-' + Date.now() + '.' + ext
       const up = await supabase.storage.from('message-attachments').upload(path, adminMsgFile, { upsert: true })
-      if (up.error) { alert('添付に失敗しました: ' + up.error.message); setAdminMsgUploading(false); return }
+      if (up.error) { showNotice('添付に失敗しました: ' + up.error.message); setAdminMsgUploading(false); return }
       fileUrl = path
     }
     const { error } = await supabase.from('messages').insert({
       application_id: activeThread, sender_id: adminUid, body, file_url: fileUrl
     })
-    if (error) { alert('送信失敗: ' + error.message); setAdminMsgUploading(false); return }
+    if (error) { showNotice('送信失敗: ' + error.message); setAdminMsgUploading(false); return }
     setAdminMsgInput('')
     setAdminMsgFile(null)
     setAdminMsgUploading(false)
@@ -678,17 +710,17 @@ export default function AdminPage() {
       share_tax_basis: feeForm.share_tax_basis, share_tax_rate: feeForm.share_tax_rate,
       day_type_fees: buildDayTypeFees(),
     }).eq('id', feePlace.id).select('id')
-    if (error) { alert('保存失敗: ' + error.message); setFeeSaving(false); return }
+    if (error) { showNotice('保存失敗: ' + error.message); setFeeSaving(false); return }
     if (!updated || updated.length === 0) {
-      alert('保存できませんでした（更新権限をご確認ください）。金額は反映されていません。')
+      showNotice('保存できませんでした（更新権限をご確認ください）。金額は反映されていません。')
       setFeeSaving(false); return
     }
     setFeeSaving(false); setFeePlace(null); loadPlacesList()
   }
   const deletePlaceAdmin = async (id: string) => {
     const { data: removed, error } = await supabase.from('places').delete().eq('id', id).select('id')
-    if (error) { alert('削除失敗: ' + error.message); return }
-    if (!removed || removed.length === 0) { alert('削除できませんでした（権限をご確認ください）'); return }
+    if (error) { showNotice('削除失敗: ' + error.message); return }
+    if (!removed || removed.length === 0) { showNotice('削除できませんでした（権限をご確認ください）'); return }
     loadPlacesList()
   }
   // 記事の表紙をAIに作り直させる。
@@ -696,8 +728,8 @@ export default function AdminPage() {
   // 生成に30秒ほどかかるので、押している間はボタンを止める。
   const [coverBusy, setCoverBusy] = useState('')
   const makeCover = async (p: { slug: string; title: string }) => {
-    if (!adminUid) { alert('認証情報がありません。再ログインしてください'); return }
-    if (!window.confirm(`「${p.title}」の表紙をAIで作り直します。\n\nいまの表紙は置き換わります。よろしいですか？`)) return
+    if (!adminUid) { showNotice('認証情報がありません。再ログインしてください'); return }
+    if (!(await ask({ title: '表紙をAIで作り直しますか？', body: `「${p.title}」の表紙を作り直します。\nいまの表紙は置き換わります。`, okLabel: '作り直す' }))) return
     setCoverBusy(p.slug)
     try {
       const res = await fetch('/api/blog-cover', {
@@ -706,10 +738,10 @@ export default function AdminPage() {
         body: JSON.stringify({ requesterId: adminUid, slug: p.slug }),
       })
       const j = await res.json()
-      if (!res.ok) alert('作れませんでした: ' + (j.error || '不明なエラー'))
-      else { alert('表紙を作りました。記事を開いて確かめてください。'); loadPosts() }
+      if (!res.ok) showNotice('作れませんでした: ' + (j.error || '不明なエラー'))
+      else { showNotice('表紙を作りました。記事を開いて確かめてください。'); loadPosts() }
     } catch {
-      alert('通信エラーが発生しました')
+      showNotice('通信エラーが発生しました')
     }
     setCoverBusy('')
   }
@@ -722,7 +754,7 @@ export default function AdminPage() {
   // 公開ページが増えていたため、下書きを作るところまでに変えた。
   const [autoPosting, setAutoPosting] = useState(false)
   const runAutoPost = async () => {
-    if (!window.confirm('AIが記事の下書きを1本作ります。公開はされません。よろしいですか？')) return
+    if (!(await ask({ title: '記事の下書きを作りますか？', body: 'AIが下書きを1本作ります。公開はされません。', okLabel: '作る' }))) return
     setAutoPosting(true)
     try {
       // 定期実行と同じAPIを呼ぶ。管理者であることを確かめられるよう
@@ -732,13 +764,13 @@ export default function AdminPage() {
         headers: { Authorization: 'Bearer ' + (sess.session?.access_token || '') },
       })
       const j = await res.json()
-      if (!res.ok) { alert('作成できませんでした: ' + (j.error || '不明なエラー')) }
+      if (!res.ok) { showNotice('作成できませんでした: ' + (j.error || '不明なエラー')) }
       else {
-        alert('下書きを作りました：' + (j.post?.title || '') + '\n記事の一覧から中身を確かめて、問題なければ公開してください。' + (j.hasImage ? '' : '\n※画像は生成できませんでした'))
+        showNotice('下書きを作りました：' + (j.post?.title || '') + '\n記事の一覧から中身を確かめて、問題なければ公開してください。' + (j.hasImage ? '' : '\n※画像は生成できませんでした'))
         loadPosts()
       }
     } catch (e) {
-      alert('作成できませんでした')
+      showNotice('作成できませんでした')
       console.error(e)
     }
     setAutoPosting(false)
@@ -788,13 +820,13 @@ export default function AdminPage() {
     const msg = undo
       ? '「入金確認済み」を取り消します。よろしいですか？（出店者へのメールは送られません）'
       : row.sellerName + ' さんの ' + row.invoice_no + '（¥' + row.total.toLocaleString() + '）の入金を確認済みにします。\n出店者へ確認のお知らせメールが届きます。よろしいですか？'
-    if (!window.confirm(msg)) return
+    if (!(await ask({ title: undo ? '入金確認を取り消しますか？' : '入金を確認済みにしますか？', body: msg, okLabel: undo ? '取り消す' : '確認済みにする', danger: undo }))) return
     setPayBusy(row.id)
     try {
       await callPayApi({ action: 'confirm', invoiceId: row.id, undo })
       await loadPayments()
     } catch (e) {
-      alert(e instanceof Error ? e.message : '更新に失敗しました')
+      showNotice(e instanceof Error ? e.message : '更新に失敗しました')
     }
     setPayBusy('')
   }
@@ -807,9 +839,9 @@ export default function AdminPage() {
     setRepXlsxBusy(placeId)
     try {
       const n = await exportPlaceSalesReport(supabase, placeId, title)
-      if (n === 0) alert('この案件には、まだ売上の報告がありません')
+      if (n === 0) showNotice('この案件には、まだ売上の報告がありません')
     } catch (e) {
-      alert(e instanceof Error ? e.message : '出力に失敗しました')
+      showNotice(e instanceof Error ? e.message : '出力に失敗しました')
     }
     setRepXlsxBusy('')
   }
@@ -820,36 +852,37 @@ export default function AdminPage() {
   // 消すと次の発行で同じ番号が使い回される。先方に送ったあとだと、
   // 同じ番号の請求書が2枚できてしまう。
   const voidInvoice = async (row: PayRow) => {
-    const reason = window.prompt(
-      row.invoice_no + '（' + row.sellerName + ' さん・¥' + row.total.toLocaleString() + '）を取り消します。\n\n'
-      + '・出店者の「お支払い」欄から消えます\n'
-      + '・入金の集計からも外れます\n'
-      + '・番号（' + row.invoice_no + '）は残り、使い回されません\n'
-      + '・すでに送信したメールは取り消せません\n\n'
-      + '理由を入れてください（あとで見返すため。空欄でも進めます）',
-      '',
-    )
-    // キャンセルを押したときは null。空欄のままOKなら理由なしで進める
-    if (reason === null) return
+    const { ok, text: reason } = await askText({
+      title: '請求書を取り消しますか？',
+      body: row.invoice_no + '（' + row.sellerName + ' さん・¥' + row.total.toLocaleString() + '）を取り消します。\n\n'
+        + '・出店者の「お支払い」欄から消えます\n'
+        + '・入金の集計からも外れます\n'
+        + '・番号（' + row.invoice_no + '）は残り、使い回されません\n'
+        + '・すでに送信したメールは取り消せません',
+      input: { label: '理由（あとで見返すため。空欄でも進めます）', placeholder: '例：金額を間違えた' },
+      okLabel: '取り消す', danger: true,
+    })
+    // キャンセルなら何もしない。空欄のままOKなら理由なしで進める
+    if (!ok) return
     setPayBusy(row.id)
     try {
       await callPayApi({ action: 'void', invoiceId: row.id, reason })
       await loadPayments()
     } catch (e) {
-      alert(e instanceof Error ? e.message : '取り消しに失敗しました')
+      showNotice(e instanceof Error ? e.message : '取り消しに失敗しました')
     }
     setPayBusy('')
   }
 
   // 取り消しを戻す。押し間違えたとき用。番号は変わらない
   const unvoidInvoice = async (row: PayRow) => {
-    if (!window.confirm(row.invoice_no + ' の取り消しを戻します。\n\n出店者の「お支払い」欄に、また表示されるようになります。よろしいですか？')) return
+    if (!(await ask({ title: '請求書の取り消しを戻しますか？', body: row.invoice_no + ' の取り消しを戻します。\n出店者の「お支払い」欄に、また表示されるようになります。', okLabel: '戻す' }))) return
     setPayBusy(row.id)
     try {
       await callPayApi({ action: 'unvoid', invoiceId: row.id })
       await loadPayments()
     } catch (e) {
-      alert(e instanceof Error ? e.message : '戻せませんでした')
+      showNotice(e instanceof Error ? e.message : '戻せませんでした')
     }
     setPayBusy('')
   }
@@ -857,7 +890,7 @@ export default function AdminPage() {
   // 売上報告のリマインドを今すぐ送る（定期実行と同じ処理を呼ぶ）
   const [reminding, setReminding] = useState(false)
   const runSalesReminder = async () => {
-    if (!window.confirm('出店日を過ぎても売上報告が無い出店者へ、催促メールを送ります。よろしいですか？\n※同じ出店については一度しか送られません。')) return
+    if (!(await ask({ title: '催促メールを送りますか？', body: '出店日を過ぎても売上報告が無い出店者へ送ります。\n同じ出店については一度しか送られません。', okLabel: '送る' }))) return
     setReminding(true)
     try {
       const { data: sess } = await supabase.auth.getSession()
@@ -865,11 +898,11 @@ export default function AdminPage() {
         headers: { Authorization: 'Bearer ' + (sess.session?.access_token || '') },
       })
       const j = await res.json()
-      if (!res.ok) alert('送信できませんでした: ' + (j.error || '不明なエラー'))
-      else if (j.sent === 0) alert('送信対象はありませんでした（' + (j.note || '未報告なし') + '）')
-      else alert(j.sent + '名の出店者へリマインドを送信しました')
+      if (!res.ok) showNotice('送信できませんでした: ' + (j.error || '不明なエラー'))
+      else if (j.sent === 0) showNotice('送信対象はありませんでした（' + (j.note || '未報告なし') + '）')
+      else showNotice(j.sent + '名の出店者へリマインドを送信しました')
     } catch (e) {
-      alert('送信できませんでした')
+      showNotice('送信できませんでした')
       console.error(e)
     }
     setReminding(false)
@@ -932,7 +965,7 @@ export default function AdminPage() {
   }
 
   const callImport = async (dryRun: boolean) => {
-    if (impRows.length === 0) { alert('CSVを選んでください'); return }
+    if (impRows.length === 0) { showNotice('CSVを選んでください'); return }
     setImpBusy(dryRun ? 'check' : 'run'); setImpResult('')
     try {
       const { data: sess } = await supabase.auth.getSession()
@@ -989,13 +1022,13 @@ export default function AdminPage() {
       body: JSON.stringify({ action: 'status', requesterId: user.id, id, status }),
     })
     const j = await res.json()
-    if (!res.ok) { alert('更新できませんでした: ' + (j.error || '')); return }
+    if (!res.ok) { showNotice('更新できませんでした: ' + (j.error || '')); return }
     loadMeetings()
   }
   // 完了した相談を削除する（溜まってきたときの整理用）
   const deleteMeetings = async (ids: string[], label: string) => {
     if (ids.length === 0) return
-    if (!window.confirm(label + '\nこの操作は取り消せません。よろしいですか？')) return
+    if (!(await ask({ title: '削除しますか？', body: label + '\nこの操作は取り消せません。', okLabel: '削除する', danger: true }))) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const res = await fetch('/api/meeting-request', {
@@ -1003,7 +1036,7 @@ export default function AdminPage() {
       body: JSON.stringify({ action: 'delete', requesterId: user.id, ids }),
     })
     const j = await res.json()
-    if (!res.ok) { alert('削除できませんでした: ' + (j.error || '')); return }
+    if (!res.ok) { showNotice('削除できませんでした: ' + (j.error || '')); return }
     loadMeetings()
   }
 
@@ -1015,14 +1048,14 @@ export default function AdminPage() {
   // 案件の公開／下書きを切り替える（RLS回避のためAPI経由）
   const setPlaceStatus = async (placeId: string, status: 'published' | 'draft') => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { alert('ログインが必要です'); return }
+    if (!user) { showNotice('ログインが必要です'); return }
     const res = await fetch('/api/admin/set-place-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requesterId: user.id, placeId, status }),
     })
     const result = await res.json()
-    if (!res.ok) { alert('変更に失敗しました: ' + (result.error || '不明なエラー')); return }
+    if (!res.ok) { showNotice('変更に失敗しました: ' + (result.error || '不明なエラー')); return }
     loadPlacesList()
   }
 
@@ -1049,9 +1082,9 @@ export default function AdminPage() {
   }
 
   const saveNewPlace = async (status: 'published' | 'draft') => {
-    if (!npForm.title.trim()) { alert('案件タイトルを入力してください'); return }
+    if (!npForm.title.trim()) { showNotice('案件タイトルを入力してください'); return }
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { alert('ログインが必要です'); return }
+    if (!user) { showNotice('ログインが必要です'); return }
     setNpSaving(true)
 
     // 画像は先にストレージへ上げてURLを作る
@@ -1061,7 +1094,7 @@ export default function AdminPage() {
       const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : 'jpg'
       const path = 'admin/' + Date.now() + '.' + ext
       const up = await supabase.storage.from('place-images').upload(path, npFile, { upsert: true })
-      if (up.error) { alert('画像のアップロードに失敗しました: ' + up.error.message); setNpSaving(false); return }
+      if (up.error) { showNotice('画像のアップロードに失敗しました: ' + up.error.message); setNpSaving(false); return }
       imageUrl = supabase.storage.from('place-images').getPublicUrl(path).data.publicUrl
     }
 
@@ -1090,22 +1123,22 @@ export default function AdminPage() {
     })
     const result = await res.json()
     setNpSaving(false)
-    if (!res.ok) { alert('登録に失敗しました: ' + (result.error || '不明なエラー')); return }
-    alert(status === 'published' ? '案件を公開しました' : '下書きとして保存しました')
+    if (!res.ok) { showNotice('登録に失敗しました: ' + (result.error || '不明なエラー')); return }
+    showNotice(status === 'published' ? '案件を公開しました' : '下書きとして保存しました')
     setNpForm(emptyNewPlace); setNpFile(null); setShowNewPlace(false)
     loadPlacesList()
   }
 
   const deleteSellerAdmin = async (id: string) => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { alert('ログインが必要です'); return }
+    if (!user) { showNotice('ログインが必要です'); return }
     const res = await fetch('/api/admin/delete-seller', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, requesterId: user.id }),
     })
     const result = await res.json()
-    if (!res.ok) { alert('削除失敗: ' + (result.error || '不明なエラー')); return }
+    if (!res.ok) { showNotice('削除失敗: ' + (result.error || '不明なエラー')); return }
     loadSellersList()
   }
 
@@ -1130,7 +1163,7 @@ export default function AdminPage() {
   // profiles には管理者用の UPDATE ポリシーが無く、クライアントから直接更新すると
   // RLS に無言で弾かれる（エラーも出ず0件更新になる）ため、サービスロールのAPI経由で更新する
   const setApproval = async (id: string, status: 'approved' | 'rejected') => {
-    if (!adminUid) { alert('認証情報がありません。再ログインしてください'); return }
+    if (!adminUid) { showNotice('認証情報がありません。再ログインしてください'); return }
     try {
       const res = await fetch('/api/admin/set-approval', {
         method: 'POST',
@@ -1138,9 +1171,9 @@ export default function AdminPage() {
         body: JSON.stringify({ requesterId: adminUid, targetId: id, status }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { alert('更新失敗: ' + (json.error || res.status)); return }
+      if (!res.ok) { showNotice('更新失敗: ' + (json.error || res.status)); return }
     } catch (e) {
-      alert('通信エラーが発生しました'); return
+      showNotice('通信エラーが発生しました'); return
     }
     loadPubReqs()
   }
@@ -1162,7 +1195,7 @@ export default function AdminPage() {
 
   const setReviewStatus = async (id: string, status: string) => {
     const { error } = await supabase.from('reviews').update({ status }).eq('id', id)
-    if (error) { alert('更新失敗: ' + error.message); return }
+    if (error) { showNotice('更新失敗: ' + error.message); return }
     loadReviewList()
   }
 
@@ -1246,15 +1279,15 @@ export default function AdminPage() {
     setSubmitXlsxBusy(placeId)
     try {
       const n = await exportPlaceSubmission(supabase, placeId, title)
-      if (n === 0) alert('この案件には、出店日が入った承認済みの申込がまだありません')
+      if (n === 0) showNotice('この案件には、出店日が入った承認済みの申込がまだありません')
     } catch (e) {
-      alert(e instanceof Error ? e.message : '出力に失敗しました')
+      showNotice(e instanceof Error ? e.message : '出力に失敗しました')
     }
     setSubmitXlsxBusy('')
   }
   // 施設側に渡すための一覧をExcelで開ける形（CSV・Shift-JIS互換のBOM付きUTF-8）で書き出す
   const exportPendingCsv = (rows: PendingApp[], label: string) => {
-    if (rows.length === 0) { alert('出力する応募がありません'); return }
+    if (rows.length === 0) { showNotice('出力する応募がありません'); return }
     const cols: [string, (a: PendingApp) => string][] = [
       ['案件名', a => a.placeTitle],
       ['出店希望日', a => a.apply_date || ''],
@@ -1300,7 +1333,7 @@ export default function AdminPage() {
   // 電話で先に伝えている場合など、送りたくない場面があるため。
   const setAppStatus = async (id: string, status: string, notify = true) => {
     const { error } = await supabase.from('applications').update({ status }).eq('id', id)
-    if (error) { alert('更新失敗: ' + error.message); return }
+    if (error) { showNotice('更新失敗: ' + error.message); return }
     if (notify) {
       try {
         await fetch('/api/notify/application-status', {
@@ -1361,7 +1394,7 @@ export default function AdminPage() {
   // 書類のプレビュー（署名付きURLを新規タブで開く）
 const previewDoc = async (fileUrl: string) => {
     const { data, error } = await supabase.storage.from('seller-documents').createSignedUrl(fileUrl, 60)
-    if (error || !data) { alert('プレビューURLの生成に失敗しました: ' + (error?.message || '')); return }
+    if (error || !data) { showNotice('プレビューURLの生成に失敗しました: ' + (error?.message || '')); return }
     const isPdf = /\.pdf(\?|$)/i.test(fileUrl)
     if (isPdf) {
       window.open(data.signedUrl, '_blank')
@@ -1378,7 +1411,7 @@ const previewDoc = async (fileUrl: string) => {
     // いつ確認したかを残す（提出日と分けて把握できるように）
     patch.reviewed_at = new Date().toISOString()
     const { error } = await supabase.from('seller_documents').update(patch).eq('id', id)
-    if (error) { alert('更新失敗: ' + error.message); return }
+    if (error) { showNotice('更新失敗: ' + error.message); return }
     loadDocReviews()
   }
 
@@ -1754,7 +1787,7 @@ const previewDoc = async (fileUrl: string) => {
                             {place.status === '公開中' ? (
                               <>
                                 <ClosedToggle placeId={place.id} closed={place.closed} compact />
-                                <button onClick={() => { if (window.confirm('この案件を下書きに戻しますか？（サイトに表示されなくなります）')) setPlaceStatus(place.id, 'draft') }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', fontWeight: '700' }}>下書きに戻す</button>
+                                <button onClick={async () => { if (await ask({ title: '下書きに戻しますか？', body: 'サイトに表示されなくなります。', okLabel: '下書きに戻す' })) setPlaceStatus(place.id, 'draft') }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', fontWeight: '700' }}>下書きに戻す</button>
                               </>
                             ) : (
                               <button onClick={() => setPlaceStatus(place.id, 'published')} style={{ fontSize: '11px', padding: '4px 10px', border: 'none', borderRadius: '6px', background: '#16A34A', cursor: 'pointer', color: '#fff', fontWeight: '700' }}>公開する</button>
@@ -1763,7 +1796,7 @@ const previewDoc = async (fileUrl: string) => {
                             <DuplicateButton placeId={place.id} compact fromAdmin />
                             <a href={'/places/' + place.id} target='_blank' rel='noopener noreferrer' style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #BFDBFE', borderRadius: '6px', background: '#EFF6FF', cursor: 'pointer', color: '#1D4ED8', textDecoration: 'none', fontWeight: '700' }}>詳細</a>
                             <Link href={'/dashboard/host/edit-place/' + place.id + '?from=admin'} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748B', textDecoration: 'none' }}>編集</Link>
-                            <button onClick={() => { if (window.confirm('この案件を削除しますか？')) deletePlaceAdmin(place.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>削除</button>
+                            <button onClick={async () => { if (await ask({ title: 'この案件を削除しますか？', body: 'この操作は取り消せません。', okLabel: '削除する', danger: true })) deletePlaceAdmin(place.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #FCA5A5', borderRadius: '6px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>削除</button>
                           </div>
                         </td>
                       </tr>
@@ -1929,7 +1962,7 @@ const previewDoc = async (fileUrl: string) => {
                       </div>
                     )}
                     {impPreview.willCreate > 0 && (
-                      <button onClick={() => { if (window.confirm(impPreview.willCreate + '件を取り込みます。よろしいですか？\n※メールは送信されません。')) callImport(false) }} disabled={!!impBusy}
+                      <button onClick={async () => { if (await ask({ title: '会員を取り込みますか？', body: impPreview.willCreate + '件を取り込みます。\nメールは送信されません。', okLabel: '取り込む' })) callImport(false) }} disabled={!!impBusy}
                         style={{ background: impBusy ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, cursor: impBusy ? 'wait' : 'pointer' }}>
                         {impBusy === 'run' ? '取り込み中…' : impPreview.willCreate + '件を取り込む'}
                       </button>
@@ -2016,7 +2049,7 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ display: 'flex', gap: '4px' }}>
                             <button onClick={() => window.open('/sellers/' + s.id + '?preview=1', '_blank')} title="公開プロフィールを見る" style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #E2E8F0', borderRadius: '5px', background: '#fff', cursor: 'pointer' }}>表示</button>
-                            <button onClick={() => { if (window.confirm(s.name + ' を削除しますか？この操作は取り消せません。')) deleteSellerAdmin(s.id) }} style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #FCA5A5', borderRadius: '5px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>削除</button>
+                            <button onClick={async () => { if (await ask({ title: '出店者を削除しますか？', body: s.name + ' を削除します。\nこの操作は取り消せません。', okLabel: '削除する', danger: true })) deleteSellerAdmin(s.id) }} style={{ fontSize: '10px', padding: '3px 8px', border: '1px solid #FCA5A5', borderRadius: '5px', background: '#FEE2E2', cursor: 'pointer', color: '#DC2626' }}>削除</button>
                           </div>
                         </td>
                       </tr>
@@ -2162,7 +2195,7 @@ const previewDoc = async (fileUrl: string) => {
                                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
                                     <button onClick={() => previewDoc(d.file_url)} style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>確認</button>
                                     <button onClick={() => reviewDoc(d.id, 'approved')} style={{ background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認</button>
-                                    <button onClick={async () => { const reason = window.prompt('否認理由を入力してください（出店者にメールで通知されます）'); if (reason === null) return; await reviewDoc(d.id, 'rejected', reason); try { await fetch('/api/notify/document-rejected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId: d.id, reason }) }) } catch (e) { console.error('否認通知に失敗', e) } }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>否認</button>
+                                    <button onClick={async () => { const { ok, text: reason } = await askText({ title: '書類を否認しますか？', body: '否認の理由は出店者にメールで届きます。', input: { label: '否認の理由', placeholder: '例：有効期限が切れています' }, okLabel: '否認する', danger: true }); if (!ok) return; await reviewDoc(d.id, 'rejected', reason); try { await fetch('/api/notify/document-rejected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId: d.id, reason }) }) } catch (e) { console.error('否認通知に失敗', e) } }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>否認</button>
                                   </div>
                                 </div>
                               )
@@ -2537,7 +2570,7 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.total_pay ?? s.fee).toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{Math.round((s.total_pay ?? s.fee) * 1.1).toLocaleString()}</td>
                         <td style={{ padding: '10px 14px' }}>
-                          <button onClick={() => { if (window.confirm('この売上記録を削除しますか？')) deleteSale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
+                          <button onClick={async () => { if (await ask({ title: '売上記録を削除しますか？', body: '出店者が報告し直せるよう、削除したことを出店者へお伝えください。', okLabel: '削除する', danger: true })) deleteSale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
                         </td>
                       </tr>
                     ))}
@@ -2831,7 +2864,7 @@ const previewDoc = async (fileUrl: string) => {
                     {r.comment && <div style={{ fontSize: '14px', color: '#444', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: '10px' }}>{r.comment}</div>}
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <button onClick={() => setReviewStatus(r.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>承認して公開</button>
-                      <button onClick={() => { if (window.confirm('このレビューを却下しますか？')) setReviewStatus(r.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>却下</button>
+                      <button onClick={async () => { if (await ask({ title: 'レビューを却下しますか？', okLabel: '却下する', danger: true })) setReviewStatus(r.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>却下</button>
                       <span style={{ fontSize: '11px', color: '#94A3B8', marginLeft: 'auto' }}>{new Date(r.created_at).toLocaleDateString('ja-JP')}</span>
                     </div>
                   </div>
@@ -2853,7 +2886,7 @@ const previewDoc = async (fileUrl: string) => {
                     {r.comment && <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: '8px' }}>{r.comment}</div>}
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {r.status === 'approved'
-                        ? <button onClick={() => { if (window.confirm('公開を取り消して却下にしますか？')) setReviewStatus(r.id, 'rejected') }} style={{ background: '#fff', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>公開を取り消す</button>
+                        ? <button onClick={async () => { if (await ask({ title: '公開を取り消しますか？', body: 'このレビューを却下にします。', okLabel: '却下する', danger: true })) setReviewStatus(r.id, 'rejected') }} style={{ background: '#fff', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>公開を取り消す</button>
                         : <button onClick={() => setReviewStatus(r.id, 'approved')} style={{ background: '#fff', color: '#16A34A', border: '1px solid #BBF7D0', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>承認して公開する</button>}
                     </div>
                   </div>
@@ -2886,7 +2919,7 @@ const previewDoc = async (fileUrl: string) => {
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <a href={'/sellers/' + r.id + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>プレビュー</a>
                   <button onClick={() => setApproval(r.id, 'approved')} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>承認して公開</button>
-                  {r.approval_status === 'pending' && <button onClick={() => { if (window.confirm('この申請を非承認にしますか？')) setApproval(r.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>非承認</button>}
+                  {r.approval_status === 'pending' && <button onClick={async () => { if (await ask({ title: '申請を非承認にしますか？', okLabel: '非承認にする', danger: true })) setApproval(r.id, 'rejected') }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>非承認</button>}
                 </div>
               </div>
             )
@@ -3254,6 +3287,32 @@ const previewDoc = async (fileUrl: string) => {
           }}
         />
       )}
+
+      {/* showNotice() で出す短いお知らせ。alert の置き換え */}
+      <Notice message={notice?.message ?? null} kind={notice?.kind} onClose={() => setNotice(null)} />
+
+      {/* ask() で出す確認ダイアログ。画面内に出すので、アプリ内ブラウザでも動く */}
+      <ConfirmDialog
+        open={!!askState}
+        title={askState?.title || ''}
+        body={askState?.body}
+        okLabel={askState?.okLabel}
+        danger={askState?.danger}
+        extra={askState?.input ? (
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>{askState.input.label}</div>
+            <input
+              value={askText_}
+              onChange={e => setAskText_(e.target.value)}
+              placeholder={askState.input.placeholder}
+              autoFocus
+              style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px' }}
+            />
+          </div>
+        ) : undefined}
+        onOk={() => answerAsk(true)}
+        onCancel={() => answerAsk(false)}
+      />
     </div>
   )
 }

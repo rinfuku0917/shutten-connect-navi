@@ -25,6 +25,9 @@ type Row = {
   status: string
   seller_id: string
   created_at: string | null
+  // 取り消したとき。経緯を追えるように残す
+  cancelled_at?: string | null
+  cancel_reason?: string | null
 }
 
 type Seller = {
@@ -110,6 +113,9 @@ export default function PlaceApplicationsModal({
   const [cxBusy, setCxBusy] = useState(false)
   const [cxErr, setCxErr] = useState<string | null>(null)
   const [cxReason, setCxReason] = useState('')
+  // サーバに「お金の記録があるため取り消せない」と弾かれた状態。
+  // 理由を見せたまま、それでも赤いボタンが押せる、という見た目を防ぐ
+  const [cxBlocked, setCxBlocked] = useState(false)
 
   const REASONS = ['体調不良', '車両の故障', '日程の重複', '天候', '出店者の都合', 'その他']
 
@@ -197,6 +203,8 @@ export default function PlaceApplicationsModal({
         const blockers: string[] = Array.isArray(json?.blockers) ? json.blockers : []
         setCxErr((json?.error || '取り消せませんでした。') +
           (blockers.length ? '\n\n・' + blockers.join('\n・') : ''))
+        // お金の記録で止まった場合は、何度押しても結果は同じ。ボタンを押せなくする
+        if (blockers.length > 0) setCxBlocked(true)
         return
       }
       setCxAsk(null)
@@ -261,7 +269,7 @@ export default function PlaceApplicationsModal({
     setErr(null)
     const { data, error } = await supabase
       .from('applications')
-      .select('id, apply_date, format, status, seller_id, created_at, profiles!applications_seller_id_fkey(name, shop_name, email, phone, address, genre, areas, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, bio)')
+      .select('id, apply_date, format, status, seller_id, created_at, cancelled_at, cancel_reason, profiles!applications_seller_id_fkey(name, shop_name, email, phone, address, genre, areas, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, bio)')
       .eq('place_id', placeId)
       .order('created_at', { ascending: true })
 
@@ -336,7 +344,10 @@ export default function PlaceApplicationsModal({
 
     // 承認待ちがある出店者を先に出す
     const list = Array.from(map.values())
-    list.forEach(s => s.rows.sort((a, b) => (a.apply_date ?? '').localeCompare(b.apply_date ?? '')))
+    // 取り消した行は最後に回す。生きている申込を先に見られるように
+    list.forEach(s => s.rows.sort((a, b) =>
+      ((a.status === 'cancelled' ? 1 : 0) - (b.status === 'cancelled' ? 1 : 0))
+      || (a.apply_date ?? '').localeCompare(b.apply_date ?? '')))
     list.sort((a, b) => {
       const pa = a.rows.some(r => r.status === 'pending') ? 0 : 1
       const pb = b.rows.some(r => r.status === 'pending') ? 0 : 1
@@ -383,7 +394,13 @@ export default function PlaceApplicationsModal({
     }
   }
 
-  const total = sellers.reduce((n, s) => n + s.rows.length, 0)
+  // 件数は取り消した分を除く。案件管理の「◯件」バッジと同じ数え方にそろえる
+  // （バッジは cancelled を除外しているのに、ここは含めていて食い違っていた）
+  const live = (r: Row) => r.status !== 'cancelled'
+  const total = sellers.reduce((n, s) => n + s.rows.filter(live).length, 0)
+  const cxl = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'cancelled').length, 0)
+  // 取り消した行は普段は畳む。経緯を追いたいときだけ開く
+  const [showCancelled, setShowCancelled] = useState(false)
   const pend = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'pending').length, 0)
   const appr = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'approved').length, 0)
   const rej = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'rejected').length, 0)
@@ -434,8 +451,15 @@ export default function PlaceApplicationsModal({
               <>
                 {/* 内訳 */}
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                  <span style={{ ...chip, background: '#F1F5F9', color: '#334155' }}>出店者 {sellers.length}社</span>
+                  <span style={{ ...chip, background: '#F1F5F9', color: '#334155' }}>出店者 {sellers.filter(s => s.rows.some(live)).length}社</span>
                   <span style={{ ...chip, background: '#EBF6FD', color: '#1D4ED8' }}>申込 {total}件</span>
+                  {cxl > 0 && (
+                    <button type='button' onClick={() => setShowCancelled(v => !v)}
+                      title={showCancelled ? '取り消した申込を隠す' : '取り消した申込も表示する'}
+                      style={{ ...chip, background: showCancelled ? '#E2E8F0' : '#F8FAFC', color: '#475569', border: '1px solid #CBD5E1', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      取消し {cxl}{showCancelled ? '（表示中）' : ''}
+                    </button>
+                  )}
                   {pend > 0 && <span style={{ ...chip, background: LABEL.pending.bg, color: LABEL.pending.fg }}>承認待ち {pend}</span>}
                   {appr > 0 && <span style={{ ...chip, background: LABEL.approved.bg, color: LABEL.approved.fg }}>承認済み {appr}</span>}
                   {rej > 0 && <span style={{ ...chip, background: LABEL.rejected.bg, color: LABEL.rejected.fg }}>不採用 {rej}</span>}
@@ -600,18 +624,24 @@ export default function PlaceApplicationsModal({
 
                           {/* 申込んだ日と、その状態 */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {s.rows.map(r => {
+                            {s.rows.filter(r => showCancelled || live(r)).map(r => {
                               const b = badge(r.status)
+                              const cx = r.status === 'cancelled'
                               return (
-                                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', background: '#fff', border: '1px solid #EEF2F6', borderRadius: '8px', padding: '8px 10px' }}>
-                                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>{fmtDate(r.apply_date)}</span>
+                                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', background: cx ? '#F8FAFC' : '#fff', border: '1px solid #EEF2F6', borderRadius: '8px', padding: '8px 10px', opacity: cx ? 0.75 : 1 }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 700, color: cx ? '#94A3B8' : '#334155', textDecoration: cx ? 'line-through' : 'none' }}>{fmtDate(r.apply_date)}</span>
+                                  {cx && (r.cancelled_at || r.cancel_reason) && (
+                                    <span style={{ fontSize: '11px', color: '#64748B' }}>
+                                      {r.cancelled_at ? fmtDate(r.cancelled_at.slice(0, 10)) + ' 取消し' : '取消し'}{r.cancel_reason ? '／' + r.cancel_reason : ''}
+                                    </span>
+                                  )}
                                   {r.format && <span style={{ fontSize: '11px', color: '#888' }}>{r.format}</span>}
                                   <span style={{ ...chip, background: b.bg, color: b.fg }}>{b.text}</span>
                                   {r.status === 'approved' && (
                                     <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
                                       <button
                                         type='button'
-                                        onClick={() => { setCxErr(null); setCxReason(''); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        onClick={() => { setCxErr(null); setCxReason(''); setCxBlocked(false); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
                                         title='出店者から連絡を受けて、この出店を取り消します'
                                         style={{ background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
                                       >
@@ -834,6 +864,7 @@ export default function PlaceApplicationsModal({
       <ConfirmDialog
         open={!!cxAsk}
         busy={cxBusy}
+        okDisabled={cxBlocked}
         error={cxErr}
         danger
         title='この出店を取り消しますか？'
