@@ -259,12 +259,21 @@ function InvoiceInner() {
 
   // 明細表の配色。実際に発行している請求書のPDFから読み取った色に合わせている。
   //   濃い青 #1A56B0 … ご請求金額の枠
-  //   薄い青 #B7C8E8 … 明細表の罫線
+  //   青     #6B89C0 … 明細表の罫線
   //   淡い青 #E8F0FE … 見出し行と合計欄の塗り
-  const LINE = '#B7C8E8'
+  //
+  // 罫線は元は 0.5pt の #B7C8E8 だったが、「枠線が消えている」という
+  // 指摘を受けて濃く・太くした。調べたところ線自体は消えておらず、
+  // PDFにする途中（html2canvas → JPEG → A4への縮小）でも残っていた。
+  // 原因は薄さだった。#B7C8E8 は明るさが 205 で、白（255）との差が 50 しかなく、
+  // スマホの画面でも印刷でも見えない。#6B89C0 は差が 110 あり、はっきり出る。
+  //
+  // 太さも 0.5pt から 1pt に上げた。PDF は canvas を A4 幅へ約半分に縮めるため、
+  // 0.5pt では紙の上で 0.25pt（0.09mm）まで細くなる。1pt なら 0.5pt 残る。
+  const LINE = '#6B89C0'
   const ACCENT = '#1A56B0'
   const TINT = '#E8F0FE'
-  const cell: React.CSSProperties = { border: `0.5pt solid ${LINE}`, padding: '0 6.7pt', fontSize: '10pt', height: '17.5pt' }
+  const cell: React.CSSProperties = { border: `1pt solid ${LINE}`, padding: '0 6.7pt', fontSize: '10pt', height: '17.5pt' }
   const head: React.CSSProperties = { ...cell, textAlign: 'center', background: TINT, height: '17pt' }
   const right: React.CSSProperties = { ...cell, textAlign: 'right' }
   const sumLabel: React.CSSProperties = { ...cell, textAlign: 'right', background: TINT, height: '18.5pt' }
@@ -409,7 +418,7 @@ function InvoiceInner() {
         {/* ご請求金額（枠つき） */}
         <div style={{
           ...abs, left: '48pt', top: '235.5pt', width: '498.8pt', height: '29.2pt', boxSizing: 'border-box',
-          border: `0.5pt solid ${ACCENT}`, background: TINT,
+          border: `1pt solid ${ACCENT}`, background: TINT,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '13.3pt', fontSize: '18pt',
         }}>
           <span>ご請求金額({inv.periodLabel})</span>
