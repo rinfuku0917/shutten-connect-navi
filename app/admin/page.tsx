@@ -1868,6 +1868,28 @@ const previewDoc = async (fileUrl: string) => {
           {/* ===== 出店者管理 ===== */}
           {tab === 'sellers' && (
             <>
+              {/* 売上管理から「登録情報を見る」で来たとき。
+                  誰を見に来たのかを最初に示し、戻れるようにする。
+                  この帯より下の一覧も、その1人だけに絞る */}
+              {sellerFocus && (
+                <div style={{ background: '#EFF6FF', border: '1.5px solid #BFDBFE', borderRadius: '10px', padding: '11px 14px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '13px', color: '#1D4ED8', fontWeight: 700 }}>
+                    「{sellerFocus.name}」だけを表示しています
+                  </span>
+                  <button
+                    type='button'
+                    onClick={() => setSellerFocus(null)}
+                    style={{ background: '#fff', border: '1px solid #BFDBFE', color: '#1D4ED8', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', minHeight: '34px' }}
+                  >
+                    すべての出店者を表示
+                  </button>
+                </div>
+              )}
+
+              {/* 1人を見に来たときは、取り込みと一斉案内を出さない。
+                  探している人の情報が下へ押しやられ、毎回スクロールが要るため。
+                  「すべての出店者を表示」を押せば戻る */}
+              {!sellerFocus && <>
               {/* 旧サイトの会員CSVの取り込み。
                   旧サイトが新規登録を受け付けているあいだは、定期的に必要になる。 */}
               <div style={{ background: '#fff', border: '1.5px solid #BFDBFE', borderRadius: '10px', padding: '14px 16px', marginBottom: '16px' }}>
@@ -1923,22 +1945,7 @@ const previewDoc = async (fileUrl: string) => {
               {/* 旧サイトからの移行組へ、パスワード設定のご案内を送る。
                   本物の会員へメールが飛ぶため、押した回数だけ送る作りにしている */}
               <PasswordNotice />
-
-              {/* 売上管理から「登録情報を見る」で来たとき。誰を見ているかを示し、戻れるようにする */}
-              {sellerFocus && (
-                <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '11px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '13px', color: '#1D4ED8', fontWeight: 700 }}>
-                    「{sellerFocus.name}」だけを表示しています
-                  </span>
-                  <button
-                    type='button'
-                    onClick={() => setSellerFocus(null)}
-                    style={{ background: '#fff', border: '1px solid #BFDBFE', color: '#1D4ED8', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', minHeight: '34px' }}
-                  >
-                    すべての出店者を表示
-                  </button>
-                </div>
-              )}
+              </>}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
@@ -1987,8 +1994,21 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '10px 12px', color: '#64748B' }}>{s.genre}</td>
                         <td style={{ padding: '10px 12px', color: '#64748B' }}>{s.area}</td>
                         <td style={{ padding: '10px 12px', color: '#3A9BD5' }}>{s.sns || '—'}</td>
+                        {/* 書類の状態は、そのまま押して中身を確認できるようにする。
+                            売上を見ていて「この人の書類は大丈夫か」と思ったときに、
+                            探し直さずその場から飛べる */}
                         <td style={{ padding: '10px 12px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 7px', borderRadius: '20px', background: s.docs === '提出済' ? '#ECFDF5' : s.docs === '再提出依頼' ? '#FEE2E2' : '#FEF3C7', color: s.docs === '提出済' ? '#16A34A' : s.docs === '再提出依頼' ? '#DC2626' : '#92400E' }}>{s.docs}</span>
+                          <button
+                            type='button'
+                            onClick={() => openSellerDocs(s.id, s.shop || s.name)}
+                            title={s.name + ' の書類を確認する'}
+                            style={{ fontFamily: 'inherit', fontSize: '10px', fontWeight: '700', padding: '3px 9px', borderRadius: '20px', cursor: 'pointer', lineHeight: 1.6,
+                              background: s.docs === '提出済' ? '#ECFDF5' : s.docs === '再提出依頼' ? '#FEE2E2' : '#FEF3C7',
+                              color: s.docs === '提出済' ? '#16A34A' : s.docs === '再提出依頼' ? '#DC2626' : '#92400E',
+                              border: '1px solid ' + (s.docs === '提出済' ? '#A7F3D0' : s.docs === '再提出依頼' ? '#FCA5A5' : '#FDE68A'),
+                              whiteSpace: 'nowrap' }}>
+                            {s.docs} ›
+                          </button>
                         </td>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 7px', borderRadius: '20px', background: s.status === '承認済' ? '#ECFDF5' : '#FEF3C7', color: s.status === '承認済' ? '#16A34A' : '#92400E' }}>{s.status}</span>
@@ -2499,6 +2519,17 @@ const previewDoc = async (fileUrl: string) => {
                           {s.shopName && s.sellerName && s.shopName !== s.sellerName && (
                             <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>{s.sellerName}</div>
                           )}
+                          {/* 書類はここからも直接開けるようにする。
+                              売上を見ながら「この人の書類は」と思ったときに、
+                              登録情報を経由せずに行けるほうが早い */}
+                          <button
+                            type='button'
+                            onClick={() => openSellerDocs(s.seller_id, s.shopName || s.sellerName)}
+                            title='この出店者の書類を確認する'
+                            style={{ background: 'none', border: 'none', padding: 0, marginTop: '3px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px', display: 'block' }}
+                          >
+                            書類を確認
+                          </button>
                         </td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#64748B' }}>¥{(s.place_fee ?? 0).toLocaleString()}</td>
