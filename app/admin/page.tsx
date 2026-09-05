@@ -12,6 +12,7 @@ import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
+import ScheduleCalendar from './ScheduleCalendar'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import TodayCheckins from './TodayCheckins'
@@ -50,9 +51,9 @@ const dummyPlaces = [
 export default function AdminPage() {
   const router = useRouter()
   // 管理画面のタブ。URLと履歴の出し入れに使うため、一覧をここに持つ
-  const ADMIN_TABS = ['dashboard','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings'] as const
+  const ADMIN_TABS = ['dashboard','schedule','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings'] as const
 
-  const [tab, setTab] = useState<'dashboard' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
@@ -1459,6 +1460,7 @@ const previewDoc = async (fileUrl: string) => {
         <nav className='admin-sidebar-nav' style={{ padding: '8px 0', flex: 1 }}>
           {[
             { key: 'dashboard', label: 'ダッシュボード' },
+            { key: 'schedule', label: '出店管理' },
             { key: 'places', label: '案件管理' },
             { key: 'sellers', label: '出店者管理' },
             { key: 'docs', label: '書類審査' },
@@ -1537,6 +1539,10 @@ const previewDoc = async (fileUrl: string) => {
         <div style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
 
           {/* ===== ダッシュボード ===== */}
+          {/* 出店管理スケジュール。承認された出店を月のカレンダーに並べる。
+              日を押すとその日の出店が出て、開くと企業情報と現場メモが見られる */}
+          {tab === 'schedule' && <ScheduleCalendar />}
+
           {tab === 'dashboard' && (
             <>
               {/* 当日の受付状況。いちばん上に置いて、開いたら最初に目に入るようにする */}

@@ -1,0 +1,368 @@
+'use client'
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '../lib/supabase'
+
+// 出店管理スケジュール。
+//
+// 承認された出店を月のカレンダーに並べ、日を選ぶとその日の出店が一覧で出る。
+// 出店を開くと、出店場所・屋号・提出済みの企業情報・現場メモが見られる。
+//
+// 出店者ダッシュボードにも似たカレンダーがあるが、そちらは
+// 「自分の申込」を出すもので、扱うデータも用途も違うため作りは分けている
+// （共通化すると、動いている出店者側を触ることになる）。
+
+type Slot = {
+  applicationId: string
+  placeId: string
+  sellerId: string
+  date: string          // YYYY-MM-DD
+  placeTitle: string
+  shopName: string      // 屋号。未登録なら代表者名
+  sellerName: string
+  format: string
+  // 当日の進行。どこまで進んだかを一目で分かるようにする
+  confirmedAt: string | null
+  checkedInAt: string | null
+  leftAt: string | null
+}
+
+type Submission = {
+  shopName: string
+  instagram: string
+  genre: string
+  takeoutBag: string
+  paymentMethods: string[]
+  menus: { name: string, detail?: string, price?: string | number }[]
+  note: string
+} | null
+
+type Note = { id: string, body: string, authorName: string, createdAt: string, updatedAt: string }
+
+const pad = (n: number) => String(n).padStart(2, '0')
+const todayJst = () => {
+  // サーバーはUTCで動くが、ここはブラウザなので端末の時計でよい。
+  // 日本で使う画面なので、端末の日付をそのまま「今日」とする
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+const CARD: React.CSSProperties = {
+  background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '18px',
+}
+
+export default function ScheduleCalendar() {
+  const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
+  const [slots, setSlots] = useState<Slot[]>([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  const [picked, setPicked] = useState<string | null>(null)
+  // いま開いている出店枠。企業情報とメモはここを開いたときに読む
+  const [openSlot, setOpenSlot] = useState<Slot | null>(null)
+  const [submission, setSubmission] = useState<Submission>(null)
+  const [subLoading, setSubLoading] = useState(false)
+  const [notes, setNotes] = useState<Note[]>([])
+  const [noteDraft, setNoteDraft] = useState('')
+  const [noteBusy, setNoteBusy] = useState(false)
+  const [noteErr, setNoteErr] = useState('')
+
+  // 表示している月の出店を読む。
+  // 前後の月へ動くたびに読み直す（全期間を一度に読むと、件数が増えたときに詰まる）
+  const load = useCallback(async () => {
+    setLoading(true)
+    setErr('')
+    const { y, m } = month
+    const start = `${y}-${pad(m + 1)}-01`
+    const endD = new Date(y, m + 1, 1)
+    const end = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-01`
+
+    // profiles への結合は外部キー名を明示する。
+    // applications から profiles への関係が seller_id と cancelled_by の2本あり、
+    // 名前を書かないと「どちらか決められない」と拒否されるため
+    const { data, error } = await supabase
+      .from('applications')
+      .select('id, place_id, seller_id, apply_date, format, confirmed_at, checked_in_at, left_at, places(title), profiles!applications_seller_id_fkey(name, shop_name)')
+      .eq('status', 'approved')
+      .not('apply_date', 'is', null)
+      .gte('apply_date', start)
+      .lt('apply_date', end)
+      .order('apply_date', { ascending: true })
+
+    if (error) { setErr('出店の読み込みに失敗しました：' + error.message); setLoading(false); return }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mapped: Slot[] = (data || []).map((a: any) => ({
+      applicationId: a.id,
+      placeId: a.place_id,
+      sellerId: a.seller_id,
+      date: a.apply_date,
+      placeTitle: a.places?.title || '(案件名なし)',
+      shopName: a.profiles?.shop_name || a.profiles?.name || '(出店者)',
+      sellerName: a.profiles?.name || '',
+      format: a.format || '',
+      confirmedAt: a.confirmed_at ?? null,
+      checkedInAt: a.checked_in_at ?? null,
+      leftAt: a.left_at ?? null,
+    }))
+    setSlots(mapped)
+    setLoading(false)
+  }, [month])
+
+  useEffect(() => { load() }, [load])
+
+  // 出店枠を開いたら、企業情報とメモを読む
+  const openDetail = async (s: Slot) => {
+    setOpenSlot(s)
+    setSubmission(null)
+    setNotes([])
+    setNoteDraft('')
+    setNoteErr('')
+    setSubLoading(true)
+
+    // 提出済みの企業情報。案件×出店者で1件（出店日ごとではない）
+    const { data: sub } = await supabase
+      .from('application_submissions')
+      .select('shop_name, instagram, genre, takeout_bag, payment_methods, menus, note')
+      .eq('place_id', s.placeId)
+      .eq('seller_id', s.sellerId)
+      .maybeSingle()
+    if (sub) {
+      setSubmission({
+        shopName: sub.shop_name || '',
+        instagram: sub.instagram || '',
+        genre: sub.genre || '',
+        takeoutBag: sub.takeout_bag || '',
+        paymentMethods: Array.isArray(sub.payment_methods) ? sub.payment_methods : [],
+        menus: Array.isArray(sub.menus) ? sub.menus : [],
+        note: sub.note || '',
+      })
+    }
+    setSubLoading(false)
+    await loadNotes(s.applicationId)
+  }
+
+  const loadNotes = async (applicationId: string) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) { setNoteErr('ログインの有効期限が切れています。読み込み直してください。'); return }
+    const res = await fetch('/api/admin/onsite-notes?applicationId=' + encodeURIComponent(applicationId), {
+      headers: { Authorization: 'Bearer ' + token },
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) { setNoteErr(j.error || 'メモを読み込めませんでした'); return }
+    setNotes(j.notes || [])
+  }
+
+  const addNote = async () => {
+    if (!openSlot || !noteDraft.trim() || noteBusy) return
+    setNoteBusy(true)
+    setNoteErr('')
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) { setNoteErr('ログインの有効期限が切れています。'); setNoteBusy(false); return }
+    const res = await fetch('/api/admin/onsite-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ applicationId: openSlot.applicationId, body: noteDraft }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) { setNoteErr(j.error || 'メモを保存できませんでした'); setNoteBusy(false); return }
+    setNoteDraft('')
+    await loadNotes(openSlot.applicationId)
+    setNoteBusy(false)
+  }
+
+  const removeNote = async (id: string) => {
+    if (!openSlot || noteBusy) return
+    setNoteBusy(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) { setNoteErr('ログインの有効期限が切れています。'); setNoteBusy(false); return }
+    const res = await fetch('/api/admin/onsite-notes?id=' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + token },
+    })
+    if (!res.ok) { const j = await res.json().catch(() => ({})); setNoteErr(j.error || 'メモを削除できませんでした') }
+    await loadNotes(openSlot.applicationId)
+    setNoteBusy(false)
+  }
+
+  const { y, m } = month
+  const shift = (n: number) => { const d = new Date(y, m + n, 1); setMonth({ y: d.getFullYear(), m: d.getMonth() }); setPicked(null); setOpenSlot(null) }
+  const firstDow = new Date(y, m, 1).getDay()
+  const daysInMonth = new Date(y, m + 1, 0).getDate()
+  const today = todayJst()
+
+  // 日付ごとにまとめる
+  const byDate = new Map<string, Slot[]>()
+  for (const s of slots) {
+    const list = byDate.get(s.date)
+    if (list) list.push(s); else byDate.set(s.date, [s])
+  }
+
+  const pickedSlots = picked ? (byDate.get(picked) || []) : []
+
+  // 当日の進行のどこまで来ているか
+  const progressOf = (s: Slot) => {
+    if (s.leftAt) return { label: '撤収済み', color: '#64748B', bg: '#F1F5F9' }
+    if (s.checkedInAt) return { label: '現場入り', color: '#166534', bg: '#DCFCE7' }
+    if (s.confirmedAt) return { label: '前日確認済み', color: '#1D4ED8', bg: '#EFF6FF' }
+    return { label: '未着手', color: '#92400E', bg: '#FEF3C7' }
+  }
+
+  return (
+    <>
+      <div style={{ ...CARD, marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+          <button onClick={() => shift(-1)} aria-label='前の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>‹</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ fontWeight: 700, fontSize: '16px' }}>{y}年{m + 1}月</div>
+            <button onClick={() => { const d = new Date(); setMonth({ y: d.getFullYear(), m: d.getMonth() }); setPicked(null); setOpenSlot(null) }}
+              style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '3px 10px', background: '#fff', cursor: 'pointer', fontSize: '11px', color: '#64748B' }}>今月</button>
+          </div>
+          <button onClick={() => shift(1)} aria-label='次の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>›</button>
+        </div>
+
+        <div style={{ textAlign: 'center', fontSize: '11px', color: '#64748B', marginBottom: '12px' }}>
+          {loading ? '読み込み中…' : slots.length > 0 ? `この月の出店 ${slots.length}件（日付を押すと内容が出ます）` : 'この月に確定した出店はありません'}
+        </div>
+        {err && <div style={{ textAlign: 'center', fontSize: '12px', color: '#DC2626', marginBottom: '10px' }}>{err}</div>}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '6px' }}>
+          {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
+            <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: i === 0 ? '#DC2626' : i === 6 ? '#1D4ED8' : '#64748B', padding: '6px 0' }}>{d}</div>
+          ))}
+          {Array.from({ length: firstDow }).map((_, i) => <div key={'pad' + i} style={{ minHeight: '64px' }} />)}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const d = i + 1
+            const ds = `${y}-${pad(m + 1)}-${pad(d)}`
+            const items = byDate.get(ds) || []
+            const isToday = ds === today
+            const isPicked = ds === picked
+            return (
+              <button
+                key={ds}
+                type='button'
+                onClick={() => { setPicked(isPicked ? null : ds); setOpenSlot(null) }}
+                style={{
+                  minHeight: '64px', textAlign: 'left', padding: '5px 6px', cursor: 'pointer',
+                  border: isPicked ? '2px solid #F5A623' : isToday ? '1.5px solid #3A9BD5' : '1px solid #E2E8F0',
+                  borderRadius: '8px',
+                  background: items.length > 0 ? '#F8FDF9' : '#fff',
+                  font: 'inherit', color: '#1a1a1a',
+                }}
+              >
+                <div style={{ fontSize: '12px', fontWeight: 700, color: isToday ? '#1D4ED8' : '#334155' }}>{d}</div>
+                {items.slice(0, 2).map(s => (
+                  <div key={s.applicationId} style={{ fontSize: '9.5px', color: '#166534', background: '#DCFCE7', borderRadius: '4px', padding: '1px 4px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {s.shopName}
+                  </div>
+                ))}
+                {items.length > 2 && (
+                  <div style={{ fontSize: '9.5px', color: '#64748B', marginTop: '2px' }}>ほか{items.length - 2}件</div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 選んだ日の出店一覧 */}
+      {picked && (
+        <div style={{ ...CARD, marginBottom: '16px' }}>
+          <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '12px', color: '#B45309' }}>
+            {picked.replaceAll('-', '/')} の出店（{pickedSlots.length}件）
+          </div>
+          {pickedSlots.length === 0 && (
+            <div style={{ fontSize: '13px', color: '#94A3B8' }}>この日に確定した出店はありません。</div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {pickedSlots.map(s => {
+              const p = progressOf(s)
+              const isOpen = openSlot?.applicationId === s.applicationId
+              return (
+                <div key={s.applicationId} style={{ border: isOpen ? '1.5px solid #F5A623' : '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden' }}>
+                  <button
+                    type='button'
+                    onClick={() => isOpen ? setOpenSlot(null) : openDetail(s)}
+                    style={{ width: '100%', textAlign: 'left', background: isOpen ? '#FFFBEB' : '#fff', border: 'none', padding: '12px 14px', cursor: 'pointer', font: 'inherit', color: '#1a1a1a' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700, fontSize: '14px' }}>{s.shopName}</span>
+                      <span style={{ fontSize: '11px', color: p.color, background: p.bg, borderRadius: '999px', padding: '2px 10px', fontWeight: 700 }}>{p.label}</span>
+                      {s.format && <span style={{ fontSize: '11px', color: '#64748B' }}>{s.format}</span>}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748B', marginTop: '3px' }}>{s.placeTitle}</div>
+                  </button>
+
+                  {isOpen && (
+                    <div style={{ borderTop: '1px solid #F1F5F9', padding: '14px', background: '#FCFCFD' }}>
+                      {/* 提出済みの企業情報 */}
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>提出済みの企業情報</div>
+                      {subLoading && <div style={{ fontSize: '12px', color: '#94A3B8' }}>読み込み中…</div>}
+                      {!subLoading && !submission && (
+                        <div style={{ fontSize: '12px', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '9px 11px' }}>
+                          この案件ではまだ提出されていません。提出があるまでは、プロフィールの内容が使われます。
+                        </div>
+                      )}
+                      {!subLoading && submission && (
+                        <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.9 }}>
+                          {submission.shopName && <div>店舗名：{submission.shopName}</div>}
+                          {submission.genre && <div>ジャンル：{(() => { try { const g = JSON.parse(submission.genre); return Array.isArray(g) ? g.join('・') : submission.genre } catch { return submission.genre } })()}</div>}
+                          {submission.takeoutBag && <div>テイクアウト袋：{submission.takeoutBag}</div>}
+                          {submission.paymentMethods.length > 0 && <div>決済：{submission.paymentMethods.join('・')}</div>}
+                          {submission.instagram && <div>Instagram：{submission.instagram}</div>}
+                          {submission.menus.length > 0 && (
+                            <div style={{ marginTop: '4px' }}>
+                              メニュー：
+                              <ul style={{ margin: '2px 0 0', paddingLeft: '18px' }}>
+                                {submission.menus.map((mn, k) => (
+                                  <li key={k}>{mn.name}{mn.price ? `（${mn.price}円）` : ''}{mn.detail ? ` — ${mn.detail}` : ''}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {submission.note && <div style={{ marginTop: '4px', color: '#B45309' }}>現場への連絡事項：{submission.note}</div>}
+                        </div>
+                      )}
+
+                      {/* 現場メモ */}
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', margin: '16px 0 6px' }}>
+                        現場メモ
+                        <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>運営だけが見られます</span>
+                      </div>
+                      {noteErr && <div style={{ fontSize: '12px', color: '#DC2626', marginBottom: '8px' }}>{noteErr}</div>}
+                      {notes.length === 0 && <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '8px' }}>まだメモはありません。</div>}
+                      {notes.map(n => (
+                        <div key={n.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 11px', marginBottom: '6px' }}>
+                          <div style={{ fontSize: '12.5px', color: '#1a1a1a', whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>{n.body}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '5px' }}>
+                            <span style={{ fontSize: '10.5px', color: '#94A3B8' }}>
+                              {n.authorName}／{n.createdAt.slice(0, 16).replace('T', ' ')}
+                            </span>
+                            <button type='button' onClick={() => removeNote(n.id)} disabled={noteBusy}
+                              style={{ border: 'none', background: 'none', color: '#DC2626', fontSize: '11px', cursor: noteBusy ? 'not-allowed' : 'pointer', padding: 0 }}>削除</button>
+                          </div>
+                        </div>
+                      ))}
+                      <textarea
+                        value={noteDraft}
+                        onChange={e => setNoteDraft(e.target.value)}
+                        rows={2}
+                        placeholder='例：搬入は北側のゲートから。現場の担当は佐藤さん。'
+                        style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 11px', fontSize: '13px', color: '#1a1a1a', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                      />
+                      <button type='button' onClick={addNote} disabled={noteBusy || !noteDraft.trim()}
+                        style={{ marginTop: '6px', background: (noteBusy || !noteDraft.trim()) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: (noteBusy || !noteDraft.trim()) ? 'not-allowed' : 'pointer' }}>
+                        {noteBusy ? '保存中…' : 'メモを追加'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
