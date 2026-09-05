@@ -13,6 +13,7 @@ import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 import ScheduleCalendar from './ScheduleCalendar'
+import PasswordNotice from './PasswordNotice'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import TodayCheckins from './TodayCheckins'
@@ -1918,6 +1919,10 @@ const previewDoc = async (fileUrl: string) => {
                   <div style={{ marginTop: '10px', fontSize: '12px', color: impResult.startsWith('失敗') ? '#DC2626' : '#16A34A', fontWeight: 700, lineHeight: 1.7 }}>{impResult}</div>
                 )}
               </div>
+
+              {/* 旧サイトからの移行組へ、パスワード設定のご案内を送る。
+                  本物の会員へメールが飛ぶため、押した回数だけ送る作りにしている */}
+              <PasswordNotice />
 
               {/* 売上管理から「登録情報を見る」で来たとき。誰を見ているかを示し、戻れるようにする */}
               {sellerFocus && (
