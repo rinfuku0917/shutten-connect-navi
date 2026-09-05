@@ -90,6 +90,9 @@ export default function AdminPage() {
   const [docsLoading, setDocsLoading] = useState(false)
   // 応募者一覧の書類バッジから飛んできたとき、その出店者だけに絞り込む
   const [docSellerId, setDocSellerId] = useState<{ id: string; name: string } | null>(null)
+  // 売上管理から「この出店者の登録情報を見たい」と押されたときの絞り込み。
+  // 書類の絞り込み（docSellerId）と同じ考え方で、出店者管理タブを1人に絞る
+  const [sellerFocus, setSellerFocus] = useState<{ id: string; name: string } | null>(null)
   // 不採用は出店者にメールが届くので、画面内のダイアログで確認をはさむ
   const [rejectBusy, setRejectBusy] = useState(false)
   const [rejectErr, setRejectErr] = useState<string | null>(null)
@@ -118,6 +121,22 @@ export default function AdminPage() {
     const u = new URL(window.location.href)
     u.searchParams.set('tab', 'docs')
     window.history.pushState({ tab: 'docs' }, '', u.toString())
+    window.scrollTo({ top: 0 })
+  }
+  // 売上の一覧から、その出店者の登録情報（連絡先・エリア・ジャンル）へ移る。
+  // 運営だけが見られる情報なので、公開ページ /sellers/[id] ではなく
+  // 出店者管理タブを開く。公開ページは連絡先を出さない作りのため
+  // （supabase/migrations/20260904_public_sellers_profile.sql 参照）。
+  const openSellerInfo = (sellerId: string, sellerName: string) => {
+    if (!sellerId) return
+    setSellerFocus({ id: sellerId, name: sellerName })
+    setSellerKw('')
+    setTab('sellers')
+    try { localStorage.setItem('adminTab', 'sellers') } catch { /* 保存できなくても動く */ }
+    // 履歴に積む。確認したあと、戻るで売上管理へ帰れるようにする
+    const u = new URL(window.location.href)
+    u.searchParams.set('tab', 'sellers')
+    window.history.pushState({ tab: 'sellers' }, '', u.toString())
     window.scrollTo({ top: 0 })
   }
   const [authChecked, setAuthChecked] = useState(false)
@@ -311,7 +330,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews(docSellerId?.id) }, [tab, authChecked, docSellerId])
 
   // ===== 売上管理（管理者） =====
-  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
+  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string, shopName: string, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
@@ -371,13 +390,15 @@ export default function AdminPage() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, items, weather, customers, note, places(title), profiles!sales_seller_id_fkey(name)')
+      .select('id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, items, weather, customers, note, places(title), profiles!sales_seller_id_fkey(name, shop_name)')
       .gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SaleRow[] = (data || []).map((s: any) => ({
       id: s.id, place_id: s.place_id, seller_id: s.seller_id, sale_date: s.sale_date,
       revenue: s.revenue, fee: s.fee, place_fee: s.place_fee ?? 0, company_fee: s.company_fee ?? s.fee, total_pay: s.total_pay ?? s.fee,
       placeTitle: s.places?.title || '(案件名なし)', sellerName: s.profiles?.name || '(出店者)',
+      // 誰が出店したかは屋号のほうが分かりやすい。屋号が未登録の人は代表者名で代用する
+      shopName: s.profiles?.shop_name || '',
       items: Array.isArray(s.items) ? s.items : [],
       weather: s.weather || '', customers: s.customers ?? null, note: s.note || '',
     }))
@@ -1872,6 +1893,23 @@ const previewDoc = async (fileUrl: string) => {
                   <div style={{ marginTop: '10px', fontSize: '12px', color: impResult.startsWith('失敗') ? '#DC2626' : '#16A34A', fontWeight: 700, lineHeight: 1.7 }}>{impResult}</div>
                 )}
               </div>
+
+              {/* 売上管理から「登録情報を見る」で来たとき。誰を見ているかを示し、戻れるようにする */}
+              {sellerFocus && (
+                <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '11px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '13px', color: '#1D4ED8', fontWeight: 700 }}>
+                    「{sellerFocus.name}」だけを表示しています
+                  </span>
+                  <button
+                    type='button'
+                    onClick={() => setSellerFocus(null)}
+                    style={{ background: '#fff', border: '1px solid #BFDBFE', color: '#1D4ED8', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', minHeight: '34px' }}
+                  >
+                    すべての出店者を表示
+                  </button>
+                </div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
                   <input type="text" value={sellerKw} onChange={e => setSellerKw(e.target.value)} placeholder="出店者名・メールで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />
@@ -1896,7 +1934,10 @@ const previewDoc = async (fileUrl: string) => {
                   <tbody>
                     {(() => {
                       const kw = sellerKw.trim().toLowerCase()
-                      const filteredSellers = kw ? sellers.filter(s => (s.name || '').toLowerCase().includes(kw) || (s.email || '').toLowerCase().includes(kw)) : sellers
+                      // 売上管理から特定の1人を指して来た場合は、その人だけに絞る。
+                      // 検索語より優先する（名前で検索し直すまでは、その人を見せ続ける）
+                      const base = sellerFocus ? sellers.filter(s => s.id === sellerFocus.id) : sellers
+                      const filteredSellers = kw ? base.filter(s => (s.name || '').toLowerCase().includes(kw) || (s.email || '').toLowerCase().includes(kw)) : base
                       return (<>
                     {sellersLoading && (<tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>読み込み中...</td></tr>)}
                     {!sellersLoading && filteredSellers.length === 0 && (<tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>{kw ? '該当する出店者がいません。' : '出店者がまだいません。'}</td></tr>)}
@@ -2383,7 +2424,21 @@ const previewDoc = async (fileUrl: string) => {
                             </div>
                           )}
                         </td>
-                        <td style={{ padding: '10px 14px' }}>{s.sellerName}</td>
+                        {/* 誰が出店したかは屋号のほうが分かる。押すと登録情報（連絡先・エリア）へ移る。
+                            列は増やさず、代表者名は屋号の下に小さく添える */}
+                        <td style={{ padding: '10px 14px' }}>
+                          <button
+                            type='button'
+                            onClick={() => openSellerInfo(s.seller_id, s.shopName || s.sellerName)}
+                            title='この出店者の登録情報を見る'
+                            style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', font: 'inherit', color: '#1D4ED8', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                          >
+                            {s.shopName || s.sellerName}
+                          </button>
+                          {s.shopName && s.sellerName && s.shopName !== s.sellerName && (
+                            <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>{s.sellerName}</div>
+                          )}
+                        </td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#64748B' }}>¥{(s.place_fee ?? 0).toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{(s.company_fee ?? s.fee).toLocaleString()}</td>

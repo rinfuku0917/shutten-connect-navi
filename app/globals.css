@@ -377,6 +377,97 @@ img[width='1'][height='1'] { display: inline !important; }
   .top3-footcols { gap: 22px 20px; }
 }
 
+/* フッターの折りたたみ。
+   開閉の状態は、見えないチェックボックス（.top3-footacc-state）が持つ。
+   JavaScript を使わないのは、<details> では
+   「スマホは閉じる／パソコンは開いたまま」を作れないため
+   （open は属性なので、画面幅では切り替えられない）。
+
+   パソコンでは下の指定を一切かけない。見出しはただの文字、
+   リンクは出たまま、＋も出さない。つまり今までと1pxも変わらない。 */
+/* パソコンでは開閉そのものが無いので、チェックボックスを消す。
+   display:none にすることで、キーボードの移動先にも入らない
+   （押しても何も起きないものに止まらせない） */
+.top3-footacc-state { display: none; }
+.top3-foothead { display: block; }
+.top3-foothead h4 {
+  font-size: 12px;
+  color: #456254;      /* siteTheme の footerMuted と同じ */
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+.top3-footacc-mark { display: none; }
+
+@media (max-width: 640px) {
+  /* スマホだけ、見出しを押せる帯にする */
+  .top3-footcols { grid-template-columns: 1fr; gap: 0; }
+
+  /* チェックボックスは見せないが、キーボードでは選べるようにする。
+     display:none にすると Tab で止まらず、キーボードだけで開けなくなる */
+  .top3-footacc-state {
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .top3-foothead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #1F3D33;
+    color: #fff;
+    padding: 14px 16px;
+    cursor: pointer;
+    /* 上下の細い境界線で、押せる範囲を分かるようにする */
+    border-top: 1px solid rgba(255, 255, 255, .18);
+    border-bottom: 1px solid rgba(255, 255, 255, .18);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .top3-foothead h4 {
+    color: #fff;
+    font-size: 13.5px;
+    margin: 0;
+  }
+  .top3-footacc-mark {
+    display: inline-block;
+    color: #fff;
+    font-size: 15px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: transform .2s;
+  }
+  /* 開いたら＋が45度回って×になる（よくある質問の開閉と同じ動き） */
+  .top3-footacc-state:checked + .top3-foothead .top3-footacc-mark {
+    transform: rotate(45deg);
+  }
+  /* 開いている見出しは、濃いグレーにして今どこを開いているか分かるようにする */
+  .top3-footacc-state:checked + .top3-foothead {
+    background: #3A423E;
+  }
+
+  /* 中身。閉じているあいだも、リンクはHTMLに残したまま隠すだけ */
+  .top3-footbody {
+    display: none;
+    background: rgba(255, 255, 255, .55);
+    padding: 12px 16px 4px;
+  }
+  .top3-footacc-state:checked ~ .top3-footbody { display: block; }
+
+  /* キーボードで見出しを選んだときに、どこにいるか分かるようにする */
+  .top3-footacc-state:focus-visible + .top3-foothead {
+    outline: 2px solid #F5A623;
+    outline-offset: -2px;
+  }
+}
+
 /* 費用ページ・エリアページ: PC2列 → スマホ1列 */
 .cost-case-grid { max-width: 100%; }
 .cost-case-grid > * { min-width: 0; }

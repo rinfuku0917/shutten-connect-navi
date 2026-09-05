@@ -57,13 +57,32 @@ export default function SiteFooter() {
               </a>
             </div>
           </div>
+          {/* スマホでは折りたたむ。パソコンはこれまでどおり4列に並べる。
+              リンクは常にHTMLへ書き出し、閉じているときはCSSで隠すだけにしている。
+              条件分岐で描き分けると、全公開ページから内部リンク16本が消えてしまう。
+
+              開閉に JavaScript を使っていないのは、
+                ・<details> だと「スマホは閉じる／パソコンは開いたまま」を作れない
+                  （open は属性なので、画面幅では切り替えられない）
+                ・チェックボックスと :checked なら、その出し分けをCSSだけで書ける
+              ため。JSが動く前でも開くので、読み込み中に触っても反応する。 */}
           <div className='top3-footcols'>
-            {cols.map(col => (
-              <div key={col.head} className='top3-footcol'>
-                <h4 style={{ fontSize: '12px', color: C.footerMuted, fontWeight: 700, marginBottom: '12px' }}>{col.head}</h4>
-                {col.items.map(it => <Link key={it.href} href={it.href} style={linkStyle}>{it.label}</Link>)}
-              </div>
-            ))}
+            {cols.map((col, i) => {
+              const id = 'footacc-' + i
+              return (
+                <div key={col.head} className='top3-footcol'>
+                  <input type='checkbox' id={id} className='top3-footacc-state' />
+                  <label htmlFor={id} className='top3-foothead'>
+                    <h4>{col.head}</h4>
+                    {/* ＋が45度回って×になる。よくある質問の開閉と同じ動き */}
+                    <span className='top3-footacc-mark' aria-hidden='true'>＋</span>
+                  </label>
+                  <div className='top3-footbody'>
+                    {col.items.map(it => <Link key={it.href} href={it.href} style={linkStyle}>{it.label}</Link>)}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
         <div style={{ borderTop: '1px solid rgba(47,95,67,.2)', paddingTop: '18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
