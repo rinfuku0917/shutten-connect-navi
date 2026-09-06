@@ -45,7 +45,19 @@ export default function MailTemplates({ focusKey }: { focusKey?: string } = {}) 
   const [preview, setPreview] = useState<{ subject: string, body: string } | null>(null)
   // 「編集」と「届く形」を切り替えて見せる。
   // 以前は押すと下に出る作りで、スクロールしないと見えなかった
-  const [view, setView] = useState<'edit' | 'preview'>('edit')
+  const [view, setView] = useState<'edit' | 'preview' | 'send'>('edit')
+
+  // ===== この文面を1通だけ送る =====
+  //
+  // ふだんのメールは出来事に合わせて自動で飛ぶが、
+  // 「あの1件だけもう一度送りたい」「電話で聞かれたのでメールでも送りたい」
+  // が実際には起きる。これまでは運営が自分のメールソフトで書き写していた。
+  const [sendTo, setSendTo] = useState('')
+  // 差し込みに入れる値。文面ごとに項目が違うので、名前をそのまま持つ
+  const [sendVars, setSendVars] = useState<Record<string, string>>({})
+  const [who, setWho] = useState<{ found: boolean, name: string, shopName: string, role: string | null, lastSentAt: string | null } | null>(null)
+  const [sending, setSending] = useState(false)
+  const [confirm, setConfirm] = useState<{ subject: string, body: string, empty: string[] } | null>(null)
 
   const token = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -81,6 +93,67 @@ export default function MailTemplates({ focusKey }: { focusKey?: string } = {}) 
     setView('edit')
     setMsg('')
     setErr('')
+    // 別の文面を開いたら、前の送り先と差し込みは持ち越さない。
+    // 前の宛先が残ったまま別の文面を送るのがいちばん危ない
+    setSendTo('')
+    setSendVars(Object.fromEntries(t.vars.map(v => [v.name, ''])))
+    setWho(null)
+    setConfirm(null)
+  }
+
+  // 送り先のアドレスから、その人が誰かを調べる。
+  // 会員なら、屋号やお名前を差し込みの初期値に入れる（打ち間違いを防ぐため）
+  const lookup = async (t: Tpl) => {
+    const to = sendTo.trim()
+    if (!to) return
+    const tk = await token()
+    const res = await fetch('/api/admin/mail-templates/send?email=' + encodeURIComponent(to) + '&key=' + encodeURIComponent(t.key),
+      { headers: { Authorization: 'Bearer ' + tk } })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) return
+    setWho(j)
+    if (!j.found) return
+    setSendVars(prev => {
+      const next = { ...prev }
+      for (const v of t.vars) {
+        if (next[v.name]) continue
+        if (v.name === '屋号') next[v.name] = j.shopName || j.name || ''
+        if (v.name === 'お名前' || v.name === '宛名') next[v.name] = j.name || j.shopName || ''
+        if (v.name === 'メールアドレス') next[v.name] = to
+      }
+      return next
+    })
+  }
+
+  // 送る前に、実際に届く形を作って確かめてもらう
+  const askSend = (t: Tpl) => {
+    setErr(''); setMsg('')
+    const to = sendTo.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { setErr('メールアドレスの形が正しくありません。'); return }
+    const fill = (text: string) =>
+      text.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, n: string) => sendVars[n] ?? '')
+    setConfirm({
+      subject: fill(draft.subject),
+      body: fill(draft.body),
+      empty: t.vars.filter(v => !(sendVars[v.name] || '').trim()).map(v => v.name),
+    })
+  }
+
+  const doSend = async (t: Tpl) => {
+    if (sending) return
+    setSending(true); setErr(''); setMsg('')
+    const tk = await token()
+    const res = await fetch('/api/admin/mail-templates/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk },
+      body: JSON.stringify({ key: t.key, to: sendTo.trim(), subject: draft.subject, body: draft.body, vars: sendVars }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setSending(false)
+    setConfirm(null)
+    if (!res.ok) { setErr(j.error || '送信に失敗しました'); return }
+    setMsg(j.sentTo + ' へ送信しました。')
+    setWho(w => w ? { ...w, lastSentAt: new Date().toISOString() } : w)
   }
 
   const save = async (t: Tpl) => {
@@ -199,9 +272,9 @@ export default function MailTemplates({ focusKey }: { focusKey?: string } = {}) 
                     以前は「届く形を見る」を押すと画面の下に出る作りで、
                     スクロールしないと見えなかった */}
                 <div style={{ display: 'flex', gap: '0', marginBottom: '14px', borderBottom: '2px solid #E2E8F0' }}>
-                  {([['edit', '文面を書く'], ['preview', '届く形を見る']] as const).map(([v, lbl]) => (
+                  {([['edit', '文面を書く'], ['preview', '届く形を見る'], ['send', '1通だけ送る']] as const).map(([v, lbl]) => (
                     <button key={v} type='button'
-                      onClick={() => { if (v === 'preview') showPreview(t); else setView('edit') }}
+                      onClick={() => { if (v === 'preview') showPreview(t); else setView(v) }}
                       style={{
                         background: 'none', border: 'none', fontFamily: 'inherit', cursor: 'pointer',
                         padding: '9px 16px', fontSize: '13px', fontWeight: 700,
@@ -214,7 +287,93 @@ export default function MailTemplates({ focusKey }: { focusKey?: string } = {}) 
                   ))}
                 </div>
 
-                {view === 'preview' ? (
+                {view === 'send' ? (
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '12px', lineHeight: 1.9 }}>
+                      この文面を、いま画面にある内容のまま1通だけ送ります。
+                      <strong style={{ color: '#B45309' }}>保存していない書きかけの内容でも、そのまま送られます。</strong>
+                    </div>
+
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>送り先のメールアドレス</div>
+                    <input
+                      type='email'
+                      value={sendTo}
+                      onChange={e => { setSendTo(e.target.value); setWho(null) }}
+                      onBlur={() => lookup(t)}
+                      placeholder='example@example.com'
+                      style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 13px', fontSize: '13.5px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }}
+                    />
+                    {/* 誰あてかを出す。打ち間違いに気づけるようにするため */}
+                    {who && (
+                      <div style={{ fontSize: '12px', marginTop: '6px', lineHeight: 1.8, color: who.found ? '#15803D' : '#B45309' }}>
+                        {who.found
+                          ? '会員：' + (who.shopName || who.name || '（名前の登録なし）') + (who.role ? '（' + who.role + '）' : '')
+                          : 'このアドレスは会員として登録されていません。会員以外へも送れますが、宛先をもう一度お確かめください。'}
+                        {who.lastSentAt && (
+                          <div style={{ color: '#B45309' }}>
+                            この文面は {new Date(who.lastSentAt).toLocaleString('ja-JP')} に、このアドレスへ送信済みです。
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {t.vars.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', margin: '18px 0 6px' }}>
+                          差し込みに入れる内容
+                          <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>空のままだと、その部分が抜けて届きます</span>
+                        </div>
+                        <div style={{ display: 'grid', gap: '10px', marginBottom: '4px' }}>
+                          {t.vars.map(v => (
+                            <div key={v.name}>
+                              <div style={{ fontSize: '11.5px', color: '#64748B', marginBottom: '4px' }}>{'{{' + v.name + '}}'}　{v.note}</div>
+                              <input
+                                value={sendVars[v.name] || ''}
+                                onChange={e => setSendVars(p => ({ ...p, [v.name]: e.target.value }))}
+                                style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 13px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    <button type='button' onClick={() => askSend(t)} disabled={sending || !sendTo.trim()}
+                      style={{ marginTop: '16px', background: (sending || !sendTo.trim()) ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 24px', fontSize: '13px', fontWeight: 900, cursor: (sending || !sendTo.trim()) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                      {sending ? '送信中…' : '内容を確かめて送る'}
+                    </button>
+
+                    {/* 送る前の最終確認。実際に届く形をそのまま出す */}
+                    {confirm && (
+                      <div style={{ marginTop: '16px', border: '2px solid #FDE68A', background: '#FFFBEB', borderRadius: '10px', padding: '14px 16px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 900, color: '#B45309', marginBottom: '8px' }}>この内容で送ります</div>
+                        <div style={{ fontSize: '12px', color: '#334155', marginBottom: '10px', lineHeight: 1.9 }}>
+                          送り先　<strong>{sendTo.trim()}</strong>
+                          {who?.found && <>（{who.shopName || who.name}）</>}
+                        </div>
+                        {confirm.empty.length > 0 && (
+                          <div style={{ fontSize: '12px', color: '#DC2626', marginBottom: '10px', lineHeight: 1.9 }}>
+                            {confirm.empty.map(n => '{{' + n + '}}').join('、')} が空のままです。その部分が抜けたまま届きます。
+                          </div>
+                        )}
+                        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px', marginBottom: '12px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #E2E8F0' }}>{confirm.subject}</div>
+                          <pre style={{ margin: 0, fontSize: '12.5px', color: '#334155', lineHeight: 1.9, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{confirm.body}</pre>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button type='button' onClick={() => doSend(t)} disabled={sending}
+                            style={{ background: sending ? '#ccc' : '#DC2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 24px', fontSize: '13px', fontWeight: 900, cursor: sending ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                            {sending ? '送信中…' : 'この内容で送信する'}
+                          </button>
+                          <button type='button' onClick={() => setConfirm(null)} disabled={sending}
+                            style={{ background: '#fff', color: '#64748B', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                            やめる
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : view === 'preview' ? (
                   <div>
                     <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '8px', lineHeight: 1.8 }}>
                       出店者・募集者にはこの形で届きます。
