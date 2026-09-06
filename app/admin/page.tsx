@@ -1575,7 +1575,7 @@ const previewDoc = async (fileUrl: string) => {
           {/* ===== ダッシュボード ===== */}
           {/* 出店管理スケジュール。承認された出店を月のカレンダーに並べる。
               日を押すとその日の出店が出て、開くと企業情報と現場メモが見られる */}
-          {tab === 'schedule' && <ScheduleCalendar />}
+          {tab === 'schedule' && <ScheduleCalendar onOpenDocs={openSellerDocs} onOpenSeller={openSellerInfo} />}
 
           {tab === 'dashboard' && (
             <>

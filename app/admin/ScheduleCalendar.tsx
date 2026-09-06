@@ -50,7 +50,15 @@ const CARD: React.CSSProperties = {
   background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '18px',
 }
 
-export default function ScheduleCalendar() {
+export default function ScheduleCalendar({
+  onOpenDocs,
+  onOpenSeller,
+}: {
+  /** 出店者の書類だけを絞って開く。管理画面の openSellerDocs を渡す */
+  onOpenDocs?: (sellerId: string, sellerName: string) => void
+  /** 出店者の登録情報（連絡先・エリア）を開く。管理画面の openSellerInfo を渡す */
+  onOpenSeller?: (sellerId: string, sellerName: string) => void
+} = {}) {
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   const [slots, setSlots] = useState<Slot[]>([])
   const [loading, setLoading] = useState(true)
@@ -202,11 +210,21 @@ export default function ScheduleCalendar() {
   const pickedSlots = picked ? (byDate.get(picked) || []) : []
 
   // 当日の進行のどこまで来ているか
+  // 当日の進行のどこまで来ているか。
+  //
+  // これは「出店者が当日の進行ボタンを押したか」であって、
+  // 「出店があったか」ではない。押さない出店者も多い。
+  // 以前は何も押されていないと一律「未着手」と出していたが、
+  // 終わった出店にもそう出るため「実施済みなのに未着手で紛らわしい」と
+  // 指摘を受けた。出店日を過ぎているかどうかで言い分けを変える。
   const progressOf = (s: Slot) => {
     if (s.leftAt) return { label: '撤収済み', color: '#64748B', bg: '#F1F5F9' }
     if (s.checkedInAt) return { label: '現場入り', color: '#166534', bg: '#DCFCE7' }
     if (s.confirmedAt) return { label: '前日確認済み', color: '#1D4ED8', bg: '#EFF6FF' }
-    return { label: '未着手', color: '#92400E', bg: '#FEF3C7' }
+    // 出店日が過ぎているのに何も押されていない場合。
+    // 出店そのものは行われている可能性が高いので「未着手」とは言わない
+    if (s.date < today) return { label: '当日の記録なし', color: '#64748B', bg: '#F1F5F9' }
+    return { label: '当日の記録待ち', color: '#92400E', bg: '#FEF3C7' }
   }
 
   return (
@@ -227,7 +245,11 @@ export default function ScheduleCalendar() {
         </div>
         {err && <div style={{ textAlign: 'center', fontSize: '12px', color: '#DC2626', marginBottom: '10px' }}>{err}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '6px' }}>
+        {/* 1fr のままだと、長い屋号がマスを押し広げて列幅がバラバラになる。
+            1fr は minmax(auto,1fr) と同じで、auto の下限が中身の最小幅になるため。
+            minmax(0,1fr) にすると下限が0になり、7列が必ず等幅で並ぶ。
+            フッターの列（globals.css）でも同じ理由でこの書き方にしている */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,minmax(0,1fr))', gap: '6px' }}>
           {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
             <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: i === 0 ? '#DC2626' : i === 6 ? '#1D4ED8' : '#64748B', padding: '6px 0' }}>{d}</div>
           ))}
@@ -296,6 +318,26 @@ export default function ScheduleCalendar() {
 
                   {isOpen && (
                     <div style={{ borderTop: '1px solid #F1F5F9', padding: '14px', background: '#FCFCFD' }}>
+                      {/* 出店者そのものを見に行く導線。
+                          現場で「この人の書類は大丈夫か」を確かめたい場面が多いため、
+                          企業情報より先に置いている */}
+                      {(onOpenSeller || onOpenDocs) && (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                          {onOpenSeller && (
+                            <button type='button' onClick={() => onOpenSeller(s.sellerId, s.shopName)}
+                              style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px' }}>
+                              出店者の登録情報
+                            </button>
+                          )}
+                          {onOpenDocs && (
+                            <button type='button' onClick={() => onOpenDocs(s.sellerId, s.shopName)}
+                              style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px' }}>
+                              書類を確認
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {/* 提出済みの企業情報 */}
                       <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>提出済みの企業情報</div>
                       {subLoading && <div style={{ fontSize: '12px', color: '#94A3B8' }}>読み込み中…</div>}
