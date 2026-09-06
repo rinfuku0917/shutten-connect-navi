@@ -842,6 +842,9 @@ export default function AdminPage() {
   // 品目ごとの販売食数をまとめて出す。
   const [repXlsxBusy, setRepXlsxBusy] = useState('')
   const [reportPlaces, setReportPlaces] = useState<{ placeId: string, title: string, count: number }[]>([])
+  // 提出用Excelの案件一覧は、案件が増えるほど縦に伸びて画面を埋める。
+  // 普段は畳んでおき、書き出すときだけ開く
+  const [repXlsxOpen, setRepXlsxOpen] = useState(false)
   const downloadSalesReportXlsx = async (placeId: string, title: string) => {
     setRepXlsxBusy(placeId)
     try {
@@ -2242,21 +2245,37 @@ const previewDoc = async (fileUrl: string) => {
 
               {/* 企業へ提出する売上報告 */}
               {reportPlaces.length > 0 && (
-                <div style={{ background: '#fff', border: '2px solid #BBF7D0', borderRadius: '10px', padding: '14px 16px', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#15803D', marginBottom: '4px' }}>📊 施設・企業へ提出する売上報告Excel</div>
-                  <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px', lineHeight: 1.7 }}>
-                    出店者から届いた報告（売上・品目ごとの販売食数・天候・来客数・所感）を、開催日ごとのシートにまとめます。「何食売れたか」のご報告にそのまま使えます。
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                    {reportPlaces.map(pl => (
-                      <button key={pl.placeId} onClick={() => downloadSalesReportXlsx(pl.placeId, pl.title)} disabled={repXlsxBusy === pl.placeId}
-                        style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: repXlsxBusy === pl.placeId ? 'wait' : 'pointer' }}>
-                        {repXlsxBusy === pl.placeId
-                          ? '作成中…'
-                          : <>{pl.title}<span className='nowrap-unit'>（{pl.count}件）</span></>}
-                      </button>
-                    ))}
-                  </div>
+                <div style={{ background: '#fff', border: '2px solid #BBF7D0', borderRadius: '10px', marginBottom: '16px' }}>
+                  {/* 見出しの行を押すと開く。案件が何十件になっても、
+                      閉じているあいだはこの1行しか場所を取らない */}
+                  <button type='button' onClick={() => setRepXlsxOpen(v => !v)}
+                    aria-expanded={repXlsxOpen}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', background: 'transparent', border: 'none', borderRadius: '10px', padding: '14px 16px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: '13px', fontWeight: 900, color: '#15803D' }}>
+                      📊 施設・企業へ提出する売上報告Excel
+                      <span className='nowrap-unit' style={{ fontWeight: 700, color: '#4D7C4F' }}>（{reportPlaces.length}案件）</span>
+                    </span>
+                    <span style={{ flexShrink: 0, fontSize: '11px', fontWeight: 700, color: '#15803D' }}>
+                      {repXlsxOpen ? '閉じる ▲' : '開く ▼'}
+                    </span>
+                  </button>
+                  {repXlsxOpen && (
+                    <div style={{ padding: '0 16px 14px' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px', lineHeight: 1.7 }}>
+                        出店者から届いた報告（売上・品目ごとの販売食数・天候・来客数・所感）を、開催日ごとのシートにまとめます。「何食売れたか」のご報告にそのまま使えます。
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {reportPlaces.map(pl => (
+                          <button key={pl.placeId} onClick={() => downloadSalesReportXlsx(pl.placeId, pl.title)} disabled={repXlsxBusy === pl.placeId}
+                            style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: repXlsxBusy === pl.placeId ? 'wait' : 'pointer' }}>
+                            {repXlsxBusy === pl.placeId
+                              ? '作成中…'
+                              : <>{pl.title}<span className='nowrap-unit'>（{pl.count}件）</span></>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
