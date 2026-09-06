@@ -23,7 +23,9 @@ const ISSUER = {
   zip: '〒136-0073',
   address: '東京都江東区北砂5-1-26-301',
   mail: 'MAIL:info@connect-navi.com',
-  taxId: '登録番号:T-6010601064156',
+  // 適格請求書（インボイス）の登録番号。
+  // 先方が仕入税額控除を受けるのに要るので、請求書にも領収書にも必ず出す
+  taxId: 'インボイス登録番号:T-6010601064156',
 }
 
 type Item = { no: number; date: string; title: string; amount: number }
@@ -221,15 +223,12 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
 
           {/* 4段目　収入印紙欄／内訳／発行者 */}
           <div style={{ display: 'flex', alignItems: 'stretch', borderTop: `0.8pt solid ${INK}` }}>
-            {/* 収入印紙の欄。市販の様式にあるので枠は残し、
-                なぜ貼っていないかをその場で書いておく */}
-            <div style={{ width: '74pt', borderRight: `0.8pt solid ${INK}`, padding: '8pt 4pt', textAlign: 'center' }}>
-              <div style={{ fontSize: '8.5pt', letterSpacing: '3pt', lineHeight: '13pt' }}>収入<br />印紙</div>
-              <div style={{ fontSize: '6.2pt', color: '#555', marginTop: '4pt', lineHeight: '8pt' }}>電子発行のため<br />貼付不要</div>
-            </div>
+            {/* 収入印紙の欄は置かない。
+                電子で渡す領収書には印紙が要らないので、空の枠だけが残ると
+                「貼り忘れではないか」と受け取る側に思わせてしまう */}
 
             {/* 内訳 */}
-            <div style={{ width: '196pt', borderRight: `0.8pt solid ${INK}`, padding: '8pt 12pt', fontSize: '9.5pt', lineHeight: '17pt' }}>
+            <div style={{ width: '236pt', borderRight: `0.8pt solid ${INK}`, padding: '8pt 14pt', fontSize: '9.5pt', lineHeight: '17pt' }}>
               <div style={{ fontSize: '8.5pt', color: '#333', marginBottom: '2pt' }}>内訳</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `0.5pt solid ${INK}` }}>
                 <span>税抜金額</span><span>¥{data.subtotal.toLocaleString()}</span>
@@ -256,6 +255,7 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
         <div style={{ position: 'absolute', left: '52pt', top: '360pt', fontSize: '9pt', color: '#333', lineHeight: '15pt' }}>
           <div>お支払い方法：銀行振込{paidDate ? `（お振込日 ${jpDate(paidDate)}）` : ''}</div>
           <div>請求書番号：{data.invoiceNo}</div>
+          <div>※ この領収書は電子的に発行しており、収入印紙は貼付しておりません。</div>
         </div>
       </div>
     </div>
