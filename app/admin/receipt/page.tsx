@@ -42,6 +42,11 @@ type Data = {
   voidedAt?: string | null
 }
 
+// 市販の領収証（コクヨ ウケ-107N など）に近い配色。
+// 罫線は真っ黒より少し落とし、金額の帯だけ薄い色を敷く
+const INK = '#3A3A3A'
+const TINT = '#E4EFE6'
+
 const yen = (n: number) => '¥' + n.toLocaleString()
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 const jpDate = (iso: string) => {
@@ -62,6 +67,9 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
   const [pdfMaking, setPdfMaking] = useState(false)
+  // 領収日。既定は出店者が申告した振込日。
+  // 先方の締めの都合で日付を合わせたい場面があるため、運営は直せる
+  const [issueOn, setIssueOn] = useState('')
 
   useEffect(() => {
     ;(async () => {
@@ -76,6 +84,8 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
       const j = await res.json()
       if (!res.ok) { setErr(j.error || '領収書を作成できませんでした'); setLoading(false); return }
       setData(j)
+      // 既定の領収日。申告された振込日、無ければ運営が確認した日
+      setIssueOn(j.paidOn || (j.paidConfirmedAt ? String(j.paidConfirmedAt).slice(0, 10) : ''))
       setLoading(false)
     })()
   }, [no])
@@ -131,8 +141,11 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
   // 何の代金かが一目で分かる形に固定する。
   // 事前請求も売上からの請求も、受け取っているのは出店料である点は変わらない
   const forWhat = data.kind === 'advance' ? '出店料（事前）として' : '出店料として'
-  // 領収日。申告された振込日を使い、無いときだけ運営が確認した日にする
+  // 実際に振り込まれた日。紙面の下に添える
   const paidDate = data.paidOn || (data.paidConfirmedAt ? String(data.paidConfirmedAt).slice(0, 10) : '')
+  // 紙面に出す領収日。年・月・日を別に置くため、分けておく
+  const [iy, im, id] = (issueOn || paidDate || '').slice(0, 10).split('-')
+  const ymd = { y: iy || '　　', m: im ? String(Number(im)) : '　', d: id ? String(Number(id)) : '　' }
 
   const abs: React.CSSProperties = { position: 'absolute', whiteSpace: 'nowrap' }
 
@@ -142,6 +155,21 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
         <Link href={isSeller ? '/dashboard/seller?tab=payment' : '/admin'} style={{ fontSize: '13px', color: '#64748B', textDecoration: 'none' }}>
           {isSeller ? '← お支払いに戻る' : '← 管理画面'}
         </Link>
+        {/* 領収日。既定は振込日で、運営だけが直せる。
+            受け取る側が日付を動かせてはいけないので、出店者には出さない */}
+        {!isSeller && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', color: '#64748B' }}>領収日</span>
+            <input type='date' value={issueOn} onChange={e => setIssueOn(e.target.value)}
+              style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px' }} />
+            {paidDate && issueOn !== paidDate && (
+              <button type='button' onClick={() => setIssueOn(paidDate)}
+                style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '6px 10px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                振込日に戻す
+              </button>
+            )}
+          </div>
+        )}
         <div style={{ flex: 1 }} />
         <button onClick={savePdf} disabled={pdfMaking}
           style={{ background: pdfMaking ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, cursor: pdfMaking ? 'not-allowed' : 'pointer', minHeight: '44px' }}>
@@ -149,70 +177,85 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
         </button>
       </div>
 
-      {/* 紙面。請求書と同じA4（596×842pt）で組む */}
+      {/* 紙面。市販の複写式領収証（紙幣判ヨコ型）と同じ体裁で組む。
+          先方の経理が見慣れた形にしておくと、確認が早い。
+          用紙はA4のままで、その中に領収証の枠を1枚置いている */}
       <div id='receipt-sheet' style={{
         position: 'relative', width: '596pt', minHeight: '842pt', margin: '0 auto', background: '#fff',
-        boxSizing: 'border-box', color: '#000',
+        boxSizing: 'border-box', color: '#111',
         fontFamily: '"Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif',
         boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
       }}>
-        <img src='/logo-invoice.png' alt='出店コネクトナビ'
-          style={{ ...abs, left: '54.8pt', top: '55.3pt', width: '99.1pt', height: '24pt' }} />
+        {/* 領収証の枠 */}
+        <div style={{ position: 'absolute', left: '52pt', top: '86pt', width: '492pt', border: `1.2pt solid ${INK}`, background: '#fff' }}>
 
-        <div style={{ ...abs, right: '55.2pt', top: '53.9pt', fontSize: '10pt', lineHeight: '11.9pt', textAlign: 'right' }}>
-          <div>請求書番号:{data.invoiceNo}</div>
-          <div>発行日:{jpDate(paidDate)}</div>
-        </div>
+          {/* 1段目　表題／宛名／番号 */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', padding: '14pt 16pt 10pt', gap: '14pt' }}>
+            <div style={{ fontSize: '17pt', letterSpacing: '7pt', fontWeight: 700, whiteSpace: 'nowrap' }}>領収証</div>
+            <div style={{ flex: 1, minWidth: 0, borderBottom: `0.8pt solid ${INK}`, paddingBottom: '2pt', fontSize: '12.5pt', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {data.seller.shopName || '（店名未登録）'}
+            </div>
+            <div style={{ fontSize: '11pt', whiteSpace: 'nowrap', paddingBottom: '2pt' }}>様</div>
+            <div style={{ fontSize: '9pt', whiteSpace: 'nowrap', paddingBottom: '3pt' }}>No. {data.invoiceNo}</div>
+          </div>
 
-        <div style={{ ...abs, left: '250pt', top: '120.4pt', fontSize: '22pt', lineHeight: '22pt', letterSpacing: '6.1pt' }}>領収書</div>
+          {/* 2段目　金額。市販の様式と同じく、薄い色を敷いた帯にする */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12pt', padding: '10pt 16pt', background: TINT, borderTop: `0.8pt solid ${INK}`, borderBottom: `0.8pt solid ${INK}` }}>
+            <div style={{ fontSize: '10pt', whiteSpace: 'nowrap' }}>金額</div>
+            <div style={{ flex: 1, fontSize: '23pt', fontWeight: 700, letterSpacing: '1pt', whiteSpace: 'nowrap' }}>
+              ¥ {data.total.toLocaleString()} —
+            </div>
+            <div style={{ fontSize: '9.5pt', whiteSpace: 'nowrap' }}>（税込）</div>
+          </div>
 
-        {/* 宛名 */}
-        <div style={{ ...abs, left: '53.2pt', top: '175pt', fontSize: '15pt', lineHeight: '15pt' }}>
-          {data.seller.shopName || '（店名未登録）'}　様
-        </div>
-        <div style={{ position: 'absolute', left: '53.2pt', top: '196pt', width: '260pt', borderBottom: '1pt solid #000' }} />
+          {/* 3段目　但し書きと領収日 */}
+          <div style={{ padding: '12pt 16pt 6pt', display: 'flex', alignItems: 'flex-end', gap: '10pt' }}>
+            <div style={{ fontSize: '10.5pt', whiteSpace: 'nowrap' }}>但</div>
+            <div style={{ flex: 1, minWidth: 0, borderBottom: `0.6pt solid ${INK}`, paddingBottom: '2pt', fontSize: '10.5pt', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {data.periodLabel}　{forWhat}
+            </div>
+          </div>
+          <div style={{ padding: '4pt 16pt 12pt', fontSize: '10pt', textAlign: 'right' }}>
+            {ymd.y} 年 {ymd.m} 月 {ymd.d} 日　上記正に領収いたしました
+          </div>
 
-        {/* 金額 */}
-        <div style={{ ...abs, left: '53.2pt', top: '232pt', fontSize: '12pt' }}>金額</div>
-        <div style={{ ...abs, left: '110pt', top: '224pt', fontSize: '24pt', fontWeight: 700, letterSpacing: '1pt' }}>
-          {yen(data.total)}　<span style={{ fontSize: '12pt', fontWeight: 400 }}>（税込）</span>
-        </div>
-        <div style={{ position: 'absolute', left: '53.2pt', top: '262pt', width: '440pt', borderBottom: '1.5pt solid #000' }} />
+          {/* 4段目　収入印紙欄／内訳／発行者 */}
+          <div style={{ display: 'flex', alignItems: 'stretch', borderTop: `0.8pt solid ${INK}` }}>
+            {/* 収入印紙の欄。市販の様式にあるので枠は残し、
+                なぜ貼っていないかをその場で書いておく */}
+            <div style={{ width: '74pt', borderRight: `0.8pt solid ${INK}`, padding: '8pt 4pt', textAlign: 'center' }}>
+              <div style={{ fontSize: '8.5pt', letterSpacing: '3pt', lineHeight: '13pt' }}>収入<br />印紙</div>
+              <div style={{ fontSize: '6.2pt', color: '#555', marginTop: '4pt', lineHeight: '8pt' }}>電子発行のため<br />貼付不要</div>
+            </div>
 
-        {/* 但し書き */}
-        <div style={{ ...abs, left: '53.2pt', top: '284pt', fontSize: '11pt' }}>但し　{data.periodLabel}　{forWhat}</div>
-        <div style={{ ...abs, left: '53.2pt', top: '306pt', fontSize: '11pt' }}>上記正に領収いたしました</div>
+            {/* 内訳 */}
+            <div style={{ width: '196pt', borderRight: `0.8pt solid ${INK}`, padding: '8pt 12pt', fontSize: '9.5pt', lineHeight: '17pt' }}>
+              <div style={{ fontSize: '8.5pt', color: '#333', marginBottom: '2pt' }}>内訳</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `0.5pt solid ${INK}` }}>
+                <span>税抜金額</span><span>¥{data.subtotal.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `0.5pt solid ${INK}` }}>
+                <span>消費税額等（10%）</span><span>¥{data.tax.toLocaleString()}</span>
+              </div>
+            </div>
 
-        {/* 内訳 */}
-        <div style={{ ...abs, left: '53.2pt', top: '348pt', fontSize: '10pt', fontWeight: 700 }}>【内訳】</div>
-        <div style={{ position: 'absolute', left: '53.2pt', top: '368pt', width: '250pt', fontSize: '10pt', lineHeight: '18pt' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>税抜金額</span><span>{yen(data.subtotal)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>消費税等（10%）</span><span>{yen(data.tax)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1pt solid #000', paddingTop: '3pt', fontWeight: 700 }}>
-            <span>合計</span><span>{yen(data.total)}</span>
+            {/* 発行者。社名に丸印を重ねる */}
+            <div style={{ flex: 1, position: 'relative', padding: '8pt 62pt 8pt 14pt', fontSize: '8.4pt', lineHeight: '12pt' }}>
+              <div style={{ fontSize: '10.5pt', fontWeight: 700, marginBottom: '2pt' }}>{ISSUER.name}</div>
+              <div>{ISSUER.zip} {ISSUER.address}</div>
+              <div>{ISSUER.mail}</div>
+              <div>{ISSUER.taxId}</div>
+              <img src='/seal-company.webp' alt=''
+                style={{ position: 'absolute', right: '6pt', bottom: '6pt', width: '50pt', height: '50pt', opacity: 0.88 }} />
+            </div>
           </div>
         </div>
 
-        {/* 受け取り方法。振込であることを書いておくと、
-            先方の経理が振込明細と突き合わせやすい */}
-        <div style={{ ...abs, left: '53.2pt', top: '452pt', fontSize: '10pt', lineHeight: '16pt' }}>
-          <div>お支払い方法：銀行振込</div>
-          {paidDate && <div>お振込日：{jpDate(paidDate)}</div>}
-        </div>
-
-        {/* 発行者 */}
-        <div style={{ position: 'absolute', right: '55.2pt', top: '440pt', fontSize: '10pt', lineHeight: '15pt', textAlign: 'left' }}>
-          <div style={{ fontSize: '12pt', fontWeight: 700, marginBottom: '4pt' }}>{ISSUER.name}</div>
-          <div>{ISSUER.zip}</div>
-          <div>{ISSUER.address}</div>
-          <div>{ISSUER.mail}</div>
-          <div>{ISSUER.taxId}</div>
-        </div>
-
-        {/* 電子で発行していることを書いておく。
-            紙で渡す領収書と違い、収入印紙を貼っていない理由が先方に伝わる */}
-        <div style={{ ...abs, left: '53.2pt', top: '560pt', fontSize: '8.5pt', color: '#333' }}>
-          ※ この領収書は電子的に発行しており、収入印紙は貼付しておりません。
+        {/* 枠の下に、振込であることを添える。
+            先方の経理が振込明細と突き合わせやすいように */}
+        <div style={{ position: 'absolute', left: '52pt', top: '360pt', fontSize: '9pt', color: '#333', lineHeight: '15pt' }}>
+          <div>お支払い方法：銀行振込{paidDate ? `（お振込日 ${jpDate(paidDate)}）` : ''}</div>
+          <div>請求書番号：{data.invoiceNo}</div>
         </div>
       </div>
     </div>
