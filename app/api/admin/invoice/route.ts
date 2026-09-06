@@ -8,6 +8,23 @@ import { perDayFee } from '../../../lib/placeFee'
 // 参照・書き込みはすべてサービスロールで行い、管理者かどうかはここで照合する。
 
 // 2026年分は 2026-0041 まで発行済みのため、42 から採番する
+// 実施日の表記。「9/5（金）」の形にする。
+//
+// 曜日が無いと、請求書を受け取った側が日付だけで判断することになる。
+// 出店は曜日で条件が変わることが多い（平日と土日祝で出店料が違うなど）ため、
+// 曜日まで出したほうが照合しやすい、という運営の判断で足した。
+//
+// 日付は 'YYYY-MM-DD' で渡す。読めない値のときは空文字を返す
+// （請求書に「NaN/NaN」のような表記が出るのを防ぐ）。
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
+function mdLabel(isoDate: string | null | undefined): string {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}/.test(isoDate)) return ''
+  const [y, mm, dd] = isoDate.slice(0, 10).split('-').map(Number)
+  // 月は0から数える。時刻を付けないと、環境によって前日になることがある
+  const w = WEEKDAYS[new Date(y, mm - 1, dd).getDay()]
+  return `${mm}/${dd}（${w}）`
+}
+
 const NUMBER_START: Record<string, number> = { '2026': 42 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -184,7 +201,7 @@ export async function POST(req: Request) {
         }
       }
 
-      const md = applyDate ? `${parseInt(applyDate.slice(5, 7), 10)}/${parseInt(applyDate.slice(8, 10), 10)}` : ''
+      const md = mdLabel(applyDate)
       const title = (typeof label === 'string' && label.trim())
         ? label.trim()
         : `${placeTitle || '出店'} 出店料（事前）`
@@ -252,9 +269,8 @@ export async function POST(req: Request) {
       const p = placeOf.get(s.place_id)
       const amount = s.total_pay ?? s.fee ?? 0
       const cond = feeLabel(p, s.sale_date)
-      // 元の請求書と同じ「7/1」形式にする（月・日とも先頭のゼロを外す）
-      const [mm, dd] = s.sale_date.slice(5).split('-')
-      const md = `${parseInt(mm, 10)}/${parseInt(dd, 10)}`
+      // 「9/5（金）」の形にする（曜日まで出す）
+      const md = mdLabel(s.sale_date)
       return {
         no: i + 1,
         saleId: s.id,
