@@ -64,7 +64,7 @@ function feeLabel(place: any, saleDate?: string | null): string {
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, sellerId, period, action, dueOn, edited, amount, label, applicationId, invoiceNo: invoiceNoParam, force } = await req.json()
+    const { requesterId, sellerId, period, action, dueOn, edited, amount, label, applicationId, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
 
     const url0 = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key0 = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
 
       const { data: row } = await adminO
         .from('invoices')
-        .select('invoice_no, seller_id, period, kind, items, subtotal, tax, total, item_count, due_on, issued_on, to_name, to_person, note, created_at, voided_at, void_reason')
+        .select('invoice_no, seller_id, period, kind, items, subtotal, tax, total, item_count, due_on, issued_on, to_name, to_person, note, created_at, voided_at, void_reason, paid_status, paid_on, paid_confirmed_at')
         .eq('invoice_no', no).maybeSingle()
 
       // 運営でなければ、自分あての請求書だけを開ける。
@@ -108,6 +108,16 @@ export async function POST(req: Request) {
       if (!row) {
         return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
       }
+      // 領収書として開くときは、入金を確認できているものだけを渡す。
+      // まだ受け取っていないお金の領収書が作れてしまうと、
+      // 帳簿と実際の入金が合わなくなる。
+      // 画面側の出し分けだけでは、URLを直接叩かれたときに防げない
+      if (forReceipt === true && row.paid_status !== 'paid') {
+        return NextResponse.json({
+          error: 'この請求書はまだ入金を確認できていません。領収書は入金の確認後に発行できます。',
+        }, { status: 409 })
+      }
+
       const { data: sl } = await adminO
         .from('profiles').select('shop_name, name').eq('id', row.seller_id).maybeSingle()
       const pm = parseInt(String(row.period).slice(5, 7), 10)
@@ -133,6 +143,11 @@ export async function POST(req: Request) {
         issuedOn: row.issued_on || row.created_at,
         voidedAt: row.voided_at,
         voidReason: row.void_reason,
+        // 領収書に使う。領収日は出店者が申告した振込日を使い、
+        // 申告が無い古い行だけ、運営が確認した日を控えにする
+        paidStatus: row.paid_status,
+        paidOn: row.paid_on,
+        paidConfirmedAt: row.paid_confirmed_at,
       })
     }
 

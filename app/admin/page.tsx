@@ -2353,6 +2353,19 @@ const previewDoc = async (fileUrl: string) => {
                             >
                               請求書を開く
                             </a>
+                            {/* 領収書は入金を確認できたものだけ。
+                                まだ受け取っていないお金の領収書が出ると、
+                                帳簿と実際の入金が合わなくなる */}
+                            {r.paid_status === 'paid' && !r.voided_at && (
+                              <a
+                                href={'/admin/receipt?no=' + encodeURIComponent(r.invoice_no)}
+                                target='_blank' rel='noopener noreferrer'
+                                title='この入金の領収書を開いてPDFにする'
+                                style={{ background: '#15803D', color: '#fff', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+                              >
+                                領収書を開く
+                              </a>
+                            )}
                           </div>
                           <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginBottom: '8px' }}>
                             <div>

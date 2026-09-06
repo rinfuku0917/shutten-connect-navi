@@ -1740,6 +1740,14 @@ export default function SellerDashboard() {
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fff', color: '#1D4ED8', border: '1.5px solid #BFDBFE', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, textDecoration: 'none', minHeight: '44px', boxSizing: 'border-box' }}>
                             請求書を見る・PDFで保存
                           </a>
+                          {/* 領収書は入金を確認できてから。
+                              まだ受け取っていないお金の領収書は出せない */}
+                          {iv.paid_status === 'paid' && (
+                            <a href={'/dashboard/seller/receipt?no=' + encodeURIComponent(iv.invoice_no)}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fff', color: '#15803D', border: '1.5px solid #BBF7D0', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, textDecoration: 'none', minHeight: '44px', boxSizing: 'border-box' }}>
+                              領収書を作る・PDFで保存
+                            </a>
+                          )}
                           {iv.paid_status !== 'paid' && (
                             <button onClick={() => {
                               setPayFor(iv)
