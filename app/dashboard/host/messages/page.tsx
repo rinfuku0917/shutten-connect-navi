@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import MessageAttachment from '../../../components/MessageAttachment'
 import { supabase } from '../../../lib/supabase'
 import BackButton from '../../../components/BackButton'
 
@@ -114,21 +115,11 @@ export default function HostMessages() {
   }, [])
 
   // 添付ファイルを表示する（画像はインライン、それ以外はリンク）
-  const renderAttachment = (filePath: string, isMine: boolean) => {
-    const { data } = supabase.storage.from('message-attachments').getPublicUrl(filePath)
-    const url = data.publicUrl
-    const isImage = /\.(jpe?g|png|gif|webp)$/i.test(filePath)
-    if (isImage) {
-      return (
-        <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', marginTop: '6px' }}>
-          <img src={url} alt="添付画像" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block' }} />
-        </a>
-      )
-    }
-    return (
-      <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '6px', fontSize: '12px', textDecoration: 'underline', color: isMine ? '#fff' : '#2563EB' }}>📎 ファイルを開く</a>
-    )
-  }
+  // 添付ファイルの表示。期限付きURLを使う共通の部品にまとめてある
+  // （公開URLだと、URLを知っていれば誰でも見られてしまうため）
+  const renderAttachment = (filePath: string, isMine: boolean) => (
+    <MessageAttachment filePath={filePath} isMine={isMine} />
+  )
 
 
   // 自分が送ったメッセージを取り消す（打ち間違いの取り消し用）

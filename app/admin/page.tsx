@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import MessageAttachment from '../components/MessageAttachment'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
@@ -546,21 +547,11 @@ export default function AdminPage() {
 
   // 管理者として返信を送信
   // 添付ファイルを表示する（画像はインライン、それ以外はリンク）
-  const renderAttachment = (filePath: string, isMine: boolean) => {
-    const { data } = supabase.storage.from('message-attachments').getPublicUrl(filePath)
-    const url = data.publicUrl
-    const isImage = /\.(jpe?g|png|gif|webp)$/i.test(filePath)
-    if (isImage) {
-      return (
-        <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', marginTop: '6px' }}>
-          <img src={url} alt="添付画像" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block' }} />
-        </a>
-      )
-    }
-    return (
-      <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '6px', fontSize: '12px', textDecoration: 'underline', color: isMine ? '#fff' : '#2563EB' }}>📎 ファイルを開く</a>
-    )
-  }
+  // 添付ファイルの表示。期限付きURLを使う共通の部品にまとめてある
+  // （公開URLだと、URLを知っていれば誰でも見られてしまうため）
+  const renderAttachment = (filePath: string, isMine: boolean) => (
+    <MessageAttachment filePath={filePath} isMine={isMine} />
+  )
 
   const sendAdminMsg = async () => {
     if ((!adminMsgInput.trim() && !adminMsgFile) || !activeThread || !adminUid) return
