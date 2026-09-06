@@ -1356,23 +1356,25 @@ export default function SellerDashboard() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {myApplies.map(a => (
-                  <div key={a.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
+                  <div key={a.id} className='apply-row' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', background: '#F1F5F9', color: '#64748B' }}>{a.type}</span>
+                        <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', background: '#F1F5F9', color: '#64748B', whiteSpace: 'nowrap' }}>{a.type}</span>
                       </div>
-                      <div style={{ fontSize: '14px', fontWeight: '700', marginBottom: '4px' }}>{a.place}</div>
-                      <div style={{ fontSize: '12px', color: '#64748B' }}>{a.date}</div>
+                      <div className='jp-head' style={{ fontSize: '14px', fontWeight: '700', marginBottom: '4px', lineHeight: 1.6 }}>{a.place}</div>
+                      <div style={{ fontSize: '12px', color: '#64748B', whiteSpace: 'nowrap' }}>{a.date}</div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: a.statusBg, color: a.statusColor }}>{a.status}</span>
+                    <div className='apply-side' style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+                      <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: a.statusBg, color: a.statusColor, whiteSpace: 'nowrap' }}>{a.status}</span>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button onClick={() => { setTab('messages'); openThread(a.id) }} style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #E2E8F0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>連絡</button>
                         {/* 出店者からの取り消しは受け付けない。気軽に取り消せると当日の欠席が増え、
                             募集者は会場や書類の準備を進めているため。やむを得ない事情は運営が個別に判断する */}
-                        {a.status === '審査中' && <span style={{ fontSize: '11px', color: '#64748B' }}>審査中（取り消しは運営へご連絡ください）</span>}
-                        {/* 出店が決まったあとは、この画面からは取り消せない。募集者が準備を進めているため */}
-                        {a.status === '承認済' && <span style={{ fontSize: '11px', color: '#64748B' }}>出店決定（取り消しは運営へご連絡ください）</span>}
+                        {(a.status === '審査中' || a.status === '承認済') && (
+                          <span className='apply-note' style={{ fontSize: '11px', color: '#94A3B8', lineHeight: 1.7 }}>
+                            取り消しは運営へご連絡ください
+                          </span>
+                        )}
                         {a.status === '否認' && <button style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid #F5A623', borderRadius: '6px', background: '#FFF8E1', color: '#B45309', cursor: 'pointer' }}>再申込</button>}
                       </div>
                     </div>

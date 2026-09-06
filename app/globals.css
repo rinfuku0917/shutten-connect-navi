@@ -485,3 +485,26 @@ img[width='1'][height='1'] { display: inline !important; }
 @media (max-width: 720px) {
   .cost-case-grid { grid-template-columns: 1fr !important; }
 }
+
+
+/* 出店者マイページの申込一覧。
+   スマホでは横並びのままだと、左の案件名が押し潰されて
+   「キ／ッ／チ／ン／カ／ー」のように1文字ずつ縦に折れてしまう。
+   狭い画面では上下に積んで、それぞれに幅を持たせる。 */
+@media (max-width: 640px) {
+  .apply-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 14px 16px !important;
+  }
+  .apply-side {
+    align-items: flex-start !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  .apply-note {
+    flex-basis: 100%;
+  }
+}
