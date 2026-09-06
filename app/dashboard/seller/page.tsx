@@ -419,7 +419,7 @@ export default function SellerDashboard() {
   // ===== 売上（出店者） =====
   type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string, schedule: unknown, day_type_fees: unknown }
   type SaleItem = { name: string, qty: string, price: string }
-  type SellerSale = { id: string, application_id: string | null, sale_date: string, placeTitle: string, revenue: number, fee: number, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
+  type SellerSale = { id: string, application_id: string | null, sale_date: string, placeTitle: string, revenue: number, fee: number, acceptedAt: string | null, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
 
   // ===== 出店報告フォーム =====
   // 出店が終わったら、企業へ提出できる形で報告してもらう専用の入力画面。
@@ -508,7 +508,7 @@ export default function SellerDashboard() {
   // 品目別の内訳（任意）。施設から「何が何食売れたか」を求められることがある
   const [saleItems, setSaleItems] = useState<SaleItem[]>([])
   // 売上報告がまだの承認済み申込（リマインド表示用）
-  const [unreported, setUnreported] = useState<{ application_id: string, placeTitle: string, apply_date: string }[]>([])
+  const [unreported, setUnreported] = useState<{ application_id: string, placeTitle: string, apply_date: string, remindedAt: string | null }[]>([])
 
   // 出店日を過ぎたのに売上報告が無い申込を探す（直近30日）
   const loadUnreported = async () => {
@@ -519,7 +519,9 @@ export default function SellerDashboard() {
     const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
     const { data: apps } = await supabase
       .from('applications')
-      .select('id, apply_date, places(title)')
+      // sales_reminder_sent_at は「実際に督促を送れた日時」。
+      // sales_reminded_at は報告済みで対象から外したときにも入るため使わない
+      .select('id, apply_date, sales_reminder_sent_at, places(title)')
       .eq('seller_id', uid).eq('status', 'approved')
       .not('apply_date', 'is', null).gte('apply_date', from).lt('apply_date', today)
     if (!apps || apps.length === 0) { setUnreported([]); return }
@@ -529,7 +531,7 @@ export default function SellerDashboard() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setUnreported((apps as any[])
       .filter(a => !done.has(a.id))
-      .map(a => ({ application_id: a.id, placeTitle: a.places?.title || '(案件)', apply_date: a.apply_date }))
+      .map(a => ({ application_id: a.id, placeTitle: a.places?.title || '(案件)', apply_date: a.apply_date, remindedAt: a.sales_reminder_sent_at ?? null }))
       .sort((a, b) => (a.apply_date < b.apply_date ? -1 : 1)))
   }
   const [myApprovedApps, setMyApprovedApps] = useState<SellerApp[]>([])
@@ -603,13 +605,14 @@ export default function SellerDashboard() {
     const from = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10)
     const { data } = await supabase
       .from('sales')
-      .select('id, application_id, sale_date, revenue, fee, total_pay, items, weather, customers, note, places(title)')
+      .select('id, application_id, sale_date, revenue, fee, total_pay, items, weather, customers, note, accepted_at, places(title)')
       .eq('seller_id', uid).gte('sale_date', from)
       .order('sale_date', { ascending: false })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setCalSales((data || []).map((x: any) => ({
       id: x.id, application_id: x.application_id ?? null, sale_date: x.sale_date, revenue: x.revenue, fee: x.total_pay ?? x.fee,
       placeTitle: x.places?.title || '(案件名なし)',
+      acceptedAt: x.accepted_at ?? null,
       items: Array.isArray(x.items) ? x.items : [],
       weather: x.weather || '', customers: x.customers ?? null, note: x.note || '',
     })))
@@ -693,12 +696,13 @@ export default function SellerDashboard() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, application_id, sale_date, revenue, fee, total_pay, items, weather, customers, note, places(title)')
+      .select('id, application_id, sale_date, revenue, fee, total_pay, items, weather, customers, note, accepted_at, places(title)')
       .eq('seller_id', uid).gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SellerSale[] = (data || []).map((s: any) => ({
       id: s.id, application_id: s.application_id ?? null, sale_date: s.sale_date, revenue: s.revenue, fee: s.total_pay ?? s.fee,
       placeTitle: s.places?.title || '(案件名なし)',
+      acceptedAt: s.accepted_at ?? null,
       items: Array.isArray(s.items) ? s.items : [],
       weather: s.weather || '', customers: s.customers ?? null, note: s.note || '',
     }))
@@ -1180,7 +1184,15 @@ export default function SellerDashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {unreported.slice(0, 5).map(u => (
                   <div key={u.application_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '12px', color: '#7F1D1D' }}>{u.apply_date.slice(5).replace('-', '/')}　{u.placeTitle}</span>
+                    <span style={{ fontSize: '12px', color: '#7F1D1D' }}>
+                      {u.apply_date.slice(5).replace('-', '/')}　{u.placeTitle}
+                      {/* 運営が督促を送ったものは、それと分かるようにする */}
+                      {u.remindedAt && (
+                        <span style={{ display: 'inline-block', marginLeft: '8px', fontSize: '10.5px', fontWeight: 700, color: '#B45309', background: '#FEF3C7', borderRadius: '999px', padding: '1px 8px' }}>
+                          運営から催促がありました
+                        </span>
+                      )}
+                    </span>
                     <button onClick={() => openReport(u)}
                       style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>報告する</button>
                   </div>
@@ -2447,7 +2459,7 @@ export default function SellerDashboard() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                   <thead>
                     <tr>
-                      {['売上日', '案件', '売上', '出店料(税別)', 'あなたの利益', ''].map(h => (
+                      {['売上日', '案件', '売上', '出店料(税別)', 'あなたの利益', '運営の確認', ''].map(h => (
                         <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: '600', borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -2469,6 +2481,12 @@ export default function SellerDashboard() {
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>¥{s.revenue.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#3A9BD5' }}>¥{s.fee.toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.revenue - s.fee).toLocaleString()}</td>
+                        {/* 運営が受理したものは、それと分かるようにする */}
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                          {s.acceptedAt
+                            ? <span style={{ fontSize: '11px', fontWeight: 700, color: '#166534', background: '#DCFCE7', borderRadius: '999px', padding: '2px 10px' }}>受理済み</span>
+                            : <span style={{ fontSize: '11px', color: '#94A3B8' }}>確認待ち</span>}
+                        </td>
                         <td style={{ padding: '10px 14px' }}>
                           <button onClick={() => { setDelSaleErr(null); setDelSaleAsk(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
                         </td>

@@ -120,6 +120,82 @@ alter table public.sales_reminder_log enable row level security;
 -- ポリシーは作らない。サービスロールを持つ管理者用APIからだけ触れる
 
 
+-- ═══════════════════════════════════════════════
+-- 3. 売上報告を消せなくする条件
+-- ═══════════════════════════════════════════════
+--
+-- 出店者は自分の売上報告を消せる（20260623_rls_hardening.sql の
+-- 「sellers delete own sales」）。直す手段が削除しかないため、
+-- 普段はそれでよい。
+--
+-- ただし、次の2つは消されると困る。
+--   ・運営が受理したもの     … 受理を確定として扱うため
+--   ・請求書の根拠になったもの … 消えると請求書の金額の根拠が無くなる
+--
+-- 請求書のほうは実際に起こりうる形だった。
+-- 出店取消しでは請求書を確認して止めているのに、
+-- 売上報告の削除では見ていなかった。
+--   ① 出店者が売上を報告 → ② 運営が請求書を発行 → ③ 出店者が報告を削除
+--   → 請求書だけが残り、金額の根拠が消える
+--
+-- ★ 画面のボタンを消すだけでは足りない。
+--    売上の削除は画面から直接データベースへ行く（サーバを経由しない）ため、
+--    ここで止める。申込期間の上限と同じ考え方。
+--
+-- 運営は消せる。間違いを直せる人がいなくなると詰むため。
+-- 受理済みのものを直したいときは、先に受理を取り消してから消す運用でもよいが、
+-- 運営はそのまま消せるようにしておく。
+
+create or replace function public.check_sale_deletable()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  invoice_no_found text;
+begin
+  -- 運営はどれでも消せる
+  if public.is_admin() then
+    return old;
+  end if;
+
+  -- 受理済みは消せない
+  if old.accepted_at is not null then
+    raise exception
+      'この売上報告は運営が受理済みのため、削除できません。修正が必要な場合は運営（info@connect-navi.com）までご連絡ください。'
+      using errcode = 'check_violation';
+  end if;
+
+  -- 請求書の根拠になっているものは消せない。
+  -- 取り消した請求書（voided_at あり）は数えない
+  select i.invoice_no into invoice_no_found
+  from public.invoices i
+  where i.voided_at is null
+    and i.sale_ids is not null
+    and old.id = any (i.sale_ids)
+  limit 1;
+
+  if invoice_no_found is not null then
+    raise exception
+      'この売上をもとに請求書（%）を発行済みのため、削除できません。運営（info@connect-navi.com）までご連絡ください。', invoice_no_found
+      using errcode = 'check_violation';
+  end if;
+
+  return old;
+end;
+$$;
+
+comment on function public.check_sale_deletable() is
+  '売上報告を消してよいか確かめる。受理済みと請求済みは出店者から消せない。運営は消せる';
+
+drop trigger if exists sales_deletable on public.sales;
+create trigger sales_deletable
+  before delete on public.sales
+  for each row
+  execute function public.check_sale_deletable();
+
+
 -- 入ったことの確認
 select
   (select count(*) from information_schema.columns
@@ -131,4 +207,6 @@ select
   (select relrowsecurity from pg_class
     where relname = 'sales_reminder_log')                           as 督促記録のRLS,
   (select count(*) from pg_policies
-    where schemaname = 'public' and tablename = 'sales_reminder_log') as ポリシーの数;
+    where schemaname = 'public' and tablename = 'sales_reminder_log') as ポリシーの数,
+  (select count(*) from pg_trigger
+    where tgname = 'sales_deletable')                                 as 削除制限のトリガー;

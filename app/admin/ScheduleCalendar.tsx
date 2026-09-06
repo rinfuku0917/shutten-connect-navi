@@ -49,6 +49,7 @@ type Sale = {
   note: string
   saleDate: string
   createdAt: string
+  acceptedAt: string | null
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -87,6 +88,63 @@ export default function ScheduleCalendar({
   const [noteErr, setNoteErr] = useState('')
   // 出店枠ごとの売上報告。月を読み込むときに一括で引く
   const [salesByApp, setSalesByApp] = useState<Map<string, Sale[]>>(new Map())
+  // 受理と督促の操作中フラグ・結果
+  const [actBusy, setActBusy] = useState('')
+  const [actErr, setActErr] = useState('')
+  // 開いた出店枠の督促の履歴（前回いつ送ったか）
+  const [remind, setRemind] = useState<{ count: number, lastSentAt: string | null } | null>(null)
+
+  const token = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token || ''
+  }
+
+  // 売上報告を受理する／受理を取り消す
+  const toggleAccept = async (sale: Sale) => {
+    if (actBusy) return
+    setActBusy(sale.id)
+    setActErr('')
+    const t = await token()
+    if (!t) { setActErr('ログインの有効期限が切れています。読み込み直してください。'); setActBusy(''); return }
+    const res = await fetch('/api/admin/sales-accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify({ saleId: sale.id, undo: !!sale.acceptedAt }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setActBusy('')
+    if (!res.ok) { setActErr(j.error || '受理の記録に失敗しました'); return }
+    await load()
+  }
+
+  // この出店枠へ督促を送る
+  const sendRemind = async (s: Slot) => {
+    if (actBusy) return
+    setActBusy(s.applicationId)
+    setActErr('')
+    const t = await token()
+    if (!t) { setActErr('ログインの有効期限が切れています。読み込み直してください。'); setActBusy(''); return }
+    const res = await fetch('/api/admin/sales-remind', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify({ applicationId: s.applicationId }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setActBusy('')
+    if (!res.ok) { setActErr(j.error || '督促を送れませんでした'); return }
+    setRemind({ count: j.count || 0, lastSentAt: j.lastSentAt || null })
+  }
+
+  const loadRemind = async (applicationId: string) => {
+    setRemind(null)
+    const t = await token()
+    if (!t) return
+    const res = await fetch('/api/admin/sales-remind?applicationId=' + encodeURIComponent(applicationId), {
+      headers: { Authorization: 'Bearer ' + t },
+    })
+    const j = await res.json().catch(() => ({}))
+    if (res.ok) setRemind({ count: j.count || 0, lastSentAt: j.lastSentAt || null })
+  }
 
   // 表示している月の出店を読む。
   // 前後の月へ動くたびに読み直す（全期間を一度に読むと、件数が増えたときに詰まる）
@@ -138,7 +196,7 @@ export default function ScheduleCalendar({
     if (ids.length > 0) {
       const { data: rows, error: sErr } = await supabase
         .from('sales')
-        .select('id, application_id, sale_date, revenue, total_pay, items, weather, customers, note, created_at')
+        .select('id, application_id, sale_date, revenue, total_pay, items, weather, customers, note, created_at, accepted_at')
         .in('application_id', ids)
       // 取れなかったときに黙って「全部未報告」と出さない。
       // 報告済みの出店者に催促を送る判断をしてしまうため
@@ -159,6 +217,7 @@ export default function ScheduleCalendar({
             note: r.note || '',
             saleDate: r.sale_date || '',
             createdAt: r.created_at || '',
+            acceptedAt: r.accepted_at ?? null,
           })
           map.set(r.application_id, list)
         }
@@ -198,7 +257,9 @@ export default function ScheduleCalendar({
       })
     }
     setSubLoading(false)
+    setActErr('')
     await loadNotes(s.applicationId)
+    await loadRemind(s.applicationId)
   }
 
   const loadNotes = async (applicationId: string) => {
@@ -412,9 +473,32 @@ export default function ScheduleCalendar({
                       {rep.list.length === 0 && (
                         <div style={{ fontSize: '12px', color: s.date < today ? '#B45309' : '#94A3B8', background: s.date < today ? '#FFFBEB' : '#F8FAFC', border: '1px solid ' + (s.date < today ? '#FDE68A' : '#E2E8F0'), borderRadius: '8px', padding: '9px 11px', marginBottom: '16px' }}>
                           {s.date < today
-                            ? 'まだ報告がありません。出店者へ催促する場合は、売上管理タブの「売上報告の催促を送る」からお送りできます。'
+                            ? 'まだ報告がありません。'
                             : 'これからの出店です。出店日を過ぎると、報告の有無がここに出ます。'}
                         </div>
+                      )}
+
+                      {/* 督促。報告が無く、出店日を過ぎているときだけ出す。
+                          何度でも送れるので、前回いつ送ったかを添えて連打を防ぐ */}
+                      {rep.list.length === 0 && s.date < today && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                          <button type='button' onClick={() => sendRemind(s)} disabled={actBusy === s.applicationId}
+                            style={{ background: actBusy === s.applicationId ? '#ccc' : '#B45309', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: actBusy === s.applicationId ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                            {actBusy === s.applicationId ? '送信中…' : '売上報告を督促する'}
+                          </button>
+                          {remind && remind.count > 0 && remind.lastSentAt && (
+                            <span style={{ fontSize: '11.5px', color: '#64748B' }}>
+                              前回 {remind.lastSentAt.slice(0, 16).replace('T', ' ')} に送信済み（計{remind.count}回）
+                            </span>
+                          )}
+                          {remind && remind.count === 0 && (
+                            <span style={{ fontSize: '11.5px', color: '#94A3B8' }}>まだ送っていません</span>
+                          )}
+                        </div>
+                      )}
+
+                      {actErr && (
+                        <div style={{ fontSize: '12px', color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '9px 11px', marginBottom: '16px' }}>{actErr}</div>
                       )}
                       {rep.list.map(sa => {
                         const qty = sa.items.reduce((t, it) => t + (it.qty || 0), 0)
@@ -432,6 +516,20 @@ export default function ScheduleCalendar({
                             <div style={{ fontSize: '10.5px', color: '#94A3B8', marginTop: '3px' }}>
                               売上日 {sa.saleDate.replaceAll('-', '/')}
                               {sa.createdAt ? '／登録 ' + sa.createdAt.slice(0, 16).replace('T', ' ') : ''}
+                            </div>
+
+                            {/* 受理。押すと出店者の画面にも「受理済み」と出る（メールは送らない）。
+                                押し直すと取り消せる */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #F1F5F9' }}>
+                              {sa.acceptedAt && (
+                                <span style={{ fontSize: '11px', color: '#166534', background: '#DCFCE7', borderRadius: '999px', padding: '2px 10px', fontWeight: 700 }}>
+                                  受理済み {sa.acceptedAt.slice(0, 10).replaceAll('-', '/')}
+                                </span>
+                              )}
+                              <button type='button' onClick={() => toggleAccept(sa)} disabled={actBusy === sa.id}
+                                style={{ background: sa.acceptedAt ? '#fff' : '#16A34A', color: sa.acceptedAt ? '#64748B' : '#fff', border: sa.acceptedAt ? '1px solid #E2E8F0' : 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: actBusy === sa.id ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '34px' }}>
+                                {actBusy === sa.id ? '保存中…' : sa.acceptedAt ? '受理を取り消す' : '報告を受理する'}
+                              </button>
                             </div>
                           </div>
                         )
