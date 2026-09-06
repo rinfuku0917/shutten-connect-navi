@@ -791,14 +791,30 @@ export default function SellerDashboard() {
     if (!uid) return
     const { data, error } = await supabase
       .from('applications')
-      .select('id, place_id, apply_date, format, status, places(title, reminder_days)')
+      .select('id, place_id, apply_date, format, status, created_at, places(title, reminder_days)')
       .eq('seller_id', uid)
       .order('created_at', { ascending: false })
     // 読み込みに失敗したときに、申込が無いのと同じ見た目にならないようにする
     if (error) { setAppliesError('申込の読み込みに失敗しました: ' + error.message); return }
     setAppliesError('')
     if (!data) return
-    const mapped: MyApply[] = data.map((a: any) => {
+
+    // 取り消された申込は、出店日から1ヶ月たったら一覧から外す。
+    //
+    // 行は残す（キャンセル料の判断と、繰り返す出店者の把握のため運営は見る）。
+    // ただし出店者本人の画面に何年も残り続けるのは気持ちのよいものではない、
+    // という指摘を受けて、本人の画面からだけ見えなくする。
+    // 直近のものは見えるので、経緯は追える。
+    // 出店日が決まっていない取消しは、申し込んだ日から数える。
+    const hideBefore = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const visible = (data as any[]).filter(a => {
+      if (a.status !== 'cancelled') return true
+      const d = a.apply_date || (a.created_at ? String(a.created_at).slice(0, 10) : '')
+      return !d || d >= hideBefore
+    })
+
+    const mapped: MyApply[] = visible.map((a: any) => {
       const s = statusMap[a.status] || { label: a.status, color: '#555', bg: '#F3F4F6' }
       return {
         id: a.id,
