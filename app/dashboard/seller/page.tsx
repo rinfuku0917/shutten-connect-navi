@@ -379,6 +379,35 @@ export default function SellerDashboard() {
     showNotice('プロフィールを保存しました')
   }
 
+  // パスワードの変更。
+  //
+  // 「パスワードを忘れた」という声が多いが、保存されているのは暗号化された値で、
+  // 運営にも元の文字列は分からない（表示する機能は作れない）。
+  // 代わりに、ログイン中なら今のパスワードを思い出さなくても
+  // 新しいものに決め直せるようにする。忘れてもその場で立て直せる。
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pwNew, setPwNew] = useState('')
+  const [pwNew2, setPwNew2] = useState('')
+  const [pwShow, setPwShow] = useState(false)
+  const [pwBusy, setPwBusy] = useState(false)
+
+  const changePassword = async () => {
+    if (pwBusy) return
+    // Supabase の既定は6文字以上。ここで先に知らせて、往復を減らす
+    if (pwNew.length < 8) { showNotice('パスワードは8文字以上にしてください。'); return }
+    if (pwNew !== pwNew2) { showNotice('確認用のパスワードが一致しません。'); return }
+    setPwBusy(true)
+    const { error } = await supabase.auth.updateUser({ password: pwNew })
+    setPwBusy(false)
+    if (error) {
+      // 期限切れのときは入り直してもらう必要がある
+      showNotice('変更できませんでした：' + error.message)
+      return
+    }
+    setPwNew(''); setPwNew2(''); setPwOpen(false)
+    showNotice('パスワードを変更しました。次回のログインから新しいパスワードをお使いください。', 'ok')
+  }
+
   const statusMap: Record<string, { label: string, color: string, bg: string }> = {
     pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' },
     approved: { label: '承認済', color: '#16A34A', bg: '#ECFDF5' },
@@ -2150,6 +2179,52 @@ export default function SellerDashboard() {
                   </>
                 )}
               </div>
+              {/* パスワードの変更。ログイン中なら、いまのパスワードを思い出さなくても決め直せる */}
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontWeight: '700', fontSize: '14px' }}>パスワード</div>
+                    <div style={{ fontSize: '12px', color: '#64748B', marginTop: '3px', lineHeight: 1.8 }}>
+                      安全のため、いまのパスワードは運営にも表示できません。<br />
+                      お忘れの場合は、ここで新しいものにお決めください。
+                    </div>
+                  </div>
+                  {!pwOpen && (
+                    <button type='button' onClick={() => { setPwNew(''); setPwNew2(''); setPwOpen(true) }}
+                      style={{ background: '#fff', color: '#1D4ED8', border: '1.5px solid #BFDBFE', borderRadius: '8px', padding: '10px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px', whiteSpace: 'nowrap' }}>
+                      変更する
+                    </button>
+                  )}
+                </div>
+
+                {pwOpen && (
+                  <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #F1F5F9' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>新しいパスワード（8文字以上）</div>
+                    <input type={pwShow ? 'text' : 'password'} value={pwNew} onChange={e => setPwNew(e.target.value)}
+                      autoComplete='new-password' placeholder='新しいパスワード'
+                      style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 13px', fontSize: '14px', color: '#1a1a1a', boxSizing: 'border-box', marginBottom: '8px', minHeight: '44px' }} />
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>もう一度ご入力ください</div>
+                    <input type={pwShow ? 'text' : 'password'} value={pwNew2} onChange={e => setPwNew2(e.target.value)}
+                      autoComplete='new-password' placeholder='確認のため、もう一度'
+                      style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 13px', fontSize: '14px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px' }} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '12.5px', color: '#64748B', margin: '10px 0 4px', cursor: 'pointer' }}>
+                      <input type='checkbox' checked={pwShow} onChange={e => setPwShow(e.target.checked)} style={{ width: '18px', height: '18px' }} />
+                      入力した文字を表示する
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                      <button type='button' onClick={() => { setPwOpen(false); setPwNew(''); setPwNew2('') }} disabled={pwBusy}
+                        style={{ flex: 1, background: '#fff', color: '#64748B', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '12px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                        やめる
+                      </button>
+                      <button type='button' onClick={changePassword} disabled={pwBusy || !pwNew || !pwNew2}
+                        style={{ flex: 2, background: (pwBusy || !pwNew || !pwNew2) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '14px', fontWeight: 900, cursor: (pwBusy || !pwNew || !pwNew2) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                        {pwBusy ? '変更中…' : 'パスワードを変更する'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
                 <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>SNS・メディア</div>
                 {!profileEdit ? (

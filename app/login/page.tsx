@@ -28,19 +28,22 @@ export default function LoginPage() {
         if (profile?.role) { role = profile.role; break }
         await new Promise(res => setTimeout(res, 300))
       }
-      if(tab === 'seller' && role !== 'seller') {
-        await supabase.auth.signOut()
-        setError('このアカウントは出店者として登録されていません。募集者の方は「募集者ログイン」をお選びください。')
-        setLoading(false); return
-      }
-      if(tab === 'host' && role !== 'host' && role !== 'admin') {
-        await supabase.auth.signOut()
-        setError('このアカウントは募集者として登録されていません。出店者の方は「出店者ログイン」をお選びください。')
-        setLoading(false); return
-      }
+      // タブの選び間違いでログアウトさせない。
+      //
+      // 以前は、選んだタブと登録の種別が違うと signOut していた。
+      // 初期表示が「出店者ログイン」なので、募集者の方は必ずここに当たり、
+      // 正しいパスワードを入れたのに追い出される形になっていた。
+      // パスワードが合っているなら入れるべきで、行き先だけ正しく振り分ければよい。
       if(role === 'host') router.push('/dashboard/host')
       else if(role === 'admin') router.push('/admin')
-      else router.push('/dashboard/seller')
+      else if(role === 'seller') router.push('/dashboard/seller')
+      else {
+        // 種別が取れなかったときだけ止める。
+        // ここで signOut しないのは、入れているのに追い出すと
+        // 「パスワードが違う」と誤解されるため
+        setError('会員情報を読み込めませんでした。少し待ってからもう一度お試しください。')
+        setLoading(false); return
+      }
     }
     setLoading(false)
   }
@@ -83,8 +86,14 @@ export default function LoginPage() {
             <div style={{textAlign:'center',fontSize:'13px',color:'#888',marginBottom:'12px'}}>
               <Link href='/register' style={{color:'#F5A623',fontWeight:'700',textDecoration:'none'}}>新規会員登録はこちら</Link>
             </div>
-            <div style={{textAlign:'center',fontSize:'12px'}}>
-              <Link href='/reset-password' style={{color:'#999',textDecoration:'none'}}>パスワードをお忘れの方</Link>
+            {/* パスワード再設定は、忘れた人がたどり着く唯一の道。
+                以前は薄い灰色の小さな字で、探さないと見つからなかった。
+                お問い合わせの多くがここに来られないことによるものだったため、
+                押せる大きさの枠にして目に入るようにした */}
+            <div style={{textAlign:'center'}}>
+              <Link href='/reset-password' style={{display:'inline-block',color:'#1D4ED8',fontWeight:700,fontSize:'13.5px',textDecoration:'none',border:'1px solid #BFDBFE',background:'#EFF6FF',borderRadius:'8px',padding:'10px 20px',minHeight:'42px',boxSizing:'border-box'}}>
+                パスワードをお忘れの方はこちら
+              </Link>
             </div>
             {/* 旧サイトから会員情報を引き継いでいるため、新規登録が不要なことを伝える */}
             <div style={{background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:'8px',padding:'10px 14px',marginTop:'14px',fontSize:'12px',color:'#B45309',lineHeight:1.8}}>
