@@ -1666,7 +1666,7 @@ export default function SellerDashboard() {
           {tab === 'payments' && (
             <>
               <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', lineHeight: 1.8 }}>
-                発行済みの請求書と、お支払いの状況をご確認いただけます。お振込が済みましたら「振り込みました」からお知らせください。運営で確認のうえ、確認済みのご連絡をいたします。
+                発行済みの請求書と、お支払いの状況をご確認いただけます。「請求書を見る・PDFで保存」から中身をご確認いただけます。お振込が済みましたら「振り込みました」からお知らせください。運営で確認のうえ、確認済みのご連絡をいたします。
               </div>
 
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '16px' }}>
@@ -1730,17 +1730,28 @@ export default function SellerDashboard() {
                         {iv.paid_status === 'paid' && (
                           <div style={{ fontSize: '12px', color: '#16A34A', marginBottom: '8px', lineHeight: 1.8 }}>ご入金を確認いたしました。ありがとうございました。</div>
                         )}
-                        {iv.paid_status !== 'paid' && (
-                          <button onClick={() => {
-                            setPayFor(iv)
-                            // 出し直しのときは前回の内容を出す（今日の日付で上書きしない）
-                            setPayOn(iv.paid_on || todayStr())
-                            setPayName(iv.paid_name || profile.shop_name || profile.name || '')
-                          }}
-                            style={{ background: iv.paid_status === 'reported' ? '#fff' : '#F5A623', color: iv.paid_status === 'reported' ? '#B45309' : '#fff', border: iv.paid_status === 'reported' ? '1px solid #FDE68A' : 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-                            {iv.paid_status === 'reported' ? '報告内容を出し直す' : '振り込みました'}
-                          </button>
-                        )}
+                        {/* 請求書そのものを見る導線。
+                            これまで金額と期限しか出しておらず、
+                            何に対する請求かを確かめる手段が無かった。
+                            開くと運営が発行したものと同じ紙面が出て、
+                            そのままPDFにできる */}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <a href={'/dashboard/seller/invoice?no=' + encodeURIComponent(iv.invoice_no)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fff', color: '#1D4ED8', border: '1.5px solid #BFDBFE', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, textDecoration: 'none', minHeight: '44px', boxSizing: 'border-box' }}>
+                            請求書を見る・PDFで保存
+                          </a>
+                          {iv.paid_status !== 'paid' && (
+                            <button onClick={() => {
+                              setPayFor(iv)
+                              // 出し直しのときは前回の内容を出す（今日の日付で上書きしない）
+                              setPayOn(iv.paid_on || todayStr())
+                              setPayName(iv.paid_name || profile.shop_name || profile.name || '')
+                            }}
+                              style={{ background: iv.paid_status === 'reported' ? '#fff' : '#F5A623', color: iv.paid_status === 'reported' ? '#B45309' : '#fff', border: iv.paid_status === 'reported' ? '1px solid #FDE68A' : 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', minHeight: '44px' }}>
+                              {iv.paid_status === 'reported' ? '報告内容を出し直す' : '振り込みました'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )
                   })}

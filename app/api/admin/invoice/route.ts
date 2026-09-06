@@ -87,13 +87,24 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: '請求書番号が指定されていません' }, { status: 400 })
       }
       const adminO = createClient(url0, key0, { auth: { autoRefreshToken: false, persistSession: false } })
-      if (!(await verifyAdmin(adminO, requesterId))) {
-        return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-      }
+      const isAdmin = await verifyAdmin(adminO, requesterId)
+
       const { data: row } = await adminO
         .from('invoices')
         .select('invoice_no, seller_id, period, kind, items, subtotal, tax, total, item_count, due_on, issued_on, to_name, to_person, note, created_at, voided_at, void_reason')
         .eq('invoice_no', no).maybeSingle()
+
+      // 運営でなければ、自分あての請求書だけを開ける。
+      //
+      // 「見つからない」と「あなたのものではない」を同じ答えにしているのは、
+      // 番号を順に試すことで他社の請求書の有無を調べられないようにするため。
+      // 取り消した請求書も、出店者には出さない（無効になったものが
+      // 手元に残ると、支払い済みかどうかの取り違えが起きる）。
+      if (!isAdmin) {
+        if (!row || row.seller_id !== requesterId || row.voided_at) {
+          return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
+        }
+      }
       if (!row) {
         return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
       }

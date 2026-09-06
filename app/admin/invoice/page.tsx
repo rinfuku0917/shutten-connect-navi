@@ -74,7 +74,15 @@ const defaultDue = (period: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function InvoiceInner() {
+// 誰が見ているか。
+//   admin  … 運営。発行・編集・日付の変更ができる
+//   seller … 出店者。自分あての請求書を見て、PDFにするだけ
+// 紙面そのものは同じものを使う。2つに分けて書くと、
+// どちらかを直したときにもう一方だけ古いままになるため
+type Viewer = 'admin' | 'seller'
+
+function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
+  const isSeller = viewer === 'seller'
   // 確認とお知らせを画面の中に出す。
   // window.confirm / alert はアプリ内ブラウザ（LINE など）で黙って無視され、
   // 押しても何も起きないように見える。管理画面と同じ作りにそろえる
@@ -145,6 +153,8 @@ function InvoiceInner() {
 
   // ===== 管理画面での修正 =====
   // 明細の文言・金額・宛先・備考を直せるようにする。合計は自動で計算し直す。
+  // 出店者は中身を直せない。編集の入口を出さないだけでなく、
+  // ここを false に固定して、紙面側の入力欄も出ないようにする
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [items, setItems] = useState<Item[]>([])
@@ -322,10 +332,20 @@ function InvoiceInner() {
   return (
     <div className='invoice-page' style={{ background: '#F1F5F9', minHeight: '100vh', padding: '20px 12px' }}>
       {/* 操作パネル（印刷には出さない） */}
+      {isSeller && (
+        <div className='no-print' style={{ maxWidth: '596pt', margin: '0 auto 10px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', fontSize: '13px', color: '#1E40AF', lineHeight: 1.9 }}>
+          運営が発行した請求書です。内容のご確認と、PDFでの保存ができます。
+          金額や日付のご相談は、お手数ですが運営までご連絡ください。
+        </div>
+      )}
       <div className='no-print' style={{ maxWidth: '596pt', margin: '0 auto 12px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <Link href='/admin' style={{ fontSize: '13px', color: '#64748B', textDecoration: 'none' }}>← 管理画面</Link>
+        <Link href={isSeller ? '/dashboard/seller?tab=payment' : '/admin'} style={{ fontSize: '13px', color: '#64748B', textDecoration: 'none' }}>
+          {isSeller ? '← お支払いに戻る' : '← 管理画面'}
+        </Link>
         {/* 紙面に出る2つの日付。どちらもここから直せる。
-            発行日は、実際に先方へ出した日と紙面を合わせたい場面があるため */}
+            発行日は、実際に先方へ出した日と紙面を合わせたい場面があるため。
+            出店者には出さない。受け取る側が日付を動かせてはいけないため */}
+        {!isSeller && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '12px', color: '#64748B' }}>発行日</span>
           <input type='date' value={issuedOn} onChange={e => setIssuedOn(e.target.value)}
@@ -339,19 +359,22 @@ function InvoiceInner() {
             </button>
           )}
         </div>
+        )}
         <div style={{ flex: 1 }} />
+        {!isSeller && (
         <button onClick={() => setEditing(v => !v)} style={{ background: editing ? '#1D4ED8' : '#fff', color: editing ? '#fff' : '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
           {editing ? '編集を終える' : '内容を修正'}
         </button>
-        {editing && (
+        )}
+        {!isSeller && editing && (
           <button onClick={addItem} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 14px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>＋ 明細を追加</button>
         )}
-        {inv.invoiceNo && (
+        {!isSeller && inv.invoiceNo && (
           <button onClick={saveEdits} disabled={saving} style={{ background: saving ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
             {saving ? '保存中...' : '修正を保存'}
           </button>
         )}
-        {!inv.invoiceNo && (
+        {!isSeller && !inv.invoiceNo && (
           <button onClick={issue} disabled={issuing} style={{ background: issuing ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, cursor: issuing ? 'not-allowed' : 'pointer' }}>
             {issuing ? '発行中...' : '発行して番号を確定'}
           </button>
@@ -560,10 +583,16 @@ function InvoiceInner() {
   )
 }
 
-export default function InvoicePage() {
+// 出店者側の画面（app/dashboard/seller/invoice）からも同じ紙面を使う。
+// 紙面を2つに分けて書くと、片方だけ古いままになるため
+export function InvoiceScreen({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
   return (
     <Suspense fallback={<div style={{ padding: '40px', textAlign: 'center', color: '#64748B' }}>読み込み中...</div>}>
-      <InvoiceInner />
+      <InvoiceInner viewer={viewer} />
     </Suspense>
   )
+}
+
+export default function InvoicePage() {
+  return <InvoiceScreen viewer='admin' />
 }
