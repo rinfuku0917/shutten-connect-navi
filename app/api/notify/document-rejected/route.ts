@@ -22,6 +22,25 @@ export async function POST(req: Request) {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
+    // 呼び出し元を確かめる。
+    //
+    // 以前はここに認証が無く、書類のIDを当てられれば誰でも
+    // 差戻しのメールを送れる状態だった。差戻しの理由は
+    // データベースの値をそのまま載せるため文面の細工はできないが、
+    // 出店者に身に覚えのない通知が届くのは避ける。
+    //
+    // 書類の審査は運営の仕事なので、運営だけが呼べるようにする。
+    const authHeader = req.headers.get('authorization') || ''
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+    const { data: userData, error: uErr } = await db.auth.getUser(token)
+    const uid = userData?.user?.id
+    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
+    const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
+    if (me?.role !== 'admin') {
+      return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
+    }
+
     const { data: doc, error: dErr } = await db
       .from('seller_documents').select('seller_id, doc_type, status, reject_reason').eq('id', documentId).single()
     if (dErr || !doc) {
