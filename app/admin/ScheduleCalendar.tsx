@@ -67,11 +67,14 @@ const CARD: React.CSSProperties = {
 export default function ScheduleCalendar({
   onOpenDocs,
   onOpenSeller,
+  onEditMail,
 }: {
   /** 出店者の書類だけを絞って開く。管理画面の openSellerDocs を渡す */
   onOpenDocs?: (sellerId: string, sellerName: string) => void
   /** 出店者の登録情報（連絡先・エリア）を開く。管理画面の openSellerInfo を渡す */
   onOpenSeller?: (sellerId: string, sellerName: string) => void
+  /** 送るメールの文面を編集しに行く。管理画面の openMailTemplate を渡す */
+  onEditMail?: (key: string) => void
 } = {}) {
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   const [slots, setSlots] = useState<Slot[]>([])
@@ -493,6 +496,13 @@ export default function ScheduleCalendar({
                           )}
                           {remind && remind.count === 0 && (
                             <span style={{ fontSize: '11.5px', color: '#94A3B8' }}>まだ送っていません</span>
+                          )}
+                          {/* 送る前に文面を直したい場面があるので、その場から行けるようにする */}
+                          {onEditMail && (
+                            <button type='button' onClick={() => onEditMail('sales-remind')}
+                              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                              文面を編集
+                            </button>
                           )}
                         </div>
                       )}

@@ -125,6 +125,8 @@ export default function AdminPage() {
   // 売上管理から「この出店者の登録情報を見たい」と押されたときの絞り込み。
   // 書類の絞り込み（docSellerId）と同じ考え方で、出店者管理タブを1人に絞る
   const [sellerFocus, setSellerFocus] = useState<{ id: string; name: string } | null>(null)
+  // 各フローの画面から「文面を編集」で来たときに、その文面を開いた状態にする
+  const [mailFocus, setMailFocus] = useState('')
   // 不採用は出店者にメールが届くので、画面内のダイアログで確認をはさむ
   const [rejectBusy, setRejectBusy] = useState(false)
   const [rejectErr, setRejectErr] = useState<string | null>(null)
@@ -171,6 +173,19 @@ export default function AdminPage() {
     window.history.pushState({ tab: 'sellers' }, '', u.toString())
     window.scrollTo({ top: 0 })
   }
+  // メールの文面を、その場から編集しに行く。
+  // 文面タブを探して該当のメールを開き直す手間を省くため、
+  // 送信の操作がある画面から直接飛べるようにしている
+  const openMailTemplate = (key: string) => {
+    setMailFocus(key)
+    setTab('mail')
+    try { localStorage.setItem('adminTab', 'mail') } catch { /* 保存できなくても動く */ }
+    const u = new URL(window.location.href)
+    u.searchParams.set('tab', 'mail')
+    window.history.pushState({ tab: 'mail' }, '', u.toString())
+    window.scrollTo({ top: 0 })
+  }
+
   const [authChecked, setAuthChecked] = useState(false)
   const [adminUid, setAdminUid] = useState<string | null>(null)
 
@@ -1568,10 +1583,10 @@ const previewDoc = async (fileUrl: string) => {
           {/* ===== ダッシュボード ===== */}
           {/* 出店管理スケジュール。承認された出店を月のカレンダーに並べる。
               日を押すとその日の出店が出て、開くと企業情報と現場メモが見られる */}
-          {tab === 'schedule' && <ScheduleCalendar onOpenDocs={openSellerDocs} onOpenSeller={openSellerInfo} />}
+          {tab === 'schedule' && <ScheduleCalendar onOpenDocs={openSellerDocs} onOpenSeller={openSellerInfo} onEditMail={openMailTemplate} />}
 
           {/* 送信メールの文面。ここで直したものが実際に届く */}
-          {tab === 'mail' && <MailTemplates />}
+          {tab === 'mail' && <MailTemplates focusKey={mailFocus} />}
 
           {tab === 'dashboard' && (
             <>
@@ -1973,7 +1988,7 @@ const previewDoc = async (fileUrl: string) => {
 
               {/* 旧サイトからの移行組へ、パスワード設定のご案内を送る。
                   本物の会員へメールが飛ぶため、押した回数だけ送る作りにしている */}
-              <PasswordNotice />
+              <PasswordNotice onEditMail={openMailTemplate} />
               </>}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
@@ -2063,7 +2078,14 @@ const previewDoc = async (fileUrl: string) => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', gap: '12px' }}>
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者が提出した書類を確認し、承認または否認します。</p>
-                <button onClick={() => loadDocReviews(docSellerId?.id)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>更新</button>
+                <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                  {/* 差し戻すときに送るメールの文面を、この場から直せるようにする */}
+                  <button type='button' onClick={() => openMailTemplate('document-rejected')} title='書類を差し戻したときに出店者へ送るメール'
+                    style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    差戻しメールの文面
+                  </button>
+                  <button onClick={() => loadDocReviews(docSellerId?.id)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>更新</button>
+                </div>
               </div>
               {docSellerId && (
                 <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '11px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
@@ -2245,10 +2267,17 @@ const previewDoc = async (fileUrl: string) => {
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a' }}>出店料の入金状況</div>
                     <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>発行済みの請求書と、振込の報告・確認の状況です。出店者が振込を報告すると運営にメールが届きます。</div>
                   </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {/* 入金にまつわるメールの文面を、この場から直せるようにする */}
+                  <button type='button' onClick={() => openMailTemplate('payment-confirmed')} title='入金を確認したときに出店者へ送るメール'
+                    style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    入金確認メールの文面
+                  </button>
                   <button onClick={loadPayments} disabled={payLoading}
                     style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
                     {payLoading ? '読み込み中…' : '更新'}
                   </button>
+                  </div>
                 </div>
                 {payRows.length === 0 ? (
                   <div style={{ padding: '20px', textAlign: 'center', color: '#999', fontSize: '12px' }}>

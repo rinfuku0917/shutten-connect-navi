@@ -20,7 +20,7 @@ const CARD: React.CSSProperties = {
   background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '18px', marginBottom: '16px',
 }
 
-export default function PasswordNotice() {
+export default function PasswordNotice({ onEditMail }: { onEditMail?: (key: string) => void } = {}) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [preview, setPreview] = useState<Target[]>([])
   const [mailText, setMailText] = useState('')
@@ -158,7 +158,15 @@ export default function PasswordNotice() {
 
       {/* ② 文面 */}
       <div style={CARD}>
-        <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '10px', color: '#B45309' }}>② お送りする文面</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+          <div style={{ fontWeight: 700, fontSize: '14px', color: '#B45309' }}>② お送りする文面</div>
+          {onEditMail && (
+            <button type='button' onClick={() => onEditMail('password-notice')}
+              style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px' }}>
+              文面を編集する
+            </button>
+          )}
+        </div>
         <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '8px' }}>件名：{mailSubject}</div>
         <pre style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px', fontSize: '12.5px', color: '#1a1a1a', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{mailText}</pre>
         <div style={{ fontSize: '11.5px', color: '#94A3B8', marginTop: '8px', lineHeight: 1.8 }}>

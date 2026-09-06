@@ -33,7 +33,7 @@ const CARD: React.CSSProperties = {
   background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '12px',
 }
 
-export default function MailTemplates() {
+export default function MailTemplates({ focusKey }: { focusKey?: string } = {}) {
   const [list, setList] = useState<Tpl[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -43,6 +43,9 @@ export default function MailTemplates() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [preview, setPreview] = useState<{ subject: string, body: string } | null>(null)
+  // 「編集」と「届く形」を切り替えて見せる。
+  // 以前は押すと下に出る作りで、スクロールしないと見えなかった
+  const [view, setView] = useState<'edit' | 'preview'>('edit')
 
   const token = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -63,10 +66,19 @@ export default function MailTemplates() {
 
   useEffect(() => { load() }, [load])
 
+  // 各フローの画面から「文面を編集」で来たとき、その文面を開いた状態にする
+  useEffect(() => {
+    if (!focusKey || list.length === 0) return
+    const t = list.find(x => x.key === focusKey)
+    if (t) open(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, list.length])
+
   const open = (t: Tpl) => {
     setOpenKey(t.key)
     setDraft({ subject: t.subject, body: t.body })
     setPreview(null)
+    setView('edit')
     setMsg('')
     setErr('')
   }
@@ -114,6 +126,7 @@ export default function MailTemplates() {
     const j = await res.json().catch(() => ({}))
     if (!res.ok) { setErr(j.error || '見本を作れませんでした'); return }
     setPreview({ subject: j.subject, body: j.body })
+    setView('preview')
   }
 
   // 差し込みを、いま編集している場所へ入れる。
@@ -182,44 +195,77 @@ export default function MailTemplates() {
 
             {isOpen && (
               <div style={{ borderTop: '1px solid #F1F5F9', padding: '16px', background: '#FCFCFD' }}>
-                {/* 使える差し込み */}
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  使える差し込み
-                  <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>押すと本文に入ります</span>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
-                  {t.vars.map(v => (
-                    <button key={v.name} type='button' onClick={() => insertVar(v.name)} title={v.note}
-                      style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '5px 12px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      {'{{' + v.name + '}}'}
+                {/* 編集と、届く形の切り替え。
+                    以前は「届く形を見る」を押すと画面の下に出る作りで、
+                    スクロールしないと見えなかった */}
+                <div style={{ display: 'flex', gap: '0', marginBottom: '14px', borderBottom: '2px solid #E2E8F0' }}>
+                  {([['edit', '文面を書く'], ['preview', '届く形を見る']] as const).map(([v, lbl]) => (
+                    <button key={v} type='button'
+                      onClick={() => { if (v === 'preview') showPreview(t); else setView('edit') }}
+                      style={{
+                        background: 'none', border: 'none', fontFamily: 'inherit', cursor: 'pointer',
+                        padding: '9px 16px', fontSize: '13px', fontWeight: 700,
+                        color: view === v ? '#B45309' : '#94A3B8',
+                        borderBottom: '2px solid ' + (view === v ? '#F5A623' : 'transparent'),
+                        marginBottom: '-2px',
+                      }}>
+                      {lbl}
                     </button>
                   ))}
                 </div>
-                <ul style={{ margin: '0 0 16px', paddingLeft: '18px', fontSize: '11.5px', color: '#94A3B8', lineHeight: 1.9 }}>
-                  {t.vars.map(v => <li key={v.name}>{'{{' + v.name + '}}'}　… {v.note}</li>)}
-                </ul>
 
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>件名</div>
-                <input
-                  value={draft.subject}
-                  onChange={e => setDraft(d => ({ ...d, subject: e.target.value }))}
-                  style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 13px', fontSize: '13.5px', color: '#1a1a1a', boxSizing: 'border-box', marginBottom: '14px', minHeight: '44px', fontFamily: 'inherit' }}
-                />
+                {view === 'preview' ? (
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '8px', lineHeight: 1.8 }}>
+                      出店者・募集者にはこの形で届きます。
+                      <strong>［　］の部分に、送るときの実際の値が入ります。</strong>
+                    </div>
+                    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px' }}>
+                      <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '3px' }}>件名</div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a1a', paddingBottom: '10px', marginBottom: '10px', borderBottom: '1px solid #F1F5F9' }}>
+                        {preview?.subject || '（読み込み中）'}
+                      </div>
+                      <pre style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: 2, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{preview?.body || ''}</pre>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* 使える差し込み */}
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                      使える差し込み
+                      <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>押すと本文に入ります</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
+                      {t.vars.map(v => (
+                        <button key={v.name} type='button' onClick={() => insertVar(v.name)} title={v.note}
+                          style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '5px 12px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {'{{' + v.name + '}}'}
+                        </button>
+                      ))}
+                    </div>
+                    <ul style={{ margin: '0 0 16px', paddingLeft: '18px', fontSize: '11.5px', color: '#94A3B8', lineHeight: 1.9 }}>
+                      {t.vars.map(v => <li key={v.name}>{'{{' + v.name + '}}'}　… {v.note}</li>)}
+                    </ul>
 
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>本文</div>
-                <textarea
-                  id='mail-body'
-                  value={draft.body}
-                  onChange={e => setDraft(d => ({ ...d, body: e.target.value }))}
-                  rows={18}
-                  style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '12px 13px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.9, fontFamily: 'inherit' }}
-                />
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>件名</div>
+                    <input
+                      value={draft.subject}
+                      onChange={e => setDraft(d => ({ ...d, subject: e.target.value }))}
+                      style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 13px', fontSize: '13.5px', color: '#1a1a1a', boxSizing: 'border-box', marginBottom: '14px', minHeight: '44px', fontFamily: 'inherit' }}
+                    />
+
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>本文</div>
+                    <textarea
+                      id='mail-body'
+                      value={draft.body}
+                      onChange={e => setDraft(d => ({ ...d, body: e.target.value }))}
+                      rows={18}
+                      style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '12px 13px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.9, fontFamily: 'inherit' }}
+                    />
+                  </>
+                )}
 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
-                  <button type='button' onClick={() => showPreview(t)} disabled={busy}
-                    style={{ background: '#fff', color: '#1D4ED8', border: '1.5px solid #BFDBFE', borderRadius: '8px', padding: '11px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
-                    届く形を見る
-                  </button>
                   <button type='button' onClick={() => save(t)} disabled={busy || !changed(t)}
                     style={{ background: (busy || !changed(t)) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 22px', fontSize: '13px', fontWeight: 900, cursor: (busy || !changed(t)) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
                     {busy ? '保存中…' : '保存する'}
@@ -231,23 +277,6 @@ export default function MailTemplates() {
                     </button>
                   )}
                 </div>
-
-                {preview && (
-                  <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px dashed #E2E8F0' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                      届く形
-                      <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>
-                        ［ ］の部分に、実際の値が入ります
-                      </span>
-                    </div>
-                    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a', paddingBottom: '8px', marginBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
-                        {preview.subject}
-                      </div>
-                      <pre style={{ margin: 0, fontSize: '12.5px', color: '#334155', lineHeight: 1.9, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{preview.body}</pre>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
