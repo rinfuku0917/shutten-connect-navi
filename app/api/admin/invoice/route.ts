@@ -16,6 +16,13 @@ import { perDayFee } from '../../../lib/placeFee'
 //
 // 日付は 'YYYY-MM-DD' で渡す。読めない値のときは空文字を返す
 // （請求書に「NaN/NaN」のような表記が出るのを防ぐ）。
+// 画面から来た日付を受け取る。2026-09-06 の形でなければ受け取らない。
+// 受け取らなかったときは null を返し、呼び出し側で
+// 「その項目は触らない（既定や既存の値を残す）」ようにしている
+function asDate(v: unknown): string | null {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null
+}
+
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 function mdLabel(isoDate: string | null | undefined): string {
   if (!isoDate || !/^\d{4}-\d{2}-\d{2}/.test(isoDate)) return ''
@@ -85,7 +92,7 @@ export async function POST(req: Request) {
       }
       const { data: row } = await adminO
         .from('invoices')
-        .select('invoice_no, seller_id, period, kind, items, subtotal, tax, total, item_count, due_on, to_name, to_person, note, created_at, voided_at, void_reason')
+        .select('invoice_no, seller_id, period, kind, items, subtotal, tax, total, item_count, due_on, issued_on, to_name, to_person, note, created_at, voided_at, void_reason')
         .eq('invoice_no', no).maybeSingle()
       if (!row) {
         return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
@@ -110,7 +117,9 @@ export async function POST(req: Request) {
         dueOn: row.due_on,
         note: row.note ?? null,
         kind: row.kind,
-        issuedOn: row.created_at,
+        // 紙面に出す発行日は issued_on。画面から直せる。
+        // 記録が無い古い行のためだけに、作成日時を控えにしている
+        issuedOn: row.issued_on || row.created_at,
         voidedAt: row.voided_at,
         voidReason: row.void_reason,
       })
@@ -216,8 +225,8 @@ export async function POST(req: Request) {
       const lastSeqA = lastA && lastA.length > 0 ? parseInt(lastA[0].invoice_no.split('-')[1], 10) : 0
       const noA = `${yearA}-${String(Math.max(lastSeqA + 1, NUMBER_START[yearA] ?? 1)).padStart(4, '0')}`
 
-      const dueA = typeof dueOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueOn) ? dueOn : null
-      const { error: aErr } = await admin.from('invoices').insert({
+      const dueA = asDate(dueOn)
+      const rowA: Record<string, unknown> = {
         invoice_no: noA, seller_id: sellerId, period, kind: 'advance',
         application_id: appId,
         subtotal: yen, tax: advTax, total: yen + advTax, item_count: 1,
@@ -225,7 +234,13 @@ export async function POST(req: Request) {
         to_name: edited?.toName ?? null,
         to_person: edited?.toPerson ?? null,
         note: edited?.note ?? null,
-      })
+      }
+      // 発行日。指定が無ければ記録側の既定（今日）に任せる。
+      // 事前請求は管理画面から直接出すため、通常ここには来ない。
+      // 出したあとで直したいときは、番号で開いて日付を保存すればよい
+      const issuedA = asDate(edited?.issuedOn)
+      if (issuedA) rowA.issued_on = issuedA
+      const { error: aErr } = await admin.from('invoices').insert(rowA)
       if (aErr) {
         return NextResponse.json({ error: '事前請求の記録に失敗しました: ' + aErr.message }, { status: 500 })
       }
@@ -300,14 +315,19 @@ export async function POST(req: Request) {
       if (!edited) return NextResponse.json({ error: '保存する内容がありません' }, { status: 400 })
       const sub = (edited.items || []).reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
       const tx = Math.floor(sub * 0.1)
-      const patch = {
+      const patch: Record<string, unknown> = {
         items: edited.items || null,
         to_name: edited.toName ?? null,
         to_person: edited.toPerson ?? null,
         note: edited.note ?? null,
-        due_on: /^\d{4}-\d{2}-\d{2}$/.test(edited.dueOn || '') ? edited.dueOn : null,
+        due_on: asDate(edited.dueOn),
         subtotal: sub, tax: tx, total: sub + tx, item_count: (edited.items || []).length,
       }
+      // 発行日は、送られてきたときだけ書き換える。
+      // 常に書くと、日付を送らない古い画面から保存されたときに
+      // 発行日が消えてしまう
+      const issuedS = asDate(edited.issuedOn)
+      if (issuedS) patch.issued_on = issuedS
       // 番号で開いている場合はその1枚だけを直す。
       // 事前請求は同じ出店者・同じ月に複数あり得るため、番号で特定しないと
       // 関係のない請求書まで書き換えてしまう
@@ -336,12 +356,16 @@ export async function POST(req: Request) {
           seller: { shopName: saved.to_name ?? payload.seller.shopName, personName: saved.to_person ?? payload.seller.personName },
           items: saved.items, subtotal: sub, tax: tx, total: sub + tx, itemCount: saved.items.length,
           note: saved.note ?? null,
-          invoiceNo: saved.invoice_no, dueOn: saved.due_on, alreadyIssued: exist || [],
+          invoiceNo: saved.invoice_no, dueOn: saved.due_on,
+          issuedOn: saved.issued_on ?? null,
+          alreadyIssued: exist || [],
         })
       }
       return NextResponse.json({
         ...payload, invoiceNo: saved?.invoice_no ?? null,
         dueOn: saved?.due_on ?? null,
+        // 発行済みなら、そのときの発行日を返す。未発行なら null で、画面は今日を出す
+        issuedOn: saved?.issued_on ?? null,
         alreadyIssued: exist || [],
       })
     }
@@ -358,12 +382,12 @@ export async function POST(req: Request) {
     const seq = Math.max(lastSeq + 1, startFrom)
     const invoiceNo = `${year}-${String(seq).padStart(4, '0')}`
 
-    const due = typeof dueOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueOn) ? dueOn : null
+    const due = asDate(dueOn)
     // 画面で修正されていれば、その内容で発行する
     const useItems = edited?.items?.length ? edited.items : items
     const sub2 = useItems.reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
     const tax2 = Math.floor(sub2 * 0.1)
-    const { error: iErr } = await admin.from('invoices').insert({
+    const row: Record<string, unknown> = {
       invoice_no: invoiceNo, seller_id: sellerId, period, kind: 'sales',
       subtotal: sub2, tax: tax2, total: sub2 + tax2, item_count: useItems.length,
       sale_ids: items.map(i => i.saleId),
@@ -372,7 +396,11 @@ export async function POST(req: Request) {
       to_name: edited?.toName ?? null,
       to_person: edited?.toPerson ?? null,
       note: edited?.note ?? null,
-    })
+    }
+    // 発行日。画面で指定されていればそれを、無ければ記録側の既定（今日）に任せる
+    const issuedI = asDate(edited?.issuedOn)
+    if (issuedI) row.issued_on = issuedI
+    const { error: iErr } = await admin.from('invoices').insert(row)
     if (iErr) {
       return NextResponse.json({ error: '請求書の記録に失敗しました: ' + iErr.message }, { status: 500 })
     }

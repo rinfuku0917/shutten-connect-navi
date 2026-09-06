@@ -51,11 +51,22 @@ type Invoice = {
 }
 
 const yen = (n: number) => '¥' + n.toLocaleString()
+// 紙面に出す日付。曜日まで入れる。
+// 先方が「何曜日の締めか」をその場で確かめられるようにするため
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 const jpDate = (iso: string) => {
   if (!iso) return ''
   const [y, m, d] = iso.split('-')
-  return `${y}年${m}月${d}日`
+  if (!y || !m || !d) return ''
+  const w = WEEKDAYS[new Date(Number(y), Number(m) - 1, Number(d)).getDay()]
+  return `${y}年${m}月${d}日（${w}）`
 }
+// 日付の入力欄が受け取れる形（2026-09-06）かどうか
+const isIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
+// Date を、日付の入力欄が受け取れる形にする。
+// toISOString は世界標準時に直すので、日本時間の朝9時より前が前日にずれる
+const toIso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 // 既定の振込期限は対象月の翌月末日
 const defaultDue = (period: string) => {
   const [y, m] = period.split('-').map(Number)
@@ -85,6 +96,9 @@ function InvoiceInner() {
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
   const [issuing, setIssuing] = useState(false)
+  // 発行日。振込期限と同じく 2026-09-06 の形で持ち、紙面に出すときに整える。
+  // 以前は日本語の文字列で持っていて画面から直せなかったが、
+  // 「実際に出した日と紙面の日付を合わせたい」という運用の求めで直せるようにした
   const [issuedOn, setIssuedOn] = useState('')
   const [dueOn, setDueOn] = useState('')
 
@@ -107,17 +121,20 @@ function InvoiceInner() {
     // 最初の読み込みのときだけ保存済みの期限を入れる。
     // 画面で日付を直したあとに上書きされてしまうため、以降は触らない。
     if (j.dueOn && action !== 'issue') setDueOn(j.dueOn)
-    // 発行済みを開いたときは、そのときの発行日を出す（今日ではない）
-    if (action === 'open' && j.issuedOn) {
-      const d = new Date(j.issuedOn)
-      setIssuedOn(`${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`)
+    // 発行済みを開いたときは、そのときの発行日を出す（今日ではない）。
+    // 番号で開いた場合（open）だけでなく、出店者と対象月で開いて
+    // すでに発行済みだった場合（preview）も同じ。
+    // 記録は日付（2026-09-06）だが、古い行は日時で返ることがあるので両方を受ける
+    if (action !== 'issue' && j.issuedOn) {
+      const s = String(j.issuedOn)
+      setIssuedOn(isIsoDate(s.slice(0, 10)) ? s.slice(0, 10) : toIso(new Date(s)))
     }
     setLoading(false)
   }
 
   useEffect(() => {
-    const d = new Date()
-    setIssuedOn(`${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`)
+    // 既定は今日。発行済みを開いた場合は、そのあと call('open') が記録の日で上書きする
+    setIssuedOn(toIso(new Date()))
     // 番号を指定して開くときは、出店者と対象月は要らない
     if (openNo) { call('open'); return }
     if (!sellerId || !period) { setErr('出店者と対象月が指定されていません'); setLoading(false); return }
@@ -158,6 +175,8 @@ function InvoiceInner() {
   const editedPayload = () => ({
     items: items.map((it, i) => ({ ...it, no: i + 1, amount: Number(it.amount) || 0 })),
     toName, toPerson, note, dueOn,
+    // 画面で直した発行日。形が違うときは送らず、サーバー側の既定に任せる
+    issuedOn: isIsoDate(issuedOn) ? issuedOn : undefined,
   })
 
   // 発行済みの請求書の修正を保存する
@@ -305,13 +324,18 @@ function InvoiceInner() {
       {/* 操作パネル（印刷には出さない） */}
       <div className='no-print' style={{ maxWidth: '596pt', margin: '0 auto 12px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
         <Link href='/admin' style={{ fontSize: '13px', color: '#64748B', textDecoration: 'none' }}>← 管理画面</Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px' }}>
-          <span style={{ fontSize: '12px', color: '#64748B' }}>振込期限</span>
+        {/* 紙面に出る2つの日付。どちらもここから直せる。
+            発行日は、実際に先方へ出した日と紙面を合わせたい場面があるため */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', color: '#64748B' }}>発行日</span>
+          <input type='date' value={issuedOn} onChange={e => setIssuedOn(e.target.value)}
+            style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px' }} />
+          <span style={{ fontSize: '12px', color: '#64748B', marginLeft: '4px' }}>振込期限</span>
           <input type='date' value={dueOn} onChange={e => setDueOn(e.target.value)}
             style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px' }} />
           {inv.invoiceNo && (
             <button onClick={saveEdits} disabled={saving} style={{ background: saving ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
-              期限を保存
+              日付を保存
             </button>
           )}
         </div>
@@ -391,7 +415,7 @@ function InvoiceInner() {
 
         <div style={{ ...abs, right: '55.2pt', top: '53.9pt', fontSize: '10pt', lineHeight: '11.9pt', textAlign: 'right' }}>
           <div>請求書番号:{inv.invoiceNo || '（未発行）'}</div>
-          <div>発行日:{issuedOn}</div>
+          <div>発行日:{jpDate(issuedOn)}</div>
           {dueOn && <div>お支払期限:{jpDate(dueOn)}</div>}
         </div>
 
