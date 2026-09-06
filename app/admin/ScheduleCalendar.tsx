@@ -38,6 +38,19 @@ type Submission = {
 
 type Note = { id: string, body: string, authorName: string, createdAt: string, updatedAt: string }
 
+// 売上報告。出店枠ごとに引いて、報告が来ているかどうかと中身を出す
+type Sale = {
+  id: string
+  revenue: number
+  totalPay: number | null
+  items: { name: string, qty: number, price: number | null }[]
+  weather: string
+  customers: number | null
+  note: string
+  saleDate: string
+  createdAt: string
+}
+
 const pad = (n: number) => String(n).padStart(2, '0')
 const todayJst = () => {
   // サーバーはUTCで動くが、ここはブラウザなので端末の時計でよい。
@@ -72,6 +85,8 @@ export default function ScheduleCalendar({
   const [noteDraft, setNoteDraft] = useState('')
   const [noteBusy, setNoteBusy] = useState(false)
   const [noteErr, setNoteErr] = useState('')
+  // 出店枠ごとの売上報告。月を読み込むときに一括で引く
+  const [salesByApp, setSalesByApp] = useState<Map<string, Sale[]>>(new Map())
 
   // 表示している月の出店を読む。
   // 前後の月へ動くたびに読み直す（全期間を一度に読むと、件数が増えたときに詰まる）
@@ -112,6 +127,44 @@ export default function ScheduleCalendar({
       leftAt: a.left_at ?? null,
     }))
     setSlots(mapped)
+
+    // その月の出店に売上報告が来ているかを、まとめて1回で引く。
+    // 「当日の進行ボタンを押したか」よりも、運営が知りたいのは
+    // 「売上の報告が来ているか」なので、それを枠に出せるようにする。
+    //
+    // 本日の受付状況（TodayCheckins）が同じ引き方をしている。
+    const ids = mapped.map(x => x.applicationId)
+    const map = new Map<string, Sale[]>()
+    if (ids.length > 0) {
+      const { data: rows, error: sErr } = await supabase
+        .from('sales')
+        .select('id, application_id, sale_date, revenue, total_pay, items, weather, customers, note, created_at')
+        .in('application_id', ids)
+      // 取れなかったときに黙って「全部未報告」と出さない。
+      // 報告済みの出店者に催促を送る判断をしてしまうため
+      if (sErr) {
+        setErr('売上の読み込みに失敗しました：' + sErr.message)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const r of ((rows || []) as any[])) {
+          if (!r.application_id) continue
+          const list = map.get(r.application_id) || []
+          list.push({
+            id: r.id,
+            revenue: r.revenue ?? 0,
+            totalPay: r.total_pay ?? null,
+            items: Array.isArray(r.items) ? r.items : [],
+            weather: r.weather || '',
+            customers: r.customers ?? null,
+            note: r.note || '',
+            saleDate: r.sale_date || '',
+            createdAt: r.created_at || '',
+          })
+          map.set(r.application_id, list)
+        }
+      }
+    }
+    setSalesByApp(map)
     setLoading(false)
   }, [month])
 
@@ -209,7 +262,6 @@ export default function ScheduleCalendar({
 
   const pickedSlots = picked ? (byDate.get(picked) || []) : []
 
-  // 当日の進行のどこまで来ているか
   // 当日の進行のどこまで来ているか。
   //
   // これは「出店者が当日の進行ボタンを押したか」であって、
@@ -225,6 +277,18 @@ export default function ScheduleCalendar({
     // 出店そのものは行われている可能性が高いので「未着手」とは言わない
     if (s.date < today) return { label: '当日の記録なし', color: '#64748B', bg: '#F1F5F9' }
     return { label: '当日の記録待ち', color: '#92400E', bg: '#FEF3C7' }
+  }
+
+  // 売上報告が来ているか。運営がいちばん知りたいのはここ
+  const reportOf = (s: Slot) => {
+    const list = salesByApp.get(s.applicationId) || []
+    if (list.length > 0) {
+      const total = list.reduce((t, x) => t + (x.revenue || 0), 0)
+      return { list, done: true, label: '報告済み ¥' + total.toLocaleString(), color: '#166534', bg: '#DCFCE7' }
+    }
+    // 出店日が来ていないうちは「未報告」とは言わない。まだ出店していないため
+    if (s.date >= today) return { list, done: false, label: '', color: '', bg: '' }
+    return { list, done: false, label: '売上の報告待ち', color: '#B45309', bg: '#FEF3C7' }
   }
 
   return (
@@ -300,6 +364,7 @@ export default function ScheduleCalendar({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {pickedSlots.map(s => {
               const p = progressOf(s)
+              const rep = reportOf(s)
               const isOpen = openSlot?.applicationId === s.applicationId
               return (
                 <div key={s.applicationId} style={{ border: isOpen ? '1.5px solid #F5A623' : '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden' }}>
@@ -310,6 +375,10 @@ export default function ScheduleCalendar({
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 700, fontSize: '14px' }}>{s.shopName}</span>
+                      {/* 売上の報告が来ているかを先に出す。運営がいちばん知りたいところ */}
+                      {rep.label && (
+                        <span style={{ fontSize: '11px', color: rep.color, background: rep.bg, borderRadius: '999px', padding: '2px 10px', fontWeight: 700 }}>{rep.label}</span>
+                      )}
                       <span style={{ fontSize: '11px', color: p.color, background: p.bg, borderRadius: '999px', padding: '2px 10px', fontWeight: 700 }}>{p.label}</span>
                       {s.format && <span style={{ fontSize: '11px', color: '#64748B' }}>{s.format}</span>}
                     </div>
@@ -337,6 +406,37 @@ export default function ScheduleCalendar({
                           )}
                         </div>
                       )}
+
+                      {/* 売上報告。施設へ出す報告書に載る項目をそのまま出す */}
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>売上報告</div>
+                      {rep.list.length === 0 && (
+                        <div style={{ fontSize: '12px', color: s.date < today ? '#B45309' : '#94A3B8', background: s.date < today ? '#FFFBEB' : '#F8FAFC', border: '1px solid ' + (s.date < today ? '#FDE68A' : '#E2E8F0'), borderRadius: '8px', padding: '9px 11px', marginBottom: '16px' }}>
+                          {s.date < today
+                            ? 'まだ報告がありません。出店者へ催促する場合は、売上管理タブの「売上報告の催促を送る」からお送りできます。'
+                            : 'これからの出店です。出店日を過ぎると、報告の有無がここに出ます。'}
+                        </div>
+                      )}
+                      {rep.list.map(sa => {
+                        const qty = sa.items.reduce((t, it) => t + (it.qty || 0), 0)
+                        return (
+                          <div key={sa.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '11px 13px', marginBottom: '8px', fontSize: '12.5px', color: '#334155', lineHeight: 1.9 }}>
+                            <div style={{ fontSize: '15px', fontWeight: 900, color: '#166534' }}>¥{sa.revenue.toLocaleString()}</div>
+                            <div>販売食数：{qty > 0 ? qty + '食' : '—'}／天候：{sa.weather || '—'}／来客数：{sa.customers != null ? sa.customers : '—'}</div>
+                            {sa.items.length > 0 && (
+                              <div style={{ color: '#64748B' }}>
+                                {sa.items.filter(it => (it.qty || 0) > 0).map(it => it.name + ' ' + it.qty + '食').join('／')}
+                              </div>
+                            )}
+                            {sa.note && <div style={{ color: '#B45309', marginTop: '2px' }}>所感：{sa.note}</div>}
+                            {/* 運営が代理で入れた場合はその時刻になるため「登録」と書く */}
+                            <div style={{ fontSize: '10.5px', color: '#94A3B8', marginTop: '3px' }}>
+                              売上日 {sa.saleDate.replaceAll('-', '/')}
+                              {sa.createdAt ? '／登録 ' + sa.createdAt.slice(0, 16).replace('T', ' ') : ''}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {rep.list.length > 0 && <div style={{ marginBottom: '16px' }} />}
 
                       {/* 提出済みの企業情報 */}
                       <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>提出済みの企業情報</div>
