@@ -397,7 +397,10 @@ async function refreshPublicPages(placeId?: string) {
               {[{k:'power',l:'電源'},{k:'gas',l:'ガス機器'},{k:'water',l:'水道設備'},{k:'eatSpace',l:'飲食スペース'}].map(item=>(
                 <div key={item.k}>
                   <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>{item.l}{req}</label>
-                  <div style={{display:'flex',gap:'16px',marginTop:'10px'}}>
+                  {/* この4項目はスマホでも2列のままなので1列あたりが狭く、
+                      折り返しを許さないと「有り」「無し」が縦に割れてしまう。
+                      入りきらないときは選択肢ごと次の行へ落とす。 */}
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'16px',marginTop:'10px'}}>
                     <Radio name={item.k} val='yes' label='有り'/>
                     <Radio name={item.k} val='no' label='無し'/>
                   </div>
@@ -424,7 +427,10 @@ async function refreshPublicPages(placeId?: string) {
 
             <div style={{marginBottom:'20px'}}>
               <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>高さ制限{req}</label>
-              <div style={{display:'flex',gap:'24px',alignItems:'center',marginTop:'10px'}}>
+              {/* 「有り」を選ぶと横に数値の入力欄が増えるため、狭い画面では
+                  選択肢と入力欄が押し合って文字が縦に割れる。
+                  同じ作りの「雨天時の対応」に合わせて折り返しを許す。 */}
+              <div style={{display:'flex',gap:'24px',alignItems:'center',marginTop:'10px',flexWrap:'wrap'}}>
                 <Radio name='heightLimit' val='no' label='無し'/>
                 <Radio name='heightLimit' val='yes' label='有り'/>
                 {form.heightLimit==='yes' && <input value={form.heightValue} onChange={e=>set('heightValue',e.target.value)} placeholder='例：3m' style={{border:'1px solid #E5E7EB',borderRadius:'8px',padding:'8px 12px',fontSize:'14px',width:'100px'}}/>}

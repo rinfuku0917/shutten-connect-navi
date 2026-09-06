@@ -540,3 +540,110 @@ img[width='1'][height='1'] { display: inline !important; }
     flex-basis: 100%;
   }
 }
+
+
+/* ────────────────────────────────────────────────
+   スマホでの読みづらさへの対策（まとめ）
+
+   運営から「スマホのテキストが読みづらい」との指摘を受けて
+   全画面を測り直した結果、原因は次の3つに集約された。
+     ・横並びの中身が押し潰されて、文字が1文字ずつ縦に折れる
+     ・画面幅を超えてはみ出し、右側が読めない
+     ・入力欄にふれると iOS が画面を拡大し、そのまま横にはみ出す
+   ここではその対策として使うクラスをまとめて置く。
+   ──────────────────────────────────────────────── */
+
+/* 入力欄にふれたときの、iOS Safari の自動拡大を止める。
+
+   iOS Safari は、文字が16px未満の入力欄にふれると
+   その欄が読める大きさになるまで画面全体を拡大する。
+   拡大されたぶん横にはみ出し、指で戻すまで文面が読めなくなる。
+   このサイトの入力欄は13〜15pxが大半なので、ほぼ全ての
+   入力でこれが起きていた。
+
+   viewport に user-scalable=no を書けば拡大は止まるが、
+   それは利用者が自分で拡大することまで禁じてしまうので使わない。
+   16px にすれば、拡大の必要そのものが無くなる。
+
+   このサイトの入力欄は style で直接 fontSize を指定しているものが大半で、
+   その指定はどんなセレクタよりも強い。強く上書きしないと効かない。 */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* 請求書の紙面だけは対象外にする。
+     A4（596×842pt）の実寸で組んでいて、中の入力欄は紙面の文字と
+     同じ大きさを継いでいる。ここを16pxにすると、画面でもPDFでも
+     文字がはみ出して体裁が崩れる */
+  .invoice-sheet input,
+  .invoice-sheet textarea,
+  .invoice-sheet select {
+    font-size: inherit !important;
+  }
+}
+
+/* 売上報告の集計3枚（月の売上／出店料／利益）。
+   スマホで3列のままだと1枚あたり約68pxしかなく、
+   「¥250,000」が枠からあふれる。数字とカンマの間では
+   改行できないので、折り返しでは逃げられない。 */
+@media (max-width: 640px) {
+  .sum-3 { grid-template-columns: 1fr !important; }
+}
+
+/* 書類の有効期限の行。日付欄が縮まないので、折り返せるようにする */
+.doc-expiry { flex-wrap: wrap; }
+.doc-expiry input[type="date"] {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ラベルと値が横に並ぶ行（プロフィールの基本情報など）。
+   メールアドレスやURLは日本語と違って途中で改行できないため、
+   何もしないとその長さが下限になって枠からはみ出す。 */
+.kv-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* メッセージの吹き出し。長いURLでも枠の外に出さない */
+.msg-bubble { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .msg-bubble { max-width: 88% !important; }
+}
+
+/* 出店管理スケジュールの日付マス。
+
+   7列を等幅で割るため、スマホでは1マスに文字が入る幅が16px程度しかない。
+   そこに9.5pxで屋号を入れても「ベ…」としか出ず、読めない。
+   かといってマスから屋号を消すと、パソコンで使う運営が一覧性を失う。
+
+   そこで両方をHTMLに置いておき、ここで出し分ける。
+   スマホでは屋号を隠し、代わりに「●3」と件数だけを出す。
+   屋号は日付を押すと下に出る一覧（14px）で読めるので、情報は失われない。 */
+.cal-cell-count { display: none; }
+@media (max-width: 640px) {
+  .cal-cell-shop { display: none !important; }
+  .cal-cell-count {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #166534;      /* マスの中の屋号と同じ緑。出店ありの印だと分かるように */
+    margin-top: 3px;
+    line-height: 1.2;
+    letter-spacing: .02em;
+  }
+}
+
+/* 当日の受付状況の表。
+   受付がまだの行を光らせる指定（.ccn-unseen）は tr に付いているが、
+   スマホでは1列目が固定表示になり、そのセルに白い背景が入るため
+   1列目だけ光らない。固定した列にも同じ色を届ける。 */
+@media (max-width: 640px) {
+  .admin-table-wrap tr.ccn-unseen td:first-child { background: #FFF8E1; }
+}

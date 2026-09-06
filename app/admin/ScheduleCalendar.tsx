@@ -402,13 +402,24 @@ export default function ScheduleCalendar({
                 }}
               >
                 <div style={{ fontSize: '12px', fontWeight: 700, color: isToday ? '#1D4ED8' : '#334155' }}>{d}</div>
+                {/* マスの中の屋号。7列を等幅で割るため、スマホでは1マスの文字が入る幅が
+                    16px程度しかなく、9.5pxの屋号は「ベ…」としか出せず読めない。
+                    そこでスマホ（640px以下）では .cal-cell-shop を隠し、代わりに
+                    下の .cal-cell-count で「●3」のような点と件数だけを出す。
+                    屋号は日付を押すと下に出る一覧（14px）で読めるので、情報は失われない。
+                    パソコンでは今までどおり屋号を出したいので、出し分けはクラス側で行う */}
                 {items.slice(0, 2).map(s => (
-                  <div key={s.applicationId} style={{ fontSize: '9.5px', color: '#166534', background: '#DCFCE7', borderRadius: '4px', padding: '1px 4px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div key={s.applicationId} className='cal-cell-shop' style={{ fontSize: '9.5px', color: '#166534', background: '#DCFCE7', borderRadius: '4px', padding: '1px 4px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {s.shopName}
                   </div>
                 ))}
                 {items.length > 2 && (
-                  <div style={{ fontSize: '9.5px', color: '#64748B', marginTop: '2px' }}>ほか{items.length - 2}件</div>
+                  <div className='cal-cell-shop' style={{ fontSize: '9.5px', color: '#64748B', marginTop: '2px' }}>ほか{items.length - 2}件</div>
+                )}
+                {/* スマホでだけ出る件数の印。パソコンでは屋号と二重になるため隠す。
+                    見た目の指定はすべてクラス側に置き、パソコン表示を変えないようにしている */}
+                {items.length > 0 && (
+                  <div className='cal-cell-count'>●{items.length}</div>
                 )}
               </button>
             )

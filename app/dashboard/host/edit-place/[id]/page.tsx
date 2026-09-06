@@ -466,7 +466,11 @@ async function refreshPublicPages(placeId?: string) {
               {[{k:'power',l:'電源'},{k:'gas',l:'ガス機器'},{k:'water',l:'水道設備'},{k:'eatSpace',l:'飲食スペース'}].map(item=>(
                 <div key={item.k}>
                   <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>{item.l}{req}</label>
-                  <div style={{display:'flex',gap:'16px',marginTop:'10px'}}>
+                  {/* この4項目はスマホでは2列に畳まれ、1列あたりの幅が狭くなる。
+                      折り返しを許さないと「有り」「無し」が横に押し潰され、
+                      日本語はどこでも改行できるため「有／り」と縦に割れてしまう。
+                      入りきらないときは2段に落として、文字が割れないようにする。 */}
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'16px',marginTop:'10px'}}>
                     <Radio name={item.k} val='yes' label='有り'/>
                     <Radio name={item.k} val='no' label='無し'/>
                   </div>

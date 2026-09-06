@@ -1846,16 +1846,21 @@ const previewDoc = async (fileUrl: string) => {
                     <div style={{ fontWeight:900, fontSize: '16px', marginBottom: '4px', color: '#1a1a1a' }}>料金設定</div>
                     <div style={{ fontSize: '13px', color: '#64748B', marginBottom: '18px' }}>{feePlace.title}</div>
                     <div style={{ fontWeight:700, fontSize: '13px', color: '#B45309', marginBottom: '8px' }}>取引先の取り分（出店者には内訳を見せません）</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px' }}>
-                      <div><label style={{fontSize: '11px',color: '#64748B'}}>固定額（円）</label><input type= 'number' value={ff.price_fixed === 0 ? '' : ff.price_fixed} onChange={e=>setFeeForm({...ff, price_fixed: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
-                      <div><label style={{fontSize: '11px',color: '#64748B'}}>単位</label><select value={ff.place_fixed_unit} onChange={e=>setFeeForm({...ff, place_fixed_unit: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value= 'per_day'>1日あたり</option><option value= 'per_event'>期間で1回</option></select></div>
-                      <div><label style={{fontSize: '11px',color: '#64748B'}}>歩合（%）</label><input type= 'number' value={ff.price_share_pct === 0 ? '' : ff.price_share_pct} onChange={e=>setFeeForm({...ff, price_share_pct: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
+                    {/* 3列・2列のままだと、中の選択欄が「1日あたり」「税抜に換算してから」の
+                        文字幅より狭くなれず、スマホでは右端の「歩合（%）」が画面の外に出て
+                        気づかないまま保存されてしまうため、狭い画面では1列に畳む。
+                        欄のラベルは、どの数字を入れる欄かを見分ける唯一の手がかりなので
+                        本文の下限にそろえて12pxにする（金額の入れ違いを防ぐため） */}
+                    <div className='form-grid-3' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+                      <div><label style={{fontSize: '12px',color: '#64748B'}}>固定額（円）</label><input type= 'number' value={ff.price_fixed === 0 ? '' : ff.price_fixed} onChange={e=>setFeeForm({...ff, price_fixed: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
+                      <div><label style={{fontSize: '12px',color: '#64748B'}}>単位</label><select value={ff.place_fixed_unit} onChange={e=>setFeeForm({...ff, place_fixed_unit: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value= 'per_day'>1日あたり</option><option value= 'per_event'>期間で1回</option></select></div>
+                      <div><label style={{fontSize: '12px',color: '#64748B'}}>歩合（%）</label><input type= 'number' value={ff.price_share_pct === 0 ? '' : ff.price_share_pct} onChange={e=>setFeeForm({...ff, price_share_pct: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
                     </div>
                     <div style={{ fontWeight:700, fontSize: '13px', color: '#3A9BD5', marginBottom: '8px' }}>弊社の利益</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '18px' }}>
-                      <div><label style={{fontSize: '11px',color: '#64748B'}}>固定額（円）</label><input type= 'number' value={ff.company_fixed_amount === 0 ? '' : ff.company_fixed_amount} onChange={e=>setFeeForm({...ff, company_fixed_amount: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
-                      <div><label style={{fontSize: '11px',color: '#64748B'}}>単位</label><select value={ff.company_fixed_unit} onChange={e=>setFeeForm({...ff, company_fixed_unit: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value= 'per_day'>1日あたり</option><option value= 'per_event'>期間で1回</option></select></div>
-                      <div><label style={{fontSize: '11px',color: '#64748B'}}>歩合（%）</label><input type= 'number' value={ff.company_share_pct === 0 ? '' : ff.company_share_pct} onChange={e=>setFeeForm({...ff, company_share_pct: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
+                    <div className='form-grid-3' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '18px' }}>
+                      <div><label style={{fontSize: '12px',color: '#64748B'}}>固定額（円）</label><input type= 'number' value={ff.company_fixed_amount === 0 ? '' : ff.company_fixed_amount} onChange={e=>setFeeForm({...ff, company_fixed_amount: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
+                      <div><label style={{fontSize: '12px',color: '#64748B'}}>単位</label><select value={ff.company_fixed_unit} onChange={e=>setFeeForm({...ff, company_fixed_unit: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value= 'per_day'>1日あたり</option><option value= 'per_event'>期間で1回</option></select></div>
+                      <div><label style={{fontSize: '12px',color: '#64748B'}}>歩合（%）</label><input type= 'number' value={ff.company_share_pct === 0 ? '' : ff.company_share_pct} onChange={e=>setFeeForm({...ff, company_share_pct: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
                     </div>
                     {/* 平日と土日祝で金額が変わる案件のための欄。
                         入れた場合は、上の固定額の代わりにこちらを使う。
@@ -1876,13 +1881,13 @@ const previewDoc = async (fileUrl: string) => {
                         ] as const).map(([label, pk, ck]) => (
                           <div key={label} style={{ marginBottom:'10px' }}>
                             <div style={{ fontSize:'12px', fontWeight:700, color:'#B45309', marginBottom:'4px' }}>{label}</div>
-                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+                            <div className='form-grid-2' style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
                               <div>
-                                <label style={{fontSize:'11px',color:'#64748B'}}>取引先へ渡す額（円）</label>
+                                <label style={{fontSize:'12px',color:'#64748B'}}>取引先へ渡す額（円）</label>
                                 <input inputMode='numeric' value={dtForm[pk]} onChange={e=>setDtForm({...dtForm, [pk]: e.target.value.replace(/[^0-9]/g,'')})} placeholder='空欄可' style={{width:'100%',border:'1.5px solid #E2E8F0',borderRadius:'8px',padding:'8px',fontSize:'13px',boxSizing:'border-box'}} />
                               </div>
                               <div>
-                                <label style={{fontSize:'11px',color:'#64748B'}}>弊社の利益（円）</label>
+                                <label style={{fontSize:'12px',color:'#64748B'}}>弊社の利益（円）</label>
                                 <input inputMode='numeric' value={dtForm[ck]} onChange={e=>setDtForm({...dtForm, [ck]: e.target.value.replace(/[^0-9]/g,'')})} placeholder='空欄可' style={{width:'100%',border:'1.5px solid #E2E8F0',borderRadius:'8px',padding:'8px',fontSize:'13px',boxSizing:'border-box'}} />
                               </div>
                             </div>
@@ -1896,9 +1901,9 @@ const previewDoc = async (fileUrl: string) => {
                       </div>
                     )}
                     <div style={{ fontWeight:700, fontSize: '13px', color: '#16A34A', marginBottom: '8px' }}>歩合の計算元（税の扱い）</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '18px' }}>
-                      <div><label style={{fontSize: '11px',color: '#64748B'}}>計算元</label><select value={ff.share_tax_basis} onChange={e=>setFeeForm({...ff, share_tax_basis: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value='as_entered'>入力金額そのまま</option><option value='tax_excluded'>税抜に換算してから</option></select></div>
-                      {ff.share_tax_basis === 'tax_excluded' && (<div><label style={{fontSize: '11px',color: '#64748B'}}>税率</label><select value={ff.share_tax_rate} onChange={e=>setFeeForm({...ff, share_tax_rate: parseInt(e.target.value)||10})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value={8}>8%（軽減税率）</option><option value={10}>10%</option></select></div>)}
+                    <div className='form-grid-2' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '18px' }}>
+                      <div><label style={{fontSize: '12px',color: '#64748B'}}>計算元</label><select value={ff.share_tax_basis} onChange={e=>setFeeForm({...ff, share_tax_basis: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value='as_entered'>入力金額そのまま</option><option value='tax_excluded'>税抜に換算してから</option></select></div>
+                      {ff.share_tax_basis === 'tax_excluded' && (<div><label style={{fontSize: '12px',color: '#64748B'}}>税率</label><select value={ff.share_tax_rate} onChange={e=>setFeeForm({...ff, share_tax_rate: parseInt(e.target.value)||10})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value={8}>8%（軽減税率）</option><option value={10}>10%</option></select></div>)}
                     </div>
                     <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '13px' }}><div style={{fontWeight:700,color: '#16A34A',marginBottom: '4px'}}>出店者に見える表示</div>出店料：{dispFixed.toLocaleString()}円/{unitLabel(ff.place_fixed_unit)}{dispPct>0? ' ＋ 売上の'+dispPct+ '%' : ''}</div>
                     <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '18px', fontSize: '12px', color: '#64748B', lineHeight:1.8 }}><div style={{fontWeight:700,color: '#1a1a1a',marginBottom: '4px'}}>管理側の内訳（売上{ex.toLocaleString()}円/日の例）</div>取引先分：{Math.round(pf).toLocaleString()}円 ／ 弊社の利益：<strong style={{color: '#3A9BD5'}}>{Math.round(cf).toLocaleString()}円</strong> ／ 総額：<strong style={{color: '#16A34A'}}>{Math.round(pf+cf).toLocaleString()}円</strong></div>
@@ -2032,7 +2037,10 @@ const previewDoc = async (fileUrl: string) => {
                             <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#B45309', flexShrink: 0 }}>{s.name[0]}</div>
                             <div>
                               <div style={{ fontWeight: '600' }}>{s.name}</div>
-                              <div style={{ fontSize: '10px', color: '#64748B' }}>{s.shop}</div>
+                              {/* 屋号は運営が人を見分ける手がかりで、飾りではなく中身。
+                                  スマホでは1列目が固定表示になり、右へ送っているあいだ
+                                  画面に残り続けるのがこの行なので、本文の下限12pxにする */}
+                              <div style={{ fontSize: '12px', color: '#64748B' }}>{s.shop}</div>
                             </div>
                           </div>
                         </td>
@@ -2624,9 +2632,15 @@ const previewDoc = async (fileUrl: string) => {
             </div>
           )}
 
+          {/* 「一覧320px＋やり取り」の2列。スマホでは1列目だけで画面の幅を
+              使い切ってしまい、やり取りの本文が画面の外へ出てしまうため、
+              狭い画面では上下に積む（募集者側のメッセージ画面と同じ形）。
+              中の2つに minWidth:0 を入れているのは、格子の列が既定では
+              中身（メッセージ入力欄や長い本文）の幅より狭くなれず、
+              1列に畳んでもなお横にはみ出すため */}
           {tab === 'messages' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '16px', height: 'calc(100vh - 180px)' }}>
-              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflowY: 'auto' }}>
+            <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '16px', height: 'calc(100vh - 180px)' }}>
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflowY: 'auto', minWidth: 0 }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>出店者一覧（案件ごと）</div>
                 {threads.length === 0 ? (
                   <div style={{ padding: '24px', textAlign: 'center', color: '#999', fontSize: '13px' }}>承認済みの案件がありません。</div>
@@ -2642,7 +2656,7 @@ const previewDoc = async (fileUrl: string) => {
                   </div>
                 ))}
               </div>
-              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 {activeThread ? (
                   <>
                     <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>{threads.find(t => t.application_id === activeThread)?.sellerName || '出店者'} とのやり取り</div>
@@ -3004,7 +3018,10 @@ const previewDoc = async (fileUrl: string) => {
                     <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>タイトル <span style={{ color: '#DC2626' }}>*</span></label>
                     <input type="text" value={pTitle} onChange={e => setPTitle(e.target.value)} placeholder="例：キッチンカー開業の費用はいくら？初期費用の内訳と抑えるコツ" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {/* 入力欄は既定で20文字ぶんの幅を持ち、それより狭い列には入らない。
+                      2列のままだとスマホでカードからはみ出すので、狭い画面では1列に畳む
+                      （下の記事一覧の格子と同じ扱いにそろえる） */}
+                  <div className='form-grid-2' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>URL（半角英数字） <span style={{ color: '#DC2626' }}>*</span></label>
                       <input type="text" value={pSlug} onChange={e => setPSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} placeholder="kitchen-car-startup-cost" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
@@ -3019,7 +3036,7 @@ const previewDoc = async (fileUrl: string) => {
                       <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px' }}>記事一覧の絞り込みに使います</div>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '12px' }}>
+                  <div className='admin-newplace-grid' style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '12px' }}>
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>絵文字</label>
                       <input type="text" value={pEmoji} onChange={e => setPEmoji(e.target.value)} placeholder="📝" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '20px', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
@@ -3139,6 +3156,10 @@ const previewDoc = async (fileUrl: string) => {
                   <button onClick={() => { setImportedPage(0); loadImported() }} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>検索</button>
                 </div>
               </div>
+              {/* この表だけは1列目が「No.」で、名前の列は2列目にある。
+                  ほかの一覧と同じ固定表示のクラスを当てると、番号だけが
+                  116px幅で画面に居座り、狭い画面がさらに狭くなるため付けない。
+                  2列目を固定できる指定ができたら、そのときに合わせる */}
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '900px' }}>
                   <thead>
@@ -3223,7 +3244,10 @@ const previewDoc = async (fileUrl: string) => {
                       <span>プレビュー（{csvPreview.length - 1}件）</span>
                       {csvImported && <span style={{ color: '#16A34A', fontWeight: '700', fontSize: '12px' }}>インポート完了！</span>}
                     </div>
-                    <div style={{ overflowX: 'auto' }}>
+                    {/* 取り込む前の中身を確かめる表。ほかの一覧と同じ扱いにして、
+                        スマホで右へ送っても1列目（出店者名）が固定で残るようにする。
+                        取り込む相手を取り違えたまま実行しないため */}
+                    <div className='admin-table-wrap'>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                         <thead>
                           <tr style={{ background: '#F8FAFC' }}>

@@ -172,7 +172,10 @@ export default function TodayCheckins() {
       {rows.length === 0 ? (
         <div style={{ padding: '20px 18px', color: '#999', fontSize: '13px' }}>本日の出店はありません。</div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className='admin-table-wrap' style={{ overflowX: 'auto' }}>
+          {/* 10列あるのでスマホでは横に送って見ることになる。admin-table-wrap を付けると
+              1列目の店舗名が固定されて画面に残るため、右端の「受付完了」まで送っても
+              誰の受付をしているのか分からなくなることがない */}
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
             <thead>
               <tr>
@@ -192,11 +195,15 @@ export default function TodayCheckins() {
                 const yesterday = r.applyDate === dayStr(-1)
                 return (
                   <tr key={r.id} className={live ? 'ccn-unseen' : undefined}>
-                    <td style={{ ...cell, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {/* 折り返さない指定は admin-table-wrap 側が持っている。ここで重ねて書くと
+                        スマホで1列目を固定したときの折り返しが効かず、店舗名がはみ出すため書かない */}
+                    <td style={{ ...cell, fontWeight: 700 }}>
                       {r.shopName}
                       {yesterday && <span style={{ marginLeft: '6px', fontSize: '10px', color: '#94A3B8', fontWeight: 400 }}>前日分</span>}
                     </td>
-                    <td style={{ ...cell, color: '#64748B' }}>{r.placeTitle}</td>
+                    {/* 案件名だけは長くなるので折り返して見せる。ただし下限の幅を決めておかないと
+                        他の列に幅を取られて1行1文字まで潰れてしまうため 140px を確保する */}
+                    <td style={{ ...cell, color: '#64748B', whiteSpace: 'normal', minWidth: '140px' }}>{r.placeTitle}</td>
                     {STEPS.map(s => (
                       <td key={String(s.key)} style={{ ...cell, textAlign: 'center' }}>
                         <Mark at={r[s.key] as string | null} />

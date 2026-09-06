@@ -1152,7 +1152,11 @@ export default function SellerDashboard() {
 
       {/* メイン */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 24px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* 高さを固定せず、狭い画面では折り返して2段に落ちるようにする。
+            横一列のままだと、戻るボタンと右のご案内が縮まないぶんの
+            しわ寄せが画面名だけに集まり、「出店料のお支 / 払い」のように
+            言葉の途中で折れてしまうため。 */}
+        <div style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '6px 24px', minHeight: '50px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: '6px' }}>
           {/* 一つ前の画面に戻る。タブの移動も履歴に積んでいるので、
               書類を見たあとに元のタブへ帰れる */}
           <button
@@ -1163,7 +1167,9 @@ export default function SellerDashboard() {
           >
             <span style={{ fontSize: '14px', lineHeight: 1 }}>←</span>戻る
           </button>
-          <div style={{ fontWeight: '700', fontSize: '15px' }}>
+          {/* 画面名は言葉の途中で折れないようにする。入らないときは
+              上の flexWrap で行ごと下に落ちる */}
+          <div style={{ fontWeight: '700', fontSize: '15px', whiteSpace: 'nowrap' }}>
             {tab === 'home' && 'ダッシュボード'}
             {tab === 'applies' && '申込一覧'}
             {tab === 'calendar' && '出店カレンダー'}
@@ -1318,9 +1324,15 @@ export default function SellerDashboard() {
                         </div>
                       ))}
                     </div>
-                    <div style={{ background: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#DC2626', display: 'flex', gap: '6px' }}>
-                      <span>損害賠償保険証書が未提出です。出店前に提出してください。</span>
-                    </div>
+                    {/* 損害賠償保険証書がまだのときだけ出す。
+                        これまで条件が付いておらず、提出いただいた方にも
+                        いつまでも赤い注意書きが出たままになっていたため。
+                        スマホでは2行になるので、行間も広げて読めるようにする */}
+                    {docStatusLabel(myDocs.find(d => d.doc_type === 'liability_insurance')?.status) === '未提出' && (
+                      <div style={{ background: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#DC2626', lineHeight: 1.8 }}>
+                        損害賠償保険証書が未提出です。出店前に提出してください。
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1674,13 +1686,15 @@ export default function SellerDashboard() {
                             </div>
                           </div>
                         </div>
+                        {/* お支払いの状況をお伝えする文章なので、
+                            補足ではなく読ませる文字の大きさにする */}
                         {iv.paid_status === 'reported' && (
-                          <div style={{ fontSize: '11px', color: '#B45309', marginBottom: '8px' }}>
+                          <div style={{ fontSize: '12px', color: '#B45309', marginBottom: '8px', lineHeight: 1.8 }}>
                             {iv.paid_on ? iv.paid_on.replace(/-/g, '/') + ' のお振込としてご報告いただいています。' : 'お振込のご報告をいただいています。'}運営で確認しております。
                           </div>
                         )}
                         {iv.paid_status === 'paid' && (
-                          <div style={{ fontSize: '11px', color: '#16A34A', marginBottom: '8px' }}>ご入金を確認いたしました。ありがとうございました。</div>
+                          <div style={{ fontSize: '12px', color: '#16A34A', marginBottom: '8px', lineHeight: 1.8 }}>ご入金を確認いたしました。ありがとうございました。</div>
                         )}
                         {iv.paid_status !== 'paid' && (
                           <button onClick={() => {
@@ -1728,7 +1742,10 @@ export default function SellerDashboard() {
                         <div style={{ color: msgError ? '#DC2626' : '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>{msgError || 'まだメッセージがありません'}</div>
                       ) : dbMessages.map(m => (
                         m.sender_id === myId ? (
-                          <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
+                          // 会場の地図など長いURLは途中で改行できず、
+                          // そのままでは吹き出しの外へはみ出す。
+                          // .msg-bubble で折り返しを許し、スマホでは幅も広げる
+                          <div key={m.id} className='msg-bubble' style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
                             <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, width: 'fit-content', marginLeft: 'auto', whiteSpace: 'pre-wrap' }}>
                               {m.body && <div>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, true)}
@@ -1738,7 +1755,8 @@ export default function SellerDashboard() {
                             </div>
                           </div>
                         ) : (
-                          <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
+                          // 相手からの吹き出しも同じ理由で .msg-bubble を付ける
+                          <div key={m.id} className='msg-bubble' style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
                             <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a', width: 'fit-content', whiteSpace: 'pre-wrap' }}>
                               {m.body && <div>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, false)}
@@ -1778,8 +1796,10 @@ export default function SellerDashboard() {
           {/* 書類管理 */}
           {tab === 'docs' && (
             <>
-              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
-                <span>各書類のファイルを選んでアップロードしてください。提出後は「審査中」になります。</span>
+              {/* スマホでは数行に折り返るご案内なので、行間を広げて読みやすくする。
+                  お支払いタブのご案内（lineHeight 1.8）と揃えた */}
+              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', lineHeight: 1.8 }}>
+                各書類のファイルを選んでアップロードしてください。提出後は「審査中」になります。
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {docTypes.map(doc => {
@@ -1794,8 +1814,13 @@ export default function SellerDashboard() {
                   const expiryLabel = doc.key === 'license_front' ? '運転免許証の有効期限' : '有効期限'
                   return (
                     <div key={doc.key} style={{ background: '#fff', borderRadius: '12px', border: '1px solid ' + border, padding: '16px 20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ flex: 1 }}>
+                      {/* 状態バッジとアップロードのボタンは縮まないため、
+                          横一列のままだと書類名だけが押し潰され、
+                          「運転免許証（表面）」が3〜4行に折れてしまう。
+                          書類名に幅の下限を持たせ、入らないときは
+                          ボタンを次の行へ落とす */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: '150px' }}>
                           <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>{doc.name} {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}</div>
                         </div>
                         <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: badgeBg, color: badgeColor, flexShrink: 0 }}>{status}</span>
@@ -1805,8 +1830,10 @@ export default function SellerDashboard() {
                             onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDoc(doc.key, file); e.currentTarget.value = '' }} />
                         </label>
                       </div>
+                      {/* 日付欄はスマホでは書式のぶんの幅を持って縮まないため、
+                          .doc-expiry で折り返しを許し、欄が枠からはみ出さないようにする */}
                       {showExpiry && (
-                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #E2E8F0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div className='doc-expiry' style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #E2E8F0', display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>{expiryLabel}</span>
                           <input type='date' defaultValue={rec?.expiry_date || ''}
                             onChange={(e) => saveExpiry(doc.key, e.target.value)}
@@ -1877,7 +1904,10 @@ export default function SellerDashboard() {
                     ].map(fld => (
                       <div key={fld.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
                         <div style={{ width: '100px', fontSize: '12px', color: '#64748B', flexShrink: 0 }}>{fld.label}</div>
-                        <div style={{ fontSize: '13px', fontWeight: '500', color: fld.value === '未設定' ? '#94A3B8' : '#1a1a1a' }}>{fld.value}</div>
+                        {/* メールアドレスは途中で改行できず、そのままでは
+                            その長さが下限になってカードからはみ出すため、
+                            .kv-value でどこでも折り返せるようにする */}
+                        <div className='kv-value' style={{ fontSize: '13px', fontWeight: '500', color: fld.value === '未設定' ? '#94A3B8' : '#1a1a1a' }}>{fld.value}</div>
                       </div>
                     ))}
                     {photos.length > 0 && (
@@ -1908,7 +1938,8 @@ export default function SellerDashboard() {
                     ].filter(f => f.value).map(fld => (
                       <div key={fld.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
                         <div style={{ width: '100px', fontSize: '12px', color: '#64748B', flexShrink: 0 }}>{fld.label}</div>
-                        <div style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a' }}>{fld.value}</div>
+                        {/* 設備や決済方法も長くなるので、同じく折り返せるようにする */}
+                        <div className='kv-value' style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a' }}>{fld.value}</div>
                       </div>
                     ))}
                     <button onClick={startProfileEdit} style={{ marginTop: '16px', width: '100%', background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>編集する</button>
@@ -1946,7 +1977,9 @@ export default function SellerDashboard() {
                           </label>
                         )}
                       </div>
-                      <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '6px' }}>1枚目が一覧やトップに表示されます。写真は追加・削除した時点で自動保存されます。</div>
+                      {/* 保存ボタンを押さずに画面を離れてよいかの判断に関わる説明なので、
+                          読める大きさ・濃さにする */}
+                      <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', lineHeight: 1.7 }}>1枚目が一覧やトップに表示されます。写真は追加・削除した時点で自動保存されます。</div>
                     </div>
 
                     {/* 提供メニュー */}
@@ -2003,7 +2036,7 @@ export default function SellerDashboard() {
                         </div>
                         <button onClick={addMenu} disabled={menuSaving} style={{ width: '100%', background: menuSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 700, cursor: menuSaving ? 'not-allowed' : 'pointer' }}>{menuSaving ? '追加中...' : '＋ メニューを追加'}</button>
                       </div>
-                      <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '6px' }}>追加したメニューは出店者紹介ページに表示されます。</div>
+                      <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', lineHeight: 1.7 }}>追加したメニューは出店者紹介ページに表示されます。</div>
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
@@ -2224,7 +2257,9 @@ export default function SellerDashboard() {
                     { label: 'TikTok', value: snsLinks.tiktok },
                   ]).map(s => (
                     <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
-                      <div style={{ flex: 1 }}>
+                      {/* YouTubeのチャンネルURLなどは途中で改行できないため、
+                          .kv-value を付けて枠の中で折り返せるようにする */}
+                      <div className='kv-value' style={{ flex: 1 }}>
                         <div style={{ fontSize: '11px', color: '#64748B' }}>{s.label}</div>
                         <div style={{ fontSize: '13px', fontWeight: '500', color: !s.value ? '#94A3B8' : '#1D4ED8' }}>{s.value || '未設定'}</div>
                       </div>
@@ -2262,10 +2297,14 @@ export default function SellerDashboard() {
                       </button>
                     ))}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#991B1B', marginTop: '6px' }}>押すと報告フォームが開きます。売上と食数をまとめて報告できます。</div>
+                  {/* 使い方をお伝えする文章なので、補足の大きさ（11px）ではなく
+                      本文と同じ12pxにする */}
+                  <div style={{ fontSize: '12px', color: '#991B1B', marginTop: '6px', lineHeight: 1.7 }}>押すと報告フォームが開きます。売上と食数をまとめて報告できます。</div>
                 </div>
               )}
-              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', display: 'flex', gap: '8px' }}>
+              {/* スマホでは5行に折り返るご案内なので、行間を広げて読みやすくする。
+                  お支払いタブのご案内（lineHeight 1.8）と揃えた */}
+              <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B45309', lineHeight: 1.8 }}>
                 <span>承認された案件ごとに売上を入力すると、出店料（出店コネクトナビへのお支払い額）とあなたの利益（手取り）が自動計算されます。<br /><strong>出店料の請求は税別となります。</strong>ご請求時に消費税10%を加算した金額をご請求します。</span>
               </div>
 
@@ -2281,7 +2320,7 @@ export default function SellerDashboard() {
                     {myApprovedApps.length === 0 && (
                       // 承認された申込が1件も無いと、案件を選べず売上を記録できない。
                       // 「選択してください」だけだと理由が分からないため、ここで説明する。
-                      <div style={{ fontSize: '11px', color: '#B45309', marginTop: '6px', lineHeight: 1.7 }}>
+                      <div style={{ fontSize: '12px', color: '#B45309', marginTop: '6px', lineHeight: 1.7 }}>
                         売上を記録できるのは、出店が承認された案件だけです。承認されるとここに出ます。
                       </div>
                     )}
@@ -2356,7 +2395,7 @@ export default function SellerDashboard() {
                       style={{ background: '#fff', color: '#B45309', border: '1.5px dashed #F5A623', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>＋ 品目を追加</button>
                   </div>
                   {saleItems.length === 0 && (
-                    <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '6px', lineHeight: 1.7 }}>
+                    <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', lineHeight: 1.7 }}>
                       「何が何食売れたか」を施設・企業へ報告する場合にご利用ください。登録済みのメニュー名が候補に出ます。
                     </div>
                   )}
@@ -2406,7 +2445,9 @@ export default function SellerDashboard() {
                     )
                   })()}
                 </div>
-                <div style={{ marginTop: '8px', fontSize: '11px', color: '#94A3B8', lineHeight: 1.7 }}>
+                {/* 金額の入れ方は、いちばん間違えやすいところのご説明なので、
+                    薄い補足ではなく読める大きさ・濃さにする */}
+                <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748B', lineHeight: 1.7 }}>
                   {saleSplit
                     ? 'ご自身の商品の税率で分けて入力してください。軽減税率8%の商品（フードやドリンクの持ち帰りなど）と、10%の商品（お酒・物販・その場でのご飲食など）の内訳を記録できます。出店料は合計額から計算するため、分けても金額は変わりません。'
                     : '売上金額は、レジの合計（お客様からお預かりした金額）をそのまま入力してください。通常はこのままで問題ありません。ご自身の商品の税率で分けて計算したい場合のみ、上のチェックをご利用ください。'}
@@ -2446,7 +2487,10 @@ export default function SellerDashboard() {
                 })()}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '14px', marginBottom: '20px' }}>
+              {/* スマホで3列のままだと1枚あたりの中身が約68pxしかなく、
+                  「¥250,000」が枠からあふれる。数字とカンマの間では改行できないので、
+                  .sum-3 で狭い画面では1列に積む */}
+              <div className='sum-3' style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '14px', marginBottom: '20px' }}>
                 {(() => {
                   const totalRev = mySales.reduce((s, r) => s + r.revenue, 0)
                   const totalFee = mySales.reduce((s, r) => s + r.fee, 0)
@@ -2464,7 +2508,10 @@ export default function SellerDashboard() {
                 })()}
               </div>
 
-              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflowX: 'auto' }}>
+              {/* 7列あるため、スマホでは横に送って見ていただく表。
+                  .admin-table-wrap を付けると、右へ送っても1列目（売上日）が残り、
+                  各列が押し潰されて文字が1文字ずつ縦に折れることもなくなる */}
+              <div className='admin-table-wrap' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                   <thead>
                     <tr>
@@ -2475,11 +2522,18 @@ export default function SellerDashboard() {
                   </thead>
                   <tbody>
                     {mySales.length === 0 ? (
-                      <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>この月の売上記録はまだありません。</td></tr>
+                      // 表は7列あるので、空のときの1行も7列ぶんで受ける
+                      // （6のままだと文言が中央に来ない）。
+                      // この行は横に送る必要が無いので、1列目を固定する指定と
+                      // 幅の上限は外して、文章のまま出るようにする
+                      <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#999', whiteSpace: 'normal', position: 'static', maxWidth: 'none', boxShadow: 'none' }}>この月の売上記録はまだありません。</td></tr>
                     ) : mySales.map((s, i) => (
                       <tr key={s.id} style={{ borderBottom: i < mySales.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{s.sale_date}</td>
-                        <td style={{ padding: '10px 14px' }}>
+                        {/* 案件名だけは折り返して読ませたいので、
+                            .admin-table-wrap が一律に掛ける nowrap をここで戻す。
+                            幅の下限も持たせて、1文字ずつ縦に折れないようにする */}
+                        <td style={{ padding: '10px 14px', whiteSpace: 'normal', minWidth: '160px', maxWidth: '240px' }}>
                           {s.placeTitle}
                           {s.items.length > 0 && (
                             <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
@@ -2602,13 +2656,14 @@ export default function SellerDashboard() {
                       placeholder='50000' style={{ ...box, flex: 1, textAlign: 'right', fontSize: '18px', fontWeight: 700 }} />
                     <span style={{ fontSize: '14px', color: '#64748B' }}>円</span>
                   </div>
-                  <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>レジの合計（お客様からお預かりした金額）をご入力ください。</div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', lineHeight: 1.7 }}>レジの合計（お客様からお預かりした金額）をご入力ください。</div>
                 </div>
 
                 {/* 品目ごとの食数。合計が施設の報告書の「販売食数（合計）」になる */}
                 <div style={{ marginBottom: '18px' }}>
                   <div style={label}>品目ごとの販売食数（必須）</div>
-                  <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '8px', lineHeight: 1.7 }}>
+                  {/* 報告書の中身に直結するご説明なので、読める大きさ・濃さにする */}
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '8px', lineHeight: 1.7 }}>
                     売れた品目の数だけご入力ください（0や空欄の品目は報告されません）。合計が、施設へお出しする報告書の「販売食数」になります。単価は登録済みメニューから入りますが、当日変更した場合は直せます。
                   </div>
                   {rpItems.length === 0 && (
@@ -2624,10 +2679,15 @@ export default function SellerDashboard() {
                       <input value={it.price} inputMode='numeric'
                         onChange={e => setRpItems(rpItems.map((x, k) => k === idx ? { ...x, price: e.target.value.replace(/[^0-9]/g, '') } : x))}
                         placeholder='単価' style={{ ...box, width: '76px', flexShrink: 0, textAlign: 'right', fontSize: '13px' }} />
-                      <input value={it.qty} inputMode='numeric'
-                        onChange={e => setRpItems(rpItems.map((x, k) => k === idx ? { ...x, qty: e.target.value.replace(/[^0-9]/g, '') } : x))}
-                        placeholder='0' style={{ ...box, width: '68px', flexShrink: 0, textAlign: 'right', fontSize: '13px' }} />
-                      <span style={{ fontSize: '12px', color: '#64748B', flexShrink: 0 }}>食</span>
+                      {/* 食数の欄と「食」をひとまとまりにする。
+                          別々に並べていると、狭い画面では折り返しの境目で
+                          単位だけが次の行に取り残され、数字の欄だけが並ぶ */}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        <input value={it.qty} inputMode='numeric'
+                          onChange={e => setRpItems(rpItems.map((x, k) => k === idx ? { ...x, qty: e.target.value.replace(/[^0-9]/g, '') } : x))}
+                          placeholder='0' style={{ ...box, width: '68px', flexShrink: 0, textAlign: 'right', fontSize: '13px' }} />
+                        <span style={{ fontSize: '12px', color: '#64748B', flexShrink: 0 }}>食</span>
+                      </span>
                       <button type='button' onClick={() => setRpItems(rpItems.filter((_, k) => k !== idx))} title='この行を消す'
                         style={{ border: 'none', background: 'none', color: '#CBD5E1', cursor: 'pointer', fontSize: '15px', flexShrink: 0, padding: '0 2px' }}>✕</button>
                     </div>
@@ -2662,7 +2722,7 @@ export default function SellerDashboard() {
                     未入力だと報告書に「—」と印字されてしまう。 */}
                 <div style={{ marginBottom: '18px' }}>
                   <div style={label}>当日の状況（必須）</div>
-                  <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '8px', lineHeight: 1.7 }}>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '8px', lineHeight: 1.7 }}>
                     施設へお出しする報告書に載ります。天候と来客数は、施設側からご提出を求められている項目です。
                   </div>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>

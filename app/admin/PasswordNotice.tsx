@@ -147,7 +147,10 @@ export default function PasswordNotice({ onEditMail }: { onEditMail?: (key: stri
               {preview.map((p, i) => (
                 <div key={p.email + i} style={{ display: 'flex', gap: '10px', padding: '8px 12px', borderBottom: i < preview.length - 1 ? '1px solid #F1F5F9' : 'none', fontSize: '12.5px', flexWrap: 'wrap' }}>
                   <span style={{ fontWeight: 700, color: '#1a1a1a', minWidth: '140px' }}>{p.shopName || '（屋号なし）'}</span>
-                  <span style={{ color: '#64748B' }}>{p.email}</span>
+                  {/* メールアドレスは半角英数が続いて途中で改行できないため、
+                      狭い画面では枠（overflow:hidden）の外へ出て末尾が切れてしまう。
+                      kv-value で途中の折り返しを許し、送り先を最後まで読めるようにする */}
+                  <span className='kv-value' style={{ color: '#64748B' }}>{p.email}</span>
                   {p.mismatch && <span style={{ color: '#B45309', fontSize: '11px' }}>※ログイン用のアドレスと違います</span>}
                 </div>
               ))}
