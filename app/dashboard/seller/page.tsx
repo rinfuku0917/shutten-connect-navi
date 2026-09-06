@@ -1156,7 +1156,7 @@ export default function SellerDashboard() {
             横一列のままだと、戻るボタンと右のご案内が縮まないぶんの
             しわ寄せが画面名だけに集まり、「出店料のお支 / 払い」のように
             言葉の途中で折れてしまうため。 */}
-        <div style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '6px 24px', minHeight: '50px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: '6px' }}>
+        <div className='dash-topbar' style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '6px 24px', minHeight: '50px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: '6px' }}>
           {/* 一つ前の画面に戻る。タブの移動も履歴に積んでいるので、
               書類を見たあとに元のタブへ帰れる */}
           <button
@@ -1316,23 +1316,45 @@ export default function SellerDashboard() {
                     <button onClick={() => setTab('docs')} style={{ background: 'none', border: 'none', color: '#3A9BD5', fontSize: '12px', cursor: 'pointer' }}>管理する</button>
                   </div>
                   <div style={{ padding: '14px 18px' }}>
+                    {/* 「否認」も数える。これまで3つしか数えておらず、
+                        否認された書類はどの数にも入らないため、合計が
+                        書類の数と合わず、出し直しが要ることも伝わらなかった */}
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                      {[{ label: '承認済', count: docTypes.filter(t => docStatusLabel(myDocs.find(d => d.doc_type === t.key)?.status) === '承認済').length, color: '#16A34A', bg: '#ECFDF5' }, { label: '審査中', count: docTypes.filter(t => docStatusLabel(myDocs.find(d => d.doc_type === t.key)?.status) === '審査中').length, color: '#92400E', bg: '#FEF3C7' }, { label: '未提出', count: docTypes.filter(t => docStatusLabel(myDocs.find(d => d.doc_type === t.key)?.status) === '未提出').length, color: '#DC2626', bg: '#FEE2E2' }].map(d => (
-                        <div key={d.label} style={{ flex: 1, background: d.bg, borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                      {(() => {
+                        const countOf = (label: string) =>
+                          docTypes.filter(t => docStatusLabel(myDocs.find(d => d.doc_type === t.key)?.status) === label).length
+                        return [
+                          { label: '承認済', count: countOf('承認済'), color: '#16A34A', bg: '#ECFDF5' },
+                          { label: '審査中', count: countOf('審査中'), color: '#92400E', bg: '#FEF3C7' },
+                          { label: '否認', count: countOf('否認'), color: '#B91C1C', bg: '#FEE2E2' },
+                          { label: '未提出', count: countOf('未提出'), color: '#DC2626', bg: '#FEE2E2' },
+                        ]
+                      })().map(d => (
+                        <div key={d.label} style={{ flex: 1, minWidth: 0, background: d.bg, borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
                           <div style={{ fontSize: '18px', fontWeight: '900', color: d.color }}>{d.count}</div>
-                          <div style={{ fontSize: '10px', color: d.color }}>{d.label}</div>
+                          <div style={{ fontSize: '11px', color: d.color, whiteSpace: 'nowrap' }}>{d.label}</div>
                         </div>
                       ))}
                     </div>
-                    {/* 損害賠償保険証書がまだのときだけ出す。
+                    {/* 損害賠償保険証書が有効でないときだけ出す。
                         これまで条件が付いておらず、提出いただいた方にも
                         いつまでも赤い注意書きが出たままになっていたため。
+
+                        「否認」も出す側に入れている。否認は出し直しが要る状態で、
+                        有効な書類が無いことに変わりはないため。
+                        文面は状態で言い分けないと実態と合わない。
                         スマホでは2行になるので、行間も広げて読めるようにする */}
-                    {docStatusLabel(myDocs.find(d => d.doc_type === 'liability_insurance')?.status) === '未提出' && (
-                      <div style={{ background: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#DC2626', lineHeight: 1.8 }}>
-                        損害賠償保険証書が未提出です。出店前に提出してください。
-                      </div>
-                    )}
+                    {(() => {
+                      const ins = docStatusLabel(myDocs.find(d => d.doc_type === 'liability_insurance')?.status)
+                      if (ins !== '未提出' && ins !== '否認') return null
+                      return (
+                        <div style={{ background: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#DC2626', lineHeight: 1.8 }}>
+                          {ins === '否認'
+                            ? '損害賠償保険証書が否認されています。出店前に、あらためてご提出をお願いします。'
+                            : '損害賠償保険証書が未提出です。出店前に提出してください。'}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1502,14 +1524,26 @@ export default function SellerDashboard() {
                               onClick={() => { if (tappable) setCalPicked(calPicked === ds ? null : ds) }}
                               style={{ minHeight: '60px', borderRadius: '8px', border: calPicked === ds ? '2px solid #1D4ED8' : (isToday ? '2px solid #F5A623' : `1px solid ${main ? main.statusColor : '#E2E8F0'}`), background: main ? main.statusBg : '#fff', padding: '5px', overflow: 'hidden', cursor: tappable ? 'pointer' : 'default' }}>
                               <div style={{ fontSize: '12px', fontWeight: isToday ? '800' : '600', color: dow === 0 ? '#DC2626' : dow === 6 ? '#1D4ED8' : '#333', marginBottom: '3px' }}>{d}</div>
+                              {/* マスの中の文字は9px。パソコンでは読めるが、
+                                  スマホでは7列を等幅で割るため1マスに文字が入る幅が
+                                  26px程度しかなく、2〜3文字で切れて読めない。
+                                  そこでスマホでは .cal-cell-shop を隠し、代わりに
+                                  下の .cal-cell-count で件数と売上の有無だけを出す。
+                                  中身は日付を押すと下に開く一覧（14px）で読める */}
                               {items.slice(0, 2).map(a => (
-                                <div key={a.id} style={{ fontSize: '9px', fontWeight: '700', color: a.statusColor, lineHeight: 1.3, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <div key={a.id} className='cal-cell-shop' style={{ fontSize: '9px', fontWeight: '700', color: a.statusColor, lineHeight: 1.3, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {a.status}<br />{a.place}
                                 </div>
                               ))}
-                              {items.length > 2 && <div style={{ fontSize: '9px', color: '#64748B' }}>ほか{items.length - 2}件</div>}
+                              {items.length > 2 && <div className='cal-cell-shop' style={{ fontSize: '9px', color: '#64748B' }}>ほか{items.length - 2}件</div>}
                               {hasSale && (
-                                <div style={{ fontSize: '9px', fontWeight: 800, color: '#16A34A', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>¥{dayRev.toLocaleString()}</div>
+                                <div className='cal-cell-shop' style={{ fontSize: '9px', fontWeight: 800, color: '#16A34A', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>¥{dayRev.toLocaleString()}</div>
+                              )}
+                              {tappable && (
+                                <div className='cal-cell-count' aria-hidden='true'>
+                                  {items.length > 0 && <span style={{ color: main ? main.statusColor : '#64748B' }}>●{items.length}</span>}
+                                  {hasSale && <span style={{ color: '#16A34A', marginLeft: items.length > 0 ? '3px' : 0 }}>¥</span>}
+                                </div>
                               )}
                             </div>
                           )

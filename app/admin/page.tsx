@@ -2057,7 +2057,7 @@ const previewDoc = async (fileUrl: string) => {
                             type='button'
                             onClick={() => openSellerDocs(s.id, s.shop || s.name)}
                             title={s.name + ' の書類を確認する'}
-                            style={{ fontFamily: 'inherit', fontSize: '10px', fontWeight: '700', padding: '3px 9px', borderRadius: '20px', cursor: 'pointer', lineHeight: 1.6,
+                            style={{ fontFamily: 'inherit', fontSize: '11.5px', fontWeight: '700', padding: '3px 9px', borderRadius: '20px', cursor: 'pointer', lineHeight: 1.6,
                               background: s.docs === '提出済' ? '#ECFDF5' : s.docs === '再提出依頼' ? '#FEE2E2' : '#FEF3C7',
                               color: s.docs === '提出済' ? '#16A34A' : s.docs === '再提出依頼' ? '#DC2626' : '#92400E',
                               border: '1px solid ' + (s.docs === '提出済' ? '#A7F3D0' : s.docs === '再提出依頼' ? '#FCA5A5' : '#FDE68A'),
@@ -2066,7 +2066,7 @@ const previewDoc = async (fileUrl: string) => {
                           </button>
                         </td>
                         <td style={{ padding: '10px 12px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 7px', borderRadius: '20px', background: s.status === '承認済' ? '#ECFDF5' : '#FEF3C7', color: s.status === '承認済' ? '#16A34A' : '#92400E' }}>{s.status}</span>
+                          <span style={{ fontSize: '11.5px', fontWeight: '700', padding: '2px 7px', borderRadius: '20px', background: s.status === '承認済' ? '#ECFDF5' : '#FEF3C7', color: s.status === '承認済' ? '#16A34A' : '#92400E', whiteSpace: 'nowrap' }}>{s.status}</span>
                         </td>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ display: 'flex', gap: '4px' }}>
@@ -2634,12 +2634,17 @@ const previewDoc = async (fileUrl: string) => {
 
           {/* 「一覧320px＋やり取り」の2列。スマホでは1列目だけで画面の幅を
               使い切ってしまい、やり取りの本文が画面の外へ出てしまうため、
-              狭い画面では上下に積む（募集者側のメッセージ画面と同じ形）。
+              狭い画面では上下に積む。
+              高さも固定をやめる。calc(100vh - 180px) の 180px は
+              サイドバーが左にある前提の引き算で、スマホでは
+              サイドバーが上の帯に変わるため合わない。
+              積んだ2枚が1つの高さを分け合って、どちらも潰れてしまう。
+              募集者側のメッセージ画面（min-height:520px）にそろえる。
               中の2つに minWidth:0 を入れているのは、格子の列が既定では
               中身（メッセージ入力欄や長い本文）の幅より狭くなれず、
               1列に畳んでもなお横にはみ出すため */}
           {tab === 'messages' && (
-            <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '16px', height: 'calc(100vh - 180px)' }}>
+            <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '16px', minHeight: '520px', height: 'calc(100vh - 180px)' }}>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflowY: 'auto', minWidth: 0 }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>出店者一覧（案件ごと）</div>
                 {threads.length === 0 ? (
@@ -3245,8 +3250,10 @@ const previewDoc = async (fileUrl: string) => {
                       {csvImported && <span style={{ color: '#16A34A', fontWeight: '700', fontSize: '12px' }}>インポート完了！</span>}
                     </div>
                     {/* 取り込む前の中身を確かめる表。ほかの一覧と同じ扱いにして、
-                        スマホで右へ送っても1列目（出店者名）が固定で残るようにする。
-                        取り込む相手を取り違えたまま実行しないため */}
+                        スマホで右へ送ってもCSVの1列目（規定の並びなら出店者名）が
+                        固定で残るようにする。取り込む相手を取り違えたまま実行しないため。
+                        見出しは読み込んだCSVの1行目をそのまま並べているので、
+                        並びが規定と違うファイルでは固定される列も変わる */}
                     <div className='admin-table-wrap'>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                         <thead>

@@ -595,12 +595,17 @@ img[width='1'][height='1'] { display: inline !important; }
 
 /* 書類の有効期限の行。日付欄が縮まないので、折り返せるようにする */
 .doc-expiry { flex-wrap: wrap; }
-.doc-expiry input[type="date"] {
-  box-sizing: border-box;
-  max-width: 100%;
-  min-width: 0;
-  -webkit-appearance: none;
-  appearance: none;
+/* 日付欄の見た目を外す指定は、スマホだけに効かせる。
+   パソコンでは今までどおりの見た目にしておきたいため
+   （売上入力欄の .sale-field も同じ範囲にそろえている） */
+@media (max-width: 640px) {
+  .doc-expiry input[type="date"] {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
 }
 
 /* ラベルと値が横に並ぶ行（プロフィールの基本情報など）。
@@ -633,10 +638,12 @@ img[width='1'][height='1'] { display: inline !important; }
     display: block;
     font-size: 12px;
     font-weight: 700;
-    color: #166534;      /* マスの中の屋号と同じ緑。出店ありの印だと分かるように */
     margin-top: 3px;
     line-height: 1.2;
     letter-spacing: .02em;
+    /* 色は要素側で決める。管理画面は出店の緑、出店者マイページは
+       その日の申込の状態の色（承認済・審査中・否認）を使うため */
+    color: #166534;
   }
 }
 
@@ -646,4 +653,15 @@ img[width='1'][height='1'] { display: inline !important; }
    1列目だけ光らない。固定した列にも同じ色を届ける。 */
 @media (max-width: 640px) {
   .admin-table-wrap tr.ccn-unseen td:first-child { background: #FFF8E1; }
+}
+
+/* 出店者マイページの上部の帯。
+   狭い画面では折り返して2段になる。そのとき space-between のままだと、
+   1段目に残った「戻る」と画面名が左右の端に引き離されて、
+   間が大きく空いてしまう。折り返したときだけ左に寄せる。 */
+@media (max-width: 640px) {
+  .dash-topbar {
+    justify-content: flex-start !important;
+    column-gap: 12px;
+  }
 }
