@@ -125,7 +125,6 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
   // 「エントリーする」と出ていると、済んでいないように見えてしまう。
   type MyEntry = { id: string, apply_date: string | null, status: string }
   const [myEntries, setMyEntries] = useState<MyEntry[]>([])
-  const [cancelingId, setCancelingId] = useState<string | null>(null)
 
   const loadMyEntries = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -136,39 +135,6 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
       .eq('place_id', id).eq('seller_id', user.id)
       .order('apply_date', { ascending: true })
     setMyEntries((data || []) as MyEntry[])
-  }
-
-  // 申込の辞退（出店者ダッシュボードと同じAPIを使う）。
-  //
-  // 確認と失敗の知らせに window.confirm / alert を使っていたが、
-  // スマホのアプリ内ブラウザではどちらも無視される。押しても何も
-  // 起きず、辞退できたと思い込んでしまうため、画面内のダイアログにした。
-  const [cancelAsk, setCancelAsk] = useState<{ id: string; date: string } | null>(null)
-  const [cancelErr, setCancelErr] = useState<string | null>(null)
-
-  const runCancel = async () => {
-    if (!cancelAsk) return
-    const appId = cancelAsk.id
-    setCancelingId(appId)
-    setCancelErr(null)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) { setCancelErr('ログインの有効期限が切れています。一度ログインし直してください。'); return }
-      const res = await fetch('/api/applications/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ applicationId: appId }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) { setCancelErr(j.error || '辞退できませんでした（エラー ' + res.status + '）'); return }
-      setCancelAsk(null)
-      await loadMyEntries()
-    } catch {
-      setCancelErr('通信に失敗しました。電波の良いところでもう一度お試しください。')
-    } finally {
-      setCancelingId(null)
-    }
   }
 
   const handleEntryClick = async () => {
@@ -515,19 +481,16 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                               <span style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: 700 }}>
                                 {e.apply_date ? e.apply_date.replace(/-/g, '/') : '日程調整中'}
                               </span>
-                              {e.status === 'approved' ? (
-                                // 出店が決まったあとは、この画面からは取り消せない。
-                                // 募集者が会場や書類の準備を進めているため。
+                              {e.status !== 'rejected' ? (
+                                // 出店者からの取り消しは受け付けない。
+                                // 気軽に取り消せると当日の欠席が増え、
+                                // 募集者は会場や書類の準備を進めているため。
+                                // やむを得ない事情は運営が個別に判断する。
                                 <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#64748B', lineHeight: 1.7, textAlign: 'right' }}>
-                                  出店が決定しています。
+                                  {e.status === 'approved' ? '出店が決定しています。' : '審査中です。'}
                                   <br />
-                                  やむを得ない場合は運営までご連絡ください。
+                                  取り消しをご希望の場合は運営までご連絡ください。
                                 </span>
-                              ) : e.status !== 'rejected' ? (
-                                <button type='button' onClick={() => { setCancelErr(null); setCancelAsk({ id: e.id, date: e.apply_date ? e.apply_date.replace(/-/g, '/') : '日程調整中' }) }} disabled={cancelingId === e.id}
-                                  style={{ marginLeft: 'auto', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: cancelingId === e.id ? 'not-allowed' : 'pointer', minHeight: '30px' }}>
-                                  {cancelingId === e.id ? '取消中...' : '辞退する'}
-                                </button>
                               ) : null}
                             </div>
                           )
@@ -617,17 +580,6 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
         </div>
       </div>
 
-      <ConfirmDialog
-        open={!!cancelAsk}
-        busy={cancelingId !== null}
-        error={cancelErr}
-        danger
-        title='この申込を辞退しますか？'
-        body={cancelAsk ? `${cancelAsk.date}の申込を取り消します。\n\n運営と募集者にお知らせが届きます。取り消したあとに元へ戻すことはできません。` : ''}
-        okLabel='辞退する'
-        onOk={runCancel}
-        onCancel={() => { if (cancelingId === null) { setCancelAsk(null); setCancelErr(null) } }}
-      />
 
       <SiteFooter />
     </div>
