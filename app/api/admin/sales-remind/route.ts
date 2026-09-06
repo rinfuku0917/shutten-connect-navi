@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 // 売上報告の督促を、1件ずつ送る。
 //
@@ -104,30 +105,22 @@ export async function POST(req: Request) {
   const [y, m, d] = String(app.apply_date || '').split('-')
   const dateLabel = y ? `${Number(m)}月${Number(d)}日（${y}年）` : '先日'
 
+  // 文面は管理画面（メール文面タブ）で書き換えられる。
+  // 書き換えられていなければ、ここに書いた既定の文面が使われる
+  const def = MAIL_DEF_BY_KEY['sales-remind']
+  const mail = await renderMail(db, 'sales-remind', { subject: def.subject, body: def.body }, {
+    '屋号': shopName,
+    '出店の一覧': `・${dateLabel} ${placeTitle}`,
+  })
+
   const resend = new Resend(apiKey)
   const { error: mErr } = await resend.emails.send({
     from: '出店コネクトナビ <' + FROM_EMAIL + '>',
     to: email,
     // 返信先を運営の窓口にする。差出人は送信専用のため
     replyTo: REPLY_TO,
-    subject: '【出店コネクトナビ】売上報告のお願い',
-    text: `${shopName} 様
-
-いつも出店コネクトナビをご利用いただきありがとうございます。
-
-以下のご出店について、売上報告がまだ確認できておりません。
-お手数ですが、マイページの「売上報告」からご入力をお願いいたします。
-
-・${dateLabel} ${placeTitle}
-
-▼ 売上報告はこちら（開くと「売上報告」の画面が出ます）
-https://app.connect-navi.com/dashboard/seller?tab=sales
-
-すでにご報告いただいている場合は、行き違いですのでご容赦ください。
-ご不明な点がございましたら、${REPLY_TO} までご連絡ください。
-
-出店コネクトナビ運営事務局
-株式会社nav`,
+    subject: mail.subject,
+    text: mail.text,
   })
 
   if (mErr) {

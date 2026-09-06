@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
+import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 // 管理者の通知先（Resend登録アドレスなので onboarding@resend.dev から送れる）
 const ADMIN_EMAIL = 'info@connect-navi.com'
@@ -20,21 +21,18 @@ export async function POST(req: Request) {
     const roleLabel = role === 'host' ? '募集者（お店を呼びたい）' : '出店者（出店したい）'
     const areasText = Array.isArray(areas) && areas.length > 0 ? areas.join('・') : '（未設定）'
 
-    const subject = `【出店コネクトナビ】新規${roleLabel}登録: ${name || '名称未設定'} さん`
-
-    const text = [
-      '新しい会員が登録しました。',
-      '',
-      `種別: ${roleLabel}`,
-      `氏名: ${name || '（未設定）'}`,
-      `店舗名: ${shop_name || '（未設定）'}`,
-      `メール: ${email || '（未設定）'}`,
-      `電話: ${phone || '（未設定）'}`,
-      `エリア: ${areasText}`,
-      '',
-      '管理画面で詳細を確認してください。',
-      'https://app.connect-navi.com/admin',
-    ].join('\n')
+    // 文面は管理画面（メール文面タブ）で書き換えられる
+    const def = MAIL_DEF_BY_KEY['new-seller']
+    const mail = await renderMailStandalone('new-seller', { subject: def.subject, body: def.body }, {
+      '種別': roleLabel,
+      'お名前': name || '（未設定）',
+      '屋号': shop_name || '（未設定）',
+      'メールアドレス': email || '（未設定）',
+      '電話番号': phone || '（未設定）',
+      'エリア': areasText,
+    })
+    const subject = mail.subject
+    const text = mail.text
 
     const { error } = await resend.emails.send({
       from: `出店コネクトナビ <${FROM_EMAIL}>`,

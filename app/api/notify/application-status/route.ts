@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
@@ -55,33 +56,17 @@ export async function POST(req: Request) {
       return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${w}）`
     })()
 
-    const subject = approved
-      ? '【出店コネクトナビ】「' + placeTitle + '」への申込が承認されました'
-      : '【出店コネクトナビ】「' + placeTitle + '」への申込結果のお知らせ'
-
-    const forDay = dayText ? '（' + dayText + '）' : ''
-    const lines = approved
-      ? [
-          sellerName + ' 様',
-          '',
-          'ご申込いただいた「' + placeTitle + '」' + forDay + 'への出店が承認されました。',
-          '',
-          '担当者とメッセージでやり取りを進め、当日に向けてご準備ください。',
-          '',
-          '下のリンクを開くと、マイページの「メッセージ」が開きます。',
-          'https://app.connect-navi.com/dashboard/seller?tab=messages',
-        ]
-      : [
-          sellerName + ' 様',
-          '',
-          'ご申込いただいた「' + placeTitle + '」' + forDay + 'への出店は、',
-          '誠に申し訳ございませんが、今回は見送りとなりました。',
-          '',
-          'ご応募いただきありがとうございました。',
-          '他の案件も掲載しておりますので、ぜひご覧ください。',
-          'https://app.connect-navi.com/places',
-        ]
-    const text = lines.join('\n')
+    // 文面は管理画面（メール文面タブ）で書き換えられる。
+    // 承認と不採用で内容がまったく違うので、別々に編集できるようにしている
+    const key = approved ? 'application-approved' : 'application-rejected'
+    const def = MAIL_DEF_BY_KEY[key]
+    const mail = await renderMail(db, key, { subject: def.subject, body: def.body }, {
+      'お名前': sellerName,
+      '案件名': placeTitle,
+      '出店日': dayText ? '（' + dayText + '）' : '',
+    })
+    const subject = mail.subject
+    const text = mail.text
 
     const dedupeKey = applicationId + '|' + status
     const prevSend = recentStatusSends.get(dedupeKey)

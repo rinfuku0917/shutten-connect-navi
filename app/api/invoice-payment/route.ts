@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { renderMail, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
 
 // 出店料の入金まわり。invoices は RLS でクライアントから読めないため、
 // 出店者・管理者どちらの操作もここを通す。
@@ -105,23 +106,21 @@ export async function POST(req: Request) {
       if (apiKey && !skipMail) {
         try {
           const shop = me?.shop_name || me?.name || '(出店者)'
+          // 文面は管理画面（メール文面タブ）で書き換えられる
+          const def = MAIL_DEF_BY_KEY['payment-reported']
+          const mail = await renderMail(db, 'payment-reported', { subject: def.subject, body: def.body }, {
+            '屋号': shop,
+            '請求書番号': inv.invoice_no,
+            '対象月': inv.period,
+            '金額': yen(inv.total),
+            '振込日': paidOn ? jpDate(paidOn) : '（未記入）',
+            '振込名義': paidName || '（未記入）',
+          })
           await new Resend(apiKey).emails.send({
             from: '出店コネクトナビ <' + FROM_EMAIL + '>',
             to: ADMIN_EMAIL,
-            subject: `【入金報告】${shop} 様 / ${inv.invoice_no}`,
-            text: [
-              '出店者から出店料の振込報告がありました。通帳をご確認ください。',
-              '',
-              `出店者: ${shop}`,
-              `請求書番号: ${inv.invoice_no}`,
-              `対象月: ${inv.period}`,
-              `請求額(税込): ${yen(inv.total)}`,
-              `振込日: ${paidOn ? jpDate(paidOn) : '（未記入）'}`,
-              `振込名義: ${paidName || '（未記入）'}`,
-              '',
-              '▼ 入金の確認はこちら（管理画面 → 売上管理 → 入金状況）',
-              'https://app.connect-navi.com/admin',
-            ].join('\n'),
+            subject: mail.subject,
+            text: mail.text,
           })
         } catch (e) {
           console.error('入金報告の通知に失敗しました', e)
@@ -182,26 +181,19 @@ export async function POST(req: Request) {
           const { data: seller } = await db.from('profiles').select('name, shop_name, email').eq('id', inv.seller_id).maybeSingle()
           if (seller?.email) {
             const shop = seller.shop_name || seller.name || '出店者'
+            // 文面は管理画面（メール文面タブ）で書き換えられる
+            const def = MAIL_DEF_BY_KEY['payment-confirmed']
+            const mail = await renderMail(db, 'payment-confirmed', { subject: def.subject, body: def.body }, {
+              '屋号': shop,
+              '請求書番号': inv.invoice_no,
+              '対象月': inv.period,
+              '金額': yen(inv.total),
+            })
             await new Resend(apiKey).emails.send({
               from: '出店コネクトナビ <' + FROM_EMAIL + '>',
               to: seller.email,
-              subject: '【出店コネクトナビ】出店料のご入金を確認いたしました',
-              text: [
-                `${shop} 様`,
-                '',
-                'いつも出店コネクトナビをご利用いただきありがとうございます。',
-                '下記の出店料について、ご入金を確認いたしました。',
-                '',
-                `請求書番号: ${inv.invoice_no}`,
-                `対象月: ${inv.period}`,
-                `ご入金額(税込): ${yen(inv.total)}`,
-                '',
-                'お忙しいなかご対応いただき、誠にありがとうございました。',
-                '引き続きどうぞよろしくお願いいたします。',
-                '',
-                '出店コネクトナビ運営事務局',
-                '株式会社nav',
-              ].join('\n'),
+              subject: mail.subject,
+              text: mail.text,
             })
           }
         } catch (e) {

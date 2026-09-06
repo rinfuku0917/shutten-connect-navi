@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
@@ -71,17 +72,18 @@ export async function POST(req: Request) {
       ? 'https://app.connect-navi.com/dashboard/host/messages'
       : 'https://app.connect-navi.com/dashboard/seller?tab=messages'
 
-    const subject = '【出店コネクトナビ】「' + placeTitle + '」に新しいメッセージが届きました'
-    const text = [
-      (recipient.name || 'ご担当者') + ' 様',
-      '',
-      '「' + placeTitle + '」のやり取りに、新しいメッセージが届きました。',
-      '',
-      recipientIsHost
+    // 文面は管理画面（メール文面タブ）で書き換えられる
+    const def = MAIL_DEF_BY_KEY['new-message']
+    const mail = await renderMail(db, 'new-message', { subject: def.subject, body: def.body }, {
+      '宛名': recipient.name || 'ご担当者',
+      '案件名': placeTitle,
+      '案内文': recipientIsHost
         ? 'ログインしてご確認ください。'
         : '下のリンクを開くと、マイページの「メッセージ」が開きます。',
-      dashUrl,
-    ].join('\n')
+      'メッセージ画面のURL': dashUrl,
+    })
+    const subject = mail.subject
+    const text = mail.text
 
     const resend = new Resend(apiKey)
     const dedupeKey = String(recipientId) + '|' + String(placeTitle);

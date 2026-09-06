@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
@@ -41,18 +42,16 @@ export async function POST(req: Request) {
     const shopName = seller?.shop_name ? '（' + seller.shop_name + '）' : ''
     const dateList = Array.isArray(dates) && dates.length > 0 ? dates.join('、') : '日程指定なし'
 
-    const subject = '【出店コネクトナビ】「' + place.title + '」に新しい申込が届きました'
-    const text = [
-      (host.name || 'ホスト') + ' 様',
-      '',
-      'あなたの案件「' + place.title + '」に、新しい申込が届きました。',
-      '',
-      '申込者: ' + sellerName + shopName,
-      '希望日程: ' + dateList,
-      '',
-      'ダッシュボードで詳細を確認し、ご対応ください。',
-      'https://app.connect-navi.com/dashboard/host',
-    ].join('\n')
+    // 文面は管理画面（メール文面タブ）で書き換えられる
+    const def = MAIL_DEF_BY_KEY['new-application']
+    const mail = await renderMail(db, 'new-application', { subject: def.subject, body: def.body }, {
+      '宛名': host.name || 'ホスト',
+      '案件名': place.title,
+      '申込者': sellerName + shopName,
+      '希望日程': dateList,
+    })
+    const subject = mail.subject
+    const text = mail.text
 
     const resend = new Resend(apiKey)
     const { error } = await resend.emails.send({

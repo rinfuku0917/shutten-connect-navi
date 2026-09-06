@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 // 旧サイトからの移行組へ「パスワードを設定してください」とご案内する。
 //
@@ -23,7 +24,6 @@ import { NextResponse } from 'next/server'
 //    定期実行からは呼ばれない。運営が画面のボタンを押した回数だけ送る。
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
-const RESET_URL = 'https://app.connect-navi.com/reset-password'
 
 // 1回の実行で送る上限。これを超える指定が来ても、ここで頭打ちにする
 const MAX_PER_RUN = 100
@@ -64,39 +64,19 @@ async function requireAdmin(req: Request): Promise<Ctx | NextResponse> {
 
 // お送りする文面。
 //
+// 管理画面（メール文面タブ）で書き換えられる。
+// 書き換えられていなければ、app/lib/mailTemplates.ts の既定が使われる。
+//
 // 「あなたはログインできていません」とは書かない。
 // 絞り込みは last_sign_in_at に頼っており、万一すり抜けた方に届いても
 // 事実に反しない・害が出ない書き方にしておく。
-function buildMail(shopName: string) {
-  const name = shopName || 'ご登録者'
-  return {
-    subject: '【出店コネクトナビ】パスワード設定のお願い（新サイトへの移行に伴い）',
-    text: `${name} 様
-
-いつも出店コネクトナビをご利用いただきありがとうございます。
-
-旧サイトからの会員情報の引き継ぎに伴い、新サイトでは
-パスワードの再設定をお願いしております。
-新しく会員登録をしていただく必要はございません。
-
-▼ こちらからパスワードをお決めください
-${RESET_URL}
-
- ① 上のページで、ご登録のメールアドレスを入力
- ② 届いたメールのリンクを開く
- ③ 新しいパスワードを決める
-
-これでログインできるようになります。
-メールが見当たらない場合は、迷惑メールフォルダもご確認ください。
-
-すでにログインできている方は、このメールは破棄してください。
-
-ご案内が行き届かず申し訳ございませんでした。
-ご不明な点がございましたら、このメールにご返信ください。
-
-出店コネクトナビ運営事務局
-株式会社nav`,
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buildMail(db: any, shopName: string) {
+  const def = MAIL_DEF_BY_KEY['password-notice']
+  const m = await renderMail(db, 'password-notice', { subject: def.subject, body: def.body }, {
+    '屋号': shopName || 'ご登録者',
+  })
+  return { subject: m.subject, text: m.text }
 }
 
 // 送る前の下見。何人に送ることになるかを返す
@@ -128,7 +108,7 @@ export async function GET(req: Request) {
       mismatch: String(t.email || '').toLowerCase() !== String(t.auth_email || '').toLowerCase(),
     })),
     maxPerRun: MAX_PER_RUN,
-    sampleMail: buildMail('（屋号がここに入ります）'),
+    sampleMail: await buildMail(db, '（屋号がここに入ります）'),
   })
 }
 
@@ -149,7 +129,7 @@ export async function POST(req: Request) {
   if (mode === 'test') {
     const to = typeof body?.email === 'string' ? body.email.trim() : ''
     if (!to) return NextResponse.json({ error: '送り先のアドレスを入れてください' }, { status: 400 })
-    const mail = buildMail('テスト 様')
+    const mail = await buildMail(db, 'テスト 様')
     const { error } = await resend.emails.send({
       from: '出店コネクトナビ <' + FROM_EMAIL + '>',
       to,
@@ -182,7 +162,7 @@ export async function POST(req: Request) {
     if (!first) await wait(SEND_INTERVAL_MS)
     first = false
 
-    const mail = buildMail(t.shop_name || t.name || '')
+    const mail = await buildMail(db, t.shop_name || t.name || '')
     const { error } = await resend.emails.send({
       from: '出店コネクトナビ <' + FROM_EMAIL + '>',
       to: t.email,

@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
@@ -62,22 +63,15 @@ export async function POST(req: Request) {
     const docLabel = docTypeLabels[doc.doc_type] || doc.doc_type || '提出書類'
     const reasonText = (doc.reject_reason && String(doc.reject_reason).trim()) ? String(doc.reject_reason).trim() : '記載なし'
 
-    const subject = '【出店コネクトナビ】提出書類について再提出のお願い'
-    const text = [
-      (seller.name || 'ご担当者') + ' 様',
-      '',
-      'ご提出いただいた書類「' + docLabel + '」を確認いたしましたが、',
-      '今回は受理を見送らせていただきました。',
-      '',
-      '【理由】',
-      reasonText,
-      '',
-      'お手数ですが、内容をご確認のうえ、再度ご提出をお願いいたします。',
-      '',
-      '下のリンクを開くと、マイページの「書類管理」が開きます。',
-      'そこから同じ書類をもう一度アップロードしてください。',
-      'https://app.connect-navi.com/dashboard/seller?tab=docs',
-    ].join('\n')
+    // 文面は管理画面（メール文面タブ）で書き換えられる
+    const def = MAIL_DEF_BY_KEY['document-rejected']
+    const mail = await renderMail(db, 'document-rejected', { subject: def.subject, body: def.body }, {
+      'お名前': seller.name || 'ご担当者',
+      '書類の種類': docLabel,
+      '差戻しの理由': reasonText,
+    })
+    const subject = mail.subject
+    const text = mail.text
 
     const resend = new Resend(apiKey)
     const { error } = await resend.emails.send({

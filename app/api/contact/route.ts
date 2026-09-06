@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
+import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 const TO_EMAIL = 'info@connect-navi.com'
@@ -24,21 +25,15 @@ export async function POST(req: Request) {
     const em = String(email).trim()
     const msg = String(message).trim()
 
-    const subject = '【お問い合わせ】' + nm + ' 様より'
-    const text = [
-      '出店コネクトナビのお問い合わせフォームから送信がありました。',
-      '',
-      '━━━━━━━━━━━━━━━━━━',
-      'お名前: ' + nm,
-      'メール: ' + em,
-      '━━━━━━━━━━━━━━━━━━',
-      '',
-      '【お問い合わせ内容】',
-      msg,
-      '',
-      '━━━━━━━━━━━━━━━━━━',
-      '※このメールに返信すると、送信者(' + em + ')に直接届きます。',
-    ].join('\n')
+    // 文面は管理画面（メール文面タブ）で書き換えられる
+    const def = MAIL_DEF_BY_KEY['contact']
+    const mail = await renderMailStandalone('contact', { subject: def.subject, body: def.body }, {
+      'お名前': nm,
+      'メールアドレス': em,
+      '内容': msg,
+    })
+    const subject = mail.subject
+    const text = mail.text
 
     const resend = new Resend(apiKey)
     const { error } = await resend.emails.send({

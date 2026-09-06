@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 // 承認済みの出店を、運営が取り消す。
 //
@@ -163,80 +164,57 @@ export async function POST(req: Request) {
         const dateText = app.apply_date || '日程指定なし'
         const reasonText = (typeof reason === 'string' && reason.trim()) ? reason.trim() : '記載なし'
         const resend = new Resend(apiKey)
+        const hostName = host?.name || '（案件に募集者が紐づいていません）'
+
+        // 文面は管理画面（メール文面タブ）で書き換えられる。
+        // 3通とも宛先も内容も違うので、別々に編集できるようにしている
+        const send = async (
+          key: string,
+          to: string,
+          vars: Record<string, string>,
+          who: string,
+        ) => {
+          try {
+            const def = MAIL_DEF_BY_KEY[key]
+            const mail = await renderMail(db, key, { subject: def.subject, body: def.body }, vars)
+            await resend.emails.send({
+              from: '出店コネクトナビ <' + FROM_EMAIL + '>',
+              to,
+              subject: mail.subject,
+              text: mail.text,
+            })
+          } catch (e) {
+            // 通知が送れなくても取消し自体は完了させる
+            console.error(who + 'への取消し通知に失敗しましたが、取消しは完了しました', e)
+          }
+        }
 
         // 運営あて
-        try {
-          await resend.emails.send({
-            from: '出店コネクトナビ <' + FROM_EMAIL + '>',
-            to: ADMIN_EMAIL,
-            subject: '【出店取消し】「' + placeTitle + '」' + dateText,
-            text: [
-              '承認済みの出店を取り消しました。',
-              '',
-              '案件: ' + placeTitle,
-              '出店日: ' + dateText,
-              '出店者: ' + shopName,
-              '理由: ' + reasonText,
-              '募集者: ' + (host?.name || '（案件に募集者が紐づいていません）'),
-              '',
-              'キャンセルポリシーにより、承認後の取消しはキャンセル料の対象です。',
-              '請求が必要かどうかをご確認ください。',
-              'https://app.connect-navi.com/admin',
-            ].join('\n'),
-          })
-        } catch (e) {
-          console.error('運営への取消し通知に失敗しましたが、取消しは完了しました', e)
-        }
+        await send('cancel-admin', ADMIN_EMAIL, {
+          '案件名': placeTitle,
+          '出店日': dateText,
+          '屋号': shopName,
+          '取消しの理由': reasonText,
+          '募集者': hostName,
+        }, '運営')
 
         // 募集者あて
         if (host?.email) {
-          try {
-            await resend.emails.send({
-              from: '出店コネクトナビ <' + FROM_EMAIL + '>',
-              to: host.email,
-              subject: '【出店コネクトナビ】「' + placeTitle + '」の出店が取り消されました',
-              text: [
-                (host.name || 'ご担当者') + ' 様',
-                '',
-                'ご案件「' + placeTitle + '」について、下記の出店が取り消されました。',
-                '',
-                '出店日: ' + dateText,
-                '出店者: ' + shopName,
-                '',
-                '空いた枠に別の出店者をお探しの場合は、運営までご連絡ください。',
-                'https://app.connect-navi.com/dashboard/host',
-              ].join('\n'),
-            })
-          } catch (e) {
-            console.error('募集者への取消し通知に失敗しましたが、取消しは完了しました', e)
-          }
+          await send('cancel-host', host.email, {
+            '宛名': host.name || 'ご担当者',
+            '案件名': placeTitle,
+            '出店日': dateText,
+            '屋号': shopName,
+          }, '募集者')
         }
 
         // 出店者あて。キャンセル料の話があるので必ず知らせる
         if (seller?.email) {
-          try {
-            await resend.emails.send({
-              from: '出店コネクトナビ <' + FROM_EMAIL + '>',
-              to: seller.email,
-              subject: '【出店コネクトナビ】「' + placeTitle + '」の出店取消しを承りました',
-              text: [
-                (seller.name || 'ご担当者') + ' 様',
-                '',
-                'ご連絡いただいた下記の出店について、取消しの手続きを行いました。',
-                '',
-                '案件: ' + placeTitle,
-                '出店日: ' + dateText,
-                '',
-                'なお、出店が確定したあとの取消しはキャンセル料の対象となります。',
-                '金額は案件ごとに定めております。追ってご案内いたします。',
-                'https://app.connect-navi.com/cancel-policy',
-                '',
-                'ご不明な点がございましたら、このメールにご返信ください。',
-              ].join('\n'),
-            })
-          } catch (e) {
-            console.error('出店者への取消し通知に失敗しましたが、取消しは完了しました', e)
-          }
+          await send('cancel-seller', seller.email, {
+            '宛名': seller.name || 'ご担当者',
+            '案件名': placeTitle,
+            '出店日': dateText,
+          }, '出店者')
         }
       }
     }

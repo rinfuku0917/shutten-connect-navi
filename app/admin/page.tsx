@@ -15,6 +15,7 @@ import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
+import MailTemplates from './MailTemplates'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import TodayCheckins from './TodayCheckins'
@@ -54,7 +55,7 @@ const dummyPlaces = [
 export default function AdminPage() {
   const router = useRouter()
   // 管理画面のタブ。URLと履歴の出し入れに使うため、一覧をここに持つ
-  const ADMIN_TABS = ['dashboard','schedule','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings'] as const
+  const ADMIN_TABS = ['dashboard','schedule','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings','mail'] as const
 
   // 確認ダイアログ。
   // window.confirm は LINE や Instagram のアプリ内ブラウザで黙って無視され、
@@ -83,7 +84,7 @@ export default function AdminPage() {
   const [notice, setNotice] = useState<{ message: string; kind: 'error' | 'ok' | 'info' } | null>(null)
   const showNotice = (message: string, kind: 'error' | 'ok' | 'info' = 'error') => setNotice({ message, kind })
 
-  const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings' | 'mail'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
@@ -1494,6 +1495,7 @@ const previewDoc = async (fileUrl: string) => {
             { key: 'reviews', label: 'レビュー審査' },
             { key: 'applications', label: '出店承認' },
             { key: 'meetings', label: '打ち合わせ希望' },
+            { key: 'mail', label: 'メール文面' },
             { key: 'publish', label: '公開申請' },
             { key: 'blog', label: 'ブログ' },
             { key: 'csv', label: 'CSVインポート' },
@@ -1567,6 +1569,9 @@ const previewDoc = async (fileUrl: string) => {
           {/* 出店管理スケジュール。承認された出店を月のカレンダーに並べる。
               日を押すとその日の出店が出て、開くと企業情報と現場メモが見られる */}
           {tab === 'schedule' && <ScheduleCalendar onOpenDocs={openSellerDocs} onOpenSeller={openSellerInfo} />}
+
+          {/* 送信メールの文面。ここで直したものが実際に届く */}
+          {tab === 'mail' && <MailTemplates />}
 
           {tab === 'dashboard' && (
             <>
