@@ -389,18 +389,44 @@ img[width='1'][height='1'] { display: inline !important; }
    display:none にすることで、キーボードの移動先にも入らない
    （押しても何も起きないものに止まらせない） */
 .top3-footacc-state { display: none; }
-.top3-foothead { display: block; }
+.top3-foothead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
 .top3-foothead h4 {
   font-size: 12px;
   color: #456254;      /* siteTheme の footerMuted と同じ */
   font-weight: 700;
-  margin: 0 0 12px;
+  margin: 0;
+}
+/* 見出しのアイコンは白い丸に載せる。
+   スマホでは見出しが濃い緑の帯になり、緑のアイコンが背景に沈むため */
+.top3-foothead-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #fff;
+  flex-shrink: 0;
 }
 .top3-footacc-mark { display: none; }
 
+/* リンクの頭に付ける印。
+   16本ぶん <img> を置くと要素が増えるので、背景画像で出している */
+.top3-footbody a {
+  padding-left: 20px;
+  background: url(/ic-f-bullet.webp) left center / 13px auto no-repeat;
+}
+
 @media (max-width: 640px) {
-  /* スマホだけ、見出しを押せる帯にする */
-  .top3-footcols { grid-template-columns: 1fr; gap: 0; }
+  /* スマホだけ、見出しを押せる帯にする。
+     親が横並びの折り返しなので、幅を指定しないと帯が
+     いちばん長い見出しの幅（約270px）で止まり、右側が余る */
+  .top3-footcols { grid-template-columns: 1fr; gap: 0; width: 100%; }
 
   /* チェックボックスは見せないが、キーボードでは選べるようにする。
      display:none にすると Tab で止まらず、キーボードだけで開けなくなる */
@@ -431,10 +457,15 @@ img[width='1'][height='1'] { display: inline !important; }
     border-bottom: 1px solid rgba(255, 255, 255, .18);
     -webkit-tap-highlight-color: transparent;
   }
+  /* パソコン向けに付けた下の余白を、帯では消す（帯どうしを隙間なく並べる） */
+  .top3-foothead { margin: 0; }
   .top3-foothead h4 {
     color: #fff;
     font-size: 13.5px;
     margin: 0;
+    /* ＋印を右端に寄せるため、見出しに余った幅を持たせる */
+    flex: 1;
+    min-width: 0;
   }
   .top3-footacc-mark {
     display: inline-block;
@@ -467,7 +498,8 @@ img[width='1'][height='1'] { display: inline !important; }
      薄い線で切っている。最後の1件には線を引かない */
   .top3-footbody a {
     margin-bottom: 0;
-    padding: 11px 0;
+    /* 左の余白は、頭の印を置くぶん */
+    padding: 11px 0 11px 22px;
     border-bottom: 1px solid rgba(34, 64, 47, .12);
   }
   .top3-footbody a:last-child { border-bottom: none; }

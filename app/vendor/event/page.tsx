@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import SiteHeader from '../../components/SiteHeader'
 import BackButton from '../../components/BackButton'
@@ -149,7 +150,7 @@ export default function EventVendorPage() {
       </div>
 
       {/* ヒーロー */}
-      <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-poster.webp) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
+      <div style={{ background: 'linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),url(/hero-event.webp) center/cover no-repeat', padding: '56px 24px', textAlign: 'center' }}>
         <div style={{ maxWidth: '720px', margin: '0 auto 26px', background: 'rgba(0,0,0,0.55)', borderRadius: '18px', padding: '30px clamp(14px,4vw,26px)' }}>
           <h1 className='jp-head' style={{ fontSize: 'clamp(19px,5.1vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
             <span className='u'>イベントでの出店に</span><wbr /><span className='u'>お困りの方へ</span>
@@ -174,7 +175,7 @@ export default function EventVendorPage() {
       {/* こんなイベントに */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>こんなイベントに手配しています</h2>
+          <h2 className='jp-head' style={H2}>こんなイベントに手配しています<Image src='/ic-e-kinds.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>規模は問いません。数百人の地域の催しから、企業のイベントまでご相談いただけます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {SCENES.map(c => (
@@ -190,7 +191,7 @@ export default function EventVendorPage() {
       {/* お困りごと */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}><span className='u'>イベントの出店で</span><wbr /><span className='u'>よくあるお困りごと</span></h2>
+          <h2 className='jp-head' style={H2}><span className='u'>イベントの出店で</span><wbr /><span className='u'>よくあるお困りごと</span><Image src='/ic-e-trouble.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>ひとつでも当てはまるものがあれば、お力になれます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {TROUBLES.map(c => (
@@ -206,7 +207,7 @@ export default function EventVendorPage() {
       {/* いつまでに */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}><span className='u'>いつまでに</span><wbr /><span className='u'>ご相談いただくとよいか</span></h2>
+          <h2 className='jp-head' style={H2}><span className='u'>いつまでに</span><wbr /><span className='u'>ご相談いただくとよいか</span><Image src='/ic-e-when.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>開催日の2週間前までを目安にご相談ください。</p>
           <div style={{ ...CARD, fontSize: '14px', color: '#333', lineHeight: 2 }}>
             <p style={{ marginBottom: '14px' }}>
@@ -230,7 +231,7 @@ export default function EventVendorPage() {
       {/* 費用の目安（見積り例） */}
       <div id='cost' style={{ background: '#FAFAFA', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>費用の目安</h2>
+          <h2 className='jp-head' style={H2}>費用の目安<Image src='/ic-e-price.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p style={{ ...LEAD, marginBottom: '12px' }}>
             キッチンカーを呼ぶときの費用は、3つの形のどれかになります。
             <br />
@@ -299,7 +300,7 @@ export default function EventVendorPage() {
       {/* 準備いただくこと */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>ご相談時にお聞きすること</h2>
+          <h2 className='jp-head' style={H2}>ご相談時にお聞きすること<Image src='/ic-e-ask.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>すべて決まっていなくても構いません。分かる範囲でお知らせください。</p>
           <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
             {PREP.map(([k, v], i) => (
@@ -315,7 +316,7 @@ export default function EventVendorPage() {
       {/* FAQ */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>よくあるご質問</h2>
+          <h2 className='jp-head' style={H2}>よくあるご質問<Image src='/ic-e-faq.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>イベントの主催者からよくいただくご質問です。</p>
           <FaqList items={faqAll} />
         </div>
@@ -324,7 +325,7 @@ export default function EventVendorPage() {
       {/* 相談フォーム */}
       <div id='soudan' style={{ background: '#FFF8F0', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>まずはご相談ください</h2>
+          <h2 className='jp-head' style={H2}>まずはご相談ください<Image src='/ic-e-contact.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             会員登録は不要です。開催日と場所が決まっていなくても構いません。
           </p>

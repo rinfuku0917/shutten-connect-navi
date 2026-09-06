@@ -2,6 +2,7 @@
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
 import { track } from '../lib/ga'
@@ -53,7 +54,11 @@ export default function ContactPage() {
       </div>
 
       <div style={{ background: 'linear-gradient(rgba(245,166,35,0.78), rgba(232,130,12,0.88)), url(/hero-contact.webp) center/cover no-repeat', padding: '72px 16px', textAlign: 'center' }}>
-        <h1 style={{ fontSize: 'clamp(24px,5vw,36px)', fontWeight: 900, color: '#fff', margin: 0, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>お問い合わせ</h1>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <h1 style={{ fontSize: 'clamp(24px,5vw,36px)', fontWeight: 900, color: '#fff', margin: 0, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>お問い合わせ</h1>
+          {/* 見出しの右に置く案内係のアイコン。飾りなので読み上げには出さない */}
+          <Image src='/ic-c-head.webp' alt='' width={52} height={52} priority style={{ width: 'clamp(38px,8vw,52px)', height: 'auto', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,.25))' }} />
+        </div>
         <p style={{ fontSize: '14px', color: '#fff', marginTop: '10px', opacity: 0.95, textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>ご質問・ご相談はこちらから</p>
       </div>
 
@@ -67,15 +72,15 @@ export default function ContactPage() {
         ) : (
           <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', padding: '32px 24px' }}>
             <div style={{ marginBottom: '20px' }}>
-              <label style={labelStyle}>お名前 <span style={{ color: '#DC2626' }}>*</span></label>
+              <label style={labelStyle}><Image src='/ic-c-name.webp' alt='' width={18} height={18} style={{ display: 'inline-block', width: '18px', height: '18px', verticalAlign: '-3px', marginRight: '7px' }} />お名前 <span style={{ color: '#DC2626' }}>*</span></label>
               <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="山田 太郎" />
             </div>
             <div style={{ marginBottom: '20px' }}>
-              <label style={labelStyle}>メールアドレス <span style={{ color: '#DC2626' }}>*</span></label>
+              <label style={labelStyle}><Image src='/ic-c-mail.webp' alt='' width={18} height={18} style={{ display: 'inline-block', width: '18px', height: '18px', verticalAlign: '-3px', marginRight: '7px' }} />メールアドレス <span style={{ color: '#DC2626' }}>*</span></label>
               <input style={inputStyle} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" />
             </div>
             <div style={{ marginBottom: '24px' }}>
-              <label style={labelStyle}>お問い合わせ内容 <span style={{ color: '#DC2626' }}>*</span></label>
+              <label style={labelStyle}><Image src='/ic-c-message.webp' alt='' width={18} height={18} style={{ display: 'inline-block', width: '18px', height: '18px', verticalAlign: '-3px', marginRight: '7px' }} />お問い合わせ内容 <span style={{ color: '#DC2626' }}>*</span></label>
               <textarea style={{ ...inputStyle, minHeight: '140px', resize: 'vertical', fontFamily: 'inherit' }} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="お問い合わせ内容をご記入ください" />
             </div>
 

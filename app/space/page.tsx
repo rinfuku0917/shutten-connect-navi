@@ -25,7 +25,7 @@ export default function SpacePage() {
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '14px 16px 0' }}>
         <BackButton fallback='/' />
       </div>
-      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-top.webp) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'300px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',width:'100%'}}>
+      <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-space.webp) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'300px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',width:'100%'}}>
         <h1 style={{color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.5)',fontSize:'clamp(26px,4vw,44px)',fontWeight:'900',marginBottom:'12px'}}>出店したい方へ</h1>
         <p style={{color:'#fff',textShadow:'0 1px 4px rgba(0,0,0,0.5)',fontSize:'16px',marginBottom:'32px'}}>全国の出店スペースを検索して、理想の場所を見つけよう</p>
         <div style={{display:'flex',gap:'12px',justifyContent:'center',flexWrap:'wrap'}}>
