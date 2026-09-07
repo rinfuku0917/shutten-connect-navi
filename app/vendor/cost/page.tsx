@@ -397,6 +397,29 @@ export default function VendorCostPage() {
           <p className='jp-text' style={{ fontSize: '13px', color: '#777', textAlign: 'center', marginTop: '18px', lineHeight: 1.9 }}>
             金額は台数・開催日数・会場の条件によって変わります。当日の立ち会いが必要かどうかも案件によって変わりますので、内容をうかがったうえでお見積りします。
           </p>
+
+          {/* 「キッチンカー 派遣 料金」で探して来た方への答え。
+              このページは「費用」の語で組んでいるが、探す側は「派遣料金」とも書く。
+              同じことを別の言い方で聞かれたときに、答えが見つからない状態だった */}
+          <h3 className='jp-head' style={{ fontSize: '17px', fontWeight: 900, color: '#111', margin: '34px 0 10px' }}>
+            「派遣料金」はいくらか、と聞かれたら
+          </h3>
+          <p className='jp-text' style={{ fontSize: '14px', color: '#444', lineHeight: 1.95, margin: '0 0 12px' }}>
+            人材派遣のように「1台いくら」の派遣料金表がある、と思われることがあります。
+            ですが<strong>キッチンカーの派遣に決まった料金表はありません。</strong>
+            出店者は自分で仕入れて自分で売る事業者で、雇われて来るわけではないためです。
+          </p>
+          <p className='jp-text' style={{ fontSize: '14px', color: '#444', lineHeight: 1.95, margin: '0 0 12px' }}>
+            金額が決まるのは、上の3つの形のどれになるかです。
+            <strong>集客が見込める会場なら、主催者の持ち出しは0円</strong>で、
+            出店者が出店料を払う側になります。
+            人の入りが読めない会場では、売上保証や商品買取のぶんだけ主催者にご負担が出ます。
+          </p>
+          <p className='jp-text' style={{ fontSize: '14px', color: '#444', lineHeight: 1.95, margin: 0 }}>
+            つまり「派遣料金はいくらですか」への答えは、会場の条件しだいで
+            <strong>0円から数十万円まで</strong>変わります。
+            開催日・場所・想定来場者数の3つが分かれば、その場でおおよその金額をお伝えできます。
+          </p>
         </div>
       </div>
 
@@ -453,6 +476,31 @@ export default function VendorCostPage() {
               手配の流れやサービス全体については、キッチンカーを呼びたい方へ →
             </Link>
           </div>
+        </div>
+      </div>
+
+
+      {/* 関連する記事。
+          記事側からこのページへはリンクしているのに、こちらから記事へは
+          1本も張っていなかった。読む側は行き止まりになり、
+          検索する側から見ても、関係のあるページ同士がつながっていない状態だった */}
+      <div style={{ background: '#fff', padding: '46px 24px' }}>
+        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+          <h2 className='jp-head' style={H2}>費用について、もっと詳しく</h2>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '18px 0 0' }}>
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/invite-food-truck-free' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーを無料で呼ぶには？歩合のみ43件の仕組み</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>主催者の持ち出しが0円になるのはどういう場合か。募集中の案件を数えて説明しています。</div>
+                </li>
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/food-truck-fee-guide' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの出店料の相場は？募集中の案件を全件集計</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>出店者が払う側の金額です。固定と歩合、それぞれの実額を出しています。</div>
+                </li>
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/how-to-call-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの呼び方は？決めることは4つ</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>日程・会場の条件・台数・出店料の形。相談から当日までの流れ。</div>
+                </li>
+          </ul>
         </div>
       </div>
 

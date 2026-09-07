@@ -310,6 +310,31 @@ export default function VendorPage() {
       </div>
 
       {/* 会員登録の前でも相談できる導線。掲載を迷っている段階の方向け */}
+
+      {/* 関連する記事。
+          記事側からこのページへはリンクしているのに、こちらから記事へは
+          1本も張っていなかった。読む側は行き止まりになり、
+          関係のあるページ同士がつながっていない状態だった */}
+      <div style={{ background: '#fff', padding: '46px 24px' }}>
+        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+          <h2 className='jp-head' style={H2}>手配について、もっと詳しく</h2>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '18px 0 0' }}>
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/how-to-call-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの呼び方は？決めることは4つ</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>初めて呼ぶ方へ。何をどの順番で決めればよいかをまとめています。</div>
+                </li>
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/request-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの出店依頼はどう出す？3,521店舗が見ている条件</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>依頼のときに伝える7項目と、依頼が止まりやすい条件。</div>
+                </li>
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/invite-food-truck-free' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーを無料で呼ぶには？歩合のみ43件の仕組み</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>主催者の持ち出しが0円になる条件を、実際の募集から説明しています。</div>
+                </li>
+          </ul>
+        </div>
+      </div>
+
       <div id='soudan' style={{ background: '#FFF8F0', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>まずはご相談ください<Image src='/ic-v-contact.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
