@@ -3174,15 +3174,20 @@ const previewDoc = async (fileUrl: string) => {
                   <button onClick={() => { setImportedPage(0); loadImported() }} style={{ background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>検索</button>
                 </div>
               </div>
-              {/* この表だけは1列目が「No.」で、名前の列は2列目にある。
-                  ほかの一覧と同じ固定表示のクラスを当てると、番号だけが
-                  116px幅で画面に居座り、狭い画面がさらに狭くなるため付けない。
-                  2列目を固定できる指定ができたら、そのときに合わせる */}
-              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'auto' }}>
+              {/* 8列あるので、スマホでは横に送って見る表。
+                  これまで1列目が「No.」だったため、ほかの一覧と同じ
+                  1列目固定の仕組みが使えなかった（番号だけが画面に居座るため）。
+                  右へ送ると店舗名が画面の外に消えて、どの行を見ているのか
+                  分からなくなっていた。
+
+                  店舗名を1列目に入れ替えて、固定表示をそのまま使えるようにした。
+                  No.（登録番号）は控えとして参照するだけの値なので、
+                  2列目に移しても困らない。 */}
+              <div className='admin-table-wrap' style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '900px' }}>
                   <thead>
                     <tr style={{ background: '#F8FAFC' }}>
-                      {['No.', '店舗名・屋号', '代表者', 'メール', '電話番号', '住所', '販売エリア', '登録日'].map(h => (
+                      {['店舗名・屋号', 'No.', '代表者', 'メール', '電話番号', '住所', '販売エリア', '登録日'].map(h => (
                         <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: '#64748B', fontWeight: '600', borderBottom: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -3192,8 +3197,8 @@ const previewDoc = async (fileUrl: string) => {
                     {!importedLoading && imported.length === 0 && (<tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: '#999' }}>該当するデータがありません。</td></tr>)}
                     {imported.map((s, i) => (
                       <tr key={s.id} style={{ borderBottom: i < imported.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                        <td style={{ padding: '10px 12px', color: '#94A3B8' }}>{s.reg_no ?? '—'}</td>
                         <td style={{ padding: '10px 12px', fontWeight: '600' }}>{s.shop_name || '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#94A3B8', whiteSpace: 'nowrap' }}>{s.reg_no ?? '—'}</td>
                         <td style={{ padding: '10px 12px' }}>{s.rep_name || '—'}</td>
                         <td style={{ padding: '10px 12px', color: '#3A9BD5' }}>{s.email || '—'}</td>
                         <td style={{ padding: '10px 12px', color: '#64748B', whiteSpace: 'nowrap' }}>{s.phone || '—'}</td>
