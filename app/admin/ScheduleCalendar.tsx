@@ -97,6 +97,42 @@ export default function ScheduleCalendar({
   // 開いた出店枠の督促の履歴（前回いつ送ったか）
   const [remind, setRemind] = useState<{ count: number, lastSentAt: string | null } | null>(null)
 
+  // ===== この出店をスケジュールから外す =====
+  //
+  // テストで作った出店が一覧に残り続けて、本番の予定と見分けがつかない、
+  // という運用上の困りごとから足したもの。
+  // 行は消さず status='cancelled' にするので、記録としては残る
+  // （誰がいつ、どういう理由で外したかも残る）。
+  const [cancelFor, setCancelFor] = useState<Slot | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  // 出店者・募集者へ知らせるかどうか。
+  // テストの片づけで実在の相手に取消しの連絡が飛ぶと困るため選べるようにする。
+  // 既定は「知らせる」。指定を忘れて黙って消えるほうが危ないため
+  const [cancelSilent, setCancelSilent] = useState(false)
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const [cancelErr, setCancelErr] = useState('')
+
+  const doCancel = async () => {
+    if (!cancelFor || cancelBusy) return
+    setCancelBusy(true); setCancelErr('')
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/applications/cancel-approved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+      body: JSON.stringify({
+        applicationId: cancelFor.applicationId,
+        reason: cancelReason.trim() || undefined,
+        notify: !cancelSilent,
+      }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setCancelBusy(false)
+    if (!res.ok) { setCancelErr(j.error || '取り消せませんでした'); return }
+    setCancelFor(null); setCancelReason(''); setCancelSilent(false)
+    setOpenSlot(null)
+    load()
+  }
+
   const token = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     return session?.access_token || ''
@@ -616,11 +652,77 @@ export default function ScheduleCalendar({
                         style={{ marginTop: '6px', background: (noteBusy || !noteDraft.trim()) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: (noteBusy || !noteDraft.trim()) ? 'not-allowed' : 'pointer' }}>
                         {noteBusy ? '保存中…' : 'メモを追加'}
                       </button>
+
+                      {/* この出店をスケジュールから外す。
+                          テストで作った予定が本番の予定に混ざったままにならないよう、
+                          作った側で片づけられるようにしている */}
+                      <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px dashed #E2E8F0' }}>
+                        <button type='button' onClick={() => { setCancelFor(s); setCancelReason(''); setCancelSilent(false); setCancelErr('') }}
+                          style={{ background: '#fff', color: '#DC2626', border: '1.5px solid #FECACA', borderRadius: '8px', padding: '9px 16px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                          この出店を取り消す（一覧から外す）
+                        </button>
+                        <div style={{ fontSize: '11.5px', color: '#94A3B8', marginTop: '6px', lineHeight: 1.8 }}>
+                          スケジュールと当日の一覧から外れます。記録は残るので、あとから誰がいつ外したかを追えます。
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* 取り消しの確認。
+          window.confirm はアプリ内ブラウザで黙って無視されるため、
+          画面の中に出す（管理画面のほかの確認と同じ作り） */}
+      {cancelFor && (
+        <div onClick={() => !cancelBusy && setCancelFor(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: '14px', padding: '22px 22px 18px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 50px rgba(0,0,0,.25)' }}>
+            <div style={{ fontSize: '15px', fontWeight: 900, color: '#B91C1C', marginBottom: '10px' }}>この出店を取り消します</div>
+            <div style={{ fontSize: '13px', color: '#334155', lineHeight: 1.9, marginBottom: '14px' }}>
+              <strong>{cancelFor.shopName}</strong>　{cancelFor.date}<br />
+              {cancelFor.placeTitle}
+            </div>
+
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・記録に残ります）</div>
+            <input value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+              placeholder='例：テストで作成したデータのため'
+              style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }} />
+
+            {/* テストの片づけで、実在の相手に取消しの連絡が飛ぶと困る */}
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '14px', cursor: 'pointer' }}>
+              <input type='checkbox' checked={cancelSilent} onChange={e => setCancelSilent(e.target.checked)}
+                style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
+              <span style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.8 }}>
+                出店者・募集者へ知らせない（テストデータの片づけ）<br />
+                <span style={{ color: '#94A3B8' }}>ふだんの取消しではチェックを入れないでください。相手に連絡が届かないまま予定だけが消えます。</span>
+              </span>
+            </label>
+
+            {!cancelSilent && (
+              <div style={{ fontSize: '12px', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '9px 12px', marginTop: '12px', lineHeight: 1.8 }}>
+                出店者・募集者・運営あてに、取消しのお知らせが送られます。
+              </div>
+            )}
+
+            {cancelErr && (
+              <div style={{ fontSize: '12.5px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', marginTop: '12px', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{cancelErr}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+              <button type='button' onClick={doCancel} disabled={cancelBusy}
+                style={{ background: cancelBusy ? '#ccc' : '#DC2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 22px', fontSize: '13px', fontWeight: 900, cursor: cancelBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                {cancelBusy ? '取り消し中…' : '取り消す'}
+              </button>
+              <button type='button' onClick={() => setCancelFor(null)} disabled={cancelBusy}
+                style={{ background: '#fff', color: '#64748B', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                やめる
+              </button>
+            </div>
           </div>
         </div>
       )}

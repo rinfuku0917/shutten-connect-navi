@@ -49,7 +49,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '運営のみが出店を取り消せます' }, { status: 403 })
     }
 
-    const { applicationId, reason } = await req.json()
+    // notify=false は「知らせずに取り消す」。
+    // テストで作った出店をスケジュールから片づけるためのもので、
+    // 実在の出店者・募集者に取消しの連絡が飛ぶと困る場面に使う。
+    // 既定は今までどおり通知する（指定を忘れて黙って消えるのを防ぐ）
+    const { applicationId, reason, notify } = await req.json()
+    const silent = notify === false
     if (!applicationId) return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
 
     const { data: app, error: aErr } = await db
@@ -128,7 +133,13 @@ export async function POST(req: Request) {
         status: 'cancelled',
         cancelled_at: new Date().toISOString(),
         cancelled_by: uid,
-        cancel_reason: typeof reason === 'string' && reason.trim() ? reason.trim() : null,
+        // 知らせずに取り消したことを記録に残す。
+        // あとから「なぜ連絡が来ていないのか」を追えるようにするため
+        cancel_reason: (() => {
+          const r = typeof reason === 'string' && reason.trim() ? reason.trim() : null
+          if (!silent) return r
+          return r ? r + '（通知なしで取消し）' : '通知なしで取消し'
+        })(),
       })
       .eq('id', applicationId)
       .eq('status', 'approved')     // 同時に他から変わっていたら書き換えない
@@ -141,7 +152,7 @@ export async function POST(req: Request) {
     // 募集者は会場の準備を進めているので必ず送る。
     // 案件に募集者がひもづいていない取り込み案件があるため、その場合は運営だけ。
     const apiKey = process.env.RESEND_API_KEY
-    if (apiKey) {
+    if (apiKey && !silent) {
       const dedupeKey = 'cancel-approved|' + String(applicationId)
       const nowTs = Date.now()
       const lastTs = recentSends.get(dedupeKey)
