@@ -665,3 +665,86 @@ img[width='1'][height='1'] { display: inline !important; }
     column-gap: 12px;
   }
 }
+
+/* 見出しの右に添えたアイコン。
+
+   アイコンを文字の並びの中に置くと、折り返すかどうかの判定に
+   アイコンの幅まで入ってしまう。そのぶん文字が入る幅が狭くなり、
+   これまで1行だった見出しが2行に割れる
+   （「出店コネクトナビで／できること」のように）。
+
+   見出しを横並びの箱にして、文字とアイコンを別の要素として扱う。
+   文字だけで折り返しを判定し、アイコンは縮まずに横に付いたまま残る。 */
+.sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+.sec-head > img {
+  flex-shrink: 0;
+  margin-left: 0 !important;
+  vertical-align: middle !important;
+}
+/* 狭い画面では、アイコンと隙間のぶんだけ文字が入らなくなる。
+   「出店コネクトナビでできること」は14文字で294px要るのに、
+   アイコン26pxと隙間10pxを引くと291pxしか残らず、3px足りずに2行へ割れていた。
+   隙間を詰めて、文字が1行に収まるようにする */
+@media (max-width: 640px) {
+  .sec-head { gap: 6px; }
+  .sec-head > img { width: 24px !important; }
+}
+
+/* ── 公開ページをスマホで読みやすくするための指定 ──
+   全画面を測って洗い出した結果への対応。担当ごとにクラス名だけ付けてもらい、
+   出し分けの中身はここにまとめている。 */
+
+/* 案件詳細の項目表（日程・アクセス・出店料・出店形態／出店条件）。
+   ラベルのセルに width:160px が直接書かれており、スマホでもそのまま
+   160pxを取るため、幅375pxで右の値に125pxしか残らない。
+   「2,000円〜3,000円/日」は141px要るので必ず折れていた。
+   狭い画面ではラベル列を詰めて、値の幅を作る。 */
+@media (max-width: 640px) {
+  .detail-kv td { padding-left: 12px !important; padding-right: 12px !important; }
+  .detail-kv td:first-child { width: 92px !important; }
+}
+
+/* 「事前にご確認いただきたい設備・条件」（/vendor）と
+   「ご相談時にお聞きすること」（/vendor/event）の一覧。
+   項目名に170pxの幅を持たせているため、スマホでは説明側に100pxほどしか残らず、
+   「立体駐／車場や／軒下な」のように3文字ずつ縦に折れていた。
+   狭い画面では上下に積んで、説明に枠いっぱいの幅を持たせる。 */
+@media (max-width: 640px) {
+  .setsubi-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+  .setsubi-label { min-width: 0 !important; }
+  .setsubi-desc { min-width: 0; }
+}
+
+/* 費用ページ「3つの形と、それぞれの金額」の3つの表。
+   横並びのままだと、1行に固定した項目名（最長192px）に幅を取られて
+   金額側が97pxしか残らず、1行7文字ほどで縦長に折れる。
+   スマホでは項目名を上、金額を下に積む。 */
+@media (max-width: 640px) {
+  .cost-form-table,
+  .cost-form-table tbody,
+  .cost-form-table tr,
+  .cost-form-table th,
+  .cost-form-table td { display: block; width: 100%; }
+  .cost-form-table th { padding: 10px 0 2px !important; white-space: normal !important; }
+  .cost-form-table td { padding: 0 0 4px !important; }
+  .cost-form-table tr + tr th { border-top: 1px solid rgba(0,0,0,.06); margin-top: 4px; }
+}
+
+/* ヘッダー。幅320pxの端末では、ロゴ・お問い合わせ・メニューを
+   原寸で並べると入りきらず、ロゴが縮んでいた。
+   左右の余白とボタンのすき間を詰めて、ロゴを原寸のまま収める。 */
+@media (max-width: 400px) {
+  .top3-headrow { padding-left: 12px !important; padding-right: 12px !important; }
+  .top3-gnav { gap: 10px !important; }
+  .top3-gnav .top3-contact { padding: 8px 10px !important; }
+}

@@ -12,11 +12,16 @@ export const metadata: Metadata = {
 }
 
 export default function SpacePage() {
+  // 見出しは、文字列ではなく意味の切れ目で区切った配列にしてある。
+  // カードはスマホで2列になり、内側の幅が129px（画面幅390pxのとき）しか
+  // 残らないため見出しは必ず2行になるが、区切りを渡しておかないと
+  // 「好立地の場所を簡 / 単発見」のように語の途中で割れてしまうため。
+  // 区切りの1つは最長でも7文字（105px）なので、どの画面幅でもはみ出さない。
   const merits = [
-    {img:'/ic-space-location.webp',title:'好立地の場所を簡単発見',desc:'駅前・商業施設・イベントスペースなど多数掲載'},
-    {img:'/ic-space-cost.webp',title:'費用を比較して選べる',desc:'日額・月額・売上歩合など多様なプランを比較'},
-    {img:'/ic-space-match.webp',title:'安心のマッチング',desc:'実績・口コミ付きの信頼できる場所オーナーと繋がれる'},
-    {img:'/ic-space-mobile.webp',title:'スマホで完結',desc:'申込から契約まで全てオンラインで完結します'},
+    {img:'/ic-space-location.webp',title:['好立地の場所を','簡単発見'],desc:'駅前・商業施設・イベントスペースなど多数掲載'},
+    {img:'/ic-space-cost.webp',title:['費用を比較して','選べる'],desc:'日額・月額・売上歩合など多様なプランを比較'},
+    {img:'/ic-space-match.webp',title:['安心の','マッチング'],desc:'実績・口コミ付きの信頼できる場所オーナーと繋がれる'},
+    {img:'/ic-space-mobile.webp',title:['スマホで','完結'],desc:'申込から契約まで全てオンラインで完結します'},
   ]
 
   return (
@@ -38,9 +43,15 @@ export default function SpacePage() {
           <h2 className='mobile-section-title' style={{fontSize:'26px',fontWeight:'900',marginBottom:'32px',borderLeft:'5px solid #F5A623',paddingLeft:'12px'}}>出店コネクトナビのメリット</h2>
           <div className='grid-4 space-merit-grid' style={{gap:'16px',maxWidth:'960px',margin:'0 auto',textAlign:'center',alignItems:'stretch'}}>
             {merits.map(m => (
-              <div key={m.title} style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px 16px',textAlign:'center',height:'100%',display:'flex',flexDirection:'column',alignItems:'center'}}>
+              <div key={m.title.join('')} style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'24px 16px',textAlign:'center',height:'100%',display:'flex',flexDirection:'column',alignItems:'center'}}>
                 <img src={m.img} alt='' style={{width:'72px',height:'72px',objectFit:'contain',marginBottom:'10px'}} />
-                <div style={{fontWeight:'900',fontSize:'15px',marginBottom:'8px',color:'#1a1a1a',minHeight:'2.4em',display:'flex',alignItems:'center',justifyContent:'center',wordBreak:'keep-all',lineHeight:1.2}}>{m.title}</div>
+                {/* wordBreak:'keep-all' を外した。付いていると見出しがどこでも折り返せなくなり、
+                    スマホで2列になったときにカードの外へ36pxはみ出して隣のカードに重なっていたため。
+                    区切りは span.u（inline-block）に任せる。中の span でひとまとめにしているのは、
+                    この div が display:flex で、span を直に置くと横並びの部品になって折り返らないため。 */}
+                <div className='jp-head' style={{fontWeight:'900',fontSize:'15px',marginBottom:'8px',color:'#1a1a1a',minHeight:'2.4em',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1.2}}>
+                  <span>{m.title.map(t => <span key={t} className='u'>{t}</span>)}</span>
+                </div>
                 <div style={{fontSize:'12px',color:'#111',lineHeight:1.7}}>{m.desc}</div>
               </div>
             ))}

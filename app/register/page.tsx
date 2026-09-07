@@ -97,11 +97,17 @@ export default function RegisterPage() {
   }
 
   if(done) return (
-    <div style={{minHeight:'100vh',background:'#FFF9E6',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
+    // スマホではカードが画面いっぱいまで縮むため、左右に余白を置いて枠が画面の端に貼り付かないようにする。
+    // 入力フォーム側（下の 40px 16px）と同じ考え方。box-sizing を border-box にして、
+    // 余白のぶんだけ縦に伸びて不要なスクロールが出るのを防ぐ。
+    <div style={{minHeight:'100vh',boxSizing:'border-box',padding:'24px 16px',background:'#FFF9E6',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'}}>
       <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #FFE0A0',padding:'48px 32px',maxWidth:'420px',textAlign:'center',boxShadow:'0 4px 16px rgba(0,0,0,0.08)'}}>
         <div style={{fontSize:'clamp(28px, 6vw, 48px)',marginBottom:'16px'}}>📧</div>
         <h2 style={{fontSize:'20px',fontWeight:'900',marginBottom:'12px',color:'#1a1a1a'}}>確認メールを送信しました</h2>
-        <p style={{fontSize:'14px',color:'#666',lineHeight:1.8,marginBottom:'24px'}}>{email} に確認メールを送りました。メール内のリンクをクリックして登録を完了してください。</p>
+        {/* メールアドレスは日本語と違って途中で改行できず、長いアドレスだとその長さが枠の下限になって
+            スマホではみ出す。アドレスだけを .kv-value で包み、そこだけ途中でも折り返せるようにする。
+            文章側の改行位置は変えないため、アドレス以外の見え方はこれまでと同じ。 */}
+        <p style={{fontSize:'14px',color:'#666',lineHeight:1.8,marginBottom:'24px'}}><span className='kv-value'>{email}</span> に確認メールを送りました。メール内のリンクをクリックして登録を完了してください。</p>
         <Link href='/login' style={{background:'#F5A623',color:'#fff',fontWeight:'900',fontSize:'14px',padding:'12px 32px',borderRadius:'8px',textDecoration:'none'}}>ログインへ</Link>
       </div>
     </div>

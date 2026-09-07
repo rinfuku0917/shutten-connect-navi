@@ -44,11 +44,25 @@ export default function SiteHeader() {
 
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(255,255,255,.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid ' + C.line }}>
-      <div style={{ maxWidth: '1160px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', height: '64px' }}>
-        <Link href='/' style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }}>
-          <img src='/logo.svg' alt='出店コネクトナビ' style={{ height: '34px', width: 'auto', display: 'block' }} />
+      {/* 幅320pxの端末では、ロゴ・お問い合わせ・メニューの合計がヘッダーの幅を超え、
+          メニューボタンの右端が画面の外に出て切れていた。そのため、
+          足りないぶんをロゴ側で引き受ける形にしてある（下のロゴと nav のコメント参照）。
+          すき間の 16px→8px は、この行が space-between で、余りがあるときは
+          すき間が余りで押し広げられて効かないため、パソコンでの見た目は変わらない。
+          幅が足りないときだけロゴに回せる余地が8px増える。 */}
+      <div className='top3-headrow' style={{ maxWidth: '1160px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', height: '64px' }}>
+        {/* ロゴは flexShrink: 0 で縮まないようにしてあったが、それだと
+            幅が足りないときに右のボタンがあふれて切れてしまう。
+            縮めるようにして、ボタンを画面の中に収める。
+            高さは 34px のままにして読み込み時のがたつきを避け、
+            objectFit: 'contain' で縦横比を保ったまま小さく収める。
+            余りがあるパソコンでは縮まないので見た目は変わらない。 */}
+        <Link href='/' style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', minWidth: 0 }}>
+          <img src='/logo.svg' alt='出店コネクトナビ' style={{ height: '34px', width: 'auto', maxWidth: '100%', objectFit: 'contain', display: 'block' }} />
         </Link>
-        <nav className='top3-gnav' style={{ display: 'flex', alignItems: 'center', gap: '18px', minWidth: 0 }}>
+        {/* 右側は押せる部品なので縮ませない。minWidth: 0 だけだと、幅が足りないときに
+            この枠が中身より小さく潰され、はみ出したメニューボタンが切れてしまうため。 */}
+        <nav className='top3-gnav' style={{ display: 'flex', alignItems: 'center', gap: '18px', minWidth: 0, flexShrink: 0 }}>
           {navLinks.map(m => (
             <Link key={m.href} href={m.href} style={{ ...linkStyle, color: pathname === m.href ? C.goldDeep : C.ink }}>{m.label}</Link>
           ))}

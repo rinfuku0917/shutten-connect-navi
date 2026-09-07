@@ -240,8 +240,14 @@ export default async function Home() {
           メインビジュアルと2つの導線の下へ移した（2026-09-02）。
           h1 はページに1つだけ。位置を変えても検索での扱いは変わらない。 */}
       <div style={{ ...wrap, padding: '40px 20px 0' }}>
+        {/* まとまりを3つに割ってある。「キッチンカーの出店場所探し・手配なら」は
+            18文字あり、幅360pxの端末では文字を置ける幅（320px）に収まらない。
+            まとまりが1つで長すぎると中で折り返され、「ら」1文字だけが次の行に落ちる。
+            3つに割ると、どの端末幅でも文節の切れ目で折り返る。
+            .u は inline-block なので、iPhone の Safari でも狙った位置で切れる。
+            パソコンでは1行に収まるので見え方は変わらない。 */}
         <h1 className={maru.className + ' top3-lead jp-head'} style={{ ...h2Style, fontSize: 'clamp(18px,4.8vw,29px)', textAlign: 'center', margin: 0 }}>
-          <span className='u'>キッチンカーの出店場所探し・手配なら</span><wbr /><span className='u'>出店コネクトナビ</span>
+          <span className='u'>キッチンカーの</span><wbr /><span className='u'>出店場所探し・手配なら</span><wbr /><span className='u'>出店コネクトナビ</span>
         </h1>
         <p className='top3-lead-desc' style={{ textAlign: 'center', color: C.muted, lineHeight: 1.9, margin: '16px auto 0', maxWidth: '760px' }}>
           出店コネクトナビは、キッチンカー・移動販売の出店場所を探している方と、
@@ -310,7 +316,13 @@ export default async function Home() {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
                 <img src='/ic-truck.webp' alt='' style={{ width: '80px', height: '80px', flexShrink: 0, objectFit: 'contain' }} />
                 <div>
-                  <div className={maru.className} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.goldDeep }}>出店場所を探したい方</div>
+                  {/* 見出しをまとまりに割ってある。アイコン80pxとすき間16pxを引くと、
+                      幅375pxの端末では文字を置ける幅が185pxしか残らず、20px×10文字＝200pxは
+                      1行に入らない。何も指定しないと「方」1文字だけが次の行に落ちる。
+                      5文字ずつのまとまりにしておくと、折り返すときは必ず
+                      「出店場所を／探したい方」に割れる。
+                      パソコンでは1行に収まるので見え方は変わらない。 */}
+                  <div className={maru.className + ' jp-head'} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.goldDeep }}><span className='u'>出店場所を</span><wbr /><span className='u'>探したい方</span></div>
                   <div style={{ fontSize: '13px', color: C.muted }}>キッチンカーとして出店したい方はこちら</div>
                 </div>
               </div>
@@ -323,7 +335,9 @@ export default async function Home() {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' }}>
                 <img src='/ic-tent.webp' alt='' style={{ width: '80px', height: '80px', flexShrink: 0, objectFit: 'contain' }} />
                 <div>
-                  <div className={maru.className} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.navy }}>キッチンカーを呼びたい方</div>
+                  {/* 左のカードと同じ理由。こちらは11文字＝220pxで、幅390pxの端末でも
+                      1行に入らず「方」1文字だけが落ちていた。まとまりに割って防ぐ。 */}
+                  <div className={maru.className + ' jp-head'} style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px', color: C.navy }}><span className='u'>キッチンカーを</span><wbr /><span className='u'>呼びたい方</span></div>
                   <div style={{ fontSize: '13px', color: C.muted }}>イベントや施設に出店を呼びたい方はこちら</div>
                 </div>
               </div>

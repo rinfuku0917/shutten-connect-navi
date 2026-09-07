@@ -54,14 +54,22 @@ export default function LoginPage() {
       
       <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 16px',overflowY:'auto'}}>
         <div style={{background:'#fff',borderRadius:'12px',border:'1px solid #e0e0e0',boxShadow:'0 4px 16px rgba(0,0,0,0.08)',width:'100%',maxWidth:'420px',overflow:'hidden'}}>
+          {/* 切り替えタブは、文字とアイコンを横並びにしただけで幅の余裕がなかった。
+              幅320pxの端末では「出店者ログ／イン」と語の途中で2行に割れ、
+              アイコンだけが右へ取り残されて位置がずれていたため、次の3点を入れている。
+              ・whiteSpace:'nowrap' … タブの名前を途中で折り返させない
+              ・左右の余白を16px→6px … 狭い画面でも文字とアイコンが収まる幅を作る
+              ・アイコンに flexShrink:0 … 幅が足りないときにアイコンが潰れないようにする
+              タブの幅は flex:1 で決まり中身は中央寄せなので、
+              左右の余白を詰めてもパソコンでの見え方は変わらない */}
           <div style={{display:'flex',borderBottom:'1px solid #e0e0e0'}}>
-            <button onClick={()=>setTab('seller')} style={{flex:1,padding:'16px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='seller'?'2px solid #F5A623':'2px solid transparent',color:tab==='seller'?'#F5A623':'#888',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+            <button onClick={()=>setTab('seller')} style={{flex:1,padding:'16px 6px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='seller'?'2px solid #F5A623':'2px solid transparent',color:tab==='seller'?'#F5A623':'#888',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',whiteSpace:'nowrap'}}>
               出店者ログイン
-              <img src='/ic2-truck.webp' alt='' style={{height:'26px',width:'auto',objectFit:'contain',opacity:tab==='seller'?1:.5}} />
+              <img src='/ic2-truck.webp' alt='' style={{height:'26px',width:'auto',objectFit:'contain',opacity:tab==='seller'?1:.5,flexShrink:0}} />
             </button>
-            <button onClick={()=>setTab('host')} style={{flex:1,padding:'16px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='host'?'2px solid #F5A623':'2px solid transparent',color:tab==='host'?'#F5A623':'#888',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+            <button onClick={()=>setTab('host')} style={{flex:1,padding:'16px 6px',fontSize:'14px',fontWeight:'700',border:'none',background:'none',cursor:'pointer',borderBottom:tab==='host'?'2px solid #F5A623':'2px solid transparent',color:tab==='host'?'#F5A623':'#888',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',whiteSpace:'nowrap'}}>
               募集者ログイン
-              <img src='/ic-mikan.webp' alt='' style={{height:'24px',width:'auto',objectFit:'contain',opacity:tab==='host'?1:.5}} />
+              <img src='/ic-mikan.webp' alt='' style={{height:'24px',width:'auto',objectFit:'contain',opacity:tab==='host'?1:.5,flexShrink:0}} />
             </button>
           </div>
           <div style={{padding:'32px'}}>

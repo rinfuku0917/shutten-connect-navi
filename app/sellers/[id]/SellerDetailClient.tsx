@@ -87,6 +87,19 @@ const displayShopName = (s: Seller): string | null => {
   return name
 }
 
+// 「全長 3,440mm」「東京都」のようなまとまりを、区切り文字でつないで並べる。
+// 1本の文字列にしてしまうと、日本語は文字と文字のあいだならどこでも改行できるため、
+// 「高さ」だけが行末に残って数字が次の行に落ちる、県名が途中で割れる、といった分かれ方をする。
+// まとまりごとに .nowrap-unit（globals.css）で包むと、そのまとまりの中では改行されない。
+// 区切り文字はまとまりの後ろに付ける。行末に「、」が残る、日本語として自然な形にするため。
+const NoBreakList = ({ parts, sep }: { parts: string[]; sep: string }) => (
+  <>
+    {parts.map((p, i) => (
+      <span key={p + i} className='nowrap-unit'>{p}{i < parts.length - 1 ? sep : ''}</span>
+    ))}
+  </>
+)
+
 const Stars = ({ n }: { n: number }) => (
   <span style={{ color: BRAND, letterSpacing: '2px' }}>
     {'★'.repeat(Math.round(n))}
@@ -209,7 +222,10 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {genres.length > 0 ? genres.map((g) => (<span key={g} style={chip('#FEF3E2', '#9A5B0A')}>{g}</span>)) : <span style={{ fontSize: '13px', color: '#A8A29E' }}>ジャンル未設定</span>}
             </div>
-            {areas.length > 0 && <div style={{ fontSize: '13px', color: '#57534E', marginTop: '10px' }}>📍 {areas.join('・')}</div>}
+            {/* 出店エリアは写真のぶん幅がせまく、4件も登録があるとスマホで折り返す。
+                県名の途中で割れないよう、1件ずつまとまりにして並べる。
+                折り返したときに行が詰まらないよう、行間も広げておく */}
+            {areas.length > 0 && <div style={{ fontSize: '13px', color: '#57534E', marginTop: '10px', lineHeight: 1.7 }}>📍 <NoBreakList parts={areas} sep='・' /></div>}
             <div style={{ marginTop: '10px', fontSize: '14px', fontWeight: 700 }}>{reviews.length > 0 ? <><Stars n={avg} /> <span style={{ color: '#1C1917' }}>{avg}</span> <span style={{ color: '#A8A29E', fontSize: '12px' }}>({reviews.length}件)</span></> : <span style={{ color: '#A8A29E', fontSize: '13px', fontWeight: 400 }}>レビューはまだありません</span>}</div>
           </div>
         </div>
@@ -217,7 +233,10 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
         {/* 紹介文。出店者が自分の言葉で書いた説明なので、いちばん上に置く */}
         {(seller.bio ?? '').trim() && (
           <div style={{ ...card, padding: '20px 22px', marginTop: '16px' }}>
-            <p style={{ margin: 0, fontSize: '14px', lineHeight: 2, color: '#44403C', whiteSpace: 'pre-wrap' }}>{seller.bio}</p>
+            {/* URLやメールアドレスは日本語と違って途中で改行できないため、
+                何もしないとその長さが下限になって枠からはみ出し、ページ全体が横に動く。
+                pre-wrap は改行を残す指定で、切れない文字列を切る働きは無いので別に指定する */}
+            <p style={{ margin: 0, fontSize: '14px', lineHeight: 2, color: '#44403C', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{seller.bio}</p>
           </div>
         )}
 
@@ -232,13 +251,17 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
           const pays = Array.isArray(seller.payment_methods)
             ? seller.payment_methods.filter(Boolean).join('・')
             : (seller.payment_methods ?? '')
-          const rows: { k: string; label: string; value: string }[] = [
+          const payText = String(pays).trim()
+          // value は空欄の行を出さないための判定に使い、node があるときは node のほうを表示する。
+          // 「全長 3,440mm、全幅 1,520mm、高さ 2,460mm」や「現金・PayPay」のように
+          // 区切ってつないだ値は、まとまりの途中で折り返すとどの項目の値か読み取れなくなるため
+          const rows: { k: string; label: string; value: string; node?: React.ReactNode }[] = [
             { k: 'sales', label: '販売形態', value: (seller.sales_type ?? '').trim() },
             { k: 'car', label: '車種', value: (seller.vehicle_type ?? '').trim() },
-            { k: 'size', label: '車両サイズ', value: size },
+            { k: 'size', label: '車両サイズ', value: size, node: <NoBreakList parts={size.split('、')} sep='、' /> },
             { k: 'gear', label: '設備', value: (seller.equipment ?? '').trim() },
             { k: 'bag', label: 'テイクアウトの袋', value: (seller.takeout_bag ?? '').trim() },
-            { k: 'card', label: '利用できる決済', value: String(pays).trim() },
+            { k: 'card', label: '利用できる決済', value: payText, node: <NoBreakList parts={payText.split('・')} sep='・' /> },
           ].filter(r => r.value)
           if (rows.length === 0) return null
           return (
@@ -248,9 +271,14 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
                 {rows.map((r, i) => (
                   <div key={r.label} style={{ display: 'flex', gap: '14px', padding: '13px 18px', borderTop: i === 0 ? 'none' : '1px solid #F1EBE2', alignItems: 'flex-start' }}>
                     <span title={r.label} style={{ display: 'flex', paddingTop: '2px' }}><Icon k={r.k} /></span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: '14px', color: '#1C1917', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                      {r.value}
-                      <span style={{ display: 'block', fontSize: '11px', color: '#A8A29E', marginTop: '1px' }}>{r.label}</span>
+                    {/* kv-value（globals.css）を当てて、設備欄などにURLが書かれていても
+                        枠から出ないようにする。この枠は overflow: hidden で、
+                        はみ出すと右側が切り落とされて読めなくなるため */}
+                    <span className='kv-value' style={{ flex: 1, minWidth: 0, fontSize: '14px', color: '#1C1917', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                      {r.node ?? r.value}
+                      {/* 項目名。左の絵だけでは「車種」と「車両サイズ」の区別が付かず読ませる必要があるので、
+                          入力欄のラベル（labelStyle）と同じ大きさ・色にそろえる */}
+                      <span style={{ display: 'block', fontSize: '12px', color: '#78716C', marginTop: '1px' }}>{r.label}</span>
                     </span>
                   </div>
                 ))}
@@ -317,7 +345,8 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#1C1917' }}>{r.reviewer_name || '匿名のお客様'}</div>
                 <Stars n={r.rating} />
               </div>
-              {r.comment && <div style={{ fontSize: '14px', color: '#44403C', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{r.comment}</div>}
+              {/* レビュー本文も紹介文と同じで、URLが1本入るだけで枠からはみ出すため折り返せるようにする */}
+              {r.comment && <div style={{ fontSize: '14px', color: '#44403C', lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.comment}</div>}
               <div style={{ fontSize: '11px', color: '#A8A29E', marginTop: '8px' }}>{new Date(r.created_at).toLocaleDateString('ja-JP')}</div>
             </div>
           ))}

@@ -26,13 +26,23 @@ export default function SellPage() {
       </div>
       <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-sell.webp) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'280px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
         <h1 style={{fontSize:'clamp(28px,4vw,44px)',fontWeight:'900',color:'#fff',marginBottom:'16px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>車両を売りたい方へ</h1>
-        <p style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>キッチンカー・移動販売車を高値で売却しよう</p>
+        {/* スマホ幅では2行になり、そのままだと「売却しよ／う」と
+            最後の1文字だけが次の行に落ちてしまうため、
+            意味の切れ目を .u で区切って、そこで折り返るようにしている。 */}
+        <p className='jp-text' style={{fontSize:'16px',color:'rgba(255,255,255,0.9)',marginBottom:'32px'}}>
+          <span className='u'>キッチンカー・移動販売車を</span><span className='u'>高値で売却しよう</span>
+        </p>
         <Link href='/register' style={{background:'#fff',color:'#111',fontWeight:'900',fontSize:'16px',padding:'14px 40px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>無料で車両を掲載する</Link>
       </div>
       <div style={{background:'#fff',padding:'48px 24px'}}>
         <div style={{maxWidth:'900px',margin:'0 auto'}}>
-          <div style={{textAlign:'center',marginTop:'24px',fontSize:'20px',fontWeight:'900',color:'#111'}}>
-            出店コネクトナビではこんなお悩み必要なし！
+          {/* スマホ幅では2行に折り返るが、折り返しの指定が無いと
+              「こんなお悩み必／要なし！」と「必要」が2行にまたがって割れてしまうため、
+              切ってよい位置を .u で区切っている。.u は inline-block なので
+              word-break に対応していない iPhone の Safari でも狙った位置で折り返る。
+              パソコンでは元どおり1行に収まるので、見え方は変わらない。 */}
+          <div className='jp-head' style={{textAlign:'center',marginTop:'24px',fontSize:'20px',fontWeight:'900',color:'#111'}}>
+            <span className='u'>出店コネクトナビでは</span><span className='u'>こんなお悩み必要なし！</span>
           </div>
           <div className='grid-auto' style={{gap:'20px',marginTop:'32px'}}>
             {features.map(f => (

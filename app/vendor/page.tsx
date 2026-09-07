@@ -124,7 +124,7 @@ export default function VendorPage() {
       {/* こんなときに */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>こんなときにご相談ください<Image src='/ic-v-consult.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>こんなときにご相談ください<Image src='/ic-v-consult.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>キッチンカーを呼びたい理由は会場ごとに違います。まずは状況をお聞かせください。</p>
           <div className='grid-3' style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {CASES.map(c => (
@@ -145,7 +145,7 @@ export default function VendorPage() {
       {/* できること */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>出店コネクトナビでできること<Image src='/ic-v-can.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>出店コネクトナビでできること<Image src='/ic-v-can.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             キッチンカー事業者と、出店場所をお持ちの施設・主催者をつなぐサービスです。
             現在 3,521 店舗の出店者が登録しています。
@@ -181,7 +181,7 @@ export default function VendorPage() {
       {/* 費用の考え方 */}
       <div id='cost' style={{ background: '#FAFAFA', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>掲載は無料です<Image src='/ic-v-free.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>掲載は無料です<Image src='/ic-v-free.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             募集の掲載に費用はかかりません。
             <br />
@@ -266,15 +266,21 @@ export default function VendorPage() {
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           {/* 17文字あり、スマホでは1行に入らない。
               「〜いただ / きたい設備・条件」と割れないよう、切る位置を指定する */}
-          <h2 className='jp-head' style={H2}><span className='u'>事前にご確認いただきたい</span><wbr /><span className='u'>設備・条件</span><Image src='/ic-v-equip.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}><span className='u'>事前にご確認いただきたい</span><wbr /><span className='u'>設備・条件</span><Image src='/ic-v-equip.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             募集を出す前に、次の項目を決めていただきます。分からない項目はご相談の中で一緒に整理します。
           </p>
+          {/* 項目名と説明の横並び。
+              項目名に 170px の幅を持たせているため、スマホでは説明側に
+              100px ほどしか残らず、「立体駐 / 車場や / 軒下な」のように
+              3文字ずつ縦に折れていた。狭い画面では上下に積んで
+              説明に幅を持たせるため、行と項目名にクラスを付ける
+              （縦積みの指定は globals.css の .setsubi-row 側で行う）。 */}
           <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
             {SETSUBI.map(([k, v], i) => (
-              <div key={k} style={{ display: 'flex', gap: '16px', padding: '14px 18px', borderTop: i === 0 ? 'none' : '1px solid #F0F0F0', flexWrap: 'wrap' }}>
-                <div style={{ fontWeight: 800, fontSize: '14px', color: '#111', minWidth: '170px' }}>{k}</div>
-                <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.8, flex: 1 }}>{v}</div>
+              <div key={k} className='setsubi-row' style={{ display: 'flex', gap: '16px', padding: '14px 18px', borderTop: i === 0 ? 'none' : '1px solid #F0F0F0', flexWrap: 'wrap' }}>
+                <div className='setsubi-label' style={{ fontWeight: 800, fontSize: '14px', color: '#111', minWidth: '170px' }}>{k}</div>
+                <div className='jp-text setsubi-desc' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8, flex: 1 }}>{v}</div>
               </div>
             ))}
           </div>
@@ -288,7 +294,7 @@ export default function VendorPage() {
       {/* 対応エリア */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 className='jp-head' style={H2}>対応エリア<Image src='/ic-v-area.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>対応エリア<Image src='/ic-v-area.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p style={{ ...LEAD, marginBottom: '20px' }}>
             全国のイベント・施設に対応しています。
             現在掲載中の募集案件は「出店場所を探す」からご覧いただけます。
@@ -303,7 +309,7 @@ export default function VendorPage() {
       {/* よくあるご質問 */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>よくあるご質問<Image src='/ic-v-faq.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>よくあるご質問<Image src='/ic-v-faq.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>キッチンカーを呼びたい方からよくいただくご質問です。</p>
           <FaqList items={VENDOR_FAQ} />
         </div>
@@ -337,7 +343,7 @@ export default function VendorPage() {
 
       <div id='soudan' style={{ background: '#FFF8F0', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>まずはご相談ください<Image src='/ic-v-contact.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>まずはご相談ください<Image src='/ic-v-contact.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             会員登録は不要です。Zoomでも直接お伺いでも、ご都合の良い方法で承ります。
           </p>

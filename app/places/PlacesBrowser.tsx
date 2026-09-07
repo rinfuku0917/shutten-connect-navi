@@ -5,6 +5,7 @@ import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import dynamic from 'next/dynamic'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
 import { compareByTitle } from '../lib/placeSort'
@@ -36,7 +37,12 @@ export type Place = {
   longitude: number | null
 }
 
-function feeText(p: Place): string {
+// 出店料の表示。金額と単位を .nowrap-unit のまとまりにして返すのは、
+// 1本の文字列のままだと「30,000円/」「日」のように単位だけが次の行に落ちて、
+// いくらなのか読み取れなくなるため。折り返るのは「＋」の前後だけになる。
+// 管理画面で自由に入力した文言（fee）は長さも区切りも決まっていないので、
+// まとまりを作れない。こちらは文字列のまま返し、表示側の .jp-text に折り返しを任せる。
+function feeText(p: Place): ReactNode {
   const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
   const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
   if (fixed === 0 && pct === 0) return p.fee || '要相談'
@@ -44,7 +50,9 @@ function feeText(p: Place): string {
   const parts: string[] = []
   if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + unit)
   if (pct > 0) parts.push('売上の' + pct + '%')
-  return parts.join(' ＋ ')
+  return parts.map((part, i) => (
+    <span key={part}>{i > 0 ? ' ＋ ' : null}<span className='nowrap-unit'>{part}</span></span>
+  ))
 }
 
 // 案件の一覧はサーバー側（page.tsx）で取得して渡す。
@@ -162,7 +170,11 @@ const [showMap, setShowMap] = useState(false)
       </div>
       <div style={{background:'linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45)),url(/hero-places-new.webp) center/cover no-repeat',padding:'80px 24px',textAlign:'center',minHeight:'280px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
         <h1 style={{fontSize:'clamp(28px,4vw,44px)',fontWeight:'900',color:'#fff',marginBottom:'8px',textShadow:'0 2px 8px rgba(0,0,0,0.5)'}}>出店場所を探す</h1>
-        <p style={{fontSize:'14px',color:'rgba(255,255,255,0.9)'}}>全国の出店スペースから理想の場所を見つけよう</p>
+        {/* 狭い端末（幅360px以下）ではこの一文が2行になる。
+            「理想の場／所を」のように語の途中で割れないよう、切ってよい位置を .u で決めておく。
+            まとまり1つは14px×11文字＝約154pxで、幅320pxの端末でも1行に収まる。
+            行送りは、写真の上に2行が重なって見えるのを避けるため1.7にしている */}
+        <p className='jp-text' style={{fontSize:'14px',lineHeight:1.7,color:'rgba(255,255,255,0.9)'}}><span className='u'>全国の出店スペースから</span><span className='u'>理想の場所を見つけよう</span></p>
       </div>
       <div style={{maxWidth:'900px',margin:'0 auto',padding:'32px 16px'}}>
 
@@ -217,9 +229,13 @@ const [showMap, setShowMap] = useState(false)
                 {!place.image_url && (place.place_type==='event'?'🎪':'🏪')}
               </div>
               <div style={{padding:'20px'}}>
-                <div style={{fontSize:'16px',fontWeight:'700',color:'#1a1a1a',marginBottom:'8px'}}>{place.title}</div>
+                {/* 案件名はスマホのカード幅（約316px）だと2行以上になるのが普通なので、
+                    行送りを1.4にして行が詰まって見えないようにする（トップの案件カードと同じ値）。
+                    jp-head は文節の切れ目で改行させるため（iPhoneのSafariでは効かない） */}
+                <div className='jp-head' style={{fontSize:'16px',fontWeight:'700',lineHeight:1.4,color:'#1a1a1a',marginBottom:'8px'}}>{place.title}</div>
                 {place.prefecture && <div style={{fontSize:'13px',color:'#111',marginBottom:'6px'}}>📍 {place.prefecture}</div>}
-                <div style={{fontSize:'14px',fontWeight:'700',color:'#111',marginBottom:'8px'}}>{canSeeFee ? feeText(place) : '🔒 ログイン後表示'}</div>
+                {/* 自由入力の出店料が2行になったときのために、折り返し位置（jp-text）と行送りをそろえる */}
+                <div className='jp-text' style={{fontSize:'14px',fontWeight:'700',lineHeight:1.6,color:'#111',marginBottom:'8px'}}>{canSeeFee ? feeText(place) : '🔒 ログイン後表示'}</div>
                 <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
                   <span style={{background:'#EBF6FD',color:'#1565C0',fontSize:'11px',padding:'3px 8px',borderRadius:'4px'}}>🏪 {place.place_type==='event'?'イベント':'常設'}</span>
                   {place.closed && <span style={{background:'#FEE2E2',color:'#C81E1E',fontSize:'11px',fontWeight:700,padding:'3px 8px',borderRadius:'4px'}}>募集終了</span>}

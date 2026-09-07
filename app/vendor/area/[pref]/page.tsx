@@ -196,11 +196,23 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
           <p className='jp-text' style={LEAD}>
             費用はイベントの形で決まります。地域によって大きく変わるのは、会場までの距離にかかる出張費です。
           </p>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '520px', background: '#fff' }}>
+          {/* スマホではこの表が画面の幅に収まらず、横に送って読むことになる。
+              以前は右へ送った時点で1列目の「通常出店／売上保証／商品買取」が画面の外へ出てしまい、
+              いま見ている金額がどの形のものか分からなくなっていたため、
+              管理画面の表と同じ .admin-table-wrap を当てて1列目を固定する。
+              あわせて、いちばん読ませたい「金額の目安」の列が送り切れば丸ごと見えるように、
+              表に効いていた下限の幅（520px）を外し、この列だけ2行に折り返せるようにした。
+              幅375pxでの実測で、表の幅は520px→452px、横に送る量は193px→125pxになり、
+              送り切った状態で1列目と金額が同時に見える。
+              パソコンでは表が親の幅いっぱい（860px）に広がるので下限の幅も折り返しも働かず、
+              列の幅・行の高さは変更前と同じ値になることを確認済み。 */}
+          <div className='admin-table-wrap' style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: 0, background: '#fff' }}>
               <thead>
                 <tr style={{ background: '#FBF7F1' }}>
-                  <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: '12px', color: '#666', borderBottom: '1px solid #EEE' }}>イベントの形</th>
+                  {/* 固定する1列目には .admin-table-wrap が管理画面用の背景色を敷くので、
+                      この表の見出し行の色を要素側で指定して行の色をそろえる */}
+                  <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: '12px', color: '#666', borderBottom: '1px solid #EEE', background: '#FBF7F1' }}>イベントの形</th>
                   <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: '12px', color: '#666', borderBottom: '1px solid #EEE' }}>主催者のご負担</th>
                   <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: '12px', color: '#666', borderBottom: '1px solid #EEE' }}>金額の目安</th>
                 </tr>
@@ -209,17 +221,26 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
                 <tr>
                   <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', fontWeight: 800, color: '#2E7D32' }}>通常出店</td>
                   <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4' }}>0円（受け取る側）</td>
-                  <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', lineHeight: 1.8 }}>出店料 1台1日 1,000円〜50,000円を受け取り</td>
+                  {/* 金額の列は「出店料 1台1日」と金額の2つに分け、まとまりの中では折り返さない。
+                      .nowrap-unit だけだと、列が狭くなったときにまとまりの内側で
+                      「1,0／00円」のように数字が割れてしまうため、まとまり側にも改行させない指定を置く */}
+                  <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                    <span className='nowrap-unit' style={{ whiteSpace: 'nowrap' }}>出店料 1台1日</span>{' '}<span className='nowrap-unit' style={{ whiteSpace: 'nowrap' }}>1,000円〜50,000円を受け取り</span>
+                  </td>
                 </tr>
                 <tr>
                   <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', fontWeight: 800, color: '#1565C0' }}>売上保証</td>
                   <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4' }}>差額のみ</td>
-                  <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', lineHeight: 1.8 }}>保証額 1台1日 20,000円〜80,000円</td>
+                  <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                    <span className='nowrap-unit' style={{ whiteSpace: 'nowrap' }}>保証額 1台1日</span>{' '}<span className='nowrap-unit' style={{ whiteSpace: 'nowrap' }}>20,000円〜80,000円</span>
+                  </td>
                 </tr>
                 <tr>
                   <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', fontWeight: 800, color: '#B45309' }}>商品買取</td>
                   <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4' }}>全額</td>
-                  <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', lineHeight: 1.8 }}>単価 × 食数 ＋ 出張費30,000円〜50,000円</td>
+                  <td style={{ padding: '11px 12px', borderBottom: '1px solid #F4F4F4', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                    <span className='nowrap-unit' style={{ whiteSpace: 'nowrap' }}>単価 × 食数 ＋</span>{' '}<span className='nowrap-unit' style={{ whiteSpace: 'nowrap' }}>出張費30,000円〜50,000円</span>
+                  </td>
                 </tr>
               </tbody>
             </table>

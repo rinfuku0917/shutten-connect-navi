@@ -43,6 +43,12 @@ export const metadata: Metadata = {
 }
 
 // 3つの費用の形。金額は /vendor/event の PLANS と同じ数字を使う。
+//
+// rows の値を文字列ではなく要素にしてあるのは、金額のまとまりを
+// <span className='nowrap-unit'> で包むため。
+// 日本語はどの文字の間でも改行できる扱いなので、そのままだと
+// スマホの狭い幅で「1,000円〜10,／000円」「20,000円〜80,000／円」のように
+// 金額の途中で割れて、いくらなのかが読み取れなくなる。
 const FORMS: {
   tag: string
   tone: string
@@ -50,7 +56,7 @@ const FORMS: {
   name: string
   who: string
   cost: string
-  rows: [string, string][]
+  rows: [string, React.ReactNode][]
   example: string
 }[] = [
   {
@@ -61,9 +67,16 @@ const FORMS: {
     who: 'マルシェ、お祭り、商店街の催し、学園祭など、来場者が自分で買うイベント',
     cost: '主催者のご負担 0円〜（出店料を受け取る側になります）',
     rows: [
-      ['出店料の目安（1台1日）', '小規模なフリマ・地域の催し 1,000円〜10,000円 ／ 中規模のマルシェ 10,000円〜50,000円'],
-      ['売上に対する割合で決める場合', '売上の 10%〜20%'],
-      ['主催者の持ち出し', '集客が見込めれば 0円'],
+      [
+        '出店料の目安（1台1日）',
+        <>
+          小規模なフリマ・地域の催し <span className='nowrap-unit'>1,000円〜10,000円</span>
+          {' ／ '}
+          中規模のマルシェ <span className='nowrap-unit'>10,000円〜50,000円</span>
+        </>,
+      ],
+      ['売上に対する割合で決める場合', <>売上の <span className='nowrap-unit'>10%〜20%</span></>],
+      ['主催者の持ち出し', <>集客が見込めれば <span className='nowrap-unit'>0円</span></>],
     ],
     example:
       '町内会の夏祭り（来場者500名程度）にキッチンカー3台。出店料を1台5,000円に設定 → 主催者側の受け取り 15,000円、ご負担は0円。',
@@ -76,9 +89,9 @@ const FORMS: {
     who: '社員向け、会員向け、学校行事など、来場者数がある程度読めて売上が限られるイベント',
     cost: '保証額を決めて、売上が届かなかった差額のみご負担',
     rows: [
-      ['保証額の目安（1台1日）', '20,000円〜80,000円'],
-      ['大規模なイベントの場合', '100,000円程度になることもあります'],
-      ['売上が保証額を超えたら', 'ご負担は0円'],
+      ['保証額の目安（1台1日）', <><span className='nowrap-unit'>20,000円〜80,000円</span></>],
+      ['大規模なイベントの場合', <><span className='nowrap-unit'>100,000円程度</span>になることもあります</>],
+      ['売上が保証額を超えたら', <>ご負担は<span className='nowrap-unit'>0円</span></>],
     ],
     example:
       '保証額を1台50,000円に設定。当日の売上が38,000円だった場合、差額の12,000円をご負担。売上が55,000円なら、ご負担は0円。',
@@ -91,9 +104,20 @@ const FORMS: {
     who: '来場者に無料で配る社内イベント、周年行事、お客様感謝デーなど',
     cost: 'メニュー単価 × 食数 ＋ 出張費・諸経費',
     rows: [
-      ['メニュー単価の目安', '食事・丼もの 700円〜1,000円 ／ 軽食 400円〜600円 ／ スイーツ 500円〜800円 ／ ドリンク 300円〜500円'],
-      ['出張費・諸経費の目安', '30,000円〜50,000円程度（距離により変わります）'],
-      ['最低食数', '100食程度からのご相談が一般的です'],
+      [
+        'メニュー単価の目安',
+        <>
+          食事・丼もの <span className='nowrap-unit'>700円〜1,000円</span>
+          {' ／ '}
+          軽食 <span className='nowrap-unit'>400円〜600円</span>
+          {' ／ '}
+          スイーツ <span className='nowrap-unit'>500円〜800円</span>
+          {' ／ '}
+          ドリンク <span className='nowrap-unit'>300円〜500円</span>
+        </>,
+      ],
+      ['出張費・諸経費の目安', <><span className='nowrap-unit'>30,000円〜50,000円</span>程度（距離により変わります）</>],
+      ['最低食数', <><span className='nowrap-unit'>100食程度</span>からのご相談が一般的です</>],
     ],
     example:
       '社員100名に1食1,000円のカレーを配る場合：1,000円 × 100食 ＝ 100,000円 ＋ 出張費・諸経費 30,000円 ＝ 合計 130,000円程度（税別）。',
@@ -277,7 +301,7 @@ export default function VendorCostPage() {
       {/* 3つの形 */}
       <div id='forms' style={{ background: '#fff', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>3つの形と、それぞれの金額<Image src='/ic-cost-forms.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>3つの形と、それぞれの金額<Image src='/ic-cost-forms.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             どの形になるかは、イベントの内容をうかがえばこちらで判断できます。
           </p>
@@ -293,8 +317,17 @@ export default function VendorCostPage() {
                   <div style={{ fontSize: '12px', fontWeight: 800, color: '#888', marginBottom: '3px' }}>主催者のご負担</div>
                   <div style={{ fontSize: '15px', fontWeight: 900, color: f.tone, lineHeight: 1.6 }}>{f.cost}</div>
                 </div>
+                {/* 表の minWidth（360px）を外した。
+                    スマホでは枠が289pxしかないため、71px分が画面の外にあった。
+                    金額を読もうと横に送ると、項目名（whiteSpace:'nowrap'）が
+                    画面の外へ出てしまい、何の金額なのか分からなくなっていた。
+                    パソコンでは表の中身だけで360pxを超えるので、外しても見え方は変わらない。
+                    それでも収まらないときのために、横スクロールの枠は残してある。
+
+                    cost-form-table は、スマホで項目名を上・金額を下に積むための目印。
+                    その指定は globals.css 側に足してもらう（このファイルからは触らない）。 */}
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '360px' }}>
+                  <table className='cost-form-table' style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <tbody>
                       {f.rows.map(([k, v]) => (
                         <tr key={k}>
@@ -320,7 +353,7 @@ export default function VendorCostPage() {
       {/* ケース別の見積り例 */}
       <div style={{ background: '#FBF7F1', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>ケース別の見積り例<Image src='/ic-cost-case.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>ケース別の見積り例<Image src='/ic-cost-case.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>ご相談の多い4つの例です。近いものを目安にしてください。</p>
           <div className='cost-case-grid' style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
             {CASES.map(c => (
@@ -341,7 +374,7 @@ export default function VendorCostPage() {
       {/* 費用が変わる理由 */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>費用が変わる6つの要因<Image src='/ic-cost-factor.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>費用が変わる6つの要因<Image src='/ic-cost-factor.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>お問い合わせの前に、この6つが分かっているとお見積りが早くなります。</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {FACTORS.map(([k, v], i) => (
@@ -360,7 +393,7 @@ export default function VendorCostPage() {
       {/* 費用を抑える方法 */}
       <div style={{ background: '#F1F8F2', padding: '52px 24px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>費用を抑える3つの方法<Image src='/ic-cost-save.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>費用を抑える3つの方法<Image src='/ic-cost-save.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>同じイベントでも、条件の決め方でご負担は変わります。</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {SAVE.map(([k, v], i) => (
@@ -376,7 +409,7 @@ export default function VendorCostPage() {
       {/* 手配を任せる場合 */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>手配をお任せいただく場合の費用<Image src='/ic-cost-agency.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>手配をお任せいただく場合の費用<Image src='/ic-cost-agency.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>掲載とご相談は無料です。運営までお任せいただく場合のみ費用をいただきます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }} className='cost-case-grid'>
             <div style={{ ...CARD, background: '#F1F8F2', borderColor: '#CDE8D2' }}>
@@ -426,7 +459,7 @@ export default function VendorCostPage() {
       {/* エリア別 */}
       <div style={{ background: '#FBF7F1', padding: '48px 24px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>エリアから調べる<Image src='/ic-cost-area.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>エリアから調べる<Image src='/ic-cost-area.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             エリアごとに、登録している出店者の数と、いま募集中の案件を掲載しています。
           </p>
@@ -468,7 +501,7 @@ export default function VendorCostPage() {
       {/* FAQ */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '820px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>費用についてよくある質問<Image src='/ic-cost-faq.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>費用についてよくある質問<Image src='/ic-cost-faq.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>ここに無いことも、お気軽にお尋ねください。</p>
           <FaqList items={COST_FAQ} />
           <div style={{ textAlign: 'center', marginTop: '24px' }}>
@@ -507,7 +540,7 @@ export default function VendorCostPage() {
       {/* 相談フォーム */}
       <div id='soudan' style={{ background: '#FFF8EC', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>無料でお見積りします<Image src='/ic-cost-quote.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>無料でお見積りします<Image src='/ic-cost-quote.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             開催日・場所・想定来場者数の3つが分かれば、おおよその金額をお伝えできます。
             <br />

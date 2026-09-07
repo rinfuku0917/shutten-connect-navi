@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
+import type { ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
@@ -78,25 +79,38 @@ function fromApplyWindow(message: string): boolean {
     || message.includes('お申し込みとなります') // 申込期間の上限より先の日付
 }
 
-function feeText(p: Place): string {
+// 出店料の表示。
+//
+// 「2,000円〜3,000円/日 ＋ 売上の10%」を1本の文字列で流すと、
+// 日本語はどの文字の間でも改行できる扱いのため、スマホでは
+// 「2,000円〜3,000円/」「日」のように金額と単位が離れて読めなくなる。
+// そこで金額のまとまりごとに .nowrap-unit（display:inline-block）で包み、
+// 折り返る場所を「＋」の前後だけに絞っている。
+function feeNodes(p: Place): ReactNode {
   const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
+  const parts: string[] = []
   // 日ごとに金額が決まっている案件は、その幅を出す（例：2,000円〜3,000円/日）
   const range = perDayFeeRange(p.schedule)
   if (range) {
-    const parts: string[] = []
     parts.push(range.min === range.max
       ? range.min.toLocaleString() + '円/日'
       : range.min.toLocaleString() + '円〜' + range.max.toLocaleString() + '円/日')
     if (pct > 0) parts.push('売上の' + pct + '%')
-    return parts.join(' ＋ ')
+  } else {
+    const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
+    // 金額を登録していない案件は、募集者が書いた文言をそのまま出す。
+    // 長さも書き方も決まっていないため、まとまりでは包まない
+    if (fixed === 0 && pct === 0) return p.fee || '要相談'
+    const unit = p.place_fixed_unit === 'per_event' ? '期間' : '日'
+    if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + unit)
+    if (pct > 0) parts.push('売上の' + pct + '%')
   }
-  const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
-  if (fixed === 0 && pct === 0) return p.fee || '要相談'
-  const unit = p.place_fixed_unit === 'per_event' ? '期間' : '日'
-  const parts: string[] = []
-  if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + unit)
-  if (pct > 0) parts.push('売上の' + pct + '%')
-  return parts.join(' ＋ ')
+  return parts.map((part, i) => (
+    <Fragment key={part}>
+      {i > 0 ? ' ＋ ' : ''}
+      <span className='nowrap-unit'>{part}</span>
+    </Fragment>
+  ))
 }
 
 // 公開中の案件はサーバー側（page.tsx）で取得して渡す。
@@ -265,9 +279,21 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
   const photos = (Array.isArray(place.images) ? place.images.filter(Boolean) : [])
   if (photos.length === 0 && place.image_url) photos.push(place.image_url)
   const shownPhoto = photos[photoIndex] || photos[0] || ''
+  // 日程は、日付と時刻をつないだ1本の文字列にすると、スマホで
+  // 「2026-10-」「01 10:00〜」のように日付の数字の途中で割れてしまう
+  // （ハイフンや「〜」の後ろはブラウザが改行してよい場所と見なすため）。
+  // 日付・時刻をそれぞれ .nowrap-unit で包み、折り返るのは日付と時刻のあいだ、
+  // または日と日の区切りだけにしている。
   // 構造化された日程が無い案件は、旧サイトから移行した日程テキストを表示する
-  const scheduleText = place.schedule && place.schedule.filter(d => d.date).length > 0
-    ? place.schedule.filter(d => d.date).map(d => d.date + ' ' + d.start + '〜' + d.end).join(' / ')
+  const scheduleDays = (place.schedule || []).filter(d => d.date)
+  const scheduleNode: ReactNode = scheduleDays.length > 0
+    ? scheduleDays.map((d, i) => (
+        <Fragment key={d.date + '-' + i}>
+          {i > 0 ? ' / ' : ''}
+          <span className='nowrap-unit'>{d.date}</span>{' '}
+          <span className='nowrap-unit'>{d.start}〜{d.end}</span>
+        </Fragment>
+      ))
     : ((place.open_days || []).map(x => (x || '').trim()).filter(Boolean)[0] || '要相談')
 
   return (
@@ -291,7 +317,8 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
               )}
               {place.prefecture && <span style={{ background: '#EBF6FD', color: '#1D4ED8', fontSize: '12px', fontWeight: '700', padding: '3px 12px', borderRadius: '999px' }}>📍{place.prefecture}</span>}
             </div>
-            <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#1a1a1a', marginBottom: '20px', lineHeight: 1.4 }}>{place.title}</h1>
+            {/* 案件名は文節の切れ目で折り返す。付けないと「イオンモール幕張新都心 キッ」「チンカー出店募集」のように語の途中で割れる */}
+            <h1 className='jp-head' style={{ fontSize: '24px', fontWeight: '900', color: '#1a1a1a', marginBottom: '20px', lineHeight: 1.4 }}>{place.title}</h1>
 
             {/* 写真は複数枚登録できる。サムネイルを押すと大きい写真が入れ替わる。 */}
             <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', marginBottom: '20px', border: '1px solid #E5E7EB' }}>
@@ -317,12 +344,13 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
             )}
 
             <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', overflow: 'hidden', marginBottom: '20px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              {/* detail-kv … スマホではラベル列を狭くして、右の値が潰れないようにする（指定は globals.css 側） */}
+              <table className='detail-kv' style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <tbody>
                   {[
-                    { label: '日程', value: scheduleText },
+                    { label: '日程', value: scheduleNode },
                     { label: 'アクセス', value: place.address || '要相談' },
-                    { label: '出店料', value: canSeeFee ? feeText(place) : '🔒 ログイン後に表示' },
+                    { label: '出店料', value: canSeeFee ? feeNodes(place) : '🔒 ログイン後に表示' },
                     { label: '出店形態', value: tag },
                   ].map((row, i) => (
                     <tr key={row.label} style={{ borderBottom: i < 3 ? '1px solid #F3F4F6' : 'none' }}>
@@ -401,11 +429,14 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
               return (
                 <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', overflow: 'hidden', marginBottom: '20px' }}>
                   <h3 style={{ fontSize: '15px', fontWeight: '900', padding: '16px 20px 0', color: '#1a1a1a' }}>出店条件</h3>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+                  {/* 上の表と同じく、スマホではラベル列を狭くする。
+                      ラベルは「他の出店予定メニュー」のように長いものがあり、
+                      jp-head で文節の切れ目に寄せて折り返す（iPhone の Safari では効かないため列幅の指定と併用する） */}
+                  <table className='detail-kv' style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
                     <tbody>
                       {rows.map((row, i) => (
                         <tr key={row.label} style={{ borderBottom: i < rows.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
-                          <td style={{ padding: '12px 20px', background: '#FFFBEB', fontWeight: '700', fontSize: '13px', color: '#B45309', width: '160px', verticalAlign: 'top' }}>{row.label}</td>
+                          <td className='jp-head' style={{ padding: '12px 20px', background: '#FFFBEB', fontWeight: '700', fontSize: '13px', color: '#B45309', width: '160px', verticalAlign: 'top' }}>{row.label}</td>
                           <td style={{ padding: '12px 20px', fontSize: '14px', color: '#1a1a1a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{row.value}</td>
                         </tr>
                       ))}
@@ -442,12 +473,10 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                 {/* 募集が終わった案件は、掲載は残したままエントリーだけ止める */}
                 {place.closed ? (
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.9, marginBottom: '16px' }}>
-                      この案件の募集は終了しています。
-                      <br />
-                      同じ場所で新しい募集が出ることがありますので、
-                      <br />
-                      ほかの案件もご覧ください。
+                    {/* 改行はブラウザに任せる。br で3行に固定するとパソコンのサイドバー幅にしか合わず、
+                        枠が画面いっぱいに広がるスマホでは「で、」だけが次の行に残ってしまうため */}
+                    <div className='jp-text' style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.9, marginBottom: '16px' }}>
+                      この案件の募集は終了しています。同じ場所で新しい募集が出ることがありますので、ほかの案件もご覧ください。
                     </div>
                     <Link href='/places' style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '13px', borderRadius: '8px', fontWeight: 900, fontSize: '14px', textDecoration: 'none' }}>
                       募集中の案件を探す
@@ -486,7 +515,10 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                                 // 気軽に取り消せると当日の欠席が増え、
                                 // 募集者は会場や書類の準備を進めているため。
                                 // やむを得ない事情は運営が個別に判断する。
-                                <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#64748B', lineHeight: 1.7, textAlign: 'right' }}>
+                                //
+                                // 取り消しの連絡先を伝える案内文なので、バッジと同じ11pxでは小さすぎる。
+                                // 13pxに上げ、折り返して自分の行に落ちたときに読めるよう右寄せもやめている
+                                <span className='jp-text' style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748B', lineHeight: 1.7 }}>
                                   {e.status === 'approved' ? '出店が決定しています。' : '審査中です。'}
                                   <br />
                                   取り消しをご希望の場合は運営までご連絡ください。
@@ -537,13 +569,15 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                           <label key={d.date} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: over ? 'default' : 'pointer', border: selectedDates.includes(d.date) ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: over ? '#AAA' : '#1a1a1a', background: over ? '#FAFAFA' : (selectedDates.includes(d.date) ? '#FFFBEB' : '#fff') }}>
                             <input type="checkbox" disabled={over} checked={selectedDates.includes(d.date)} onChange={() => toggleDate(d.date)} style={{ accentColor: '#F5A623' }} />
                             <span>
-                              {d.date}（{d.start}〜{d.end}）
+                              {/* どの日がいくらなのかを選ぶ場面なので、日付と時刻、項目名と金額が
+                                  それぞれ別の行に分かれないよう、まとまりごとに包んでいる */}
+                              <span className='nowrap-unit'>{d.date}（{d.start}〜{d.end}）</span>
                               {/* 日ごとに金額が決まっている案件は、その日の額も出す */}
                               {canSeeFee && (() => {
                                 const f = perDayFee(place.schedule, d.date)
                                 const total = (f.placeFee ?? 0) + (f.companyFee ?? 0)
                                 if (f.placeFee == null && f.companyFee == null) return null
-                                return <span style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {total.toLocaleString()}円</span>
+                                return <span className='nowrap-unit' style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {total.toLocaleString()}円</span>
                               })()}
                             </span>
                           </label>
@@ -572,7 +606,7 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
               <h4 style={{ fontSize: '13px', fontWeight: '900', marginBottom: '10px', color: '#B45309' }}>📋 基本情報</h4>
               <div style={{ fontSize: '12px', color: '#666', lineHeight: 2 }}>
                 {place.prefecture && <div>📍 {place.prefecture}</div>}
-                <div>💴 {canSeeFee ? feeText(place) : '🔒 ログイン後に表示'}</div>
+                <div>💴 {canSeeFee ? feeNodes(place) : '🔒 ログイン後に表示'}</div>
                 <div>🚚 {tag}</div>
               </div>
             </div>

@@ -134,7 +134,11 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           {dateStr && <span style={{ color: '#94A3B8', fontSize: '12px' }}>{dateStr}</span>}
         </div>
 
-        <h1 style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 900, color: '#1a1a1a', lineHeight: 1.4, margin: '0 0 28px' }}>
+        {/* 記事タイトルはスマホで3行前後に折り返るため、jp-head で文節の切れ目に寄せる。
+            タイトルはデータベース由来で .u の区切りを入れられないため、
+            word-break: auto-phrase に対応するブラウザ（Android の Chrome など）でだけ効く。
+            iPhone の Safari では従来どおりの折り返しのままになる */}
+        <h1 className='jp-head' style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 900, color: '#1a1a1a', lineHeight: 1.4, margin: '0 0 28px' }}>
           <span style={{ marginRight: '8px' }}>{post.cover_emoji || '📝'}</span>{post.title}
         </h1>
 
