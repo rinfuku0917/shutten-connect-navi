@@ -146,6 +146,8 @@ const kinds = live.map(feeKindOf)
 const cnt = (arr, v) => arr.filter(x => x === v).length
 // 場所の種類 × 出店料の決め方
 const kindIn = (venue, kind) => live.filter(p => venueOf(p) === venue && feeKindOf(p) === kind).length
+// 常設か単発か × 出店料の決め方
+const typeKind = (type, kind) => live.filter(p => p.place_type === type && feeKindOf(p) === kind).length
 const venues = live.map(venueOf)
 const prefs = {}
 for (const p of live) prefs[p.prefecture ?? '-'] = (prefs[p.prefecture ?? '-'] ?? 0) + 1
@@ -236,6 +238,51 @@ const M = [
   ['ジャンル:ドリンク', genreCount['ドリンク'] ?? 0, ['offers', 'supermarket']],
   ['ジャンル:2つ以上', multiGenre, ['offers']],
   ['食事かスイーツ(重複除く)', new Set([...meal, ...sweet]).size, ['offers']],
+  ['ジャンル:物販', genreCount['物販'] ?? 0, ['offers', 'supermarket']],
+
+  // ここから下は、記事が表で使っているのに集計していなかったもの。
+  //
+  // 記事には「都道府県ごとの内訳」「常設と単発それぞれの決め方」といった
+  // 表が載っている。ところが集計は上位5県と全体の内訳しか採っておらず、
+  // 数字がずれたときに表の合計が合わなくなっても気づけなかった
+  // （実際、東京と埼玉が1件ずつ増えたときに表の合計が112件になった）。
+  // 記事に載せている粒度は、すべてここで数える。
+  ['都道府県:群馬県', prefs['群馬県'] ?? 0, ['location']],
+  ['都道府県:愛知県', prefs['愛知県'] ?? 0, ['location']],
+  ['都道府県:栃木県', prefs['栃木県'] ?? 0, ['location']],
+  ['都道府県:兵庫県', prefs['兵庫県'] ?? 0, ['location']],
+  ['都道府県:熊本県', prefs['熊本県'] ?? 0, ['location']],
+  ['都道府県:宮城県', prefs['宮城県'] ?? 0, ['location']],
+  ['都道府県:大阪府', prefs['大阪府'] ?? 0, ['location', 'offers']],
+  ['場所:ホームセンター', cnt(venues, 'ホームセンター・家電量販'), ['location']],
+  ['場所:ゴルフ場・レジャー', cnt(venues, 'ゴルフ場・レジャー'), ['location']],
+  ['場所:病院・介護', cnt(venues, '病院・介護施設'), ['location']],
+  ['場所:マンション・住宅', cnt(venues, 'マンション・住宅'), ['location']],
+  ['場所:公園・道の駅・公共', cnt(venues, '公園・道の駅・公共'), ['location']],
+  ['場所:駐車場・遊休地', cnt(venues, '駐車場・遊休地'), ['location']],
+  ['場所:その他', cnt(venues, 'その他'), ['location']],
+
+  // 常設と単発それぞれの、出店料の決め方。fee の記事がクロス表で使っている
+  ['常設:固定', typeKind('regular', '固定'), ['fee', 'parking']],
+  ['常設:歩合', typeKind('regular', '歩合'), ['fee', 'parking']],
+  ['常設:併用', typeKind('regular', '併用'), ['fee']],
+  ['常設:応相談', typeKind('regular', '応相談'), ['fee']],
+  ['単発:固定', typeKind('event', '固定'), ['fee']],
+  ['単発:歩合', typeKind('event', '歩合'), ['fee']],
+  ['単発:併用', typeKind('event', '併用'), ['fee']],
+  ['単発:応相談', typeKind('event', '応相談'), ['fee']],
+
+  // 場所の種類ごとの残りの内訳。mall と supermarket の表が使っている
+  ['スーパー:応相談', kindIn('スーパー・食品店', '応相談'), ['supermarket', 'mall']],
+  ['スーパー:常設', live.filter(p => venueOf(p) === 'スーパー・食品店' && p.place_type === 'regular').length, ['supermarket']],
+  ['学校:固定', kindIn('学校・専門学校・大学', '固定'), ['mall']],
+  ['学校:併用', kindIn('学校・専門学校・大学', '併用'), ['mall']],
+  ['学校:応相談', kindIn('学校・専門学校・大学', '応相談'), ['mall']],
+
+  // 固定額の上限。記事は「3,000円〜8,000円」のように幅で書いているが、
+  // 上限だけ集計しておらず、裏づけの無い数字になっていた
+  ['平日の最大', Math.max(...fixedRegular.map(p => dayFees(p).wd)), ['fee', 'parking']],
+  ['週末の最大', Math.max(...fixedRegular.map(p => dayFees(p).we)), ['fee', 'parking']],
 ]
 
 const ARTICLES = {
