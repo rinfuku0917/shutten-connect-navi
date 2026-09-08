@@ -17,6 +17,7 @@ import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
 import MailTemplates from './MailTemplates'
 import NotifyRecipients from './NotifyRecipients'
+import SubmissionPanel from '../components/SubmissionPanel'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import TodayCheckins from './TodayCheckins'
@@ -1300,6 +1301,8 @@ export default function AdminPage() {
     genre: string; areas: string; salesType: string; vehicleType: string
     size: string; equipment: string; menu: string; bio: string
     docsOk: number; docsTotal: number
+    /** この案件のために出店者が入力した現場情報があるか */
+    hasSubmission: boolean
   }
   const [pendingApps, setPendingApps] = useState<PendingApp[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
@@ -1308,6 +1311,8 @@ export default function AdminPage() {
   // 施設へ提出するExcel用。承認済みの申込がある案件の一覧。
   const [approvedPlaces, setApprovedPlaces] = useState<{ placeId: string, title: string, count: number }[]>([])
   const [submitXlsxBusy, setSubmitXlsxBusy] = useState('')
+  // 出店承認で「現場情報」を開いている申込
+  const [openSubAppId, setOpenSubAppId] = useState<string | null>(null)
   const loadPendingApps = async () => {
     setPendingLoading(true)
     const { data } = await supabase
@@ -1330,11 +1335,22 @@ export default function AdminPage() {
       }
     }
 
+    // この案件のために入力した現場情報があるか。承認の前に中身を見られるようにする
+    const subKeys = new Set<string>()
+    const placeIds = Array.from(new Set((data || []).map((a: any) => a.place_id).filter(Boolean)))
+    if (sellerIds.length > 0 && placeIds.length > 0) {
+      const { data: subs } = await supabase
+        .from('application_submissions').select('place_id, seller_id')
+        .in('place_id', placeIds).in('seller_id', sellerIds)
+      for (const x of subs || []) subKeys.add(x.place_id + '|' + x.seller_id)
+    }
+
     const mapped: PendingApp[] = (data || []).map((a: any) => {
       const p = a.profiles || {}
       const size = formatVehicleSize(p.size_length, p.size_width, p.size_height)
       const dc = docCount.get(a.seller_id) || { ok: 0, total: 0 }
       return {
+        hasSubmission: subKeys.has(a.place_id + '|' + a.seller_id),
         id: a.id, apply_date: a.apply_date, format: a.format,
         sellerName: p.shop_name || p.name || '(出店者)',
         placeTitle: a.places?.title || '(案件)',
@@ -2928,9 +2944,27 @@ const previewDoc = async (fileUrl: string) => {
                       {a.sellerId && (
                         <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>プロフィールを見る</a>
                       )}
+                      {/* この案件のために入力した現場情報。あれば青、無ければ灰色で「未入力」と分かるようにする */}
+                      <button
+                        type='button'
+                        onClick={() => setOpenSubAppId(openSubAppId === a.id ? null : a.id)}
+                        title={a.hasSubmission ? 'この案件のための現場情報が入力されています。押すと中身が見られます' : 'この案件のための入力はありません（プロフィールの内容が使われます）'}
+                        style={{
+                          background: openSubAppId === a.id ? '#1D4ED8' : a.hasSubmission ? '#EFF6FF' : '#fff',
+                          color: openSubAppId === a.id ? '#fff' : a.hasSubmission ? '#1D4ED8' : '#94A3B8',
+                          border: '1px solid ' + (a.hasSubmission ? '#BFDBFE' : '#E2E8F0'),
+                          borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+                        }}
+                      >
+                        {a.hasSubmission ? '現場情報あり' : '現場情報（未入力）'} {openSubAppId === a.id ? '▲' : '›'}
+                      </button>
                       <button onClick={() => openSellerDocs(a.sellerId, a.sellerName)} title={a.sellerName + ' の書類を開きます'} style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>書類を確認</button>
                       <button onClick={() => exportPendingCsv([a], a.sellerName)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>社内確認用CSV</button>
                     </div>
+                    {/* 押したら、この案件のために入力した内容をそのまま出す。見てから承認に進める */}
+                    {openSubAppId === a.id && a.placeId && a.sellerId && (
+                      <SubmissionPanel placeId={a.placeId} sellerId={a.sellerId} />
+                    )}
                   </div>
                 ))}
               </div>

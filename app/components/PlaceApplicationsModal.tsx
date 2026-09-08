@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import ConfirmDialog from './ConfirmDialog'
 import NotifyChoice from './NotifyChoice'
+import SubmissionPanel from './SubmissionPanel'
 import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 
@@ -95,6 +96,8 @@ export default function PlaceApplicationsModal({
   const [sellers, setSellers] = useState<Seller[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
+  // 「現場ごとの入力あり」を押して中身を開いている出店者
+  const [openSub, setOpenSub] = useState<string | null>(null)
 
   // 承認・不採用は出店者にメールが飛ぶので、必ず確認をはさむ
   const [ask, setAsk] = useState<{ id: string; status: 'approved' | 'rejected'; who: string; when: string } | null>(null)
@@ -605,15 +608,27 @@ export default function PlaceApplicationsModal({
                             )}
                             {/* この案件のために入力があれば、Excelはその内容で作られる。
                                 入力が無ければプロフィールが使われるので、そこも見えるようにする */}
-                            <span
-                              style={{ ...chip, background: s.hasSubmission ? '#EFF6FF' : '#F8FAFC', color: s.hasSubmission ? '#1D4ED8' : '#94A3B8' }}
-                              title={s.hasSubmission
-                                ? 'この案件のための出店者情報が入力されています。提出用Excelにはこの内容が載ります'
-                                : 'この案件のための入力がありません。提出用Excelにはプロフィールの内容が載ります'}
-                            >
-                              {s.hasSubmission ? '現場ごとの入力あり' : 'プロフィールの内容'}
-                            </span>
+                            {s.hasSubmission ? (
+                              <button
+                                type='button'
+                                onClick={() => setOpenSub(openSub === s.id ? null : s.id)}
+                                title='この案件のための出店者情報が入力されています。押すと中身が見られます'
+                                style={{ ...chip, background: openSub === s.id ? '#1D4ED8' : '#EFF6FF', color: openSub === s.id ? '#fff' : '#1D4ED8', border: '1px solid #BFDBFE', cursor: 'pointer', minHeight: '28px' }}
+                              >
+                                現場ごとの入力あり {openSub === s.id ? '▲' : '›'}
+                              </button>
+                            ) : (
+                              <span
+                                style={{ ...chip, background: '#F8FAFC', color: '#94A3B8' }}
+                                title='この案件のための入力がありません。提出用Excelにはプロフィールの内容が載ります'
+                              >
+                                プロフィールの内容
+                              </span>
+                            )}
                           </div>
+
+                          {/* 押したら、この案件のために入力した内容をそのまま出す */}
+                          {openSub === s.id && <SubmissionPanel placeId={placeId} sellerId={s.id} />}
 
                           {s.siteNote && (
                             <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '9px 11px', marginBottom: '8px' }}>
