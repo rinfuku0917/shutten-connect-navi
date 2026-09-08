@@ -77,6 +77,72 @@ function NewPlacePageInner() {
   }))
   const addDay = () => setSchedule(prev=>prev.length<31 ? [...prev,{date:'',start:'選択してください',end:'選択してください'}] : prev)
   const removeDay = (i:number) => setSchedule(prev=>prev.filter((_,idx)=>idx!==i))
+
+  // ===== 日程をまとめて入れる =====
+  //
+  // 毎日出る案件では31日ぶんを1つずつ入れることになり、
+  // 日付と時間を31回選ぶだけで相当な手間になっていた。
+  // 1日ぶん作れば、あとは複製か期間の指定で埋められるようにする。
+
+  // 日付の足し算。文字列のまま扱うと月またぎで壊れるので、
+  // いったん日付に直してから足す。時刻を付けないのは、
+  // 時差の影響で前日にずれるのを避けるため
+  const addDays = (iso:string, n:number) => {
+    const [y,m,d] = iso.split('-').map(Number)
+    if(!y||!m||!d) return ''
+    const t = new Date(y, m-1, d+n)
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`
+  }
+
+  // その1日ぶんを、翌日の日付でうしろに差し込む。
+  // 連続した日程を作るとき、日付だけ選び直せば済む
+  const duplicateDay = (i:number) => setSchedule(prev=>{
+    if(prev.length>=31) return prev
+    const src = prev[i]
+    const copy = { ...src, date: src.date ? addDays(src.date, 1) : '' }
+    return [...prev.slice(0,i+1), copy, ...prev.slice(i+1)]
+  })
+
+  // 期間と曜日を指定して、まとめて入れる
+  const [bulkFrom, setBulkFrom] = useState('')
+  const [bulkTo, setBulkTo] = useState('')
+  // 曜日は日曜=0。既定は全部の曜日
+  const [bulkDows, setBulkDows] = useState<number[]>([0,1,2,3,4,5,6])
+  const [bulkStart, setBulkStart] = useState('選択してください')
+  const [bulkEnd, setBulkEnd] = useState('選択してください')
+  const [bulkOpen, setBulkOpen] = useState(false)
+
+  // その条件で入る日付。押す前に件数を出すため、画面からも使う
+  const bulkDates = (() => {
+    if(!bulkFrom || !bulkTo) return [] as string[]
+    const out:string[] = []
+    // すでに入っている日付は入れ直さない（同じ日が二重に並ぶのを防ぐ）
+    const already = new Set(schedule.map(d=>d.date).filter(Boolean))
+    let cur = bulkFrom
+    // 上限は31日ぶん。それ以上さかのぼらないよう、回す回数にも上限を置く
+    for(let guard=0; guard<400 && cur <= bulkTo; guard++){
+      const [y,m,d] = cur.split('-').map(Number)
+      const dow = new Date(y, m-1, d).getDay()
+      if(bulkDows.includes(dow) && !already.has(cur)) out.push(cur)
+      cur = addDays(cur, 1)
+      if(!cur) break
+    }
+    return out
+  })()
+
+  // 空のままの行（1日ぶんも入力していない最初の行）は、まとめて入れるときに捨てる
+  const applyBulk = () => {
+    const dates = bulkDates
+    if(dates.length===0) return
+    setSchedule(prev=>{
+      const kept = prev.filter(d=>d.date)
+      const room = 31 - kept.length
+      return [...kept, ...dates.slice(0, Math.max(0, room)).map(date=>({
+        date, start: bulkStart, end: bulkEnd,
+      }))]
+    })
+    setBulkOpen(false)
+  }
   const req = <span style={{background:'#F5A623',color:'#fff',fontSize:'11px',padding:'2px 8px',borderRadius:'999px',marginLeft:'8px',fontWeight:'700'}}>必須</span>
 
   const times = ['選択してください', ...Array.from({length:18},(_,i)=>i+6).flatMap(h=>[`${h}:00`,`${h}:30`])]
@@ -218,7 +284,12 @@ async function refreshPublicPages(placeId?: string) {
                   <div key={i} style={{border:'1px solid #E5C07B',borderRadius:'10px',padding:'12px',background:'#FFFDF7'}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
                       <span style={{fontSize:'13px',fontWeight:'700',color:'#B45309'}}>{i+1}日目</span>
-                      {schedule.length>1 && <button type='button' onClick={()=>removeDay(i)} style={{background:'#FEF2F2',color:'#DC2626',border:'none',borderRadius:'6px',padding:'4px 10px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>削除</button>}
+                      <div style={{display:'flex',gap:'6px'}}>
+                        {/* この1日ぶんを、翌日の日付でうしろに差し込む。
+                            連続した日程は、これを押して日付を直すほうが早い */}
+                        {schedule.length<31 && <button type='button' onClick={()=>duplicateDay(i)} title='この日の内容を、翌日の日付でうしろに増やします' style={{background:'#EFF6FF',color:'#1D4ED8',border:'none',borderRadius:'6px',padding:'4px 10px',fontSize:'12px',fontWeight:'700',cursor:'pointer',fontFamily:'inherit'}}>複製</button>}
+                        {schedule.length>1 && <button type='button' onClick={()=>removeDay(i)} style={{background:'#FEF2F2',color:'#DC2626',border:'none',borderRadius:'6px',padding:'4px 10px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>削除</button>}
+                      </div>
                     </div>
                     <input type='date' value={d.date} onChange={e=>setDay(i,'date',e.target.value)} style={{width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'9px 12px',fontSize:'14px',boxSizing:'border-box',color:'#1a1a1a',background:'#fff'}}/>
                     <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'8px'}}>
@@ -258,6 +329,82 @@ async function refreshPublicPages(placeId?: string) {
                   金額を入れた日はその額を使います。空欄の日は「料金設定」の金額がそのまま使われます。
                 </div>
               )}
+              {/* 期間と曜日を指定して、まとめて入れる。
+                  毎日出る案件だと31日ぶんを1つずつ選ぶことになり、
+                  日付と時間を31回選ぶだけで相当な手間になっていた */}
+              <div style={{marginTop:'10px',border:'1.5px solid #BFDBFE',borderRadius:'10px',background:'#F8FBFF',overflow:'hidden'}}>
+                <button type='button' onClick={()=>setBulkOpen(v=>!v)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',background:'transparent',border:'none',padding:'12px 14px',fontSize:'13px',fontWeight:'700',color:'#1D4ED8',cursor:'pointer',textAlign:'left',fontFamily:'inherit',minHeight:'44px'}}>
+                  <span>📅 期間を指定して、まとめて追加</span>
+                  <span style={{fontSize:'11.5px',fontWeight:700}}>{bulkOpen ? '閉じる ▲' : '開く ▼'}</span>
+                </button>
+                {bulkOpen && (
+                  <div style={{padding:'0 14px 14px'}}>
+                    <p style={{fontSize:'12px',color:'#64748B',lineHeight:1.8,margin:'0 0 10px'}}>
+                      1か月ぶんをまとめて入れられます。曜日を選べば「平日だけ」「土日だけ」も作れます。
+                    </p>
+                    <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>開始日</label>
+                        <input type='date' value={bulkFrom} onChange={e=>setBulkFrom(e.target.value)} style={{...inputStyle,marginTop:'4px'}}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>終了日</label>
+                        <input type='date' value={bulkTo} onChange={e=>setBulkTo(e.target.value)} style={{...inputStyle,marginTop:'4px'}}/>
+                      </div>
+                    </div>
+
+                    <div style={{marginTop:'12px'}}>
+                      <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>出店する曜日</label>
+                      <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginTop:'6px'}}>
+                        {['日','月','火','水','木','金','土'].map((w,idx)=>{
+                          const on = bulkDows.includes(idx)
+                          return (
+                            <button key={w} type='button'
+                              onClick={()=>setBulkDows(prev=>on ? prev.filter(x=>x!==idx) : [...prev,idx])}
+                              style={{minWidth:'44px',minHeight:'44px',borderRadius:'8px',border:on?'1.5px solid #1D4ED8':'1.5px solid #E2E8F0',background:on?'#1D4ED8':'#fff',color:on?'#fff':(idx===0?'#DC2626':idx===6?'#1D4ED8':'#64748B'),fontSize:'13px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                              {w}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'8px'}}>
+                        <button type='button' onClick={()=>setBulkDows([0,1,2,3,4,5,6])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>毎日</button>
+                        <button type='button' onClick={()=>setBulkDows([1,2,3,4,5])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>平日だけ</button>
+                        <button type='button' onClick={()=>setBulkDows([0,6])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>土日だけ</button>
+                      </div>
+                    </div>
+
+                    <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'12px'}}>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>販売開始</label>
+                        <select value={bulkStart} onChange={e=>setBulkStart(e.target.value)} style={{...inputStyle,marginTop:'4px'}}>{times.map(t=><option key={t}>{t}</option>)}</select>
+                      </div>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>販売終了</label>
+                        <select value={bulkEnd} onChange={e=>setBulkEnd(e.target.value)} style={{...inputStyle,marginTop:'4px'}}>{times.map(t=><option key={t}>{t}</option>)}</select>
+                      </div>
+                    </div>
+
+                    {/* 押す前に、何日ぶん入るかを出す。
+                        31日を超えるぶんは入らないので、そのことも先に伝える */}
+                    <div style={{marginTop:'12px',fontSize:'12.5px',color:'#334155',lineHeight:1.9}}>
+                      {(!bulkFrom || !bulkTo)
+                        ? '開始日と終了日を選んでください。'
+                        : bulkDates.length===0
+                          ? '選んだ条件に当てはまる日がありません。曜日か期間をご確認ください。'
+                          : <><strong>{bulkDates.length}日ぶん</strong>を追加します（{bulkDates[0].replace(/-/g,'/')} 〜 {bulkDates[bulkDates.length-1].replace(/-/g,'/')}）。
+                              {bulkDates.length > 31 && <span style={{color:'#DC2626'}}><br />上限は31日までです。先頭から31日ぶんだけ入ります。</span>}
+                              <br /><span style={{color:'#94A3B8'}}>すでに入れてある日付は飛ばします。日付が空の行は置き換わります。</span></>}
+                    </div>
+
+                    <button type='button' onClick={applyBulk} disabled={bulkDates.length===0}
+                      style={{marginTop:'10px',background:bulkDates.length===0?'#ccc':'#1D4ED8',color:'#fff',border:'none',borderRadius:'8px',padding:'11px 20px',fontSize:'13px',fontWeight:900,cursor:bulkDates.length===0?'not-allowed':'pointer',fontFamily:'inherit',minHeight:'44px'}}>
+                      この条件で追加する
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {schedule.length<31 && (
                 <button type='button' onClick={addDay} style={{marginTop:'10px',background:'#fff',color:'#B45309',border:'1.5px dashed #F5A623',borderRadius:'8px',padding:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',width:'100%'}}>＋ 日程を追加（{schedule.length}/31）</button>
               )}
