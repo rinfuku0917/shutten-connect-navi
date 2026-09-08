@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     if (action === 'mine') {
       const { data, error } = await db
         .from('invoices')
-        .select('id, invoice_no, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at')
+        .select('id, invoice_no, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, kind')
         .eq('seller_id', uid)
         // 取り消した請求書は出店者には見せない
         .is('voided_at', null)

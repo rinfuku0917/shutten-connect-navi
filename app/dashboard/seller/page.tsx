@@ -546,6 +546,34 @@ export default function SellerDashboard() {
     id: string, invoice_no: string, period: string, issued_on: string, due_on: string | null,
     total: number, paid_status: string, paid_on: string | null, paid_name: string | null,
     paid_reported_at: string | null, paid_confirmed_at: string | null,
+    // sales = その月の売上をまとめた請求 / advance = 出店日の前に出す事前請求
+    kind?: string | null,
+  }
+
+  // その月の請求書をダウンロードできるようになったか。
+  //
+  // 出店料は末締めで、当月分は月が終わるまで確定しない。
+  // 事前請求のあとも出店が続く方が大半なので、月の途中で
+  // 「当月分」を出すと、そのあとの出店が入っていない請求書が
+  // 手元に残ってしまう。翌月1日を過ぎてから渡す。
+  //
+  // 事前請求（advance）は、出店日の前に出して先に払っていただくものなので
+  // この制限の対象外。出したその日から受け取れる必要がある。
+  const invoiceReady = (iv: MyInvoice) => {
+    if (iv.kind === 'advance') return true
+    const [y, m] = String(iv.period || '').split('-').map(Number)
+    if (!y || !m) return true
+    // 対象月の翌月1日。月は0から数えるので、m がそのまま「翌月」になる
+    const openOn = new Date(y, m, 1)
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()) >= openOn
+  }
+  // 「翌月1日」を画面に出すための文字列
+  const invoiceOpenLabel = (iv: MyInvoice) => {
+    const [y, m] = String(iv.period || '').split('-').map(Number)
+    if (!y || !m) return ''
+    const d = new Date(y, m, 1)
+    return `${d.getFullYear()}年${d.getMonth() + 1}月1日`
   }
   const [myInvoices, setMyInvoices] = useState<MyInvoice[]>([])
   const [invLoading, setInvLoading] = useState(false)
@@ -1730,16 +1758,34 @@ export default function SellerDashboard() {
                         {iv.paid_status === 'paid' && (
                           <div style={{ fontSize: '12px', color: '#16A34A', marginBottom: '8px', lineHeight: 1.8 }}>ご入金を確認いたしました。ありがとうございました。</div>
                         )}
+                        {/* 当月分がまだ確定していないことを、押す前に知らせる。
+                            ボタンだけ置いて押させると、落とせない理由が分からない */}
+                        {!invoiceReady(iv) && (
+                          <div style={{ fontSize: '12.5px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', marginBottom: '10px', lineHeight: 1.8 }}>
+                            当月分の出店をまとめた請求書は、<strong>{invoiceOpenLabel(iv)}</strong>よりダウンロード可能です。
+                          </div>
+                        )}
                         {/* 請求書そのものを見る導線。
                             これまで金額と期限しか出しておらず、
                             何に対する請求かを確かめる手段が無かった。
                             開くと運営が発行したものと同じ紙面が出て、
                             そのままPDFにできる */}
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          <a href={'/dashboard/seller/invoice?no=' + encodeURIComponent(iv.invoice_no)}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fff', color: '#1D4ED8', border: '1.5px solid #BFDBFE', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, textDecoration: 'none', minHeight: '44px', boxSizing: 'border-box' }}>
-                            請求書を見る・PDFで保存
-                          </a>
+                          {/* 当月分はまだ確定していないので渡さない。
+                              押せないボタンにするより、押したときに理由を出すほうが、
+                              なぜ落とせないのかが伝わる */}
+                          {invoiceReady(iv) ? (
+                            <a href={'/dashboard/seller/invoice?no=' + encodeURIComponent(iv.invoice_no)}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fff', color: '#1D4ED8', border: '1.5px solid #BFDBFE', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, textDecoration: 'none', minHeight: '44px', boxSizing: 'border-box' }}>
+                              請求書を見る・PDFで保存
+                            </a>
+                          ) : (
+                            <button type='button'
+                              onClick={() => showNotice(invoiceOpenLabel(iv) + ' よりダウンロードいただけます。当月分の出店をまとめた請求書は、月が終わってから確定するためです。', 'info')}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#F8FAFC', color: '#94A3B8', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', minHeight: '44px', boxSizing: 'border-box', fontFamily: 'inherit' }}>
+                              請求書を見る・PDFで保存
+                            </button>
+                          )}
                           {/* 領収書は入金を確認できてから。
                               まだ受け取っていないお金の領収書は出せない */}
                           {iv.paid_status === 'paid' && (

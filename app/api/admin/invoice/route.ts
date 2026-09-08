@@ -23,6 +23,25 @@ function asDate(v: unknown): string | null {
   return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null
 }
 
+// 対象月の締めが終わっているか。
+//
+// 出店料は末締めで、当月分は月が終わるまで確定しない。
+// 事前請求のあとも出店が続く方が大半なので、月の途中で「当月分」を渡すと、
+// そのあとの出店が入っていない請求書が相手の手元に残ってしまう。
+// 翌月1日を過ぎてから渡す。
+//
+// サーバーは世界標準時で動いているので、日本時間に直してから比べる。
+// そうしないと、日本で1日になっても前日として扱われる時間帯ができる。
+function periodClosed(period: string | null | undefined): boolean {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(period ?? ''))
+  if (!m) return true      // 形が読めないものは止めない（既存の行を巻き込まないため）
+  const y = Number(m[1]), mo = Number(m[2])
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const today = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate())
+  const openOn = Date.UTC(y, mo, 1)   // 月は0から数えるので、mo がそのまま翌月
+  return today >= openOn
+}
+
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 function mdLabel(isoDate: string | null | undefined): string {
   if (!isoDate || !/^\d{4}-\d{2}-\d{2}/.test(isoDate)) return ''
@@ -103,6 +122,17 @@ export async function POST(req: Request) {
       if (!isAdmin) {
         if (!row || row.seller_id !== requesterId || row.voided_at) {
           return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
+        }
+        // 当月分はまだ確定していないので渡さない。
+        // 事前請求は出店日の前に払っていただくものなので、この制限の対象外。
+        // 画面のボタンを隠すだけでは、URLを直接指定されたときに防げない
+        if (row.kind !== 'advance' && !periodClosed(row.period)) {
+          const [y, mo] = String(row.period).split('-').map(Number)
+          const d = new Date(Date.UTC(y, mo, 1))
+          return NextResponse.json({
+            error: `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月1日 よりダウンロードいただけます。`
+              + '当月分の出店をまとめた請求書は、月が終わってから確定するためです。',
+          }, { status: 409 })
         }
       }
       if (!row) {
