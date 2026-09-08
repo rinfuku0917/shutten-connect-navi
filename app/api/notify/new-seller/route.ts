@@ -1,9 +1,8 @@
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
 import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
+import { adminRecipients } from '../../../lib/notifyRecipients'
 
-// 管理者の通知先（Resend登録アドレスなので onboarding@resend.dev から送れる）
-const ADMIN_EMAIL = 'info@connect-navi.com'
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
 export async function POST(req: Request) {
@@ -36,7 +35,7 @@ export async function POST(req: Request) {
 
     const { error } = await resend.emails.send({
       from: `出店コネクトナビ <${FROM_EMAIL}>`,
-      to: ADMIN_EMAIL,
+      to: await adminRecipients('member'),
       subject,
       text,
     })

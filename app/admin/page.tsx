@@ -16,6 +16,7 @@ import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
 import MailTemplates from './MailTemplates'
+import NotifyRecipients from './NotifyRecipients'
 import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import TodayCheckins from './TodayCheckins'
@@ -1679,7 +1680,13 @@ const previewDoc = async (fileUrl: string) => {
           {tab === 'schedule' && <ScheduleCalendar onOpenDocs={openSellerDocs} onOpenSeller={openSellerInfo} onEditMail={openMailTemplate} />}
 
           {/* 送信メールの文面。ここで直したものが実際に届く */}
-          {tab === 'mail' && <MailTemplates focusKey={mailFocus} />}
+          {tab === 'mail' && (
+            <>
+              {/* 通知の宛先。「メールが自分に来ない」はここで解決する */}
+              <NotifyRecipients />
+              <MailTemplates focusKey={mailFocus} />
+            </>
+          )}
 
           {tab === 'dashboard' && (
             <>

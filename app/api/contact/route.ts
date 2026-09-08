@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
+import { adminRecipients } from '../../lib/notifyRecipients'
 
 // 公開ページ（/contact）から届くお問い合わせ。
 //
@@ -16,7 +17,6 @@ import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
 // 管理画面の一覧には出る（送信に失敗した印つきで）。
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
-const TO_EMAIL = 'info@connect-navi.com'
 // お問い合わせ本文の上限。フォーム側（app/contact/page.tsx）と同じ数字にする
 const MAX_MESSAGE = 5000
 
@@ -198,7 +198,7 @@ export async function POST(req: Request) {
     const resend = new Resend(apiKey)
     const { error } = await resend.emails.send({
       from: '出店コネクトナビ <' + FROM_EMAIL + '>',
-      to: TO_EMAIL,
+      to: await adminRecipients('contact'),
       replyTo: em,
       subject: mail.subject,
       text: mail.text,

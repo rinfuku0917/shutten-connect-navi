@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
+import { adminRecipients } from '../../lib/notifyRecipients'
 
 // 出店料の入金まわり。invoices は RLS でクライアントから読めないため、
 // 出店者・管理者どちらの操作もここを通す。
@@ -15,7 +16,6 @@ import { renderMail, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
 //
 // 呼び出し元はログイン中のアクセストークンで判定する（本人以外は触れない）。
 
-const ADMIN_EMAIL = 'info@connect-navi.com'
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
 // 同じ請求書の振込報告が短時間に繰り返されたとき、運営へ何通も飛ばさない。
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
           })
           await new Resend(apiKey).emails.send({
             from: '出店コネクトナビ <' + FROM_EMAIL + '>',
-            to: ADMIN_EMAIL,
+            to: await adminRecipients('payment'),
             subject: mail.subject,
             text: mail.text,
           })

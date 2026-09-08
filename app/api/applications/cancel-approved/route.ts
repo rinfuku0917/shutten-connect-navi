@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { adminRecipients } from '../../../lib/notifyRecipients'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 // 承認済みの出店を、運営が取り消す。
@@ -18,7 +19,6 @@ import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 // お金の記録があるものは取り消させない。詳しくは canCancel() のコメント。
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
-const ADMIN_EMAIL = 'info@connect-navi.com'
 
 // 二重送信の抑制（他の通知と同じ方式）
 const recentSends = new Map<string, number>()
@@ -181,7 +181,7 @@ export async function POST(req: Request) {
         // 3通とも宛先も内容も違うので、別々に編集できるようにしている
         const send = async (
           key: string,
-          to: string,
+          to: string | string[],
           vars: Record<string, string>,
           who: string,
         ) => {
@@ -201,7 +201,7 @@ export async function POST(req: Request) {
         }
 
         // 運営あて
-        await send('cancel-admin', ADMIN_EMAIL, {
+        await send('cancel-admin', await adminRecipients('cancel'), {
           '案件名': placeTitle,
           '出店日': dateText,
           '屋号': shopName,
