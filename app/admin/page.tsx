@@ -55,7 +55,7 @@ const dummyPlaces = [
 export default function AdminPage() {
   const router = useRouter()
   // 管理画面のタブ。URLと履歴の出し入れに使うため、一覧をここに持つ
-  const ADMIN_TABS = ['dashboard','schedule','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings','mail'] as const
+  const ADMIN_TABS = ['dashboard','schedule','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings','contacts','mail'] as const
 
   // 確認ダイアログ。
   // window.confirm は LINE や Instagram のアプリ内ブラウザで黙って無視され、
@@ -84,7 +84,7 @@ export default function AdminPage() {
   const [notice, setNotice] = useState<{ message: string; kind: 'error' | 'ok' | 'info' } | null>(null)
   const showNotice = (message: string, kind: 'error' | 'ok' | 'info' = 'error') => setNotice({ message, kind })
 
-  const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings' | 'mail'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings' | 'contacts' | 'mail'>('dashboard')
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
@@ -1052,6 +1052,53 @@ export default function AdminPage() {
 
   useEffect(() => { if (tab === 'meetings' && authChecked) loadMeetings() }, [tab, authChecked])
 
+  // ===== お問い合わせ =====
+  // これまで /contact のお問い合わせは info@connect-navi.com にメールが飛ぶだけで、
+  // どこにも残っていなかった。担当者は自分のメールに転送を設定しないと気づけず、
+  // 誰が対応したのかも追えない。ここで見られるようにする。
+  type ContactRow = {
+    id: string; name: string; email: string; message: string
+    status: string; admin_memo: string | null; handled_at: string | null
+    mail_sent: boolean; mail_error: string | null; created_at: string
+  }
+  const [contacts, setContacts] = useState<ContactRow[]>([])
+  const [contactsLoading, setContactsLoading] = useState(false)
+  const [contactMemo, setContactMemo] = useState<Record<string, string>>({})
+  const callContacts = async (body: Record<string, unknown>) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+    const res = await fetch('/api/contact', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, requesterId: user.id }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) { showNotice(j.error || 'うまくいきませんでした'); return null }
+    return j
+  }
+  const loadContacts = async () => {
+    setContactsLoading(true)
+    const j = await callContacts({ action: 'list' })
+    setContacts(j?.items || [])
+    setContactsLoading(false)
+  }
+  const setContactStatus = async (id: string, status: string) => {
+    if (await callContacts({ action: 'status', id, status })) loadContacts()
+  }
+  const saveContactMemo = async (id: string) => {
+    if (await callContacts({ action: 'status', id, memo: contactMemo[id] ?? '' })) {
+      showNotice('メモを保存しました', 'ok'); loadContacts()
+    }
+  }
+  const deleteContacts = async (ids: string[], label: string) => {
+    if (ids.length === 0) return
+    if (!(await ask({ title: '削除しますか？', body: label + '\nこの操作は取り消せません。', okLabel: '削除する', danger: true }))) return
+    if (await callContacts({ action: 'delete', ids })) loadContacts()
+  }
+  // 未対応の件数をサイドバーに出すため、タブを開いていなくても読む。
+  // タブに入ったときは最新に読み直す
+  useEffect(() => { if (authChecked) loadContacts() }, [authChecked, tab === 'contacts'])
+  const contactsNew = contacts.filter(c => c.status === 'new').length
+
   // ===== 新規案件の登録 =====
   // places への INSERT はRLSで弾かれるおそれがあるため、承認処理と同じく
   // サービスロールのAPI経由で登録する。
@@ -1513,12 +1560,13 @@ const previewDoc = async (fileUrl: string) => {
             { key: 'reviews', label: 'レビュー審査' },
             { key: 'applications', label: '出店承認' },
             { key: 'meetings', label: '打ち合わせ希望' },
+            { key: 'contacts', label: 'お問い合わせ', badge: contactsNew },
             { key: 'mail', label: 'メール文面' },
             { key: 'publish', label: '公開申請' },
             { key: 'blog', label: 'ブログ' },
             { key: 'csv', label: 'CSVインポート' },
             { key: 'imported', label: 'インポート名簿' },
-          ].map((item) => (
+          ].map((item: { key: string; label: string; badge?: number }) => (
             <div
               key={item.key}
               onClick={() => {
@@ -1539,6 +1587,12 @@ const previewDoc = async (fileUrl: string) => {
               }}
             >
               <span>{item.label}</span>
+              {/* 未対応の件数。見落としを防ぐため、タブを開かなくても分かるようにする */}
+              {!!item.badge && item.badge > 0 && (
+                <span style={{ marginLeft: 'auto', background: '#DC2626', color: '#fff', borderRadius: '999px', minWidth: '18px', height: '18px', padding: '0 6px', fontSize: '10px', fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {item.badge}
+                </span>
+              )}
             </div>
           ))}
         </nav>
@@ -1572,6 +1626,7 @@ const previewDoc = async (fileUrl: string) => {
             {tab === 'reviews' && 'レビュー審査'}
             {tab === 'applications' && '出店承認'}
             {tab === 'meetings' && '打ち合わせ希望'}
+            {tab === 'contacts' && 'お問い合わせ'}
             {tab === 'publish' && '公開申請'}
             {tab === 'blog' && 'ブログ記事管理'}
             {tab === 'imported' && 'インポート名簿'}
@@ -2907,6 +2962,103 @@ const previewDoc = async (fileUrl: string) => {
                         {m.status !== 'new' && <button onClick={() => setMeetingStatus(m.id, 'new')} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>未対応に戻す</button>}
                         {m.status === 'done' && (
                           <button onClick={() => deleteMeetings([m.id], `「${m.company || m.name}」の相談を削除します。`)}
+                            style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>削除</button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ===== お問い合わせ ===== */}
+          {/* 公開ページの「お問い合わせ」から届いた内容。
+              info@connect-navi.com へのメールと同じものが、ここに残る。
+              メールが届かなくても（送信に失敗しても）この一覧には出る */}
+          {tab === 'contacts' && (
+            <div>
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#1D4ED8', lineHeight: 1.7 }}>
+                サイトの「お問い合わせ」から届いた内容です。info@connect-navi.com に送られるメールと同じものが、ここに残ります。<br />
+                メールを見なくても、このページを開けば漏れなく確認できます。対応が済んだものは「完了にする」を押すと削除できるようになります。
+              </div>
+              {(() => {
+                const counts = { new: 0, in_progress: 0, done: 0 } as Record<string, number>
+                for (const c of contacts) counts[c.status] = (counts[c.status] || 0) + 1
+                const doneIds = contacts.filter(c => c.status === 'done').map(c => c.id)
+                return (
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {Object.entries(MEET_STATUS).map(([k, v]) => (
+                      <span key={k} style={{ background: v.bg, color: v.color, borderRadius: '999px', padding: '5px 14px', fontSize: '12px', fontWeight: 700 }}>
+                        {v.label} {counts[k] || 0}件
+                      </span>
+                    ))}
+                    <button onClick={loadContacts} style={{ background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>最新に更新</button>
+                    <div style={{ flex: 1 }} />
+                    {doneIds.length > 0 && (
+                      <button onClick={() => deleteContacts(doneIds, `完了したお問い合わせ ${doneIds.length}件をまとめて削除します。`)}
+                        style={{ background: '#fff', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                        完了分をまとめて削除（{doneIds.length}件）
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+              {contactsLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
+              {!contactsLoading && contacts.length === 0 && (
+                <div style={{ color: '#999', fontSize: '13px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center', lineHeight: 1.8 }}>
+                  まだお問い合わせはありません。<br />
+                  <span style={{ fontSize: '12px' }}>この機能を作る前に届いたお問い合わせは、ここには出ません（メールをご確認ください）。</span>
+                </div>
+              )}
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {contacts.map(c => {
+                  const st = MEET_STATUS[c.status] || MEET_STATUS.new
+                  return (
+                    <div key={c.id} style={{ background: '#fff', borderRadius: '12px', border: c.status === 'new' ? '1px solid #FECACA' : '1px solid #E2E8F0', padding: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ background: st.bg, color: st.color, borderRadius: '4px', padding: '2px 10px', fontSize: '11px', fontWeight: 700 }}>{st.label}</span>
+                          <strong style={{ fontSize: '14px', color: '#1a1a1a' }}>{c.name}</strong>
+                          {/* 運営あてのメールが送れなかったもの。メールだけ見ている人には届いていない */}
+                          {!c.mail_sent && (
+                            <span title={c.mail_error || ''} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', fontWeight: 700 }}>
+                              通知メール未送信
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '11px', color: '#94A3B8' }}>{new Date(c.created_at).toLocaleString('ja-JP')}</span>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '10px' }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top', width: '96px' }}>メール</td>
+                            <td style={{ padding: '3px 0', color: '#1a1a1a' }}>{c.email}</td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top' }}>お問い合わせ内容</td>
+                            <td style={{ padding: '3px 0', color: '#1a1a1a', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{c.message}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      {/* 誰が何をしたかを残す欄。電話した、折り返し待ち、など */}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '10px' }}>
+                        <textarea
+                          value={contactMemo[c.id] ?? c.admin_memo ?? ''}
+                          onChange={e => setContactMemo(p => ({ ...p, [c.id]: e.target.value }))}
+                          placeholder='対応メモ（例：9/8 電話で回答済み）'
+                          rows={2}
+                          style={{ flex: 1, border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '12px', resize: 'vertical', fontFamily: 'inherit' }}
+                        />
+                        <button onClick={() => saveContactMemo(c.id)} style={{ background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>メモを保存</button>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <a href={'mailto:' + c.email} style={{ background: '#F5A623', color: '#fff', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>メールで返信</a>
+                        {c.status !== 'in_progress' && <button onClick={() => setContactStatus(c.id, 'in_progress')} style={{ background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>対応中にする</button>}
+                        {c.status !== 'done' && <button onClick={() => setContactStatus(c.id, 'done')} style={{ background: '#ECFDF5', color: '#16A34A', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>完了にする</button>}
+                        {c.status !== 'new' && <button onClick={() => setContactStatus(c.id, 'new')} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>未対応に戻す</button>}
+                        {c.status === 'done' && (
+                          <button onClick={() => deleteContacts([c.id], `「${c.name}」さんのお問い合わせを削除します。`)}
                             style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>削除</button>
                         )}
                       </div>
