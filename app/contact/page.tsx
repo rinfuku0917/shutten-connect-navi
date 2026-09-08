@@ -7,6 +7,9 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { track } from '../lib/ga'
 
+// お問い合わせ本文の上限。API 側（app/api/contact/route.ts）と同じ数字にする
+const MAX_MESSAGE = 5000
+
 export default function ContactPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -81,7 +84,14 @@ export default function ContactPage() {
             </div>
             <div style={{ marginBottom: '24px' }}>
               <label style={labelStyle}><Image src='/ic-c-message.webp' alt='' width={18} height={18} style={{ display: 'inline-block', width: '18px', height: '18px', verticalAlign: '-3px', marginRight: '7px' }} />お問い合わせ内容 <span style={{ color: '#DC2626' }}>*</span></label>
-              <textarea style={{ ...inputStyle, minHeight: '140px', resize: 'vertical', fontFamily: 'inherit' }} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="お問い合わせ内容をご記入ください" />
+              <textarea style={{ ...inputStyle, minHeight: '140px', resize: 'vertical', fontFamily: 'inherit' }} value={message} onChange={(e) => setMessage(e.target.value)} maxLength={MAX_MESSAGE} placeholder="お問い合わせ内容をご記入ください" />
+              {/* 上限が近づいたときだけ出す。書いた末尾が黙って消えることがないように */}
+              {message.length > MAX_MESSAGE * 0.8 && (
+                <div style={{ fontSize: '12px', color: message.length >= MAX_MESSAGE ? '#DC2626' : '#92400E', textAlign: 'right', marginTop: '6px' }}>
+                  {message.length.toLocaleString()} / {MAX_MESSAGE.toLocaleString()}文字
+                  {message.length >= MAX_MESSAGE && '（上限です。お手数ですが分けてお送りください）'}
+                </div>
+              )}
             </div>
 
             {status === 'error' && (

@@ -9,11 +9,27 @@ import { NextResponse } from 'next/server'
 
 const METHODS = ['zoom', 'in_person', 'both']
 
+// 呼び出し元が本当に運営としてログインしているかを、アクセストークンで確かめる。
+//
+// 以前は body に入ったIDを profiles で引くだけだったが、それだと
+// 管理者のUUIDを知っているだけで、ログインしていない誰でも
+// 打ち合わせ希望の一覧（ご担当者名・会社名・メール・電話・ご相談内容）を読めた。
+// 管理者のUUIDは出店者が自分の売上行（sales.accepted_by）から拾える。
+//
+// app/api/admin/sales-accept/route.ts と同じやり方に揃える。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyAdmin(admin: any, requesterId: string) {
-  if (!requesterId) return false
-  const { data, error } = await admin.from('profiles').select('role').eq('id', requesterId).maybeSingle()
-  if (error || !data || data.role !== 'admin') return false
+async function requireAdmin(req: Request, admin: any): Promise<true | NextResponse> {
+  const authHeader = req.headers.get('authorization') || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+
+  const { data: userData, error: uErr } = await admin.auth.getUser(token)
+  const uid = userData?.user?.id
+  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
+
+  const { data: me } = await admin.from('profiles').select('role').eq('id', uid).maybeSingle()
+  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
+
   return true
 }
 
@@ -32,9 +48,8 @@ export async function POST(req: Request) {
 
     // ===== 管理者：一覧 =====
     if (body.action === 'list') {
-      if (!(await verifyAdmin(admin, body.requesterId))) {
-        return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-      }
+      const auth = await requireAdmin(req, admin)
+      if (auth instanceof NextResponse) return auth
       const { data, error } = await admin
         .from('meeting_requests').select('*').order('created_at', { ascending: false })
       if (error) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })
@@ -43,9 +58,8 @@ export async function POST(req: Request) {
 
     // ===== 管理者：対応状況の更新 =====
     if (body.action === 'status') {
-      if (!(await verifyAdmin(admin, body.requesterId))) {
-        return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-      }
+      const auth = await requireAdmin(req, admin)
+      if (auth instanceof NextResponse) return auth
       const { id, status, memo } = body
       if (!id || !['new', 'in_progress', 'done'].includes(status)) {
         return NextResponse.json({ error: 'パラメータが不正です' }, { status: 400 })
@@ -63,9 +77,8 @@ export async function POST(req: Request) {
     // ヒアリングが済んだ相談が溜まっていくため、不要になったものを消せるようにする。
     // 誤操作を防ぐため、対応が終わっていないものは削除できないようにしている。
     if (body.action === 'delete') {
-      if (!(await verifyAdmin(admin, body.requesterId))) {
-        return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-      }
+      const auth = await requireAdmin(req, admin)
+      if (auth instanceof NextResponse) return auth
       const ids: string[] = Array.isArray(body.ids) ? body.ids : (body.id ? [body.id] : [])
       if (ids.length === 0) return NextResponse.json({ error: '削除する対象がありません' }, { status: 400 })
 

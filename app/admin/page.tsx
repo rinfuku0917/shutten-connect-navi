@@ -1014,22 +1014,24 @@ export default function AdminPage() {
   const [meetingsLoading, setMeetingsLoading] = useState(false)
   const loadMeetings = async () => {
     setMeetingsLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setMeetingsLoading(false); return }
+    const token = (await supabase.auth.getSession()).data.session?.access_token
+    if (!token) { setMeetingsLoading(false); return }
     const res = await fetch('/api/meeting-request', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'list', requesterId: user.id }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ action: 'list' }),
     })
     const j = await res.json()
     setMeetings(res.ok ? (j.items || []) : [])
     setMeetingsLoading(false)
   }
   const setMeetingStatus = async (id: string, status: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const token = (await supabase.auth.getSession()).data.session?.access_token
+    if (!token) return
     const res = await fetch('/api/meeting-request', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'status', requesterId: user.id, id, status }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ action: 'status', id, status }),
     })
     const j = await res.json()
     if (!res.ok) { showNotice('更新できませんでした: ' + (j.error || '')); return }
@@ -1039,11 +1041,12 @@ export default function AdminPage() {
   const deleteMeetings = async (ids: string[], label: string) => {
     if (ids.length === 0) return
     if (!(await ask({ title: '削除しますか？', body: label + '\nこの操作は取り消せません。', okLabel: '削除する', danger: true }))) return
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const token = (await supabase.auth.getSession()).data.session?.access_token
+    if (!token) return
     const res = await fetch('/api/meeting-request', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete', requesterId: user.id, ids }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ action: 'delete', ids }),
     })
     const j = await res.json()
     if (!res.ok) { showNotice('削除できませんでした: ' + (j.error || '')); return }
@@ -1064,28 +1067,44 @@ export default function AdminPage() {
   const [contacts, setContacts] = useState<ContactRow[]>([])
   const [contactsLoading, setContactsLoading] = useState(false)
   const [contactMemo, setContactMemo] = useState<Record<string, string>>({})
-  const callContacts = async (body: Record<string, unknown>) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return null
+  // 表がまだ作られていないとき。赤いエラーではなく、やることを画面に出す
+  const [contactsNeedsSetup, setContactsNeedsSetup] = useState(false)
+  const callContacts = async (body: Record<string, unknown>, quiet = false) => {
+    // アクセストークンで名乗る。IDを本文に入れる形だと、それを知っている人なら
+    // ログインせずにお問い合わせ全件を読めてしまう
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return null
     const res = await fetch('/api/contact', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, requesterId: user.id }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body),
     })
     const j = await res.json().catch(() => ({}))
-    if (!res.ok) { showNotice(j.error || 'うまくいきませんでした'); return null }
+    if (!res.ok) {
+      if (j.needsSetup) { setContactsNeedsSetup(true); return null }
+      if (!quiet) showNotice(j.error || 'うまくいきませんでした')
+      return null
+    }
+    setContactsNeedsSetup(false)
     return j
   }
-  const loadContacts = async () => {
+  const loadContacts = async (quiet = false) => {
     setContactsLoading(true)
-    const j = await callContacts({ action: 'list' })
+    const j = await callContacts({ action: 'list' }, quiet)
     setContacts(j?.items || [])
     setContactsLoading(false)
   }
   const setContactStatus = async (id: string, status: string) => {
     if (await callContacts({ action: 'status', id, status })) loadContacts()
   }
+  // メモの保存。
+  // 画面に出ている文字をそのまま送る。ここで contactMemo だけを見ると、
+  // 一度も打ち替えていない行（＝画面には保存済みのメモが出ている行）で
+  // 空文字が送られ、保存済みのメモが消える
   const saveContactMemo = async (id: string) => {
-    if (await callContacts({ action: 'status', id, memo: contactMemo[id] ?? '' })) {
+    const shown = contactMemo[id] ?? contacts.find(c => c.id === id)?.admin_memo ?? ''
+    if (await callContacts({ action: 'status', id, memo: shown })) {
       showNotice('メモを保存しました', 'ok'); loadContacts()
     }
   }
@@ -1095,8 +1114,10 @@ export default function AdminPage() {
     if (await callContacts({ action: 'delete', ids })) loadContacts()
   }
   // 未対応の件数をサイドバーに出すため、タブを開いていなくても読む。
-  // タブに入ったときは最新に読み直す
-  useEffect(() => { if (authChecked) loadContacts() }, [authChecked, tab === 'contacts'])
+  // タブに入ったときは最新に読み直す。
+  // 開いていないときは黙って読む（他のタブに赤いエラーを出さないため）
+  const onContactsTab = tab === 'contacts'
+  useEffect(() => { if (authChecked) loadContacts(!onContactsTab) }, [authChecked, onContactsTab])
   const contactsNew = contacts.filter(c => c.status === 'new').length
 
   // ===== 新規案件の登録 =====
@@ -2988,12 +3009,12 @@ const previewDoc = async (fileUrl: string) => {
                 const doneIds = contacts.filter(c => c.status === 'done').map(c => c.id)
                 return (
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {Object.entries(MEET_STATUS).map(([k, v]) => (
+                    {!contactsNeedsSetup && Object.entries(MEET_STATUS).map(([k, v]) => (
                       <span key={k} style={{ background: v.bg, color: v.color, borderRadius: '999px', padding: '5px 14px', fontSize: '12px', fontWeight: 700 }}>
                         {v.label} {counts[k] || 0}件
                       </span>
                     ))}
-                    <button onClick={loadContacts} style={{ background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>最新に更新</button>
+                    <button onClick={() => loadContacts()} style={{ background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>最新に更新</button>
                     <div style={{ flex: 1 }} />
                     {doneIds.length > 0 && (
                       <button onClick={() => deleteContacts(doneIds, `完了したお問い合わせ ${doneIds.length}件をまとめて削除します。`)}
@@ -3005,7 +3026,17 @@ const previewDoc = async (fileUrl: string) => {
                 )
               })()}
               {contactsLoading && <div style={{ color: '#999', fontSize: '13px', padding: '16px', textAlign: 'center' }}>読み込み中...</div>}
-              {!contactsLoading && contacts.length === 0 && (
+              {/* 表がまだ無い状態。「お問い合わせが0件」と見分けがつくようにする */}
+              {!contactsLoading && contactsNeedsSetup && (
+                <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '12px', padding: '20px', fontSize: '13px', color: '#B45309', lineHeight: 1.9 }}>
+                  <strong style={{ fontSize: '14px', display: 'block', marginBottom: '8px' }}>あと1つだけ準備が必要です</strong>
+                  お問い合わせを保存する場所（データベースの表）が、まだ作られていません。<br />
+                  Supabase の管理画面 → SQL Editor で、<code style={{ background: '#fff', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 6px' }}>supabase/migrations/20260908_contacts.sql</code> の中身を貼り付けて実行してください。<br />
+                  実行が終わったら「最新に更新」を押すと、この画面が使えるようになります。<br />
+                  <span style={{ fontSize: '12px', color: '#92400E' }}>※ それまでの間も、お問い合わせのメールは info@connect-navi.com にこれまで通り届きます。</span>
+                </div>
+              )}
+              {!contactsLoading && !contactsNeedsSetup && contacts.length === 0 && (
                 <div style={{ color: '#999', fontSize: '13px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center', lineHeight: 1.8 }}>
                   まだお問い合わせはありません。<br />
                   <span style={{ fontSize: '12px' }}>この機能を作る前に届いたお問い合わせは、ここには出ません（メールをご確認ください）。</span>
