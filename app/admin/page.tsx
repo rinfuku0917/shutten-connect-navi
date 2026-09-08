@@ -1069,12 +1069,17 @@ export default function AdminPage() {
   const [contactMemo, setContactMemo] = useState<Record<string, string>>({})
   // 表がまだ作られていないとき。赤いエラーではなく、やることを画面に出す
   const [contactsNeedsSetup, setContactsNeedsSetup] = useState(false)
+  // 読み込めなかった理由。これが無いと「0件」と「読めなかった」の区別がつかない
+  const [contactsError, setContactsError] = useState('')
   const callContacts = async (body: Record<string, unknown>, quiet = false) => {
     // アクセストークンで名乗る。IDを本文に入れる形だと、それを知っている人なら
     // ログインせずにお問い合わせ全件を読めてしまう
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
-    if (!token) return null
+    if (!token) {
+      setContactsError('ログインの情報が切れています。一度ログアウトして、入り直してください。')
+      return null
+    }
     const res = await fetch('/api/contact', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
@@ -1082,17 +1087,26 @@ export default function AdminPage() {
     })
     const j = await res.json().catch(() => ({}))
     if (!res.ok) {
-      if (j.needsSetup) { setContactsNeedsSetup(true); return null }
-      if (!quiet) showNotice(j.error || 'うまくいきませんでした')
+      if (j.needsSetup) { setContactsNeedsSetup(true); setContactsError(''); return null }
+      // 401 は、画面を開いたまま新しい版が公開されたときに出る。
+      // 古い画面が新しいサーバーを呼ぶと噛み合わない。読み直せば直る
+      const msg = res.status === 401
+        ? '画面が古くなっています。ページを再読み込み（⌘R）してください。'
+        : (j.error || 'うまくいきませんでした')
+      setContactsError(msg)
+      if (!quiet) showNotice(msg)
       return null
     }
     setContactsNeedsSetup(false)
+    setContactsError('')
     return j
   }
   const loadContacts = async (quiet = false) => {
     setContactsLoading(true)
     const j = await callContacts({ action: 'list' }, quiet)
-    setContacts(j?.items || [])
+    // 読めなかったときは、前に読めていた分を消さない。
+    // 空にすると「0件」に見えてしまう
+    if (j) setContacts(j.items || [])
     setContactsLoading(false)
   }
   const setContactStatus = async (id: string, status: string) => {
@@ -3009,7 +3023,7 @@ const previewDoc = async (fileUrl: string) => {
                 const doneIds = contacts.filter(c => c.status === 'done').map(c => c.id)
                 return (
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {!contactsNeedsSetup && Object.entries(MEET_STATUS).map(([k, v]) => (
+                    {!contactsNeedsSetup && !contactsError && Object.entries(MEET_STATUS).map(([k, v]) => (
                       <span key={k} style={{ background: v.bg, color: v.color, borderRadius: '999px', padding: '5px 14px', fontSize: '12px', fontWeight: 700 }}>
                         {v.label} {counts[k] || 0}件
                       </span>
@@ -3036,7 +3050,15 @@ const previewDoc = async (fileUrl: string) => {
                   <span style={{ fontSize: '12px', color: '#92400E' }}>※ それまでの間も、お問い合わせのメールは info@connect-navi.com にこれまで通り届きます。</span>
                 </div>
               )}
-              {!contactsLoading && !contactsNeedsSetup && contacts.length === 0 && (
+              {/* 読み込めなかったとき。「0件」と紛らわしくならないように分けて出す */}
+              {!contactsLoading && !contactsNeedsSetup && contactsError && (
+                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '12px', padding: '20px', fontSize: '13px', color: '#DC2626', lineHeight: 1.9 }}>
+                  <strong style={{ fontSize: '14px', display: 'block', marginBottom: '6px' }}>お問い合わせを読み込めませんでした</strong>
+                  {contactsError}<br />
+                  <span style={{ fontSize: '12px', color: '#B91C1C' }}>※ 0件という意味ではありません。読めていないだけです。</span>
+                </div>
+              )}
+              {!contactsLoading && !contactsNeedsSetup && !contactsError && contacts.length === 0 && (
                 <div style={{ color: '#999', fontSize: '13px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center', lineHeight: 1.8 }}>
                   まだお問い合わせはありません。<br />
                   <span style={{ fontSize: '12px' }}>この機能を作る前に届いたお問い合わせは、ここには出ません（メールをご確認ください）。</span>
