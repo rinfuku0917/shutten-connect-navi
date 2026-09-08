@@ -47,11 +47,19 @@ export default function NotifyRecipients() {
     const { data: { session } } = await supabase.auth.getSession()
     const t = session?.access_token
     if (!t) { setErr('ログインの有効期限が切れています。読み込み直してください。'); return null }
-    const res = await fetch('/api/admin/notify-recipients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
-      body: JSON.stringify(body),
-    })
+    // 通信そのものが失敗したとき（電波が切れた等）に、画面が「追加中…」や
+    // 「読み込み中…」のまま固まらないように、ここで受け止める
+    let res: Response
+    try {
+      res = await fetch('/api/admin/notify-recipients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+        body: JSON.stringify(body),
+      })
+    } catch {
+      setErr('通信エラーです。電波の状態を確認して、もう一度お試しください。')
+      return null
+    }
     const j = await res.json().catch(() => ({}))
     if (!res.ok) {
       if (j.needsSetup) { setNeedsSetup(true); setErr(''); return null }
@@ -59,14 +67,13 @@ export default function NotifyRecipients() {
       return null
     }
     setNeedsSetup(false)
-    setErr('')
     return j
   }, [])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (clearErr = true) => {
     setLoading(true)
     const j = await call({ action: 'list' })
-    if (j) setRows(j.items || [])
+    if (j) { setRows(j.items || []); if (clearErr) setErr('') }
     setLoading(false)
   }, [call])
 
@@ -77,7 +84,7 @@ export default function NotifyRecipients() {
     const j = await call({ action: 'add', email: newEmail, label: newLabel })
     setBusy(false)
     if (!j) return
-    setNewEmail(''); setNewLabel('')
+    setNewEmail(''); setNewLabel(''); setErr('')
     setMsg('宛先を追加しました。次の通知から届きます。')
     load()
   }
@@ -86,13 +93,20 @@ export default function NotifyRecipients() {
     // 押した瞬間に画面へ反映する。往復を待つとチェックが遅れて見える
     setRows(p => p.map(x => (x.id === r.id ? { ...x, [field]: value } : x)))
     const j = await call({ action: 'update', id: r.id, [field]: value })
-    if (!j) load()
+    if (j) setErr('')
+    // 失敗したらサーバーの値に戻す。理由の表示は消さない
+    else load(false)
   }
 
+  // 削除は取り消せないので、二度押しで確定する。
+  // window.confirm はアプリ内ブラウザで黙って無視されるため使わない
+  const [confirmId, setConfirmId] = useState<string | null>(null)
   const remove = async (r: Row) => {
+    if (confirmId !== r.id) { setConfirmId(r.id); return }
+    setConfirmId(null)
     setMsg('')
     const j = await call({ action: 'delete', id: r.id })
-    if (j) { setMsg(r.email + ' を宛先から外しました。'); load() }
+    if (j) { setErr(''); setMsg(r.email + ' を宛先から外しました。'); load() }
   }
 
   const box: React.CSSProperties = {
@@ -108,15 +122,19 @@ export default function NotifyRecipients() {
       >
         <strong style={{ fontSize: '14px', color: '#1a1a1a' }}>通知メールの宛先</strong>
         <span style={{ fontSize: '12px', color: '#64748B' }}>
-          {loading ? '読み込み中…' : `${FIXED} ＋ ${rows.length}件`}
+          {loading ? '読み込み中…' : err || needsSetup ? FIXED : `${FIXED} ＋ ${rows.length}件`}
         </span>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: '12px', color: '#F5A623', fontWeight: 700 }}>{open ? '閉じる ▲' : '開く ▼'}</span>
       </div>
 
       {!open && (
-        <div style={{ fontSize: '12px', color: '#64748B', marginTop: '8px', lineHeight: 1.7 }}>
-          運営あてのお知らせを、ご自分のメールアドレスでも受け取れます。メールの転送設定は要りません。
+        <div style={{ fontSize: '12px', color: err ? '#DC2626' : '#64748B', marginTop: '8px', lineHeight: 1.7 }}>
+          {err
+            ? '読み込めませんでした：' + err
+            : needsSetup
+              ? '準備がもう1つ必要です。開いて手順をご確認ください。'
+              : '運営あてのお知らせを、ご自分のメールアドレスでも受け取れます。メールの転送設定は要りません。'}
         </div>
       )}
 
@@ -161,7 +179,14 @@ export default function NotifyRecipients() {
                 <button onClick={() => toggle(r, 'active', !r.active)} style={{ background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
                   {r.active ? 'いったん止める' : '受け取りを再開'}
                 </button>
-                <button onClick={() => remove(r)} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>削除</button>
+                {confirmId === r.id ? (
+                  <>
+                    <button onClick={() => remove(r)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>本当に削除する</button>
+                    <button onClick={() => setConfirmId(null)} style={{ background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>やめる</button>
+                  </>
+                ) : (
+                  <button onClick={() => remove(r)} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>削除</button>
+                )}
               </div>
               <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
                 {KINDS.map(k => (
@@ -174,7 +199,7 @@ export default function NotifyRecipients() {
             </div>
           ))}
 
-          {!loading && rows.length === 0 && !needsSetup && (
+          {!loading && rows.length === 0 && !needsSetup && !err && (
             <div style={{ fontSize: '12px', color: '#94A3B8', padding: '10px 2px' }}>
               追加の宛先はまだありません。下の欄からメールアドレスを足してください。
             </div>
@@ -183,10 +208,13 @@ export default function NotifyRecipients() {
           {/* 追加 */}
           <div style={{ borderTop: '1px solid #E2E8F0', marginTop: '14px', paddingTop: '14px' }}>
             <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>宛先を足す</div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {/* form にしておくと、ブラウザが type='email' の書式チェックをしてくれる */}
+            <form onSubmit={e => { e.preventDefault(); add() }} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <input
                 type='email' value={newEmail} onChange={e => setNewEmail(e.target.value)}
-                placeholder='メールアドレス' autoComplete='off'
+                placeholder='メールアドレス' autoComplete='off' required
+                pattern='[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}'
+                title='半角で name@example.com の形にしてください'
                 style={{ flex: '2 1 220px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px' }}
               />
               <input
@@ -195,12 +223,12 @@ export default function NotifyRecipients() {
                 style={{ flex: '1 1 140px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px' }}
               />
               <button
-                onClick={add} disabled={busy || !newEmail.trim()}
+                type='submit' disabled={busy || !newEmail.trim()}
                 style={{ background: busy || !newEmail.trim() ? '#E5B870' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700, cursor: busy || !newEmail.trim() ? 'default' : 'pointer' }}
               >
                 {busy ? '追加中…' : '追加する'}
               </button>
-            </div>
+            </form>
             <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '8px', lineHeight: 1.7 }}>
               足したあと、受け取りたい通知の種類をチェックで選べます（はじめは全部オンです）。
             </div>

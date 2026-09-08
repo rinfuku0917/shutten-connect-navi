@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
 import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
-import { adminRecipients } from '../../../lib/notifyRecipients'
+import { sendAdminMail } from '../../../lib/notifyRecipients'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
@@ -33,9 +33,9 @@ export async function POST(req: Request) {
     const subject = mail.subject
     const text = mail.text
 
-    const { error } = await resend.emails.send({
+    // info@ に単独で送り、追加の宛先には1件ずつ送る（1件の失敗で全員に届かなくなるのを防ぐ）
+    const { error } = await sendAdminMail(resend, 'member', {
       from: `出店コネクトナビ <${FROM_EMAIL}>`,
-      to: await adminRecipients('member'),
       subject,
       text,
     })

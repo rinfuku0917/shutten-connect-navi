@@ -2,7 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
-import { adminRecipients } from '../../lib/notifyRecipients'
+import { sendAdminMail } from '../../lib/notifyRecipients'
 
 // 出店料の入金まわり。invoices は RLS でクライアントから読めないため、
 // 出店者・管理者どちらの操作もここを通す。
@@ -116,12 +116,14 @@ export async function POST(req: Request) {
             '振込日': paidOn ? jpDate(paidOn) : '（未記入）',
             '振込名義': paidName || '（未記入）',
           })
-          await new Resend(apiKey).emails.send({
+          // info@ に単独で送り、追加の宛先には1件ずつ送る
+          const { error: mErr } = await sendAdminMail(new Resend(apiKey), 'payment', {
             from: '出店コネクトナビ <' + FROM_EMAIL + '>',
-            to: await adminRecipients('payment'),
             subject: mail.subject,
             text: mail.text,
           })
+          // 以前は戻り値の error を見ておらず、失敗してもログにすら残らなかった
+          if (mErr) console.error('入金報告の通知に失敗しました', mErr.message)
         } catch (e) {
           console.error('入金報告の通知に失敗しました', e)
         }

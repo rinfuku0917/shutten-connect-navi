@@ -2,7 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
-import { adminRecipients } from '../../lib/notifyRecipients'
+import { sendAdminMail } from '../../lib/notifyRecipients'
 
 // 公開ページ（/contact）から届くお問い合わせ。
 //
@@ -196,9 +196,9 @@ export async function POST(req: Request) {
     })
 
     const resend = new Resend(apiKey)
-    const { error } = await resend.emails.send({
+    // info@ に単独で送り、追加の宛先には1件ずつ送る（1件の失敗で全員に届かなくなるのを防ぐ）
+    const { error } = await sendAdminMail(resend, 'contact', {
       from: '出店コネクトナビ <' + FROM_EMAIL + '>',
-      to: await adminRecipients('contact'),
       replyTo: em,
       subject: mail.subject,
       text: mail.text,

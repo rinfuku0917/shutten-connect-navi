@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { adminRecipients } from '../../../lib/notifyRecipients'
+import { sendAdminMail } from '../../../lib/notifyRecipients'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 // 承認済みの出店を、運営が取り消す。
@@ -181,33 +181,46 @@ export async function POST(req: Request) {
         // 3通とも宛先も内容も違うので、別々に編集できるようにしている
         const send = async (
           key: string,
-          to: string | string[],
+          to: string,
           vars: Record<string, string>,
           who: string,
         ) => {
           try {
             const def = MAIL_DEF_BY_KEY[key]
             const mail = await renderMail(db, key, { subject: def.subject, body: def.body }, vars)
-            await resend.emails.send({
+            const { error } = await resend.emails.send({
               from: '出店コネクトナビ <' + FROM_EMAIL + '>',
               to,
               subject: mail.subject,
               text: mail.text,
             })
+            // 以前は戻り値の error を見ておらず、失敗してもログにすら残らなかった
+            if (error) console.error(who + 'への取消し通知に失敗しました', error.message)
           } catch (e) {
             // 通知が送れなくても取消し自体は完了させる
             console.error(who + 'への取消し通知に失敗しましたが、取消しは完了しました', e)
           }
         }
 
-        // 運営あて
-        await send('cancel-admin', await adminRecipients('cancel'), {
-          '案件名': placeTitle,
-          '出店日': dateText,
-          '屋号': shopName,
-          '取消しの理由': reasonText,
-          '募集者': hostName,
-        }, '運営')
+        // 運営あて。info@ に単独で送り、追加の宛先には1件ずつ送る
+        try {
+          const def = MAIL_DEF_BY_KEY['cancel-admin']
+          const mail = await renderMail(db, 'cancel-admin', { subject: def.subject, body: def.body }, {
+            '案件名': placeTitle,
+            '出店日': dateText,
+            '屋号': shopName,
+            '取消しの理由': reasonText,
+            '募集者': hostName,
+          })
+          const { error } = await sendAdminMail(resend, 'cancel', {
+            from: '出店コネクトナビ <' + FROM_EMAIL + '>',
+            subject: mail.subject,
+            text: mail.text,
+          })
+          if (error) console.error('運営への取消し通知に失敗しました', error.message)
+        } catch (e) {
+          console.error('運営への取消し通知に失敗しましたが、取消しは完了しました', e)
+        }
 
         // 募集者あて
         if (host?.email) {

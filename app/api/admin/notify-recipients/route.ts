@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { ADMIN_EMAIL, isValidEmail } from '../../../lib/notifyRecipients'
 
 // 運営あて通知メールの宛先の管理。
 //
@@ -71,11 +72,18 @@ export async function POST(req: Request) {
     if (body.action === 'add') {
       const email = String(body.email ?? '').trim()
       const label = String(body.label ?? '').trim()
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-        return NextResponse.json({ error: 'メールアドレスをご確認ください' }, { status: 400 })
+      // 書式は厳しめに見る。Resend は宛先の書式が不正だと送信を拒否するので、
+      // ここで通してしまうと、その宛先への通知が黙って落ち続ける
+      if (!isValidEmail(email)) {
+        return NextResponse.json(
+          { error: 'メールアドレスの形式が正しくありません。半角で「name@example.com」の形にしてください（前後の記号や全角文字は入れないでください）' },
+          { status: 400 },
+        )
       }
-      if (email.length > 200) {
-        return NextResponse.json({ error: 'メールアドレスが長すぎます' }, { status: 400 })
+      // info@ は元から必ず届く固定の宛先。行として足すと、その行のチェックを
+      // 外しても届き続けるので、画面と実際が食い違う
+      if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        return NextResponse.json({ error: ADMIN_EMAIL + ' には元からすべての通知が届きます。追加は不要です' }, { status: 400 })
       }
       const { error } = await db.from('notify_recipients')
         .insert({ email, label: label ? label.slice(0, 100) : null })
