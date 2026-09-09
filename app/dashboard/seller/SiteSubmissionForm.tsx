@@ -176,7 +176,10 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '620px', padding: '22px 24px 26px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '4px' }}>
           <div>
-            <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>この現場に出す出店者情報</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>この現場に出す出店者情報</h2>
+              <span style={{ fontSize: '11px', fontWeight: 900, color: '#fff', background: '#DC2626', borderRadius: '4px', padding: '3px 9px', whiteSpace: 'nowrap' }}>提出必須</span>
+            </div>
             <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>{placeTitle}</div>
           </div>
           <button type='button' onClick={onClose} aria-label='閉じる' style={{ border: 'none', background: 'none', fontSize: '22px', lineHeight: 1, color: '#94A3B8', cursor: 'pointer' }}>×</button>

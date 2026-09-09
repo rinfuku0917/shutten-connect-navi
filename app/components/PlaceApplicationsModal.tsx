@@ -429,6 +429,35 @@ export default function PlaceApplicationsModal({
   const cxl = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'cancelled').length, 0)
   // 取り消した行は普段は畳む。経緯を追いたいときだけ開く
   const [showCancelled, setShowCancelled] = useState(false)
+
+  // 取り消した出店を、記録ごと完全に消す。
+  //
+  // ふだんは status='cancelled' で残す（キャンセル料の根拠になるため）。
+  // ただしテストで作った出店が一覧に残り続けると本物が埋もれるので、
+  // 取り消し済みのものだけ消せるようにする。
+  const [purgeAsk, setPurgeAsk] = useState<{ id: string; who: string; when: string } | null>(null)
+  const [purgeBusy, setPurgeBusy] = useState(false)
+  const [purgeErr, setPurgeErr] = useState<string | null>(null)
+  const runPurge = async () => {
+    if (!purgeAsk) return
+    setPurgeBusy(true); setPurgeErr(null)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+        body: JSON.stringify({ action: 'application', id: purgeAsk.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setPurgeErr(j.error || '削除できませんでした。'); return }
+      setPurgeAsk(null)
+      await load()
+    } catch {
+      setPurgeErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setPurgeBusy(false)
+    }
+  }
   const pend = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'pending').length, 0)
   const appr = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'approved').length, 0)
   const rej = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'rejected').length, 0)
@@ -677,6 +706,17 @@ export default function PlaceApplicationsModal({
                                   )}
                                   {r.format && <span style={{ fontSize: '11px', color: '#888' }}>{r.format}</span>}
                                   <span style={{ ...chip, background: b.bg, color: b.fg }}>{b.text}</span>
+                                  {/* テストで作った出店の片づけ。取り消し済みのものだけ消せる */}
+                                  {cx && (
+                                    <button
+                                      type='button'
+                                      onClick={() => { setPurgeErr(null); setPurgeAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                      title='一覧から完全に消します。元に戻せません'
+                                      style={{ marginLeft: 'auto', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', minHeight: '32px' }}
+                                    >
+                                      完全に削除
+                                    </button>
+                                  )}
                                   {r.status === 'approved' && (
                                     <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
                                       <button
@@ -813,6 +853,26 @@ export default function PlaceApplicationsModal({
         okLabel={ask?.status === 'approved' ? '承認する' : '不採用にする'}
         onOk={apply}
         onCancel={() => { if (!busy) { setAsk(null); setAskErr(null) } }}
+      />
+
+      {/* 取り消した出店を完全に消す。テストデータの片づけ用 */}
+      <ConfirmDialog
+        open={!!purgeAsk}
+        busy={purgeBusy}
+        error={purgeErr}
+        title='この出店を完全に削除しますか？'
+        body={
+          purgeAsk
+            ? `${purgeAsk.who}／${purgeAsk.when}\n\n` +
+              '取り消し済みの出店を、一覧から完全に消します。\n' +
+              '記録が残らないため元に戻せません。テストで作ったものの片づけにお使いください。\n\n' +
+              '売上報告や有効な請求書が残っている場合は削除できません。'
+            : ''
+        }
+        okLabel='完全に削除する'
+        danger
+        onOk={runPurge}
+        onCancel={() => { if (!purgeBusy) { setPurgeAsk(null); setPurgeErr(null) } }}
       />
 
       <ConfirmDialog

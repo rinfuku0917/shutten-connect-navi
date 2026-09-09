@@ -899,6 +899,39 @@ export default function AdminPage() {
     setPayBusy('')
   }
 
+  // 取り消した請求書を、記録ごと完全に消す。
+  //
+  // ふだんは取り消し（voided_at）で止めておく。キャンセル料や
+  // 発行の経緯を追えるようにするためで、それが正しい。
+  // ただしテストで二重に発行したものが一覧に残り続けると、
+  // 本物の請求書が埋もれる。取り消し済みのものだけ消せるようにする。
+  const purgeInvoice = async (row: PayRow) => {
+    const ok = await ask({
+      title: 'この請求書を完全に削除しますか？',
+      body: row.invoice_no + '（' + row.sellerName + ' さん・¥' + row.total.toLocaleString() + '）を一覧から消します。\n\n'
+        + '取り消し済みの請求書だけが対象です。番号を含めて記録が消え、元に戻せません。\n'
+        + 'テストで作ったものの片づけにお使いください。',
+      okLabel: '完全に削除する', danger: true,
+    })
+    if (!ok) return
+    setPayBusy(row.id)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+        body: JSON.stringify({ action: 'invoice', id: row.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { showNotice(j.error || '削除できませんでした'); setPayBusy(''); return }
+      showNotice(row.invoice_no + ' を削除しました。', 'ok')
+      await loadPayments()
+    } catch {
+      showNotice('通信に失敗しました。もう一度お試しください。')
+    }
+    setPayBusy('')
+  }
+
   // 売上報告のリマインドを今すぐ送る（定期実行と同じ処理を呼ぶ）
   const [reminding, setReminding] = useState(false)
   const runSalesReminder = async () => {
@@ -2514,8 +2547,16 @@ const previewDoc = async (fileUrl: string) => {
                             )}
                             {/* 間違えて出した請求書を取り消す。行は消さず、番号も残す */}
                             {r.voided_at ? (
-                              <button onClick={() => unvoidInvoice(r)} disabled={payBusy === r.id}
-                                style={{ background: '#fff', color: '#64748B', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>取り消しを戻す</button>
+                              <>
+                                <button onClick={() => unvoidInvoice(r)} disabled={payBusy === r.id}
+                                  style={{ background: '#fff', color: '#64748B', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>取り消しを戻す</button>
+                                {/* テストで作った請求書の片づけ。入金確認済みのものは消せない */}
+                                {r.paid_status !== 'paid' && (
+                                  <button onClick={() => purgeInvoice(r)} disabled={payBusy === r.id}
+                                    title='一覧から完全に消します。元に戻せません'
+                                    style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>完全に削除</button>
+                                )}
+                              </>
                             ) : (
                               <button onClick={() => voidInvoice(r)} disabled={payBusy === r.id}
                                 title='番号と記録は残したまま、この請求書を無効にします'

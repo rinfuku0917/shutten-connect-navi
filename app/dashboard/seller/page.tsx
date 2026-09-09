@@ -1419,9 +1419,15 @@ export default function SellerDashboard() {
                 if (places.length === 0) return null
                 return (
                   <section aria-label='現場ごとの出店者情報' style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px 18px', marginBottom: '16px' }}>
-                    <h2 style={{ fontSize: '14px', fontWeight: 800, margin: '0 0 4px' }}>現場ごとの出店者情報</h2>
+                    {/* 記載率が低いので「提出必須」を赤で出す。
+                        施設へ出す資料に載る内容で、未入力だとプロフィールの内容が使われてしまう */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: '0 0 4px' }}>
+                      <h2 style={{ fontSize: '14px', fontWeight: 800, margin: 0 }}>現場ごとの出店者情報</h2>
+                      <span style={{ fontSize: '11px', fontWeight: 900, color: '#fff', background: '#DC2626', borderRadius: '4px', padding: '3px 9px', whiteSpace: 'nowrap' }}>提出必須</span>
+                    </div>
                     <p style={{ fontSize: '12px', color: '#64748B', margin: '0 0 12px', lineHeight: 1.7 }}>
-                      施設へ提出する資料に載る内容です。現場ごとに店舗名・ジャンル・メニュー・価格などを変えられます。未入力のときはプロフィールの内容が使われます。
+                      施設へ提出する資料に載る内容です。現場ごとに店舗名・ジャンル・メニュー・価格などを変えられます。
+                      <strong style={{ color: '#DC2626' }}>未入力のままだとプロフィールの内容がそのまま提出されます。案件ごとに必ずご入力ください。</strong>
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {places.map(([pid, title]) => {
@@ -1429,8 +1435,8 @@ export default function SellerDashboard() {
                         return (
                           <div key={pid} style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', padding: '10px 12px', borderRadius: '9px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
                             <span style={{ fontSize: '13px', fontWeight: 700, flex: 1, minWidth: '160px' }}>{title}</span>
-                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: done ? '#ECFDF5' : '#FEF3C7', color: done ? '#15803D' : '#92400E' }}>
-                              {done ? '入力済み' : '未入力'}
+                            <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 10px', borderRadius: '20px', background: done ? '#ECFDF5' : '#FEE2E2', color: done ? '#15803D' : '#DC2626', border: done ? 'none' : '1px solid #FECACA' }}>
+                              {done ? '入力済み' : '未入力（提出必須）'}
                             </span>
                             <button type='button' onClick={() => setSubForm({ placeId: pid, placeTitle: title })}
                               style={{ fontSize: '12px', fontWeight: 700, padding: '7px 14px', borderRadius: '8px', border: '1.5px solid #F5A623', background: '#FFF8E1', color: '#B45309', cursor: 'pointer', minHeight: '34px' }}>
