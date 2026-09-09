@@ -5,14 +5,19 @@ import { NextResponse } from 'next/server'
 // 取り消せるのは自分が送ったメッセージのみ。相手のメッセージは消せない。
 // messages に対する DELETE のポリシーが無い可能性があるため、
 // 他の管理系処理と同じくサービスロールで実行し、送信者の照合はここで行う。
+//
+// 誰が押したかは、ログイン中のアクセストークンで確かめる。
+// 以前は body の requesterId をそのまま送信者と比べていたが、それだと
+// 受け取った側が「メッセージのID」と「送り主のID」を画面から拾えるため、
+// ログインしていなくても、届いた連絡を消せてしまう状態だった。
 
 // 送信から取り消せる時間（分）。やり取りの記録が後から書き換わりすぎないよう区切る。
 const RETRACT_LIMIT_MINUTES = 60
 
 export async function POST(req: Request) {
   try {
-    const { messageId, requesterId } = await req.json()
-    if (!messageId || !requesterId) {
+    const { messageId } = await req.json()
+    if (!messageId) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
 
@@ -24,6 +29,16 @@ export async function POST(req: Request) {
     const admin = createClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
+
+    // 押した本人をアクセストークンで確かめる。body のIDは信用しない
+    const authHeader = req.headers.get('authorization') || ''
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    if (!token) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
+    const { data: userData, error: uErr } = await admin.auth.getUser(token)
+    const requesterId = userData?.user?.id
+    if (uErr || !requesterId) {
+      return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
+    }
 
     const { data: msg, error: mErr } = await admin
       .from('messages')

@@ -44,12 +44,19 @@ async function requireAdmin(req: Request, db: any): Promise<{ uid: string } | Ne
 }
 
 // 消した記録を残す。表が無くても本体の削除は止めない
+// 戻り値は「控えを残せたか」。表がまだ作られていなくても、本体の削除は止めない
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function writeLog(db: any, row: Record<string, unknown>) {
+async function writeLog(db: any, row: Record<string, unknown>): Promise<boolean> {
   try {
-    await db.from('purge_log').insert(row)
+    const { error } = await db.from('purge_log').insert(row)
+    if (error) {
+      console.error('purge_log への記録に失敗しました', error.message)
+      return false
+    }
+    return true
   } catch (e) {
     console.error('purge_log への記録に失敗しました', e)
+    return false
   }
 }
 
@@ -103,7 +110,7 @@ export async function POST(req: Request) {
         }, { status: 409 })
       }
 
-      await writeLog(db, {
+      const logged = await writeLog(db, {
         kind: 'application', target_id: id, deleted_by: uid,
         summary: [
           (app as { places?: { title?: string } }).places?.title || '(案件名なし)',
@@ -112,9 +119,20 @@ export async function POST(req: Request) {
         ].filter(Boolean).join(' / '),
       })
 
+      // やり取りを先に消す。messages.application_id の外部キーが
+      // 削除を止める設定（restrict / no action）だと、ここで消しておかないと
+      // 出店そのものを消せない。取り消した出店の会話を残す意味もない
+      const { error: mErr } = await db.from('messages').delete().eq('application_id', id)
+      if (mErr) console.error('メッセージの削除に失敗しました', mErr.message)
+
       const { error } = await db.from('applications').delete().eq('id', id).eq('status', 'cancelled')
-      if (error) return NextResponse.json({ error: '削除に失敗しました: ' + error.message }, { status: 500 })
-      return NextResponse.json({ success: true })
+      if (error) {
+        return NextResponse.json({
+          error: '削除に失敗しました: ' + error.message
+            + '（この出店に紐づく記録が残っている可能性があります）',
+        }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, logged })
     }
 
     // ===== 取り消し済みの請求書を消す =====
@@ -143,7 +161,7 @@ export async function POST(req: Request) {
         )
       }
 
-      await writeLog(db, {
+      const logged = await writeLog(db, {
         kind: 'invoice', target_id: id, deleted_by: uid,
         summary: [inv.invoice_no, inv.period, '¥' + Number(inv.total || 0).toLocaleString(), inv.void_reason || '']
           .filter(Boolean).join(' / '),
@@ -151,7 +169,7 @@ export async function POST(req: Request) {
 
       const { error } = await db.from('invoices').delete().eq('id', id).not('voided_at', 'is', null)
       if (error) return NextResponse.json({ error: '削除に失敗しました: ' + error.message }, { status: 500 })
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, logged })
     }
 
     return NextResponse.json({ error: 'action が不正です' }, { status: 400 })

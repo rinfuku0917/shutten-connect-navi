@@ -1047,12 +1047,12 @@ export default function SellerDashboard() {
   // 自分が送ったメッセージを取り消す（打ち間違いの取り消し用）
   const retractMessage = async (messageId: string) => {
     if (!(await ask({ title: 'このメッセージを取り消しますか？', body: '相手の画面からも削除されます。', okLabel: '取り消す', danger: true }))) return
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { showNotice('ログインが必要です'); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { showNotice('ログインが必要です'); return }
     const res = await fetch('/api/messages/retract', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messageId, requesterId: user.id }),
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ messageId }),
     })
     const result = await res.json()
     if (!res.ok) { showNotice('取り消せませんでした: ' + (result.error || '不明なエラー')); return }
