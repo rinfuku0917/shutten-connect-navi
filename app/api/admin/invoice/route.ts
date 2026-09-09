@@ -83,7 +83,7 @@ function feeLabel(place: any, saleDate?: string | null): string {
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, sellerId, period, action, dueOn, edited, amount, label, applicationId, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
+    const { requesterId, sellerId, period, action, dueOn, edited, amount, label, applicationId, applicationIds, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
 
     const url0 = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key0 = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -216,29 +216,63 @@ export async function POST(req: Request) {
     // 金額は手で決める。案件に固定額の設定があれば画面側で初期値に使うが、
     // 交渉で決まることが多いため、ここでは渡された額をそのまま使う。
     if (action === 'advance') {
+      // 金額は「1日あたり（税抜）」。複数日をまとめるときは日数ぶん明細が並ぶ
       const yen = Math.floor(Number(amount))
       if (!Number.isFinite(yen) || yen <= 0) {
         return NextResponse.json({ error: '金額を1円以上で入力してください' }, { status: 400 })
       }
 
-      // どの出店に対するものかを控えておく（売上に紐づかないため）
-      let appId: string | null = null
+      // どの出店に対するものかを控えておく（売上に紐づかないため）。
+      //
+      // 2日間の催しのように、同じ出店者の複数の出店日を1枚にまとめたい
+      // ことがある。以前は1日ずつしか出せず、2日分は発行後に明細を
+      // 手で足すしかなかった。applicationIds で複数を受け取れるようにする。
+      // 1件だけの applicationId もこれまでどおり受け付ける。
+      const wantIds: string[] = Array.from(new Set(
+        (Array.isArray(applicationIds) ? applicationIds : (applicationId ? [applicationId] : []))
+          .map((x: unknown) => String(x || '').trim()).filter(Boolean),
+      ))
+      if (wantIds.length > 31) {
+        return NextResponse.json({ error: 'まとめられるのは31日分までです' }, { status: 400 })
+      }
+
+      type AppRow = { id: string; seller_id: string; place_id: string | null; apply_date: string | null; places?: { title?: string } | null }
+      let apps: AppRow[] = []
       let placeTitle = ''
-      let applyDate = ''
-      if (applicationId) {
-        const { data: ap } = await admin
+      if (wantIds.length > 0) {
+        const { data: found } = await admin
           .from('applications')
-          .select('id, seller_id, apply_date, places(title)')
-          .eq('id', applicationId).maybeSingle()
-        if (!ap) return NextResponse.json({ error: '申込が見つかりませんでした' }, { status: 404 })
-        if (ap.seller_id !== sellerId) {
+          .select('id, seller_id, place_id, apply_date, places(title)')
+          .in('id', wantIds)
+        apps = ((found || []) as unknown as AppRow[])
+        if (apps.length !== wantIds.length) {
+          return NextResponse.json({ error: '申込が見つかりませんでした' }, { status: 404 })
+        }
+        if (apps.some(a => a.seller_id !== sellerId)) {
           return NextResponse.json({ error: 'この申込は選んだ出店者のものではありません' }, { status: 400 })
         }
-        appId = ap.id
-        applyDate = ap.apply_date || ''
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        placeTitle = (ap as any).places?.title || ''
+        // 別の案件の出店を1枚に混ぜない（請求件名も宛先の現場も変わってしまう）
+        const placeIds = new Set(apps.map(a => a.place_id || ''))
+        if (placeIds.size > 1) {
+          return NextResponse.json({ error: '別の案件の出店が混ざっています。同じ案件の出店日だけをまとめてください' }, { status: 400 })
+        }
+        apps.sort((a, b) => String(a.apply_date || '').localeCompare(String(b.apply_date || '')))
+        placeTitle = apps[0]?.places?.title || ''
+
+        // 月をまたぐ組み合わせは1枚にしない。
+        // 請求書の対象月（period）は月ごとの締め・出店取消しの判定・売上請求の
+        // 二重請求の注意に使われていて、「請求書の月 ≠ 出店日の月」の日が生まれると
+        // 後ろの月の日が請求済みなのに取り消せる／売上請求で固定分が二重になる、が起きる
+        const months = Array.from(new Set(apps.map(a => String(a.apply_date || '').slice(0, 7)).filter(Boolean)))
+        if (months.length > 1) {
+          const names = months.map(m => parseInt(m.slice(5, 7), 10) + '月分').join('と')
+          return NextResponse.json(
+            { error: '月をまたぐ出店日は1枚にまとめられません（月ごとの締めのため）。' + names + 'に分けて発行してください' },
+            { status: 400 },
+          )
+        }
       }
+      const appId: string | null = apps[0]?.id ?? null
 
       // 同じ申込に事前請求が既にあれば、いったん知らせる。
       //
@@ -246,32 +280,62 @@ export async function POST(req: Request) {
       // 先方の求めで出し直す——やり直したい場面のほうが多い。
       // 既にあることを伝えたうえで、force を付けて呼び直せば発行できる。
       // 既存の番号も返すので、画面側で「発行済みを開く」を出せる。
-      if (appId && force !== true) {
-        const { data: dup } = await admin
-          .from('invoices').select('invoice_no, total, due_on, created_at')
-          .eq('application_id', appId).eq('kind', 'advance')
+      //
+      // 複数日をまとめた請求書は application_id に先頭の1件しか入らないため、
+      // 明細（items[].applicationId）に控えた分も見る。
+      if (apps.length > 0 && force !== true) {
+        const { data: cand } = await admin
+          .from('invoices').select('invoice_no, total, due_on, created_at, application_id, items')
+          .eq('seller_id', sellerId).eq('kind', 'advance')
           // 取り消した請求書は「既にある」に数えない。取り消したなら出し直せるべき
           .is('voided_at', null)
           .order('created_at', { ascending: false })
-        if (dup && dup.length > 0) {
+        const idSet = new Set(wantIds)
+        // 請求書ごとに「選んだ日のうち、どれが載っているか」を出す。
+        // 複数日をまとめられるようになったので、一部の日だけ重なることがある。
+        // どの日かを返さないと、画面側で「重なった日を外して出す」ができない
+        const dup = (cand || []).map(d => {
+          const hit = new Set<string>()
+          if (d.application_id && idSet.has(d.application_id)) hit.add(d.application_id)
+          const its = Array.isArray(d.items) ? d.items : []
+          for (const it of its as { applicationId?: string }[]) {
+            if (it?.applicationId && idSet.has(it.applicationId)) hit.add(it.applicationId)
+          }
+          return { d, hit }
+        }).filter(x => x.hit.size > 0)
+        if (dup.length > 0) {
+          const labelOf = (id: string) => mdLabel(apps.find(a => a.id === id)?.apply_date) || '日程の指定なし'
+          const overlapIds = Array.from(new Set(dup.flatMap(x => Array.from(x.hit))))
           return NextResponse.json({
-            error: 'この出店には、すでに事前請求（' + dup.map(d => d.invoice_no).join('、') + '）を発行しています',
-            existing: dup.map(d => ({
-              invoiceNo: d.invoice_no,
-              total: d.total,
-              dueOn: d.due_on,
+            error: '選んだ出店日のうち ' + overlapIds.map(labelOf).join('・') + ' には、すでに事前請求（'
+              + dup.map(x => x.d.invoice_no).join('、') + '）を発行しています',
+            existing: dup.map(x => ({
+              invoiceNo: x.d.invoice_no,
+              total: x.d.total,
+              dueOn: x.d.due_on,
+              dates: Array.from(x.hit).map(labelOf),
             })),
+            // 重なっている申込。画面側でこれを外して出し直せる
+            overlap: overlapIds.map(id => ({ applicationId: id, label: labelOf(id) })),
             canReissue: true,
           }, { status: 409 })
         }
       }
 
-      const md = mdLabel(applyDate)
       const title = (typeof label === 'string' && label.trim())
         ? label.trim()
         : `${placeTitle || '出店'} 出店料（事前）`
-      const advItems = [{ no: 1, saleId: null, date: md, title, amount: yen }]
-      const advTax = Math.floor(yen * 0.1)
+      // 出店日ごとに1行。日付が無い申込（旧データ）でも1行は出す
+      const advItems = (apps.length > 0 ? apps : [null]).map((a, i) => ({
+        no: i + 1, saleId: null, applicationId: a?.id ?? null,
+        date: mdLabel(a?.apply_date), title, amount: yen,
+      }))
+      const advSubtotal = yen * advItems.length
+      const advTax = Math.floor(advSubtotal * 0.1)
+      // 対象月は出店日の月（同じ月しか混ざらないことは上で確かめている）。
+      // 日付の無い申込だけのときは、画面から来た period を使う
+      const firstDated = apps.map(a => String(a.apply_date || '')).find(d => /^\d{4}-\d{2}/.test(d)) || ''
+      const advPeriod = firstDated ? firstDated.slice(0, 7) : period
 
       const yearA = String(new Date().getFullYear())
       const { data: lastA } = await admin
@@ -283,9 +347,9 @@ export async function POST(req: Request) {
 
       const dueA = asDate(dueOn)
       const rowA: Record<string, unknown> = {
-        invoice_no: noA, seller_id: sellerId, period, kind: 'advance',
+        invoice_no: noA, seller_id: sellerId, period: advPeriod, kind: 'advance',
         application_id: appId,
-        subtotal: yen, tax: advTax, total: yen + advTax, item_count: 1,
+        subtotal: advSubtotal, tax: advTax, total: advSubtotal + advTax, item_count: advItems.length,
         sale_ids: null, items: advItems, due_on: dueA,
         to_name: edited?.toName ?? null,
         to_person: edited?.toPerson ?? null,
@@ -303,8 +367,8 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true, kind: 'advance', invoiceNo: noA, dueOn: dueA,
         seller: { shopName: seller.shop_name || '', personName: seller.name || '' },
-        period, periodLabel: `${period.slice(0, 4)}年${parseInt(period.slice(5, 7), 10)}月分`,
-        items: advItems, subtotal: yen, tax: advTax, total: yen + advTax, itemCount: 1,
+        period: advPeriod, periodLabel: `${advPeriod.slice(0, 4)}年${parseInt(advPeriod.slice(5, 7), 10)}月分`,
+        items: advItems, subtotal: advSubtotal, tax: advTax, total: advSubtotal + advTax, itemCount: advItems.length,
       })
     }
 

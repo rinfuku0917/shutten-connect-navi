@@ -125,7 +125,18 @@ export default function PlaceApplicationsModal({
   // 事前請求。大きなイベントでは出店料を先に払ってもらい、
   // 当日の売上の◯％はそのあと別に請求する。ここは前者を作る。
   // 売上が無くても発行できる（まだ出店していないので当然無い）。
-  const [advAsk, setAdvAsk] = useState<{ id: string; sellerId: string; who: string; when: string; date: string | null } | null>(null)
+  const [advAsk, setAdvAsk] = useState<{
+    id: string; sellerId: string; who: string; when: string; date: string | null
+    // この出店者の、同じ案件・同じ月の承認済みの出店日。2日間の催しなどを1枚にまとめるため。
+    // 月をまたぐ日は別の請求書になる（月ごとの締めのため）ので、ここには入れない
+    dates: { id: string; date: string | null; label: string }[]
+    // 別の月にある承認済みの出店日の数。あれば「別の請求書になります」と伝える
+    otherMonths: number
+  } | null>(null)
+  // まとめて請求する出店日（申込ID）。押した日は最初から入っている
+  const [advSel, setAdvSel] = useState<Set<string>>(new Set())
+  // 409 で返ってきた「すでに請求済みの日」。外して出し直す導線に使う
+  const [advOverlap, setAdvOverlap] = useState<{ applicationId: string; label: string }[] | null>(null)
   const [advBusy, setAdvBusy] = useState(false)
   const [advErr, setAdvErr] = useState<string | null>(null)
   const [advAmount, setAdvAmount] = useState('')
@@ -135,17 +146,22 @@ export default function PlaceApplicationsModal({
 
   // 同じ出店に事前請求が既にある場合、その番号を受け取ってここに入れる。
   // 「発行済みを開く」か「それでも出し直す」かを選べるようにするため
-  const [advDup, setAdvDup] = useState<{ invoiceNo: string; total: number; dueOn: string | null }[] | null>(null)
+  const [advDup, setAdvDup] = useState<{ invoiceNo: string; total: number; dueOn: string | null; dates?: string[] }[] | null>(null)
   // 発行できたときの番号。PDFを開く導線を出すのに使う
   const [advDone, setAdvDone] = useState<string | null>(null)
 
-  const runAdvance = async (force = false) => {
+  // sel を渡すと、その選択で送る（「重なった日を外して発行」で使う。
+  // setAdvSel の反映を待たずに送れるように）
+  const runAdvance = async (force = false, sel?: Set<string>) => {
     if (!advAsk) return
+    const use = sel ?? advSel
     const yen = parseInt(advAmount.replace(/[^0-9]/g, ''), 10)
     if (!yen || yen <= 0) { setAdvErr('金額を1円以上で入力してください。'); return }
     setAdvBusy(true)
     setAdvErr(null)
-    if (force) setAdvDup(null)
+    // 409 の表示（既存の番号・重なった日）は対で扱う。出し直しのときだけ消し、
+    // 通常の発行では応答で置き換える（通信失敗のときに導線が消えないように）
+    if (force) { setAdvDup(null); setAdvOverlap(null) }
     try {
       const { data: u } = await supabase.auth.getUser()
       const uid = u.user?.id
@@ -158,6 +174,8 @@ export default function PlaceApplicationsModal({
           action: 'advance',
           sellerId: advAsk.sellerId,
           applicationId: advAsk.id,
+          // 複数日をまとめるとき。1件だけでも同じ形で送る
+          applicationIds: Array.from(use.size > 0 ? use : new Set([advAsk.id])),
           // 対象月は出店日の月。日付が入っていない申込のときだけ今月にする。
           // 画面用に整えた文字列（「9月4日（金）」）からは年が取れないので、
           // 生の apply_date（2026-10-05 の形）を使う
@@ -174,12 +192,14 @@ export default function PlaceApplicationsModal({
         setAdvErr(json?.error || '発行できませんでした。')
         // 既に出ている請求書の番号が返ってきたら、開く導線と出し直しを出す
         if (json?.existing?.length) setAdvDup(json.existing)
+        if (json?.overlap?.length) setAdvOverlap(json.overlap)
         return
       }
       setAdvAsk(null)
       setAdvDup(null)
       setAdvDone(json.invoiceNo)
-      setXlsxMsg('事前請求（' + json.invoiceNo + '／¥' + (json.total ?? 0).toLocaleString() + '）を発行しました。')
+      const days = json.itemCount > 1 ? '・' + json.itemCount + '日分' : ''
+      setXlsxMsg('事前請求（' + json.invoiceNo + '／¥' + (json.total ?? 0).toLocaleString() + days + '）を発行しました。')
     } catch {
       setAdvErr('通信に失敗しました。')
     } finally {
@@ -668,7 +688,17 @@ export default function PlaceApplicationsModal({
                                           setAdvErr(null)
                                           setAdvAmount(placeFixed > 0 ? String(placeFixed) : '')
                                           setAdvDue('')
-                                          setAdvAsk({ id: r.id, sellerId: s.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date })
+                                          setAdvSel(new Set([r.id]))
+                                          setAdvDup(null); setAdvOverlap(null)
+                                          // 同じ月の承認済みだけを候補にする。月をまたぐ日は別の請求書になる
+                                          const month = String(r.apply_date || '').slice(0, 7)
+                                          const approved = s.rows.filter(x => x.status === 'approved')
+                                          const same = approved.filter(x => String(x.apply_date || '').slice(0, 7) === month)
+                                          setAdvAsk({
+                                            id: r.id, sellerId: s.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date,
+                                            dates: same.map(x => ({ id: x.id, date: x.apply_date, label: fmtDate(x.apply_date) })),
+                                            otherMonths: approved.length - same.length,
+                                          })
                                         }}
                                         title='出店日の前に、出店料の請求書を発行します'
                                         style={{ background: '#FFF8E1', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
@@ -787,7 +817,10 @@ export default function PlaceApplicationsModal({
         title='出店日の前に、出店料を請求しますか？'
         body={
           advAsk
-            ? `${advAsk.who}／${advAsk.when}\n\n` +
+            ? `${advAsk.who}／${
+                // 選んだ日をそのまま見出しに。押した日だけを出すと、選び直したあとに食い違う
+                advAsk.dates.filter(d => advSel.has(d.id)).map(d => d.label).join('・') || advAsk.when
+              }\n\n` +
               'これは出店料（固定額）の請求です。\n' +
               '当日の売上の◯％は、出店後に別の請求書で出します。'
             : ''
@@ -795,12 +828,51 @@ export default function PlaceApplicationsModal({
         extra={
           advAsk ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* 同じ案件に承認済みの出店日が複数あるとき、1枚にまとめられるようにする。
+                  2日間の催しで「1日ずつしか出せない」と困っていた */}
+              {advAsk.dates.length > 1 && (
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    まとめて請求する出店日
+                    <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>{advSel.size}日分</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {advAsk.dates.map(d => {
+                      const on = advSel.has(d.id)
+                      return (
+                        <label key={d.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: on ? '#1D4ED8' : '#475569', background: on ? '#EFF6FF' : '#fff', border: '1px solid ' + (on ? '#BFDBFE' : '#E2E8F0'), borderRadius: '999px', padding: '6px 12px', cursor: advBusy ? 'default' : 'pointer', minHeight: '34px' }}>
+                          <input
+                            type='checkbox' checked={on} disabled={advBusy}
+                            onChange={e => {
+                              const next = new Set(advSel)
+                              if (e.target.checked) next.add(d.id); else next.delete(d.id)
+                              // 0日にはしない。最低1日は残す
+                              if (next.size === 0) return
+                              setAdvSel(next)
+                            }}
+                            style={{ width: '16px', height: '16px' }}
+                          />
+                          {d.label}
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
+                    選んだ日が請求書の明細に1行ずつ並びます。
+                  </div>
+                </div>
+              )}
+              {advAsk.otherMonths > 0 && (
+                <div style={{ fontSize: '11px', color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', lineHeight: 1.7 }}>
+                  別の月にも承認済みの出店日が{advAsk.otherMonths}日あります。月ごとの締めのため、その分は別の請求書になります（その日の行の「事前請求」から出せます）。
+                </div>
+              )}
               <div>
                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  金額（税抜）
-                  {placeFixed > 0 && <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{placeFixed.toLocaleString()}円</span>}
+                  {advAsk.dates.length > 1 ? '1日あたりの金額（税抜）' : '金額（税抜）'}
+                  {placeFixed > 0 && <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{placeFixed.toLocaleString()}円／日</span>}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <input
                     value={advAmount} disabled={advBusy} inputMode='numeric' aria-label='金額'
                     onChange={e => setAdvAmount(e.target.value.replace(/[^0-9]/g, ''))}
@@ -808,13 +880,19 @@ export default function PlaceApplicationsModal({
                     style={{ width: '140px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 11px', fontSize: '14px', color: '#1a1a1a', textAlign: 'right' }}
                   />
                   <span style={{ fontSize: '13px', color: '#475569' }}>円</span>
-                  {advAmount && (
-                    <span style={{ fontSize: '12px', color: '#94A3B8' }}>
-                      消費税10%を足して <strong style={{ color: '#B45309' }}>
-                        {(parseInt(advAmount, 10) + Math.floor(parseInt(advAmount, 10) * 0.1)).toLocaleString()}円
-                      </strong>
-                    </span>
-                  )}
+                  {advAmount && (() => {
+                    const per = parseInt(advAmount, 10) || 0
+                    const n = Math.max(1, advSel.size)
+                    const sub = per * n
+                    return (
+                      <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+                        {n > 1 && <>{n}日分で {sub.toLocaleString()}円、</>}
+                        消費税10%を足して <strong style={{ color: '#B45309' }}>
+                          {(sub + Math.floor(sub * 0.1)).toLocaleString()}円
+                        </strong>
+                      </span>
+                    )
+                  })()}
                 </div>
               </div>
               <div>
@@ -837,13 +915,18 @@ export default function PlaceApplicationsModal({
               {advDup && advDup.length > 0 && (
                 <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '12px' }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#92400E', marginBottom: '8px' }}>
-                    この出店には、すでに事前請求が出ています
+                    {advOverlap && advOverlap.length > 0
+                      ? advOverlap.map(o => o.label).join('・') + ' には、すでに事前請求が出ています'
+                      : 'この出店には、すでに事前請求が出ています'}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
                     {advDup.map(d => (
                       <div key={d.invoiceNo} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '12px', color: '#78350F', fontWeight: 700 }}>{d.invoiceNo}</span>
                         <span style={{ fontSize: '12px', color: '#92400E' }}>¥{(d.total ?? 0).toLocaleString()}</span>
+                        {Array.isArray(d.dates) && d.dates.length > 0 && (
+                          <span style={{ fontSize: '11px', color: '#92400E' }}>（{d.dates.join('・')}）</span>
+                        )}
                         <a
                           href={'/admin/invoice?no=' + encodeURIComponent(d.invoiceNo)}
                           target='_blank' rel='noopener noreferrer'
@@ -854,18 +937,38 @@ export default function PlaceApplicationsModal({
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#92400E', lineHeight: 1.8 }}>
-                    同じものをもう一度PDFにしたいだけなら、上の「開いてPDFにする」から何度でも出せます。
-                    番号は変わらないので、二重請求にはなりません。<br />
-                    金額や条件が変わって<strong>新しい番号で出し直す</strong>場合だけ、下のボタンを押してください。
-                  </div>
-                  <button
-                    onClick={() => runAdvance(true)}
-                    disabled={advBusy}
-                    style={{ marginTop: '10px', background: advBusy ? '#ccc' : '#fff', color: '#B45309', border: '1.5px solid #B45309', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: advBusy ? 'not-allowed' : 'pointer' }}
-                  >
-                    {advBusy ? '発行中…' : '新しい番号で発行し直す'}
-                  </button>
+                  {(() => {
+                    // 重なった日を外した残り。残りがあれば、それだけで出す導線を先に出す
+                    const overlapIds = new Set((advOverlap || []).map(o => o.applicationId))
+                    const rest = new Set(Array.from(advSel).filter(id => !overlapIds.has(id)))
+                    const restLabels = (advAsk?.dates || []).filter(d => rest.has(d.id)).map(d => d.label)
+                    return (
+                      <>
+                        {overlapIds.size > 0 && rest.size > 0 && (
+                          <button
+                            onClick={() => { setAdvSel(rest); setAdvDup(null); setAdvOverlap(null); runAdvance(false, rest) }}
+                            disabled={advBusy}
+                            style={{ marginBottom: '10px', width: '100%', background: advBusy ? '#ccc' : '#B45309', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 14px', fontSize: '12px', fontWeight: 700, cursor: advBusy ? 'not-allowed' : 'pointer' }}
+                          >
+                            {advBusy ? '発行中…' : '重なった日を外して ' + restLabels.join('・') + ' だけ発行する'}
+                          </button>
+                        )}
+                        <div style={{ fontSize: '11px', color: '#92400E', lineHeight: 1.8 }}>
+                          同じものをもう一度PDFにしたいだけなら、上の「開いてPDFにする」から何度でも出せます。
+                          番号は変わらないので、二重請求にはなりません。<br />
+                          金額や条件が変わって<strong>新しい番号で出し直す</strong>場合だけ、下のボタンを押してください。
+                          <strong>古い請求書は自動では取り消されません。</strong>出し直したら、管理画面の売上管理から古い番号を取り消してください。
+                        </div>
+                        <button
+                          onClick={() => runAdvance(true)}
+                          disabled={advBusy}
+                          style={{ marginTop: '10px', background: advBusy ? '#ccc' : '#fff', color: '#B45309', border: '1.5px solid #B45309', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: advBusy ? 'not-allowed' : 'pointer' }}
+                        >
+                          {advBusy ? '発行中…' : '新しい番号で発行し直す（古いものは残ります）'}
+                        </button>
+                      </>
+                    )
+                  })()}
                 </div>
               )}
             </div>
@@ -873,7 +976,7 @@ export default function PlaceApplicationsModal({
         }
         okLabel='請求書を発行する'
         onOk={() => runAdvance(false)}
-        onCancel={() => { if (!advBusy) { setAdvAsk(null); setAdvErr(null); setAdvDup(null) } }}
+        onCancel={() => { if (!advBusy) { setAdvAsk(null); setAdvErr(null); setAdvDup(null); setAdvOverlap(null) } }}
       />
 
       <ConfirmDialog

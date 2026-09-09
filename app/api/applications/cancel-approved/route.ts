@@ -85,6 +85,8 @@ export async function POST(req: Request) {
     //    （出店料0円の売上は invoices.sale_ids に入らないため、
     //      sale_ids ではなく seller_id と対象月で見る）
     const blockers: string[] = []
+    // ⑶で見つけた請求書番号。⑷で同じ番号を二重に出さないため
+    const seenInvoiceNos = new Set<string>()
 
     const { data: sales } = await db
       .from('sales').select('id, sale_date, revenue').eq('application_id', app.id)
@@ -106,11 +108,37 @@ export async function POST(req: Request) {
         // 行き止まりになる）。voided_at が null のものだけが有効な請求書
         .is('voided_at', null)
       if (invs && invs.length > 0) {
+        for (const i of invs) seenInvoiceNos.add(i.invoice_no)
         const label = (s: string) =>
           s === 'paid' ? '入金確認済み' : s === 'reported' ? '振込報告済み' : '未入金'
         blockers.push(
           '請求書が発行されています（' +
           invs.map(i => `${i.invoice_no}／${label(String(i.paid_status))}`).join('、') +
+          '）',
+        )
+      }
+    }
+
+    // ⑷ この申込そのものが載っている事前請求
+    //    ⑶ は対象月で見るため、請求書の period が出店日の月と違うときに見落とす。
+    //    発行時に申込IDを控えている（application_id と items[].applicationId）ので、
+    //    それでも確かめる。紙面で手で足した明細行には申込IDが無いので、そこは対象外
+    {
+      const { data: byApp } = await db
+        .from('invoices').select('invoice_no, paid_status, application_id, items')
+        .eq('seller_id', app.seller_id).eq('kind', 'advance').is('voided_at', null)
+      const hits = (byApp || []).filter(i => {
+        if (seenInvoiceNos.has(i.invoice_no)) return false
+        if (i.application_id === app.id) return true
+        const its = Array.isArray(i.items) ? i.items : []
+        return its.some((it: { applicationId?: string }) => it?.applicationId === app.id)
+      })
+      if (hits.length > 0) {
+        const label = (s: string) =>
+          s === 'paid' ? '入金確認済み' : s === 'reported' ? '振込報告済み' : '未入金'
+        blockers.push(
+          'この出店の事前請求が発行されています（' +
+          hits.map(i => `${i.invoice_no}／${label(String(i.paid_status))}`).join('、') +
           '）',
         )
       }

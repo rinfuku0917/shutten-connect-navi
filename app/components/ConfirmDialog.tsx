@@ -95,6 +95,12 @@ export default function ConfirmDialog({
           width: '100%',
           maxWidth: '380px',
           boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+          // 中身が増えたとき（出店日の一覧など）に、スマホで「発行する」ボタンが
+          // 画面の外に出て押せなくならないように、カードの中でスクロールさせる
+          // 外枠が position:fixed; inset:0; padding:16px なので、100% ＝ 画面の高さ − 32px。
+          // dvh を解釈できない古いブラウザでも効く
+          maxHeight: '100%',
+          overflowY: 'auto',
         }}
       >
         <div style={{ fontSize: '16px', fontWeight: 800, color: '#111', marginBottom: body ? '10px' : '18px' }}>{title}</div>
