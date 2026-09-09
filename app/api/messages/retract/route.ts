@@ -64,8 +64,12 @@ export async function POST(req: Request) {
       )
     }
 
-    // 添付ファイルも残さない
-    if (msg.file_url) {
+    // 添付ファイルも残さない。
+    // ただし消すのは自分がアップロードしたものだけ。パスは
+    // <ユーザーID>/msg-... の形なので、そこで確かめる。
+    // ここを見ないと、他人のファイルのパスを貼ったメッセージを取り消すことで
+    // 相手のファイルを消せてしまう
+    if (msg.file_url && String(msg.file_url).startsWith(requesterId + '/')) {
       await admin.storage.from('message-attachments').remove([msg.file_url])
     }
 

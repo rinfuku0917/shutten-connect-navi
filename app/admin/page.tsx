@@ -514,7 +514,7 @@ export default function AdminPage() {
   }
 
   // ===== メッセージ（管理者）=====
-  type MsgThread = { application_id: string, sellerName: string, placeTitle: string, lastBody: string, unread: number }
+  type MsgThread = { application_id: string, sellerName: string, placeTitle: string, lastBody: string, unread: number, status: string, applyDate: string | null }
   type AdminMsg = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, file_url?: string | null }
   const [threads, setThreads] = useState<MsgThread[]>([])
   const [activeThread, setActiveThread] = useState<string | null>(null)
@@ -523,26 +523,40 @@ export default function AdminPage() {
   const [adminMsgFile, setAdminMsgFile] = useState<File | null>(null)
   const [adminMsgUploading, setAdminMsgUploading] = useState(false)
 
-  // 全スレッド（承認済み案件）を読み込む
+  // 全スレッド（承認済み・審査中）を読み込む。
+  // 相手から先に送られていなくても、運営からこちらで声をかけられる。
+  // 審査中の方にも聞きたいことがあるので、承認済みだけに絞らない
   const loadThreads = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     const uid = session?.user?.id || null
     setAdminUid(uid)
     const { data: apps } = await supabase
       .from('applications')
-      .select('id, seller_id, places(title), profiles(name)')
-      .eq('status', 'approved')
+      .select('id, seller_id, status, apply_date, places(title), profiles(name)')
+      .in('status', ['approved', 'pending'])
       .order('created_at', { ascending: false })
-    const { data: msgs } = await supabase
-      .from('messages')
-      .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
-      .order('sent_at', { ascending: true })
+    // 申込を絞ってから、そのスレッドのメッセージだけを引く。
+    // 全件取ってから総当たりで突き合わせると、やり取りが増えるほど重くなる
+    const appIds = (apps || []).map((a: any) => a.id)
+    const { data: msgs } = appIds.length > 0
+      ? await supabase
+        .from('messages')
+        .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
+        .in('application_id', appIds)
+        .order('sent_at', { ascending: true })
+      : { data: [] }
     const all = (msgs || []) as AdminMsg[]
+    const lastOf = new Map<string, AdminMsg>()
+    const unreadOf = new Map<string, number>()
+    for (const m of all) {
+      lastOf.set(m.application_id, m)
+      if (m.sender_id !== uid && !m.read_at) {
+        unreadOf.set(m.application_id, (unreadOf.get(m.application_id) || 0) + 1)
+      }
+    }
     const list: MsgThread[] = (apps || []).map((a: any) => {
-      const mine = all.filter(m => m.application_id === a.id)
-      const last = mine.length > 0 ? mine[mine.length - 1].body : 'メッセージはまだありません'
-      const unread = mine.filter(m => m.sender_id !== uid && !m.read_at).length
-      return { application_id: a.id, sellerName: a.profiles?.name || '(出店者)', placeTitle: a.places?.title || '(案件名なし)', lastBody: last, unread }
+      const last = lastOf.get(a.id)
+      return { application_id: a.id, sellerName: a.profiles?.name || '(出店者)', placeTitle: a.places?.title || '(案件名なし)', lastBody: last ? (last.body || '📎 添付ファイル') : 'メッセージはまだありません', unread: unreadOf.get(a.id) || 0, status: a.status as string, applyDate: (a.apply_date as string) || null }
     })
     setThreads(list)
   }
@@ -584,10 +598,17 @@ export default function AdminPage() {
       if (up.error) { showNotice('添付に失敗しました: ' + up.error.message); setAdminMsgUploading(false); return }
       fileUrl = path
     }
-    const { error } = await supabase.from('messages').insert({
-      application_id: activeThread, sender_id: adminUid, body, file_url: fileUrl
+    // 書き込みはAPIを通す（権限の確認はサーバー側で行う）
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/messages/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+      body: JSON.stringify({ applicationId: activeThread, body, fileUrl }),
     })
-    if (error) { showNotice('送信失敗: ' + error.message); setAdminMsgUploading(false); return }
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      showNotice('送信失敗: ' + (j.error || '不明なエラー')); setAdminMsgUploading(false); return
+    }
     setAdminMsgInput('')
     setAdminMsgFile(null)
     setAdminMsgUploading(false)
@@ -2815,15 +2836,21 @@ const previewDoc = async (fileUrl: string) => {
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflowY: 'auto', minWidth: 0 }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>出店者一覧（案件ごと）</div>
                 {threads.length === 0 ? (
-                  <div style={{ padding: '24px', textAlign: 'center', color: '#999', fontSize: '13px' }}>承認済みの案件がありません。</div>
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#999', fontSize: '13px' }}>やり取りできる申込がありません。</div>
                 ) : threads.map(t => (
                   <div key={t.application_id} onClick={() => openThread(t.application_id)}
                     style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: activeThread === t.application_id ? '#FFF8E1' : '#fff', borderLeft: activeThread === t.application_id ? '3px solid #F5A623' : '3px solid transparent' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '13px', fontWeight: '700', color: '#1a1a1a' }}>{t.sellerName}</span>
+                      {/* 審査中の方にも運営から声をかけられる。承認済みと区別が付くようにする */}
+                      {t.status === 'pending' && (
+                        <span style={{ background: '#FEF3C7', color: '#92400E', borderRadius: '4px', padding: '1px 7px', fontSize: '10px', fontWeight: '700' }}>審査中</span>
+                      )}
                       {t.unread > 0 && <span style={{ background: '#DC2626', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '10px', fontWeight: '700' }}>{t.unread}</span>}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>{t.placeTitle}</div>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                      {t.placeTitle}{t.applyDate ? '（' + t.applyDate.slice(5).replace('-', '/') + '）' : ''}
+                    </div>
                     <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.lastBody}</div>
                   </div>
                 ))}
@@ -2862,7 +2889,7 @@ const previewDoc = async (fileUrl: string) => {
                     <div style={{ padding: '12px 16px', borderTop: adminMsgFile ? 'none' : '1px solid #E2E8F0', display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <label htmlFor="admin-msg-file-input" style={{ cursor: adminMsgUploading ? 'not-allowed' : 'pointer', fontSize: '20px', opacity: adminMsgUploading ? 0.4 : 1, userSelect: 'none' }}>📎</label>
                       <input id="admin-msg-file-input" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={adminMsgUploading} onChange={e => { const file = e.target.files?.[0]; if (file) setAdminMsgFile(file); e.currentTarget.value = '' }} />
-                      <input value={adminMsgInput} onChange={e => setAdminMsgInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendAdminMsg() }} placeholder="メッセージを入力..." disabled={adminMsgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
+                      <input value={adminMsgInput} onChange={e => setAdminMsgInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendAdminMsg() }} maxLength={2000} placeholder="メッセージを入力..." disabled={adminMsgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
                       <button onClick={sendAdminMsg} disabled={adminMsgUploading} style={{ background: adminMsgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: adminMsgUploading ? 'not-allowed' : 'pointer' }}>{adminMsgUploading ? '...' : '送信'}</button>
                     </div>
                   </>

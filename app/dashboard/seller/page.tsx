@@ -109,7 +109,7 @@ export default function SellerDashboard() {
   const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
   const [myId, setMyId] = useState<string|null>(null)
   const [appId, setAppId] = useState<string|null>(null)
-  type MsgThread = { application_id: string, placeTitle: string, lastBody: string, unread: number }
+  type MsgThread = { application_id: string, placeTitle: string, lastBody: string, unread: number, hostId: string | null }
   const [threads, setThreads] = useState<MsgThread[]>([])
   const [unread, setUnread] = useState(0)
   type MyApply = { id: string, placeId: string, place: string, date: string, rawDate: string | null, reminderDays: number, type: string, status: string, statusColor: string, statusBg: string }
@@ -952,7 +952,7 @@ export default function SellerDashboard() {
     setMyId(uid)
     const { data: apps } = await supabase
       .from('applications')
-      .select('id, places(title)')
+      .select('id, places(title, host_id)')
       .eq('seller_id', uid)
       .order('created_at', { ascending: false })
     const { data: msgs } = await supabase
@@ -964,7 +964,7 @@ export default function SellerDashboard() {
       const mine = all.filter(m => m.application_id === a.id)
       const last = mine.length > 0 ? mine[mine.length - 1].body : 'メッセージはまだありません'
       const un = mine.filter(m => m.sender_id !== uid && !m.read_at).length
-      return { application_id: a.id, placeTitle: a.places?.title || '(案件名なし)', lastBody: last, unread: un }
+      return { application_id: a.id, placeTitle: a.places?.title || '(案件名なし)', lastBody: last, unread: un, hostId: a.places?.host_id ?? null }
     })
     setThreads(list)
     setUnread(list.reduce((s, t) => s + t.unread, 0))
@@ -1077,10 +1077,27 @@ export default function SellerDashboard() {
       if (up.error) { showNotice('添付に失敗しました: ' + up.error.message); setMsgUploading(false); return }
       fileUrl = path
     }
-    const { error } = await supabase
-      .from('messages')
-      .insert({ application_id: appId, sender_id: myId, body: text, file_url: fileUrl })
-    if (error) { showNotice('送信に失敗しました: ' + error.message); setMsgUploading(false); return }
+    // 書き込みはAPIを通す（権限の確認はサーバー側で行う）
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/messages/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+      body: JSON.stringify({ applicationId: appId, body: text, fileUrl }),
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      showNotice('送信に失敗しました: ' + (j.error || '不明なエラー')); setMsgUploading(false); return
+    }
+    // 相手へ新着メッセージ通知（失敗しても送信は成功扱い）
+    try {
+      await fetch('/api/notify/new-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId: appId, senderId: myId }),
+      })
+    } catch (e) {
+      console.error('メッセージ通知に失敗しました', e)
+    }
     setMsg('')
     setMsgFile(null)
     setMsgUploading(false)
@@ -1858,7 +1875,7 @@ export default function SellerDashboard() {
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {chatOpen ? (
                   <>
-                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>{threads.find(t => t.application_id === appId)?.placeTitle || '案件'}｜運営とのやり取り</div>
+                    <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '13px', color: '#1a1a1a' }}>{threads.find(t => t.application_id === appId)?.placeTitle || '案件'}｜会場・運営とのやり取り</div>
                     <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC' }}>
                       {dbMessages.length === 0 ? (
                         <div style={{ color: msgError ? '#DC2626' : '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>{msgError || 'まだメッセージがありません'}</div>
@@ -1876,15 +1893,24 @@ export default function SellerDashboard() {
                               <button onClick={() => retractMessage(m.id)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline' }}>送信を取り消す</button>
                             </div>
                           </div>
-                        ) : (
-                          // 相手からの吹き出しも同じ理由で .msg-bubble を付ける
-                          <div key={m.id} className='msg-bubble' style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
-                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a', width: 'fit-content', whiteSpace: 'pre-wrap' }}>
-                              {m.body && <div>{m.body}</div>}
-                              {m.file_url && renderAttachment(m.file_url, false)}
+                        ) : (() => {
+                          // 募集者（会場のご担当者）と運営の両方がここに書き込む。
+                          // どちらが書いたか分からないと、話の相手を取り違える
+                          const t = threads.find(x => x.application_id === appId)
+                          const fromHost = !!t?.hostId && m.sender_id === t.hostId
+                          return (
+                            // 相手からの吹き出しも同じ理由で .msg-bubble を付ける
+                            <div key={m.id} className='msg-bubble' style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: fromHost ? '#1D4ED8' : '#B45309', marginBottom: '3px' }}>
+                                {fromHost ? '会場のご担当者' : '運営（出店コネクトナビ）'}
+                              </div>
+                              <div style={{ background: fromHost ? '#fff' : '#FFF8E1', border: '1px solid ' + (fromHost ? '#E2E8F0' : '#FDE68A'), borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a', width: 'fit-content', whiteSpace: 'pre-wrap' }}>
+                                {m.body && <div>{m.body}</div>}
+                                {m.file_url && renderAttachment(m.file_url, false)}
+                              </div>
                             </div>
-                          </div>
-                        )
+                          )
+                        })()
                       ))}
                     </div>
                     {msgFile ? (
@@ -1904,7 +1930,7 @@ export default function SellerDashboard() {
                         if (ne?.isComposing || ne?.keyCode === 229) return
                         // 1回目のEnterは改行。すでに末尾が改行なら2回目とみなして送信する
                         if (msg.endsWith('\n')) { e.preventDefault(); sendMessage() }
-                      }} placeholder="メッセージを入力...（Enterで改行／2回続けて押すと送信）" disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
+                      }} maxLength={2000} placeholder="メッセージを入力...（Enterで改行／2回続けて押すと送信）" disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
                       <button onClick={sendMessage} disabled={msgUploading} style={{ background: msgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: msgUploading ? 'not-allowed' : 'pointer' }}>{msgUploading ? '...' : '送信'}</button>
                     </div>
                   </>

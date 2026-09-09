@@ -6,7 +6,7 @@ import BackButton from '../../../components/BackButton'
 
 type DbMessage = { id: string, application_id: string, sender_id: string | null, body: string, sent_at: string, file_url?: string | null }
 // 申込1件＝やり取り1スレッド。どの案件・どの出店者かが分かるようにまとめて持つ
-type Thread = { applicationId: string, placeTitle: string, sellerName: string, applyDate: string | null, status: string, lastBody: string, lastAt: string | null }
+type Thread = { applicationId: string, placeTitle: string, sellerName: string, sellerId: string, applyDate: string | null, status: string, lastBody: string, lastAt: string | null }
 
 const STATUS_LABEL: Record<string, { label: string, color: string, bg: string }> = {
   pending: { label: '審査中', color: '#92400E', bg: '#FEF3C7' },
@@ -156,6 +156,7 @@ export default function HostMessages() {
         applicationId: a.id,
         placeTitle: titleOf.get(a.place_id) || '(案件名なし)',
         sellerName: nameOf.get(a.seller_id) || '出店者',
+        sellerId: a.seller_id,
         applyDate: a.apply_date || null,
         status: a.status,
         lastBody: last ? (last.body || '📎 添付ファイル') : 'メッセージはまだありません',
@@ -241,9 +242,18 @@ export default function HostMessages() {
       if (up.error) { alert('添付に失敗しました: ' + up.error.message); setMsgUploading(false); return }
       fileUrl = path
     }
-    const { error } = await supabase
-      .from('messages').insert({ application_id: appId, sender_id: myId, body: text, file_url: fileUrl })
-    if (error) { alert('送信に失敗しました: ' + error.message); setMsgUploading(false); return }
+    // 書き込みはAPIを通す。画面から直接入れると、messages の権限設定次第で
+    // 「相手から先に送られていないと送れない」状態になる
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/messages/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+      body: JSON.stringify({ applicationId: appId, body: text, fileUrl }),
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      alert('送信に失敗しました: ' + (j.error || '不明なエラー')); setMsgUploading(false); return
+    }
     // 相手へ新着メッセージ通知（失敗しても送信は成功扱い）
     try {
       await fetch('/api/notify/new-message', {
@@ -414,9 +424,18 @@ export default function HostMessages() {
                   <div style={{ color: '#94A3B8', textAlign: 'center', marginTop: '40px' }}>まだメッセージがありません</div>
                 ) : dbMessages.map(m => {
                   const mine = m.sender_id === myId
+                  // 運営も同じやり取りに書き込む。誰の発言か分からないと、
+                  // 運営が書いたことを出店者が言ったものと取り違える
+                  const fromSeller = m.sender_id === current.sellerId
+                  const who = mine ? '' : fromSeller ? current.sellerName : '運営'
                   return (
                     <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '70%' }}>
-                      <div style={{ background: mine ? '#F5A623' : '#F1F5F9', color: mine ? '#fff' : '#1a1a1a', padding: '9px 14px', borderRadius: '12px', fontSize: '13px', width: 'fit-content', marginLeft: mine ? 'auto' : undefined, whiteSpace: 'pre-wrap' }}>
+                      {!mine && (
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: fromSeller ? '#64748B' : '#B45309', marginBottom: '3px' }}>
+                          {who}{!fromSeller && <span style={{ fontWeight: 400 }}>（出店コネクトナビ）</span>}
+                        </div>
+                      )}
+                      <div style={{ background: mine ? '#F5A623' : fromSeller ? '#F1F5F9' : '#FFF8E1', color: mine ? '#fff' : '#1a1a1a', border: !mine && !fromSeller ? '1px solid #FDE68A' : 'none', padding: '9px 14px', borderRadius: '12px', fontSize: '13px', width: 'fit-content', marginLeft: mine ? 'auto' : undefined, whiteSpace: 'pre-wrap' }}>
                         {m.body && <div>{m.body}</div>}
                         {m.file_url && renderAttachment(m.file_url, mine)}
                       </div>
@@ -446,7 +465,7 @@ export default function HostMessages() {
                         if (ne?.isComposing || ne?.keyCode === 229) return
                         // 1回目のEnterは改行。すでに末尾が改行なら2回目とみなして送信する
                         if (msg.endsWith('\n')) { e.preventDefault(); sendMessage() }
-                      }} placeholder='メッセージを入力...（Enterで改行／2回続けて押すと送信）' disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
+                      }} maxLength={2000} placeholder='メッセージを入力...（Enterで改行／2回続けて押すと送信）' disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
                 <button onClick={sendMessage} disabled={msgUploading} style={{ background: msgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: msgUploading ? 'not-allowed' : 'pointer' }}>{msgUploading ? '...' : '送信'}</button>
               </div>
             </>
