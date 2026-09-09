@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { snsHref } from '../lib/sns'
 
 // 出店管理スケジュール。
 //
@@ -607,7 +608,12 @@ export default function ScheduleCalendar({
                           {submission.genre && <div>ジャンル：{(() => { try { const g = JSON.parse(submission.genre); return Array.isArray(g) ? g.join('・') : submission.genre } catch { return submission.genre } })()}</div>}
                           {submission.takeoutBag && <div>テイクアウト袋：{submission.takeoutBag}</div>}
                           {submission.paymentMethods.length > 0 && <div>決済：{submission.paymentMethods.join('・')}</div>}
-                          {submission.instagram && <div>Instagram：{submission.instagram}</div>}
+                          {submission.instagram && (
+                            <div>Instagram：{snsHref('instagram', submission.instagram)
+                              ? <a href={snsHref('instagram', submission.instagram)} target='_blank' rel='noopener noreferrer' style={{ color: '#1D4ED8', wordBreak: 'break-all' }}>{snsHref('instagram', submission.instagram)}</a>
+                              : <span style={{ color: '#DC2626' }}>{submission.instagram}（リンクとして開けない形）</span>}
+                            </div>
+                          )}
                           {submission.menus.length > 0 && (
                             <div style={{ marginTop: '4px' }}>
                               メニュー：

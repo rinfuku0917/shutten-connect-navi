@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { parseSns, snsHandle, SNS_PREFIX, SNS_PLACEHOLDER } from '../../lib/sns'
 
 // 「この現場に出す出店者情報」を入力する画面。
 //
@@ -93,7 +94,7 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
     if (sub) {
       setExisting(true)
       setShopName(sub.shop_name || '')
-      setInstagram(sub.instagram || '')
+      setInstagram(snsHandle('instagram', sub.instagram))
       setGenres(parseGenres(sub.genre))
       applyBag(sub.takeout_bag || '')
       const p: string[] = Array.isArray(sub.payment_methods) ? sub.payment_methods : []
@@ -107,7 +108,8 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
     } else {
       setExisting(false)
       setShopName(prof?.shop_name || prof?.name || '')
-      setInstagram(sns?.url || '')
+      // プロフィールから写すときも、入力欄に出すのはアカウント名だけ
+      setInstagram(snsHandle('instagram', sns?.url))
       setGenres(parseGenres(prof?.genre))
       applyBag(prof?.takeout_bag || '')
       const p: string[] = Array.isArray(prof?.payment_methods) ? prof.payment_methods : []
@@ -124,6 +126,9 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
 
   const save = async () => {
     if (!shopName.trim()) { setErr('店舗名を入力してください。'); return }
+    // Instagram は押せば開く完全なURLにして保存する。表示名だけなら止める
+    const ig = parseSns('instagram', instagram)
+    if (!ig.ok) { setErr('Instagram：' + ig.error); return }
     setSaving(true)
     setErr(null)
     // 何も書いていない行は保存しない。価格は数値だけ取り出す
@@ -142,7 +147,7 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
       place_id: placeId,
       seller_id: sellerId,
       shop_name: shopName.trim(),
-      instagram: instagram.trim(),
+      instagram: ig.url,
       // 提出用Excelの genreLabel がプロフィールと同じ形を前提にしているため、
       // ここでも ["食事","スイーツ"] のJSON文字列で保存する
       genre: JSON.stringify(genres),
@@ -194,7 +199,25 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
 
             <div>
               <label style={label} htmlFor='sub-insta'>Instagram</label>
-              <input id='sub-insta' value={instagram} onChange={e => setInstagram(e.target.value)} placeholder='https://www.instagram.com/…' style={input} />
+              {/* 左に固定の「instagram.com/」を出し、アカウント名だけ入れてもらう。
+                  URLを丸ごと貼られてもアカウント名を取り出して入れ直す */}
+              <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
+                <span className='sns-prefix' style={{ display: 'flex', alignItems: 'center', padding: '0 10px', background: '#F8FAFC', color: '#64748B', borderRight: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{SNS_PREFIX.instagram}</span>
+                <input
+                  id='sub-insta' value={instagram}
+                  onChange={e => {
+                    const v = e.target.value
+                    // URLを貼ったら、その場でアカウント名だけにする
+                    if (/instagram\.com\//i.test(v)) { const r = parseSns('instagram', v); setInstagram(r.ok ? r.handle : v); return }
+                    setInstagram(v)
+                  }}
+                  placeholder={SNS_PLACEHOLDER.instagram} autoCapitalize='none' autoCorrect='off' spellCheck={false}
+                  style={{ ...input, border: 'none', borderRadius: 0, flex: 1, minWidth: 0 }}
+                />
+              </div>
+              <div style={{ fontSize: '11px', color: '#DC2626', marginTop: '4px', lineHeight: 1.6 }}>
+                ※ 必ず開けるリンクになるよう、アカウント名（英数字・「@」は付けない）かプロフィールのURLを入れてください。店名などの表示名では開けません。
+              </div>
             </div>
 
             <div>

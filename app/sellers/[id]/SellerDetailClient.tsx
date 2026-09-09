@@ -6,6 +6,7 @@ import SiteFooter from '../../components/SiteFooter'
 import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { snsHref } from '../../lib/sns'
 import { formatVehicleSize } from '../../lib/vehicleSize'
 
 export type Seller = {
@@ -322,19 +323,26 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
           </div>
         )}
 
-        {sns.length > 0 && (
-          <div style={{ marginTop: '28px' }}>
-            <h2 style={sectionTitle}>SNS</h2>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {sns.map(l => (
-                <a key={l.platform} href={l.url} target='_blank' rel='noopener noreferrer nofollow'
-                  style={{ ...card, padding: '9px 16px', fontSize: '13px', fontWeight: 700, color: '#9A5B0A', textDecoration: 'none' }}>
-                  {SNS_LABEL[l.platform] ?? l.platform} ↗
-                </a>
-              ))}
+        {(() => {
+          // 「@名前」のまま保存された古い値も、ここでURLに直して出す。
+          // 直せないもの（表示名など）は、開けないリンクを出すより出さない。
+          // 1つも直せなければ見出しごと出さない
+          const links = sns.map(l => ({ ...l, href: snsHref(l.platform, l.url) })).filter(l => l.href)
+          if (links.length === 0) return null
+          return (
+            <div style={{ marginTop: '28px' }}>
+              <h2 style={sectionTitle}>SNS</h2>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {links.map(l => (
+                  <a key={l.platform} href={l.href} target='_blank' rel='noopener noreferrer nofollow'
+                    style={{ ...card, padding: '9px 16px', fontSize: '13px', fontWeight: 700, color: '#9A5B0A', textDecoration: 'none' }}>
+                    {SNS_LABEL[l.platform] ?? l.platform} ↗
+                  </a>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         <h2 style={{ ...sectionTitle, margin: '28px 0 12px' }}>お客様のレビュー</h2>
         <div style={{ display: 'grid', gap: '12px' }}>

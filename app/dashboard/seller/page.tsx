@@ -5,6 +5,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import Notice from '../../components/Notice'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
+import { parseSns, snsHref, snsHandle, SNS_PLATFORMS, SNS_LABEL, SNS_PREFIX, SNS_PLACEHOLDER, SNS_HINT } from '../../lib/sns'
 import { useRouter } from 'next/navigation'
 import DashboardFooter from '../../components/DashboardFooter'
 import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
@@ -222,7 +223,14 @@ export default function SellerDashboard() {
   // 編集開始：表示値をフォームにコピー
   const startProfileEdit = () => {
     setProfileForm(profile)
-    setSnsForm(snsLinks)
+    // 入力欄には固定の「instagram.com/」のうしろに出すアカウント名だけを入れる。
+    // 昔の「@…」のままの値もここで直る
+    setSnsForm({
+      instagram: snsHandle('instagram', snsLinks.instagram),
+      twitter: snsHandle('twitter', snsLinks.twitter),
+      youtube: snsHandle('youtube', snsLinks.youtube),
+      tiktok: snsHandle('tiktok', snsLinks.tiktok),
+    })
     setAreasInput(profile.areas.join('・'))
     setPayOther(profile.payment_methods.filter(x => !PAY_OPTIONS.includes(x)).join('・'))
     setProfileEdit(true)
@@ -358,15 +366,24 @@ export default function SellerDashboard() {
         ...payOther.split(/[・、,]/).map(x => x.trim()).filter(Boolean),
       ])),
     }
-    const { data: pData, error: pErr } = await supabase.from('profiles').update(payload).eq('id', uid).select()
-    if (pErr) { showNotice('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
-    if (!pData || pData.length === 0) { showNotice('保存できませんでした（権限設定をご確認ください）'); setProfileSaving(false); return }
     const platforms: { key: keyof SnsLinks, name: string }[] = [
       { key: 'instagram', name: 'instagram' }, { key: 'twitter', name: 'twitter' },
       { key: 'youtube', name: 'youtube' }, { key: 'tiktok', name: 'tiktok' },
     ]
+    // SNSは押せば開く完全なURLにして保存する。表示名だけのときは、ここで止めて直してもらう。
+    // プロフィール本体を保存する前に確かめる。あとで止めると、本体だけ保存されて
+    // SNSは古いまま、という中途半端な状態になる
+    const normalized: Record<string, string> = {}
     for (const pf of platforms) {
-      const url = snsForm[pf.key].trim()
+      const r = parseSns(pf.key, snsForm[pf.key])
+      if (!r.ok) { showNotice(SNS_LABEL[pf.key] + '：' + r.error); setProfileSaving(false); return }
+      normalized[pf.key] = r.url
+    }
+    const { data: pData, error: pErr } = await supabase.from('profiles').update(payload).eq('id', uid).select()
+    if (pErr) { showNotice('プロフィール保存失敗: ' + pErr.message); setProfileSaving(false); return }
+    if (!pData || pData.length === 0) { showNotice('保存できませんでした（権限設定をご確認ください）'); setProfileSaving(false); return }
+    for (const pf of platforms) {
+      const url = normalized[pf.key]
       const { error: dErr } = await supabase.from('sns_links').delete().eq('seller_id', uid).eq('platform', pf.name)
       if (dErr) { showNotice('SNS保存失敗(' + pf.name + '): ' + dErr.message); setProfileSaving(false); return }
       if (url) {
@@ -2347,35 +2364,70 @@ export default function SellerDashboard() {
               </div>
 
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
-                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>SNS・メディア</div>
+                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '12px' }}>SNS・メディア</div>
                 {!profileEdit ? (
-                  ([
-                    { label: 'Instagram', value: snsLinks.instagram },
-                    { label: 'X（Twitter）', value: snsLinks.twitter },
-                    { label: 'YouTube', value: snsLinks.youtube },
-                    { label: 'TikTok', value: snsLinks.tiktok },
-                  ]).map(s => (
-                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
-                      {/* YouTubeのチャンネルURLなどは途中で改行できないため、
-                          .kv-value を付けて枠の中で折り返せるようにする */}
-                      <div className='kv-value' style={{ flex: 1 }}>
-                        <div style={{ fontSize: '11px', color: '#64748B' }}>{s.label}</div>
-                        <div style={{ fontSize: '13px', fontWeight: '500', color: !s.value ? '#94A3B8' : '#1D4ED8' }}>{s.value || '未設定'}</div>
+                  <>
+                    {/* 施設・企業の担当者は、出店者を選ぶときにSNSをよく見る。
+                        ほとんどの方が未記入だったので、未登録のときだけひとこと添える */}
+                    {!snsLinks.instagram && !snsLinks.twitter && !snsLinks.youtube && !snsLinks.tiktok && (
+                      <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#92400E', lineHeight: 1.7, marginBottom: '8px' }}>
+                        SNSがまだ登録されていません。施設・企業の担当者が出店者を選ぶとき、SNSはよく見られます。
+                        <strong>Instagramだけでも登録をおすすめします。</strong>基本情報の「編集する」からアカウント名を入れるだけで、公開ページと施設へ出す資料にリンクが載ります。
                       </div>
-                    </div>
-                  ))
+                    )}
+                    {SNS_PLATFORMS.map(pf => {
+                      const stored = snsLinks[pf]
+                      const href = snsHref(pf, stored)
+                      return (
+                        <div key={pf} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+                          {/* YouTubeのチャンネルURLなどは途中で改行できないため、
+                              .kv-value を付けて枠の中で折り返せるようにする */}
+                          <div className='kv-value' style={{ flex: 1 }}>
+                            <div style={{ fontSize: '11px', color: '#64748B' }}>{SNS_LABEL[pf]}</div>
+                            {!stored ? (
+                              <div style={{ fontSize: '13px', color: '#94A3B8' }}>未設定</div>
+                            ) : href ? (
+                              <a href={href} target='_blank' rel='noopener noreferrer' style={{ fontSize: '13px', fontWeight: 500, color: '#1D4ED8', wordBreak: 'break-all' }}>{href}</a>
+                            ) : (
+                              // 昔の値で、URLに直せないもの（表示名など）。開けないことを伝えて直してもらう
+                              <div style={{ fontSize: '13px', color: '#DC2626' }}>{stored}<span style={{ fontSize: '11px', marginLeft: '6px' }}>← この形ではリンクとして開けません。基本情報の「編集する」から、アカウント名（英数字）に直してください</span></div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </>
                 ) : (
-                  ([
-                    { label: 'Instagram', key: 'instagram', ph: '例：@hana_sweets' },
-                    { label: 'X（Twitter）', key: 'twitter', ph: '例：@hana_sweets_jp' },
-                    { label: 'YouTube', key: 'youtube', ph: 'チャンネル名やURL' },
-                    { label: 'TikTok', key: 'tiktok', ph: '例：@hana_sweets' },
-                  ]).map(s => (
-                    <div key={s.key} style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{s.label}</div>
-                      <input value={(snsForm as any)[s.key]} onChange={e => setSnsForm({ ...snsForm, [s.key]: e.target.value })} placeholder={s.ph} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
+                  <>
+                    <div style={{ fontSize: '12px', color: '#DC2626', lineHeight: 1.7, marginBottom: '10px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 10px' }}>
+                      ※ 必ず開けるリンクになるよう、<strong>アカウント名（英数字）</strong>か<strong>プロフィールのURL</strong>を入れてください。<br />
+                      「出店コネクトナビ」のような店名・表示名では開けません。URLは各アプリの「プロフィールをシェア」→「リンクをコピー」で取れます。
                     </div>
-                  ))
+                    <div style={{ fontSize: '12px', color: '#64748B', lineHeight: 1.7, marginBottom: '10px' }}>
+                      施設・企業の担当者が出店者を選ぶとき、SNSはよく見られます。<strong style={{ color: '#B45309' }}>Instagramだけでも登録をおすすめします。</strong>
+                    </div>
+                    {SNS_PLATFORMS.map(pf => (
+                      <div key={pf} style={{ marginBottom: '12px' }}>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{SNS_LABEL[pf]}</div>
+                        {/* 左に固定の「instagram.com/」を出し、アカウント名だけ入れてもらう。
+                            URLを丸ごと貼られてもアカウント名を取り出して入れ直す */}
+                        <div style={{ display: 'flex', alignItems: 'stretch', border: '1.5px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
+                          <span className='sns-prefix' style={{ display: 'flex', alignItems: 'center', padding: '0 10px', background: '#F8FAFC', color: '#64748B', borderRight: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{SNS_PREFIX[pf]}</span>
+                          <input
+                            value={snsForm[pf]}
+                            onChange={e => {
+                              const v = e.target.value
+                              if (/:\/\/|\.(com|be)\//i.test(v)) { const r = parseSns(pf, v); setSnsForm({ ...snsForm, [pf]: r.ok ? r.handle : v }); return }
+                              setSnsForm({ ...snsForm, [pf]: v })
+                            }}
+                            placeholder={SNS_PLACEHOLDER[pf]} autoCapitalize='none' autoCorrect='off' spellCheck={false}
+                            style={{ flex: 1, minWidth: 0, border: 'none', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }}
+                          />
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px', lineHeight: 1.6 }}>{SNS_HINT[pf]}</div>
+                      </div>
+                    ))}
+                  </>
                 )}
               </div>
             </div>

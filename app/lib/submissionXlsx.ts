@@ -18,6 +18,8 @@
 //   見出しの塗り: 出店者情報・販売メニュー = D9E1F2（イオン様式と同じ）
 //   メニュー表ヘッダ = EDF2F9（同じ色みの薄い方。見出しとの段差を残すため）
 
+import { snsHref } from './sns'
+
 export type SubmissionMenuItem = { name: string; detail: string; price: string }
 export type SubmissionSeller = {
   shopName: string
@@ -198,7 +200,7 @@ export async function exportPlaceSubmission(
     if (sub) {
       return {
         shopName: sub.shop_name || p.shop_name || p.name || '',
-        instagram: sub.instagram || '',
+        instagram: snsHref('instagram', sub.instagram) || sub.instagram || '',
         genre: genreLabel(sub.genre),
         takeoutBag: sub.takeout_bag || '',
         payments: paymentsLabel(sub.payment_methods),
@@ -207,7 +209,7 @@ export async function exportPlaceSubmission(
     }
     return {
       shopName: p.shop_name || p.name || '',
-      instagram: instaBySeller.get(a.seller_id) || '',
+      instagram: snsHref('instagram', instaBySeller.get(a.seller_id)) || instaBySeller.get(a.seller_id) || '',
       genre: genreLabel(p.genre),
       takeoutBag: p.takeout_bag || '',
       payments: paymentsLabel(p.payment_methods),

@@ -748,3 +748,8 @@ img[width='1'][height='1'] { display: inline !important; }
   .top3-gnav { gap: 10px !important; }
   .top3-gnav .top3-contact { padding: 8px 10px !important; }
 }
+
+/* SNS入力欄の左に出す固定の「instagram.com/」。
+   スマホでは入力欄が iOS の拡大防止で 16px になるので、接頭辞も同じ大きさにそろえる */
+.sns-prefix { font-size: 13px; }
+@media (max-width: 768px) { .sns-prefix { font-size: 16px; } }

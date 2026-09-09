@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { snsHref } from '../lib/sns'
 
 // 出店者が「この案件のために」入力した出店者情報を見せる。
 //
@@ -93,7 +94,9 @@ export default function SubmissionPanel({ placeId, sellerId }: { placeId: string
   const rows: [string, React.ReactNode][] = [
     ['店舗名', sub.shop_name || ''],
     ['Instagram', sub.instagram
-      ? <a href={sub.instagram} target='_blank' rel='noopener noreferrer' style={{ color: '#1D4ED8', wordBreak: 'break-all' }}>{sub.instagram}</a>
+      ? (snsHref('instagram', sub.instagram)
+        ? <a href={snsHref('instagram', sub.instagram)} target='_blank' rel='noopener noreferrer' style={{ color: '#1D4ED8', wordBreak: 'break-all' }}>{snsHref('instagram', sub.instagram)}</a>
+        : <span style={{ color: '#DC2626' }}>{sub.instagram}（リンクとして開けない形です。出店者にアカウント名で登録し直してもらってください）</span>)
       : ''],
     ['ジャンル', genreText(sub.genre)],
     ['テイクアウトの袋', sub.takeout_bag || ''],
