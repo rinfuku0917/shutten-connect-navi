@@ -53,13 +53,17 @@ export async function POST(req: Request) {
     // テストで作った出店をスケジュールから片づけるためのもので、
     // 実在の出店者・募集者に取消しの連絡が飛ぶと困る場面に使う。
     // 既定は今までどおり通知する（指定を忘れて黙って消えるのを防ぐ）
-    const { applicationId, reason, notify } = await req.json()
+    // force=true は「当日の進行の記録（搬入〜撤収）があっても取り消す」。
+    // テストで当日の進行まで押してしまった出店を片づけるためのもの。
+    // お金の記録（売上報告・請求書）がある場合は force でも取り消せない
+    const { applicationId, reason, notify, force } = await req.json()
     const silent = notify === false
+    const forced = force === true
     if (!applicationId) return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
 
     const { data: app, error: aErr } = await db
       .from('applications')
-      .select('id, seller_id, place_id, apply_date, status, checked_in_at')
+      .select('id, seller_id, place_id, apply_date, status, confirmed_at, checked_in_at, ready_at, opened_at, closed_at, left_at, checkin_seen_at')
       .eq('id', applicationId)
       .single()
     if (aErr || !app) return NextResponse.json({ error: '申込が見つかりません' }, { status: 404 })
@@ -85,17 +89,36 @@ export async function POST(req: Request) {
     //    （出店料0円の売上は invoices.sale_ids に入らないため、
     //      sale_ids ではなく seller_id と対象月で見る）
     const blockers: string[] = []
+    // 引っかかった種類。当日の記録だけなら運営が force で取り消せる
+    const kinds = new Set<'sales' | 'checkin' | 'invoice'>()
     // ⑶で見つけた請求書番号。⑷で同じ番号を二重に出さないため
     const seenInvoiceNos = new Set<string>()
 
     const { data: sales } = await db
       .from('sales').select('id, sale_date, revenue').eq('application_id', app.id)
     if (sales && sales.length > 0) {
-      blockers.push(`売上報告が${sales.length}件あります（${sales.map(s => s.sale_date).join('、')}）`)
+      kinds.add('sales')
+      blockers.push(
+        `売上報告が${sales.length}件あります（${sales.map(s => s.sale_date).join('、')}）`
+        + ' → 管理画面の「売上管理」でその報告を削除してから、もう一度お試しください',
+      )
     }
 
-    if (app.checked_in_at) {
-      blockers.push('当日の受付完了が記録されています（実際に出店されています）')
+    // 当日の進行（搬入・営業準備・営業開始・営業終了・撤収）を出店者が押した記録。
+    // 実際に現場に入った証拠なので、ふだんは止める。
+    // ただしお金の記録が無く、運営が「テストの片づけ」と判断したときは force で通す。
+    //
+    // checked_in_at（搬入）だけを見ると取りこぼす。出店者は押した工程を
+    // もう一度押して取り消せるので、「搬入だけ取り消して、撤収の記録は残っている」
+    // という状態が普通に作れる（app/api/onsite/route.ts の undo は1列ずつ）
+    const ONSITE_COLUMNS = ['confirmed_at', 'checked_in_at', 'ready_at', 'opened_at', 'closed_at', 'left_at'] as const
+    const hasOnsite = ONSITE_COLUMNS.some(c => (app as Record<string, unknown>)[c])
+    if (hasOnsite && !forced) {
+      kinds.add('checkin')
+      blockers.push(
+        '当日の進行（車両の搬入〜撤収）が記録されています。実際に出店されたものは取り消さないでください'
+        + ' → テストで押しただけなら、出店管理（スケジュール）からこの出店を開くと、記録ごと取り消せます',
+      )
     }
 
     if (app.apply_date) {
@@ -108,13 +131,14 @@ export async function POST(req: Request) {
         // 行き止まりになる）。voided_at が null のものだけが有効な請求書
         .is('voided_at', null)
       if (invs && invs.length > 0) {
+        kinds.add('invoice')
         for (const i of invs) seenInvoiceNos.add(i.invoice_no)
         const label = (s: string) =>
           s === 'paid' ? '入金確認済み' : s === 'reported' ? '振込報告済み' : '未入金'
         blockers.push(
           '請求書が発行されています（' +
           invs.map(i => `${i.invoice_no}／${label(String(i.paid_status))}`).join('、') +
-          '）',
+          '） → 「売上管理」でその請求書を取り消してから、もう一度お試しください',
         )
       }
     }
@@ -134,21 +158,30 @@ export async function POST(req: Request) {
         return its.some((it: { applicationId?: string }) => it?.applicationId === app.id)
       })
       if (hits.length > 0) {
+        kinds.add('invoice')
         const label = (s: string) =>
           s === 'paid' ? '入金確認済み' : s === 'reported' ? '振込報告済み' : '未入金'
         blockers.push(
           'この出店の事前請求が発行されています（' +
           hits.map(i => `${i.invoice_no}／${label(String(i.paid_status))}`).join('、') +
-          '）',
+          '） → 「売上管理」でその請求書を取り消してから、もう一度お試しください',
         )
       }
     }
 
     if (blockers.length > 0) {
+      // 当日の記録だけなら、運営が確認のうえ force で取り消せる。
+      // 売上報告や請求書があるときは、それを整理するまで取り消せない
+      const onlyCheckin = kinds.size === 1 && kinds.has('checkin')
       return NextResponse.json(
         {
-          error: 'この出店はお金の記録があるため取り消せません。売上と請求を先に整理してください。',
+          error: onlyCheckin
+            ? 'この出店には当日の進行の記録があるため、そのままでは取り消せません。'
+            : 'この出店はお金の記録があるため取り消せません。下の項目を先に整理してください。',
           blockers,
+          kinds: Array.from(kinds),
+          // 画面側で「当日の記録も消して取り消す」を出してよいか
+          canForce: onlyCheckin,
         },
         { status: 409 },
       )
@@ -161,13 +194,22 @@ export async function POST(req: Request) {
         status: 'cancelled',
         cancelled_at: new Date().toISOString(),
         cancelled_by: uid,
-        // 知らせずに取り消したことを記録に残す。
-        // あとから「なぜ連絡が来ていないのか」を追えるようにするため
+        // 知らせずに取り消したこと・当日の記録を消したことを記録に残す。
+        // あとから「なぜ連絡が来ていないのか」「なぜ記録が無いのか」を追えるようにするため
         cancel_reason: (() => {
           const r = typeof reason === 'string' && reason.trim() ? reason.trim() : null
-          if (!silent) return r
-          return r ? r + '（通知なしで取消し）' : '通知なしで取消し'
+          const tags: string[] = []
+          if (silent) tags.push('通知なしで取消し')
+          if (forced && hasOnsite) tags.push('当日の記録を消して取消し')
+          if (tags.length === 0) return r
+          return (r ? r + '（' : '') + tags.join('・') + (r ? '）' : '')
         })(),
+        // 当日の進行の記録は、取り消した出店に残しておく意味が無い。
+        // 残すと「撤収済み」の印が取り消した出店に付いたままになる
+        ...(forced && hasOnsite ? {
+          confirmed_at: null, checked_in_at: null, ready_at: null,
+          opened_at: null, closed_at: null, left_at: null, checkin_seen_at: null,
+        } : {}),
       })
       .eq('id', applicationId)
       .eq('status', 'approved')     // 同時に他から変わっていたら書き換えない

@@ -224,8 +224,13 @@ export default function PlaceApplicationsModal({
       if (!res.ok) {
         // お金の記録で止まった場合は、何が引っかかったのかを並べて出す
         const blockers: string[] = Array.isArray(json?.blockers) ? json.blockers : []
+        // 当日の記録だけで止まったときは、出店管理の画面から記録ごと取り消せる。
+        // ここには force の入口が無いので、どこへ行けばよいかを書き添える
+        const hint = json?.canForce === true
+          ? '\n\nテストで作った出店なら、「出店管理」のスケジュールからこの出店を開くと、当日の記録ごと取り消せます。'
+          : ''
         setCxErr((json?.error || '取り消せませんでした。') +
-          (blockers.length ? '\n\n・' + blockers.join('\n・') : ''))
+          (blockers.length ? '\n\n・' + blockers.join('\n・') : '') + hint)
         // お金の記録で止まった場合は、何度押しても結果は同じ。ボタンを押せなくする
         if (blockers.length > 0) setCxBlocked(true)
         return

@@ -112,24 +112,52 @@ export default function ScheduleCalendar({
   const [cancelSilent, setCancelSilent] = useState(false)
   const [cancelBusy, setCancelBusy] = useState(false)
   const [cancelErr, setCancelErr] = useState('')
+  // 止まった理由の一覧と、「当日の記録も消して取り消す」を出してよいか。
+  // 以前は error の1行しか出しておらず、売上を消しても止まる理由
+  // （当日の進行の記録）が分からなかった
+  const [cancelBlockers, setCancelBlockers] = useState<string[]>([])
+  const [cancelCanForce, setCancelCanForce] = useState(false)
 
-  const doCancel = async () => {
+  // 閉じるときは、止まった理由も force の導線も必ず消す。
+  // 背景タップだけリセットが漏れていて、次に開いた別の出店に
+  // 「当日の記録も消して取り消す」が最初から出ていた
+  const closeCancel = () => {
+    setCancelFor(null); setCancelErr(''); setCancelBlockers([]); setCancelCanForce(false)
+    setCancelReason(''); setCancelSilent(false)
+  }
+
+  const doCancel = async (force = false) => {
     if (!cancelFor || cancelBusy) return
     setCancelBusy(true); setCancelErr('')
     const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch('/api/applications/cancel-approved', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
-      body: JSON.stringify({
-        applicationId: cancelFor.applicationId,
-        reason: cancelReason.trim() || undefined,
-        notify: !cancelSilent,
-      }),
-    })
+    let res: Response
+    try {
+      res = await fetch('/api/applications/cancel-approved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+        body: JSON.stringify({
+          applicationId: cancelFor.applicationId,
+          reason: cancelReason.trim() || undefined,
+          notify: !cancelSilent,
+          force: force || undefined,
+        }),
+      })
+    } catch {
+      setCancelBusy(false)
+      // 止まった理由と force の導線は消さない。消すと、電波が切れただけで
+      // 「当日の記録も消して取り消す」が画面から無くなってしまう
+      setCancelErr('通信に失敗しました。電波の状態を確認して、もう一度お試しください。')
+      return
+    }
     const j = await res.json().catch(() => ({}))
     setCancelBusy(false)
-    if (!res.ok) { setCancelErr(j.error || '取り消せませんでした'); return }
-    setCancelFor(null); setCancelReason(''); setCancelSilent(false)
+    if (!res.ok) {
+      setCancelErr(j.error || '取り消せませんでした')
+      setCancelBlockers(Array.isArray(j.blockers) ? j.blockers : [])
+      setCancelCanForce(j.canForce === true)
+      return
+    }
+    closeCancel()
     setOpenSlot(null)
     load()
   }
@@ -663,7 +691,7 @@ export default function ScheduleCalendar({
                           テストで作った予定が本番の予定に混ざったままにならないよう、
                           作った側で片づけられるようにしている */}
                       <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px dashed #E2E8F0' }}>
-                        <button type='button' onClick={() => { setCancelFor(s); setCancelReason(''); setCancelSilent(false); setCancelErr('') }}
+                        <button type='button' onClick={() => { closeCancel(); setCancelFor(s) }}
                           style={{ background: '#fff', color: '#DC2626', border: '1.5px solid #FECACA', borderRadius: '8px', padding: '9px 16px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
                           この出店を取り消す（一覧から外す）
                         </button>
@@ -684,10 +712,13 @@ export default function ScheduleCalendar({
           window.confirm はアプリ内ブラウザで黙って無視されるため、
           画面の中に出す（管理画面のほかの確認と同じ作り） */}
       {cancelFor && (
-        <div onClick={() => !cancelBusy && setCancelFor(null)}
+        <div onClick={() => !cancelBusy && closeCancel()}
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ background: '#fff', borderRadius: '14px', padding: '22px 22px 18px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 50px rgba(0,0,0,.25)' }}>
+            style={{ background: '#fff', borderRadius: '14px', padding: '22px 22px 18px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 50px rgba(0,0,0,.25)',
+              // 止まった理由が増えると画面より縦に長くなり、
+              // 「取り消す」「やめる」が画面の外に出て押せなくなる。中でスクロールさせる
+              maxHeight: '100%', overflowY: 'auto' }}>
             <div style={{ fontSize: '15px', fontWeight: 900, color: '#B91C1C', marginBottom: '10px' }}>この出店を取り消します</div>
             <div style={{ fontSize: '13px', color: '#334155', lineHeight: 1.9, marginBottom: '14px' }}>
               <strong>{cancelFor.shopName}</strong>　{cancelFor.date}<br />
@@ -716,15 +747,53 @@ export default function ScheduleCalendar({
             )}
 
             {cancelErr && (
-              <div style={{ fontSize: '12.5px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', marginTop: '12px', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{cancelErr}</div>
+              <div style={{ fontSize: '12.5px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', marginTop: '12px', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                {cancelErr}
+                {/* 何が引っかかったかを1つずつ。次に何をすればいいかまで書いてある */}
+                {cancelBlockers.length > 0 && (
+                  <ul style={{ margin: '8px 0 0', paddingLeft: '18px' }}>
+                    {cancelBlockers.map((b, i) => <li key={i} style={{ marginBottom: '4px' }}>{b}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* 当日の記録しか無い（売上報告も請求書も無い）ときだけ出す。
+                テストで搬入〜撤収まで押してしまった出店を片づけるため */}
+            {cancelCanForce && (
+              <div style={{ marginTop: '12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 12px' }}>
+                <div style={{ fontSize: '12px', color: '#92400E', lineHeight: 1.8, marginBottom: '8px' }}>
+                  売上報告も請求書もありません。テストで当日の進行を押しただけなら、記録ごと消して取り消せます。<br />
+                  <span style={{ color: '#B45309' }}>実際に出店された記録なら、ここでは消さないでください。</span>
+                </div>
+                {/* 通知はここでも切り替えられるようにする。上のチェックまで戻らないと
+                    切り替えられないと、テストの片づけのつもりで本番のメールが飛ぶ */}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px', cursor: 'pointer' }}>
+                  <input type='checkbox' checked={cancelSilent} onChange={e => setCancelSilent(e.target.checked)} disabled={cancelBusy}
+                    style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', color: '#92400E', lineHeight: 1.7 }}>出店者・募集者へ知らせない</span>
+                </label>
+                <div style={{ fontSize: '11.5px', color: cancelSilent ? '#92400E' : '#B91C1C', marginBottom: '8px', lineHeight: 1.7 }}>
+                  {cancelSilent
+                    ? '取消しのお知らせは送られません。'
+                    : '※ このままだと、出店者・募集者に取消しのお知らせ（キャンセル料の案内を含む）が届きます。'}
+                </div>
+                <button type='button' onClick={() => doCancel(true)} disabled={cancelBusy}
+                  style={{ background: cancelBusy ? '#ccc' : '#B45309', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', fontSize: '12.5px', fontWeight: 900, cursor: cancelBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px', width: '100%' }}>
+                  {cancelBusy ? '取り消し中…' : '当日の記録も消して取り消す（テストデータの片づけ）'}
+                </button>
+              </div>
             )}
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
-              <button type='button' onClick={doCancel} disabled={cancelBusy}
-                style={{ background: cancelBusy ? '#ccc' : '#DC2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 22px', fontSize: '13px', fontWeight: 900, cursor: cancelBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
-                {cancelBusy ? '取り消し中…' : '取り消す'}
+              {/* 止まっている理由が出ているあいだは、同じことを繰り返すだけなので押せなくする。
+                  やることは上の案内（売上管理で整理する／記録ごと取り消す）のほう */}
+              <button type='button' onClick={() => doCancel(false)} disabled={cancelBusy || cancelBlockers.length > 0}
+                title={cancelBlockers.length > 0 ? '上の理由により取り消せません' : ''}
+                style={{ background: (cancelBusy || cancelBlockers.length > 0) ? '#ccc' : '#DC2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '11px 22px', fontSize: '13px', fontWeight: 900, cursor: (cancelBusy || cancelBlockers.length > 0) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+                {cancelBusy ? '取り消し中…' : cancelBlockers.length > 0 ? '取り消せません' : '取り消す'}
               </button>
-              <button type='button' onClick={() => setCancelFor(null)} disabled={cancelBusy}
+              <button type='button' onClick={closeCancel} disabled={cancelBusy}
                 style={{ background: '#fff', color: '#64748B', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '11px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
                 やめる
               </button>

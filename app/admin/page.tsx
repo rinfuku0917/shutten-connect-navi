@@ -2938,11 +2938,12 @@ const previewDoc = async (fileUrl: string) => {
                         )
                       })()}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <button type='button' onClick={() => { setRejectErr(null); setDecideNotify(true); setDecideAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'approved' }) }} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>承認</button>
-                      <button type='button' onClick={() => { setRejectErr(null); setDecideNotify(true); setDecideAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'rejected' }) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>不採用</button>
+                    {/* スマホではボタンが6つ横に並ばず、文字が1字ずつ縦に潰れていた。折り返す */}
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button type='button' onClick={() => { setRejectErr(null); setDecideNotify(true); setDecideAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'approved' }) }} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px', whiteSpace: 'nowrap' }}>承認</button>
+                      <button type='button' onClick={() => { setRejectErr(null); setDecideNotify(true); setDecideAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'rejected' }) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px', whiteSpace: 'nowrap' }}>不採用</button>
                       {a.sellerId && (
-                        <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>プロフィールを見る</a>
+                        <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>プロフィールを見る</a>
                       )}
                       {/* この案件のために入力した現場情報。あれば青、無ければ灰色で「未入力」と分かるようにする */}
                       <button
@@ -2953,13 +2954,13 @@ const previewDoc = async (fileUrl: string) => {
                           background: openSubAppId === a.id ? '#1D4ED8' : a.hasSubmission ? '#EFF6FF' : '#fff',
                           color: openSubAppId === a.id ? '#fff' : a.hasSubmission ? '#1D4ED8' : '#94A3B8',
                           border: '1px solid ' + (a.hasSubmission ? '#BFDBFE' : '#E2E8F0'),
-                          borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+                          borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap',
                         }}
                       >
                         {a.hasSubmission ? '現場情報あり' : '現場情報（未入力）'} {openSubAppId === a.id ? '▲' : '›'}
                       </button>
-                      <button onClick={() => openSellerDocs(a.sellerId, a.sellerName)} title={a.sellerName + ' の書類を開きます'} style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>書類を確認</button>
-                      <button onClick={() => exportPendingCsv([a], a.sellerName)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>社内確認用CSV</button>
+                      <button onClick={() => openSellerDocs(a.sellerId, a.sellerName)} title={a.sellerName + ' の書類を開きます'} style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>書類を確認</button>
+                      <button onClick={() => exportPendingCsv([a], a.sellerName)} style={{ background: '#fff', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>社内確認用CSV</button>
                     </div>
                     {/* 押したら、この案件のために入力した内容をそのまま出す。見てから承認に進める */}
                     {openSubAppId === a.id && a.placeId && a.sellerId && (
