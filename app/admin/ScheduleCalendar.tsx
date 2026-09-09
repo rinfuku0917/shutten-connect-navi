@@ -123,7 +123,7 @@ export default function ScheduleCalendar({
   // 「当日の記録も消して取り消す」が最初から出ていた
   const closeCancel = () => {
     setCancelFor(null); setCancelErr(''); setCancelBlockers([]); setCancelCanForce(false)
-    setCancelReason(''); setCancelSilent(false)
+    setCancelCanPurge(false); setCancelReason(''); setCancelSilent(false)
   }
 
   const doCancel = async (force = false) => {
@@ -155,11 +155,38 @@ export default function ScheduleCalendar({
       setCancelErr(j.error || '取り消せませんでした')
       setCancelBlockers(Array.isArray(j.blockers) ? j.blockers : [])
       setCancelCanForce(j.canForce === true)
+      // すでに取り消し済みなら、この画面からそのまま消せるようにする。
+      // 「取り消したのに一覧に残る」が片づかない、が今回の困りごとの本体
+      setCancelCanPurge(j.error === 'この出店はすでに取り消されています')
       return
     }
     closeCancel()
     setOpenSlot(null)
     load()
+  }
+
+  // 取り消し済みの出店を、記録ごと完全に消す（テストデータの片づけ）
+  const [cancelCanPurge, setCancelCanPurge] = useState(false)
+  const doPurge = async () => {
+    if (!cancelFor || cancelBusy) return
+    setCancelBusy(true); setCancelErr('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+        body: JSON.stringify({ action: 'application', id: cancelFor.applicationId }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setCancelErr(j.error || '削除できませんでした'); return }
+      closeCancel()
+      setOpenSlot(null)
+      load()
+    } catch {
+      setCancelErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setCancelBusy(false)
+    }
   }
 
   const token = async () => {
@@ -755,6 +782,20 @@ export default function ScheduleCalendar({
                     {cancelBlockers.map((b, i) => <li key={i} style={{ marginBottom: '4px' }}>{b}</li>)}
                   </ul>
                 )}
+              </div>
+            )}
+
+            {/* すでに取り消してあった場合。一覧から消す導線をその場で出す */}
+            {cancelCanPurge && (
+              <div style={{ marginTop: '12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+                <div style={{ fontSize: '12px', color: '#B91C1C', lineHeight: 1.8, marginBottom: '8px' }}>
+                  この出店はすでに取り消してあります。一覧から消したい場合は、下から削除できます。<br />
+                  <span style={{ color: '#DC2626' }}>記録が残らないため元に戻せません。テストで作ったものの片づけにお使いください。</span>
+                </div>
+                <button type='button' onClick={doPurge} disabled={cancelBusy}
+                  style={{ background: cancelBusy ? '#ccc' : '#DC2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', fontSize: '12.5px', fontWeight: 900, cursor: cancelBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '44px', width: '100%' }}>
+                  {cancelBusy ? '削除中…' : '一覧から完全に削除する'}
+                </button>
               </div>
             )}
 
