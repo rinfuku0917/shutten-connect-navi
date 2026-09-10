@@ -116,6 +116,17 @@ function NewPlacePageInner() {
   const [bulkPlaceFee, setBulkPlaceFee] = useState('')
   const [bulkCompanyFee, setBulkCompanyFee] = useState('')
 
+  // 毎月おなじ条件で翌月の日程を足す設定。
+  // 常設の案件では毎月31日ぶんを手で入れ直していて、入れ忘れると募集が止まる
+  const [repOn, setRepOn] = useState(false)
+  const [repDows, setRepDows] = useState<number[]>([0,1,2,3,4,5,6])
+  const [repStart, setRepStart] = useState('選択してください')
+  const [repEnd, setRepEnd] = useState('選択してください')
+  const [repPlaceFee, setRepPlaceFee] = useState('')
+  const [repCompanyFee, setRepCompanyFee] = useState('')
+  const [repLastAt, setRepLastAt] = useState<string | null>(null)
+  const [repLastAdded, setRepLastAdded] = useState<number | null>(null)
+
   // その条件で入る日付。押す前に件数を出すため、画面からも使う
   const bulkDates = (() => {
     if(!bulkFrom || !bulkTo) return [] as string[]
@@ -201,6 +212,13 @@ function NewPlacePageInner() {
       map_url: form.mapUrl,
       recruit: form['募集内容'],
       schedule: schedule,
+      // 毎月おなじ条件で翌月の日程を足す設定
+      repeat_monthly: repOn,
+      repeat_dows: repOn ? repDows : null,
+      repeat_start: repOn && repStart !== '選択してください' ? repStart : null,
+      repeat_end: repOn && repEnd !== '選択してください' ? repEnd : null,
+      repeat_place_fee: repOn && repPlaceFee.trim() !== '' ? Number(repPlaceFee) : null,
+      repeat_company_fee: repOn && repCompanyFee.trim() !== '' ? Number(repCompanyFee) : null,
       genres: genres,
       image_url: imageUrls[0] || '',
       images: imageUrls,
@@ -432,6 +450,78 @@ async function refreshPublicPages(placeId?: string) {
                       style={{marginTop:'10px',background:bulkDates.length===0?'#ccc':'#1D4ED8',color:'#fff',border:'none',borderRadius:'8px',padding:'11px 20px',fontSize:'13px',fontWeight:900,cursor:bulkDates.length===0?'not-allowed':'pointer',fontFamily:'inherit',minHeight:'44px'}}>
                       この条件で追加する
                     </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 毎月おなじ条件で翌月の日程を足す。
+                  常設の案件では毎月31日ぶんを手で入れ直していた */}
+              <div style={{marginTop:'10px',border:'1.5px solid #A7F3D0',borderRadius:'10px',background:'#F0FDF4',padding:'12px 14px'}}>
+                <label style={{display:'flex',alignItems:'flex-start',gap:'8px',cursor:'pointer'}}>
+                  <input type='checkbox' checked={repOn} onChange={e=>setRepOn(e.target.checked)} style={{marginTop:'3px',width:'18px',height:'18px',flexShrink:0,accentColor:'#16A34A'}}/>
+                  <span style={{fontSize:'13px',fontWeight:700,color:'#15803D',lineHeight:1.7}}>
+                    毎月おなじ条件で、翌月の日程を自動で足す<br />
+                    <span style={{fontSize:'11.5px',fontWeight:400,color:'#64748B'}}>
+                      毎月1日に、下の曜日・時間・料金で翌月ぶんが入ります。入ったらメールでお知らせします。
+                    </span>
+                  </span>
+                </label>
+
+                {repOn && (
+                  <div style={{marginTop:'12px'}}>
+                    <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>出店する曜日</label>
+                    <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginTop:'6px'}}>
+                      {['日','月','火','水','木','金','土'].map((w,idx)=>{
+                        const on = repDows.includes(idx)
+                        return (
+                          <button key={w} type='button'
+                            onClick={()=>setRepDows(prev=>on ? prev.filter(x=>x!==idx) : [...prev,idx])}
+                            style={{minWidth:'44px',minHeight:'44px',borderRadius:'8px',border:on?'1.5px solid #16A34A':'1.5px solid #E2E8F0',background:on?'#16A34A':'#fff',color:on?'#fff':(idx===0?'#DC2626':idx===6?'#1D4ED8':'#64748B'),fontSize:'13px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                            {w}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'8px'}}>
+                      <button type='button' onClick={()=>setRepDows([0,1,2,3,4,5,6])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>毎日</button>
+                      <button type='button' onClick={()=>setRepDows([1,2,3,4,5])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>平日だけ</button>
+                      <button type='button' onClick={()=>setRepDows([0,6])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>土日だけ</button>
+                    </div>
+
+                    <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'12px'}}>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>販売開始</label>
+                        <select value={repStart} onChange={e=>setRepStart(e.target.value)} style={{...inputStyle,marginTop:'4px'}}>{times.map(t=><option key={t}>{t}</option>)}</select>
+                      </div>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>販売終了</label>
+                        <select value={repEnd} onChange={e=>setRepEnd(e.target.value)} style={{...inputStyle,marginTop:'4px'}}>{times.map(t=><option key={t}>{t}</option>)}</select>
+                      </div>
+                    </div>
+
+                    <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'12px'}}>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:'700',color:'#B45309'}}>取引先へ渡す額（円）</label>
+                        <input inputMode='numeric' value={repPlaceFee} onChange={e=>setRepPlaceFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='例：2000' style={{...inputStyle,marginTop:'4px'}}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:'700',color:'#1D4ED8'}}>弊社の固定額（円）</label>
+                        <input inputMode='numeric' value={repCompanyFee} onChange={e=>setRepCompanyFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='空欄可' style={{...inputStyle,marginTop:'4px'}}/>
+                      </div>
+                    </div>
+
+                    <div style={{fontSize:'11px',color:'#64748B',marginTop:'8px',lineHeight:1.8}}>
+                      ・募集を終了した案件には足しません。<br />
+                      ・日程の上限は31日です。足す前に、終わった日は日程から外れます。<br />
+                      ・平日と土日で金額が違う場合は、この設定では片方の金額になります。「日によって金額を変える」で個別に直してください。
+                    </div>
+
+                    {repLastAt && (
+                      <div style={{fontSize:'11.5px',color:'#15803D',marginTop:'8px',fontWeight:700}}>
+                        前回の自動追加：{new Date(repLastAt).toLocaleString('ja-JP')}
+                        {repLastAdded != null && `（${repLastAdded}日ぶん）`}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

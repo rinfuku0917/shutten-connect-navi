@@ -141,6 +141,54 @@ export default function AdminPage() {
   const [cancelAppReason, setCancelAppReason] = useState('')
   const [cancelAppBusy, setCancelAppBusy] = useState(false)
   const [cancelAppErr, setCancelAppErr] = useState<string | null>(null)
+  // 出店日の振り替え。「日程を間違えてエントリーした」という連絡に、
+  // 取り消して入れ直してもらう以外の手が無かった
+  const [chgAsk, setChgAsk] = useState<{ id: string; seller: string; place: string; placeId: string; date: string } | null>(null)
+  const [chgDate, setChgDate] = useState('')
+  const [chgReason, setChgReason] = useState('')
+  const [chgNotify, setChgNotify] = useState(true)
+  const [chgBusy, setChgBusy] = useState(false)
+  const [chgErr, setChgErr] = useState<string | null>(null)
+  // その案件で選べる日程。案件の日程に無い日へは振り替えられない
+  const [chgDays, setChgDays] = useState<string[]>([])
+  const openChange = async (a: { id: string; sellerName: string; placeTitle: string; placeId: string; apply_date: string | null }) => {
+    setChgErr(null); setChgReason(''); setChgNotify(true); setChgDate('')
+    setChgAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, placeId: a.placeId, date: a.apply_date || '' })
+    setChgDays([])
+    if (!a.placeId) return
+    const { data } = await supabase.from('places').select('schedule').eq('id', a.placeId).maybeSingle()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sched: any[] = Array.isArray(data?.schedule) ? data.schedule : []
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    setChgDays(sched.map(d => String(d?.date || '')).filter(d => d && d >= today && d !== a.apply_date).sort())
+  }
+  const runChange = async () => {
+    if (!chgAsk || chgBusy) return
+    if (!chgDate) { setChgErr('新しい出店日を選んでください。'); return }
+    setChgBusy(true); setChgErr(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/applications/change-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+        body: JSON.stringify({ applicationId: chgAsk.id, newDate: chgDate, reason: chgReason.trim() || undefined, notify: chgNotify }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const blockers: string[] = Array.isArray(j?.blockers) ? j.blockers : []
+        setChgErr((j.error || '変更できませんでした') + (blockers.length ? '\n\n・' + blockers.join('\n・') : ''))
+        return
+      }
+      setChgAsk(null)
+      showNotice('出店日を変更しました。', 'ok')
+      loadPendingApps()
+    } catch {
+      setChgErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setChgBusy(false)
+    }
+  }
+
   const runCancelApp = async () => {
     if (!cancelAppAsk || cancelAppBusy) return
     setCancelAppBusy(true); setCancelAppErr(null)
@@ -3056,6 +3104,10 @@ const previewDoc = async (fileUrl: string) => {
                       <button type='button' onClick={() => { setCancelAppErr(null); setCancelAppReason(''); setCancelAppAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, date: a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP') : '' }) }}
                         title='日程の間違いなど、出店者から連絡を受けてこの申込を取り消します（不採用の通知は送りません）'
                         style={{ background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px', whiteSpace: 'nowrap' }}>申込を取り消す</button>
+                      {/* 日付だけ間違えている場合は、取り消して入れ直すより振り替えるほうが早い */}
+                      <button type='button' onClick={() => openChange({ id: a.id, sellerName: a.sellerName, placeTitle: a.placeTitle, placeId: a.placeId, apply_date: a.apply_date })}
+                        title='出店日だけを別の日に振り替えます'
+                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px', whiteSpace: 'nowrap' }}>出店日を変える</button>
                       {a.sellerId && (
                         <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>プロフィールを見る</a>
                       )}
@@ -3696,6 +3748,62 @@ const previewDoc = async (fileUrl: string) => {
       )}
 
       {/* 案件一覧で申込数を押したときに出す、その案件の応募者一覧 */}
+      {/* 出店日の振り替え。案件の日程に入っている日だけを選べる */}
+      <ConfirmDialog
+        open={!!chgAsk}
+        busy={chgBusy}
+        error={chgErr}
+        title='出店日を変えますか？'
+        body={
+          chgAsk
+            ? `${chgAsk.seller}／${chgAsk.place}\n\n` +
+              `いまの出店日：${chgAsk.date ? new Date(chgAsk.date).toLocaleDateString('ja-JP') : '（日付なし）'}`
+            : ''
+        }
+        extra={
+          chgAsk ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>新しい出店日</div>
+                {chgDays.length === 0 ? (
+                  <div style={{ fontSize: '12.5px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', lineHeight: 1.8 }}>
+                    この案件に、これから先の空いている日程がありません。<br />
+                    先に案件の編集画面で日程を足してから、もう一度お試しください。
+                  </div>
+                ) : (
+                  <select value={chgDate} onChange={e => setChgDate(e.target.value)} disabled={chgBusy}
+                    style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '16px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit', background: '#fff' }}>
+                    <option value=''>選んでください</option>
+                    {chgDays.map(d => <option key={d} value={d}>{new Date(d).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}</option>)}
+                  </select>
+                )}
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '5px', lineHeight: 1.7 }}>
+                  案件の日程に入っている、これから先の日だけを選べます。
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・記録に残ります）</div>
+                <input value={chgReason} onChange={e => setChgReason(e.target.value)} disabled={chgBusy}
+                  placeholder='例：出店者の申し出（日程の間違い）'
+                  style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '16px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }} />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                <input type='checkbox' checked={chgNotify} onChange={e => setChgNotify(e.target.checked)} disabled={chgBusy}
+                  style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
+                <span style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.8 }}>
+                  出店者・募集者・運営へ知らせる<br />
+                  <span style={{ color: '#94A3B8' }}>変更前と変更後の日付を書いたお知らせが届きます。テストの片づけならチェックを外してください。</span>
+                </span>
+              </label>
+            </div>
+          ) : null
+        }
+        okLabel='この日に変える'
+        okDisabled={chgDays.length === 0 || !chgDate}
+        onOk={runChange}
+        onCancel={() => { if (!chgBusy) { setChgAsk(null); setChgErr(null) } }}
+      />
+
       {/* 審査中の申込の取消し。不採用とは別物なので、通知の扱いも変える */}
       <ConfirmDialog
         open={!!cancelAppAsk}
