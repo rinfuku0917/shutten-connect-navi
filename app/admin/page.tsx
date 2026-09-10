@@ -530,11 +530,20 @@ export default function AdminPage() {
     const { data: { session } } = await supabase.auth.getSession()
     const uid = session?.user?.id || null
     setAdminUid(uid)
-    const { data: apps } = await supabase
+    // profiles への関係が seller_id と cancelled_by の2本あるため、
+    // profiles(name) と書くとどちらか決まらず、1件も返らない。
+    // 出店者のほうを名指しする（取消しを入れた時点からここが空になっていた）
+    const { data: apps, error: appsErr } = await supabase
       .from('applications')
-      .select('id, seller_id, status, apply_date, places(title), profiles(name)')
+      .select('id, seller_id, status, apply_date, places(title), profiles!applications_seller_id_fkey(name, shop_name)')
       .in('status', ['approved', 'pending'])
       .order('created_at', { ascending: false })
+    if (appsErr) {
+      console.error('メッセージ一覧の読み込みに失敗しました', appsErr.message)
+      showNotice('メッセージ一覧を読み込めませんでした: ' + appsErr.message)
+      setThreads([])
+      return
+    }
     // 申込を絞ってから、そのスレッドのメッセージだけを引く。
     // 全件取ってから総当たりで突き合わせると、やり取りが増えるほど重くなる
     const appIds = (apps || []).map((a: any) => a.id)
@@ -556,7 +565,7 @@ export default function AdminPage() {
     }
     const list: MsgThread[] = (apps || []).map((a: any) => {
       const last = lastOf.get(a.id)
-      return { application_id: a.id, sellerName: a.profiles?.name || '(出店者)', placeTitle: a.places?.title || '(案件名なし)', lastBody: last ? (last.body || '📎 添付ファイル') : 'メッセージはまだありません', unread: unreadOf.get(a.id) || 0, status: a.status as string, applyDate: (a.apply_date as string) || null }
+      return { application_id: a.id, sellerName: a.profiles?.shop_name || a.profiles?.name || '(出店者)', placeTitle: a.places?.title || '(案件名なし)', lastBody: last ? (last.body || '📎 添付ファイル') : 'メッセージはまだありません', unread: unreadOf.get(a.id) || 0, status: a.status as string, applyDate: (a.apply_date as string) || null }
     })
     setThreads(list)
   }
@@ -1593,9 +1602,10 @@ const previewDoc = async (fileUrl: string) => {
     const totalAppsRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).neq('status', 'cancelled')
     const approvedAppsRes = await supabase.from('applications').select('id', { count: 'exact', head: true }).eq('status', 'approved')
     setStatCounts({ sellers: sellerRes.count || 0, hosts: hostRes.count || 0, places: placeRes.count || 0, monthApps: monthRes.count || 0, gmv, fee: feeTotal, totalApps: totalAppsRes.count || 0, approvedApps: approvedAppsRes.count || 0 })
-    const { data: apps } = await supabase.from('applications').select('id, status, apply_date, places(title), profiles(name)').order('apply_date', { ascending: false }).limit(3)
+    // ここも profiles への関係が2本あるため、出店者のほうを名指しする
+    const { data: apps } = await supabase.from('applications').select('id, status, apply_date, places(title), profiles!applications_seller_id_fkey(name, shop_name)').order('apply_date', { ascending: false }).limit(3)
     const statusJa = (s: string) => s === 'approved' ? '承認済' : s === 'rejected' ? '否認' : s === 'cancelled' ? '取消し' : '審査中'
-    setRecentApps((apps || []).map((a: any) => ({ id: a.id, name: a.profiles?.name || '(出店者)', place: a.places?.title || '(案件名なし)', date: a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '', status: statusJa(a.status) })))
+    setRecentApps((apps || []).map((a: any) => ({ id: a.id, name: a.profiles?.shop_name || a.profiles?.name || '(出店者)', place: a.places?.title || '(案件名なし)', date: a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '', status: statusJa(a.status) })))
   }
   const stats = [
     { label: '総出店者数', value: statCounts.sellers.toLocaleString(), color: '#F5A623' },
