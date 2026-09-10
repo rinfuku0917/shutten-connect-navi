@@ -119,6 +119,10 @@ function EditPlacePageInner() {
   const [bulkStart, setBulkStart] = useState('選択してください')
   const [bulkEnd, setBulkEnd] = useState('選択してください')
   const [bulkOpen, setBulkOpen] = useState(false)
+  // まとめて入れる日の料金。入れた金額を、追加する全部の日に同じように入れる。
+  // これが無いと、31日ぶん追加したあとに1日ずつ金額を打ち直すことになる
+  const [bulkPlaceFee, setBulkPlaceFee] = useState('')
+  const [bulkCompanyFee, setBulkCompanyFee] = useState('')
 
   // その条件で入る日付。押す前に件数を出すため、画面からも使う
   const bulkDates = (() => {
@@ -145,10 +149,16 @@ function EditPlacePageInner() {
     setSchedule(prev=>{
       const kept = prev.filter(d=>d.date)
       const room = 31 - kept.length
+      const pf = bulkPlaceFee.trim() === '' ? undefined : Number(bulkPlaceFee)
+      const cf = bulkCompanyFee.trim() === '' ? undefined : Number(bulkCompanyFee)
       return [...kept, ...dates.slice(0, Math.max(0, room)).map(date=>({
         date, start: bulkStart, end: bulkEnd,
+        ...(pf != null ? { placeFee: pf } : {}),
+        ...(cf != null ? { companyFee: cf } : {}),
       }))]
     })
+    // 金額を入れたのに入力欄が閉じていると、入った金額が見えない
+    if(bulkPlaceFee.trim() !== '' || bulkCompanyFee.trim() !== '') setPerDayOn(true)
     setBulkOpen(false)
   }
   const req = <span style={{background:'#F5A623',color:'#fff',fontSize:'11px',padding:'2px 8px',borderRadius:'999px',marginLeft:'8px',fontWeight:'700'}}>必須</span>
@@ -435,6 +445,27 @@ async function refreshPublicPages(placeId?: string) {
                       <div>
                         <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>販売終了</label>
                         <select value={bulkEnd} onChange={e=>setBulkEnd(e.target.value)} style={{...inputStyle,marginTop:'4px'}}>{times.map(t=><option key={t}>{t}</option>)}</select>
+                      </div>
+                    </div>
+
+                    {/* 追加する全部の日に同じ金額を入れる。
+                        ここが無いと、31日ぶん入れたあとに1日ずつ打ち直すことになっていた */}
+                    <div style={{marginTop:'12px',paddingTop:'12px',borderTop:'1px solid #DBEAFE'}}>
+                      <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>この期間の料金（任意）</label>
+                      <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'6px'}}>
+                        <div>
+                          <label style={{fontSize:'12px',fontWeight:'700',color:'#B45309'}}>取引先へ渡す額（円）</label>
+                          <input inputMode='numeric' value={bulkPlaceFee} onChange={e=>setBulkPlaceFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='例：2000' style={{...inputStyle,marginTop:'4px'}}/>
+                        </div>
+                        <div>
+                          <label style={{fontSize:'12px',fontWeight:'700',color:'#1D4ED8'}}>弊社の固定額（円）</label>
+                          <input inputMode='numeric' value={bulkCompanyFee} onChange={e=>setBulkCompanyFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='空欄可' style={{...inputStyle,marginTop:'4px'}}/>
+                        </div>
+                      </div>
+                      <div style={{fontSize:'11px',color:'#64748B',marginTop:'6px',lineHeight:1.7}}>
+                        入れると、追加する{bulkDates.length>0 ? bulkDates.length + '日' : 'すべての日'}に同じ金額が入ります。
+                        空欄のままなら「料金設定」の金額が使われます。<br />
+                        平日と土日で金額が違う場合は、曜日を分けて2回追加してください（例：平日だけで1回、土日だけでもう1回）。
                       </div>
                     </div>
 
