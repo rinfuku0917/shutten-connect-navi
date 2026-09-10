@@ -717,6 +717,19 @@ export default function PlaceApplicationsModal({
                                       完全に削除
                                     </button>
                                   )}
+                                  {/* 審査中の申込も取り消せるようにする。
+                                      「日程を間違えてエントリーした」という連絡に、
+                                      これまでは「不採用」しか手が無かった */}
+                                  {r.status === 'pending' && (
+                                    <button
+                                      type='button'
+                                      onClick={() => { setCxErr(null); setCxReason(''); setCxBlocked(false); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                      title='日程の間違いなど、出店者から連絡を受けてこの申込を取り消します（不採用の通知は送りません）'
+                                      style={{ marginLeft: 'auto', background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                    >
+                                      申込を取り消す
+                                    </button>
+                                  )}
                                   {r.status === 'approved' && (
                                     <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
                                       <button

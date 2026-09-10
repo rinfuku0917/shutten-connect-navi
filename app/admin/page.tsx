@@ -135,6 +135,37 @@ export default function AdminPage() {
   // 承認・不採用の確認。status で文面を切り替える
   const [decideAsk, setDecideAsk] = useState<{ id: string; seller: string; place: string; status: 'approved' | 'rejected' } | null>(null)
   const [decideNotify, setDecideNotify] = useState(true)
+  // 審査中の申込を取り消す。「日程を間違えてエントリーした」という連絡に、
+  // これまでは「不採用」しか手が無く、出店者に不採用の通知が飛んでしまっていた
+  const [cancelAppAsk, setCancelAppAsk] = useState<{ id: string; seller: string; place: string; date: string } | null>(null)
+  const [cancelAppReason, setCancelAppReason] = useState('')
+  const [cancelAppBusy, setCancelAppBusy] = useState(false)
+  const [cancelAppErr, setCancelAppErr] = useState<string | null>(null)
+  const runCancelApp = async () => {
+    if (!cancelAppAsk || cancelAppBusy) return
+    setCancelAppBusy(true); setCancelAppErr(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/applications/cancel-approved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+        body: JSON.stringify({ applicationId: cancelAppAsk.id, reason: cancelAppReason.trim() || undefined }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const blockers: string[] = Array.isArray(j?.blockers) ? j.blockers : []
+        setCancelAppErr((j.error || '取り消せませんでした') + (blockers.length ? '\n\n・' + blockers.join('\n・') : ''))
+        return
+      }
+      setCancelAppAsk(null); setCancelAppReason('')
+      showNotice('申込を取り消しました。', 'ok')
+      loadPendingApps()
+    } catch {
+      setCancelAppErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setCancelAppBusy(false)
+    }
+  }
   // 出店者名で書類を探す（人数が多く、目当ての人を見つけにくいため）
   const [docKw, setDocKw] = useState('')
   const [docFilter, setDocFilter] = useState<'all' | 'pending' | 'expiring'>('all')
@@ -3020,6 +3051,11 @@ const previewDoc = async (fileUrl: string) => {
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <button type='button' onClick={() => { setRejectErr(null); setDecideNotify(true); setDecideAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'approved' }) }} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px', whiteSpace: 'nowrap' }}>承認</button>
                       <button type='button' onClick={() => { setRejectErr(null); setDecideNotify(true); setDecideAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, status: 'rejected' }) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px', whiteSpace: 'nowrap' }}>不採用</button>
+                      {/* 日程の間違いなど、出店者からの申し出で取り消すとき。
+                          不採用にすると相手に不採用の通知が飛んでしまう */}
+                      <button type='button' onClick={() => { setCancelAppErr(null); setCancelAppReason(''); setCancelAppAsk({ id: a.id, seller: a.sellerName, place: a.placeTitle, date: a.apply_date ? new Date(a.apply_date).toLocaleDateString('ja-JP') : '' }) }}
+                        title='日程の間違いなど、出店者から連絡を受けてこの申込を取り消します（不採用の通知は送りません）'
+                        style={{ background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px', whiteSpace: 'nowrap' }}>申込を取り消す</button>
                       {a.sellerId && (
                         <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>プロフィールを見る</a>
                       )}
@@ -3660,6 +3696,35 @@ const previewDoc = async (fileUrl: string) => {
       )}
 
       {/* 案件一覧で申込数を押したときに出す、その案件の応募者一覧 */}
+      {/* 審査中の申込の取消し。不採用とは別物なので、通知の扱いも変える */}
+      <ConfirmDialog
+        open={!!cancelAppAsk}
+        busy={cancelAppBusy}
+        error={cancelAppErr}
+        title='この申込を取り消しますか？'
+        body={
+          cancelAppAsk
+            ? `${cancelAppAsk.seller}／${cancelAppAsk.place}${cancelAppAsk.date ? '（' + cancelAppAsk.date + '）' : ''}\n\n` +
+              '日程の間違いなど、出店者からの申し出で取り消すときにお使いください。\n' +
+              '出店者へ不採用の通知は送りません。募集者と運営には取消しのお知らせが届きます。'
+            : ''
+        }
+        extra={
+          cancelAppAsk ? (
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・記録に残ります）</div>
+              <input value={cancelAppReason} onChange={e => setCancelAppReason(e.target.value)} disabled={cancelAppBusy}
+                placeholder='例：出店者の申し出（日程の間違い）'
+                style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }} />
+            </div>
+          ) : null
+        }
+        okLabel='取り消す'
+        danger
+        onOk={runCancelApp}
+        onCancel={() => { if (!cancelAppBusy) { setCancelAppAsk(null); setCancelAppErr(null) } }}
+      />
+
       <ConfirmDialog
         open={!!decideAsk}
         busy={rejectBusy}

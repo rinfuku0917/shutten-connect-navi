@@ -1953,7 +1953,26 @@ export default function SellerDashboard() {
                 {docTypes.map(doc => {
                   const rec = myDocs.find(d => d.doc_type === doc.key)
                   const status = docStatusLabel(rec?.status)
-                  const border = status === '承認済' ? '#86EFAC' : status === '審査中' ? '#FCD34D' : status === '否認' ? '#FCA5A5' : '#E2E8F0'
+                  // 有効期限の残り。管理画面と同じ基準（30日以内で注意、過ぎたら期限切れ）。
+                  // これまで出店者側には日付だけが出ていて、期限が近いことに
+                  // 気づけなかった。更新を促す文言をここで出す
+                  const exp = (() => {
+                    // 免許の裏面は表面と期限を共有しているので、表面の期限を見る
+                    const src = doc.key === 'license_back'
+                      ? myDocs.find(x => x.doc_type === 'license_front')?.expiry_date
+                      : rec?.expiry_date
+                    if (!src) return null
+                    const today = new Date(); today.setHours(0, 0, 0, 0)
+                    const d = new Date(src); d.setHours(0, 0, 0, 0)
+                    if (Number.isNaN(d.getTime())) return null
+                    const days = Math.round((d.getTime() - today.getTime()) / 86400000)
+                    if (days < 0) return { days, level: 'over' as const }
+                    if (days <= 30) return { days, level: 'soon' as const }
+                    return { days, level: 'ok' as const }
+                  })()
+                  const border = exp && exp.level === 'over' ? '#FCA5A5'
+                    : exp && exp.level === 'soon' ? '#FCD34D'
+                    : status === '承認済' ? '#86EFAC' : status === '審査中' ? '#FCD34D' : status === '否認' ? '#FCA5A5' : '#E2E8F0'
                   const badgeBg = status === '承認済' ? '#ECFDF5' : status === '審査中' ? '#FEF3C7' : status === '否認' ? '#FEE2E2' : '#F1F5F9'
                   const badgeColor = status === '承認済' ? '#16A34A' : status === '審査中' ? '#92400E' : status === '否認' ? '#DC2626' : '#64748B'
                   const isUploading = uploadingType === doc.key
@@ -1969,7 +1988,32 @@ export default function SellerDashboard() {
                           ボタンを次の行へ落とす */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                         <div style={{ flex: 1, minWidth: '150px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>{doc.name} {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}</div>
+                          <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>
+                            {doc.name}
+                            {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}
+                            {/* 期限が近い・過ぎている書類は、名前のすぐ横で知らせる */}
+                            {exp && exp.level === 'over' && (
+                              <span style={{ fontSize: '10px', color: '#fff', background: '#DC2626', padding: '2px 7px', borderRadius: '3px', marginLeft: '6px', fontWeight: 900 }}>
+                                期限切れ（{-exp.days}日超過）
+                              </span>
+                            )}
+                            {exp && exp.level === 'soon' && (
+                              <span style={{ fontSize: '10px', color: '#fff', background: '#D97706', padding: '2px 7px', borderRadius: '3px', marginLeft: '6px', fontWeight: 900 }}>
+                                あと{exp.days}日
+                              </span>
+                            )}
+                          </div>
+                          {/* 何をすればよいかを1行で。日付だけでは動きにつながらなかった */}
+                          {exp && exp.level === 'over' && (
+                            <div style={{ fontSize: '11.5px', color: '#DC2626', lineHeight: 1.7, fontWeight: 700 }}>
+                              有効期限が切れています。新しい書類をご提出ください。期限切れのままだと出店をお受けできません。
+                            </div>
+                          )}
+                          {exp && exp.level === 'soon' && (
+                            <div style={{ fontSize: '11.5px', color: '#B45309', lineHeight: 1.7, fontWeight: 700 }}>
+                              有効期限が残り1ヶ月を切っています。書類の更新準備・更新をお願いします。
+                            </div>
+                          )}
                         </div>
                         <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: badgeBg, color: badgeColor, flexShrink: 0 }}>{status}</span>
                         <label style={{ background: isUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: '700', cursor: isUploading ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
@@ -1987,6 +2031,9 @@ export default function SellerDashboard() {
                             onChange={(e) => saveExpiry(doc.key, e.target.value)}
                             style={{ fontSize: '13px', padding: '6px 10px', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#1E2A3B' }} />
                           {rec?.expiry_date && <span style={{ fontSize: '11px', color: '#16A34A', fontWeight: '600' }}>保存済み</span>}
+                          {exp && exp.level === 'ok' && (
+                            <span style={{ fontSize: '11px', color: '#64748B' }}>あと{exp.days}日</span>
+                          )}
                         </div>
                       )}
                     </div>

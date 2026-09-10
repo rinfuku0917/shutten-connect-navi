@@ -71,12 +71,18 @@ export async function POST(req: Request) {
     if (app.status === 'cancelled') {
       return NextResponse.json({ error: 'この出店はすでに取り消されています' }, { status: 409 })
     }
-    if (app.status !== 'approved') {
+    // 承認前（審査中）の申込も取り消せるようにする。
+    // 「日程を間違えてエントリーした」という連絡が実際に来るが、
+    // これまでは「不採用」にするしか手が無く、出店者に不採用の通知が
+    // 飛んでしまうため、誤登録の片づけに使えなかった。
+    if (app.status !== 'approved' && app.status !== 'pending') {
       return NextResponse.json(
-        { error: '承認済みの出店だけを取り消せます（承認待ちは辞退の扱いです）' },
+        { error: '審査中か承認済みの申込だけを取り消せます（不採用のものは対象外です）' },
         { status: 409 },
       )
     }
+    // 承認前の取消しかどうか。通知の出し分けに使う
+    const wasPending = app.status === 'pending'
 
     // ---- お金の記録を守る ----
     //
@@ -212,7 +218,8 @@ export async function POST(req: Request) {
         } : {}),
       })
       .eq('id', applicationId)
-      .eq('status', 'approved')     // 同時に他から変わっていたら書き換えない
+      // 同時に他から変わっていたら書き換えない
+      .eq('status', wasPending ? 'pending' : 'approved')
     if (upErr) {
       return NextResponse.json({ error: '取消しに失敗しました: ' + upErr.message }, { status: 500 })
     }
@@ -302,8 +309,10 @@ export async function POST(req: Request) {
           }, '募集者')
         }
 
-        // 出店者あて。キャンセル料の話があるので必ず知らせる
-        if (seller?.email) {
+        // 出店者あて。承認済みの取消しはキャンセル料の話があるので必ず知らせる。
+        // 承認前（審査中）の取消しは、出店者ご本人からの申し出で片づけることが多く、
+        // キャンセル料の文面を送ると話が食い違う。ここでは送らない
+        if (seller?.email && !wasPending) {
           await send('cancel-seller', seller.email, {
             '宛名': seller.name || 'ご担当者',
             '案件名': placeTitle,
