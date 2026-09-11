@@ -97,11 +97,20 @@ export function toYen(raw: string | null | undefined): number | null {
 // 形態ごとに持てるようにする。未設定の案件はこれまでどおり案件全体の設定を使う。
 
 // 申込で選べる形態。既存データには「テント」も入っているため、
-// 表示のときだけ受け入れる（新しく選ばせるのは下の3つ）
-export const FORMATS = ['キッチンカー', '物販', '催事PR'] as const
+// 表示のときだけ受け入れる（新しく選ばせるのは下の4つ）。
+//
+// 「テント・ブース」は、イベント出店で車を使わない出店のために足した。
+// 区画だけ借りてテントを張る形で、キッチンカーとは料金が違う。
+export const FORMATS = ['キッチンカー', '物販', '催事PR', 'テント・ブース'] as const
 export type PlaceFormat = typeof FORMATS[number]
 
+export type FormatDayFee = {
+  placeFee?: number | null
+  companyFee?: number | null
+}
+
 export type FormatFee = {
+  /** 平日、および土日祝の額を入れていないときの額 */
   placeFee?: number | null
   companyFee?: number | null
   sharePct?: number | null
@@ -110,6 +119,17 @@ export type FormatFee = {
   note?: string | null
   /** 出られる曜日（0=日 … 6=土）。空なら案件の日程すべて */
   dows?: number[] | null
+  /**
+   * 土日祝だけ額が違う形態のための、もう一方の額。
+   *
+   * なぜ「平日」の欄を作らず、上の placeFee／companyFee を平日として使うのか:
+   *   分けない案件のほうが多く、分けない場合に欄が2つあると
+   *   どちらに入れるのか迷う。上を「金額（分けるときは平日）」、
+   *   ここを「土日祝の金額」にすると、分けない案件は上だけで済み、
+   *   途中で分けることにしても上に入れた値が消えない。
+   *   まとめて日程追加の料金欄と同じ形にしている。
+   */
+  weekend?: FormatDayFee | null
 }
 export type FormatFees = Record<string, FormatFee> | null
 
@@ -138,14 +158,47 @@ export function formatFeeOf(ff: unknown, format: string | null | undefined): For
   return v && typeof v === 'object' ? v : null
 }
 
-// その形態の固定額。入っていない項目は null（＝ひとつ上の設定を使う）
-export function formatFee(ff: unknown, format: string | null | undefined): { placeFee: number | null; companyFee: number | null } {
+// その形態で、土日祝だけ別の額を入れているか
+export function hasFormatWeekendFee(ff: unknown, format: string | null | undefined): boolean {
+  const w = formatFeeOf(ff, format)?.weekend
+  if (!w || typeof w !== 'object') return false
+  return typeof w.placeFee === 'number' || typeof w.companyFee === 'number'
+}
+
+// その形態の固定額。入っていない項目は null（＝ひとつ上の設定を使う）。
+//
+// date を渡すと、その日が土日祝で「土日祝の金額」が入っていればそちらを返す。
+// 土日祝の欄のうち片方だけ入れてある場合、入れていない側は
+// 上の（平日の）額に落ちる。
+export function formatFee(
+  ff: unknown,
+  format: string | null | undefined,
+  date?: string | null,
+): { placeFee: number | null; companyFee: number | null } {
   const v = formatFeeOf(ff, format)
   if (!v) return { placeFee: null, companyFee: null }
+  const num = (x: unknown) => (typeof x === 'number' ? x : null)
+  const flat = { placeFee: num(v.placeFee), companyFee: num(v.companyFee) }
+  if (!date || !isWeekendOrHoliday(date)) return flat
+  const w = v.weekend
+  if (!w || typeof w !== 'object') return flat
+  const p = num(w.placeFee)
+  const c = num(w.companyFee)
+  if (p == null && c == null) return flat
   return {
-    placeFee: typeof v.placeFee === 'number' ? v.placeFee : null,
-    companyFee: typeof v.companyFee === 'number' ? v.companyFee : null,
+    placeFee: p != null ? p : flat.placeFee,
+    companyFee: c != null ? c : flat.companyFee,
   }
+}
+
+// 出店者への表示用。曜日の並びを日→土に直す。
+// 押した順に入るので、そのまま出すと「火・水・土・金」のように散らばる。
+// 7日すべてなら制限が無いのと同じなので空で返す（画面に出さない）
+export function sortedDows(dows: unknown): number[] {
+  if (!Array.isArray(dows)) return []
+  const uniq = Array.from(new Set(dows.filter(n => Number.isInteger(n) && n >= 0 && n <= 6))) as number[]
+  if (uniq.length >= 7) return []
+  return uniq.sort((a, b) => a - b)
 }
 
 // その形態の歩合（%）。入っていなければ null

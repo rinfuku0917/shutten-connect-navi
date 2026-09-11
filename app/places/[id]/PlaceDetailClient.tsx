@@ -9,7 +9,7 @@ import SiteHeader from '../../components/SiteHeader'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
-import { perDayFeeRange, perDayFee, allowedFormats, formatFeeOf, formatAllowsDate } from '../../lib/placeFee'
+import { perDayFeeRange, perDayFee, dayTypeFee, allowedFormats, formatFeeOf, formatFee, formatAllowsDate, sortedDows, type FormatFees } from '../../lib/placeFee'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
 export type Place = {
@@ -41,16 +41,12 @@ export type Place = {
   details: Record<string, string> | null
   // 何ヶ月先まで申し込めるか。null は上限なし
   apply_within_months: number | null
-  // 形態（キッチンカー・物販・催事PR）ごとの出店料と条件。
-  // 未設定なら、これまでどおり全部の形態を選べて金額も案件全体の設定を使う
-  format_fees: Record<string, {
-    placeFee?: number | null
-    companyFee?: number | null
-    sharePct?: number | null
-    companySharePct?: number | null
-    note?: string | null
-    dows?: number[] | null
-  }> | null
+  // 平日／土日祝で決めた金額（案件全体）
+  day_type_fees: unknown
+  // 形態（キッチンカー・物販・催事PR・テント・ブース）ごとの出店料と条件。
+  // 未設定なら、これまでどおり全部の形態を選べて金額も案件全体の設定を使う。
+  // 形は app/lib/placeFee.ts の FormatFees が唯一の正（二重に書かない）
+  format_fees: FormatFees
 }
 
 // 案件フォームで選んだ値を、画面に出す日本語に直す
@@ -567,7 +563,14 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                         // その形態の金額。空欄の項目は案件全体の設定を使う
                         const fixed = (ff?.placeFee ?? place.price_fixed ?? 0) + (ff?.companyFee ?? place.company_fixed_amount ?? 0)
                         const pct = (ff?.sharePct ?? place.price_share_pct ?? 0) + (ff?.companySharePct ?? place.company_share_pct ?? 0)
-                        const dows = Array.isArray(ff?.dows) ? ff!.dows!.filter(n => n >= 0 && n <= 6) : []
+                        // 土日祝だけ金額が違う形態は、両方を出す。
+                        // 1つしか出さないと、実際に請求される額と食い違って見える
+                        const we = ff?.weekend
+                        const weFixed = (we && (typeof we.placeFee === 'number' || typeof we.companyFee === 'number'))
+                          ? (we.placeFee ?? ff?.placeFee ?? place.price_fixed ?? 0) + (we.companyFee ?? ff?.companyFee ?? place.company_fixed_amount ?? 0)
+                          : null
+                        const splitFee = weFixed != null && weFixed !== fixed
+                        const dows = sortedDows(ff?.dows)
                         return (
                           <label key={opt} style={{ display: 'block', cursor: 'pointer', border: format === opt ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '12px 14px', fontSize: '14px', color: '#1a1a1a', background: format === opt ? '#FFFBEB' : '#fff' }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -578,11 +581,13 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                             {ff && (
                               <span style={{ display: 'block', marginTop: '6px', paddingLeft: '26px', fontSize: '12.5px', color: '#475569', lineHeight: 1.8 }}>
                                 出店料：
-                                {fixed === 0 && pct === 0
+                                {fixed === 0 && pct === 0 && !splitFee
                                   ? <span style={{ color: '#B45309' }}>要相談</span>
                                   : <>
-                                      {fixed > 0 && <strong>{fixed.toLocaleString()}円/日</strong>}
-                                      {fixed > 0 && pct > 0 && ' ＋ '}
+                                      {splitFee
+                                        ? <><strong>平日 {fixed.toLocaleString()}円/日</strong>{' ／ '}<strong>土日祝 {weFixed!.toLocaleString()}円/日</strong></>
+                                        : fixed > 0 && <strong>{fixed.toLocaleString()}円/日</strong>}
+                                      {(splitFee || fixed > 0) && pct > 0 && ' ＋ '}
                                       {pct > 0 && <strong>売上の{pct}%</strong>}
                                     </>}
                                 {ff.note && <><br />区画：{ff.note}</>}
@@ -612,11 +617,21 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                               {/* どの日がいくらなのかを選ぶ場面なので、日付と時刻、項目名と金額が
                                   それぞれ別の行に分かれないよう、まとまりごとに包んでいる */}
                               <span className='nowrap-unit'>{d.date}（{d.start}〜{d.end}）</span>
-                              {/* 日ごとに金額が決まっている案件は、その日の額も出す */}
+                              {/* その日にいくら払うのかを、日付の横に出す。
+                                  優先順位は運営の計算（app/admin/page.tsx の calcFees）と同じ:
+                                    選んだ形態の額（土日祝を分けていればその額）
+                                    → 日程に入れたその日の額
+                                    → 案件の平日/土日祝の額
+                                  形態をいちばん強くしているのは、形態を選び直したときに
+                                  ここの金額も変わらないと、形態の金額が反映されていないように見えるため */}
                               {canSeeFee && (() => {
-                                const f = perDayFee(place.schedule, d.date)
-                                const total = (f.placeFee ?? 0) + (f.companyFee ?? 0)
-                                if (f.placeFee == null && f.companyFee == null) return null
+                                const fmtF = formatFee(place.format_fees, format, d.date)
+                                const dayF = perDayFee(place.schedule, d.date)
+                                const dtF = dayTypeFee(place.day_type_fees, d.date)
+                                const pf = fmtF.placeFee ?? dayF.placeFee ?? dtF.placeFee
+                                const cf = fmtF.companyFee ?? dayF.companyFee ?? dtF.companyFee
+                                if (pf == null && cf == null) return null
+                                const total = (pf ?? 0) + (cf ?? 0)
                                 return <span className='nowrap-unit' style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {total.toLocaleString()}円</span>
                               })()}
                               {/* なぜ選べないのかを、その日の横に出す。

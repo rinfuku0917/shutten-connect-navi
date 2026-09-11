@@ -485,18 +485,26 @@ export default function AdminPage() {
     const basis = ov === 'ex8' || ov === 'ex10' ? 'tax_excluded' : ov === 'as_entered' ? 'as_entered' : (a.share_tax_basis || 'as_entered')
     const base = basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
     // 金額の優先順位:
-    //   日程に入れたその日の額 → 形態（キッチンカー/物販/催事PR）ごとの額
-    //   → 平日/土日祝の額 → 案件全体の固定額
-    // 形態を日付より先にしないのは、特定の日のイベント価格をいちばん強くしたいため
+    //   形態（キッチンカー/物販/催事PR/テント・ブース）ごとの額
+    //   → 日程に入れたその日の額 → 案件の平日/土日祝の額 → 案件全体の固定額
+    //
+    // 形態をいちばん強くしている。以前は日程のその日を先に見ていたが、
+    // 「催事PRに18,000円を入れたのに、申込画面の各日は3,000円/4,500円のまま」
+    // という報告があった。日程の金額はキッチンカー向けに入れたものなので、
+    // 形態に金額を入れたらそちらが効くのが、入力した人の期待に合う。
+    // 特定の日だけ別の額にしたい場合は、形態の金額を空欄にして
+    // 日程のその日に入れる（空欄の項目はひとつ下に落ちる）。
+    //
+    // formatFee に date を渡すと、土日祝を分けている形態はその日に合う額を返す。
+    const fmt = formatFee(a.format_fees, a.format, date)
     const day = perDayFee(a.schedule, date)
-    const fmt = formatFee(a.format_fees, a.format)
     const dt = dayTypeFee(a.day_type_fees, date)
-    const placeFixed = day.placeFee != null ? day.placeFee
-      : fmt.placeFee != null ? fmt.placeFee
+    const placeFixed = fmt.placeFee != null ? fmt.placeFee
+      : day.placeFee != null ? day.placeFee
       : dt.placeFee != null ? dt.placeFee
       : (a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0))
-    const companyFixed = day.companyFee != null ? day.companyFee
-      : fmt.companyFee != null ? fmt.companyFee
+    const companyFixed = fmt.companyFee != null ? fmt.companyFee
+      : day.companyFee != null ? day.companyFee
       : dt.companyFee != null ? dt.companyFee
       : (a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0))
     // 歩合も形態で変えられる（物販は固定額のみ、キッチンカーは歩合ありなど）

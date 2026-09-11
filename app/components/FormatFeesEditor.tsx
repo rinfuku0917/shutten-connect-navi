@@ -1,13 +1,20 @@
 'use client'
+import { useState } from 'react'
 import { FORMATS, type FormatFee } from '../lib/placeFee'
 
-// 形態（キッチンカー・物販・催事PR）ごとの出店料と条件を入れる欄。
+// 形態（キッチンカー・物販・催事PR・テント・ブース）ごとの出店料と条件を入れる欄。
 //
 // なぜ要るか:
 //   出店料の設定が案件に1組しかなく、キッチンカーの金額しか入れられなかった。
 //   物販や催事PRは金額が違うため、概要欄に文章で書いて運用していた。
 //   文章だと出店者が見落とすうえ、売上の計算にも入らないので、
 //   請求のたびに運営が手で直すことになっていた。
+//
+// 平日と土日祝で分けられる:
+//   最初は形態ごとに1組しか入れられず、「平日3,000円・土日4,500円」のような
+//   案件を入れられなかった。上の欄を平日（分けないときは全日）、
+//   チェックを入れると出てくる欄を土日祝にしている。
+//   まとめて日程追加の料金欄と同じ形にしてある。
 //
 // 使わない形態は入れない。入れた形態だけが、出店者の申込画面に出る。
 // 何も入れていない案件は、これまでどおり全部の形態を選べて、
@@ -25,6 +32,17 @@ export default function FormatFeesEditor({
   /** 親から渡す入力欄の見た目（案件の編集画面と揃えるため） */
   times?: string[]
 }) {
+  // 「土日祝だけ分ける」を開いているか。形態ごとに覚える。
+  // 既に土日祝の額が入っている形態は、最初から開いた状態で出す
+  const [split, setSplit] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {}
+    for (const f of FORMATS) {
+      const w = value[f]?.weekend
+      if (w && (typeof w.placeFee === 'number' || typeof w.companyFee === 'number')) init[f] = true
+    }
+    return init
+  })
+
   const inputStyle: React.CSSProperties = {
     width: '100%', border: '1px solid #E5C07B', borderRadius: '8px',
     padding: '10px 14px', fontSize: '16px', marginTop: '6px',
@@ -42,9 +60,24 @@ export default function FormatFeesEditor({
   const set = (f: string, patch: Partial<FormatFee>) => {
     onChange({ ...value, [f]: { ...(value[f] || {}), ...patch } })
   }
+  // 土日祝の額だけを書き換える
+  const setWeekend = (f: string, patch: { placeFee?: number | null; companyFee?: number | null }) => {
+    const cur = value[f] || {}
+    onChange({ ...value, [f]: { ...cur, weekend: { ...(cur.weekend || {}), ...patch } } })
+  }
   const num = (v: string) => {
     const t = v.replace(/[^0-9.]/g, '')
     return t === '' ? null : Number(t)
+  }
+  // チェックを外したら、土日祝に入れていた額も消す。
+  // 残しておくと、画面に出ていない額で計算されることになる
+  const toggleSplit = (f: string, want: boolean) => {
+    setSplit(s => ({ ...s, [f]: want }))
+    if (!want && value[f]?.weekend) {
+      const cur = { ...(value[f] || {}) }
+      delete cur.weekend
+      onChange({ ...value, [f]: cur })
+    }
   }
 
   return (
@@ -60,6 +93,7 @@ export default function FormatFeesEditor({
 
       {FORMATS.map(f => {
         const v = value[f] || {}
+        const isSplit = !!split[f]
         return (
           <div key={f} style={{ background: '#fff', border: '1px solid ' + (on(f) ? '#BFDBFE' : '#E2E8F0'), borderRadius: '9px', padding: '12px', marginBottom: '10px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -71,20 +105,57 @@ export default function FormatFeesEditor({
 
             {on(f) && (
               <div style={{ marginTop: '12px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <label style={{ ...label, color: '#B45309' }}>取引先へ渡す額（円）</label>
-                    <input inputMode='numeric' value={v.placeFee ?? ''} placeholder='例：0'
-                      onChange={e => set(f, { placeFee: num(e.target.value) })} style={inputStyle} />
+                {/* 平日と土日祝で金額が違う案件が多いので、1回で両方入れられるようにする。
+                    まとめて日程追加の料金欄と同じ形 */}
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer' }}>
+                  <input type='checkbox' checked={isSplit} onChange={e => toggleSplit(f, e.target.checked)}
+                    style={{ width: '18px', height: '18px', accentColor: '#1D4ED8', cursor: 'pointer' }} />
+                  <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#1D4ED8' }}>平日と土日祝で金額を分ける</span>
+                </label>
+
+                <div style={{ background: '#fff', border: '1px solid #DBEAFE', borderRadius: '8px', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#334155', marginBottom: '2px' }}>
+                    {isSplit ? '平日の金額' : '金額'}
                   </div>
-                  <div>
-                    <label style={{ ...label, color: '#1D4ED8' }}>弊社の固定額（円）</label>
-                    <input inputMode='numeric' value={v.companyFee ?? ''} placeholder='例：3000'
-                      onChange={e => set(f, { companyFee: num(e.target.value) })} style={inputStyle} />
+                  <div className='form-grid-2' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ ...label, color: '#B45309' }}>取引先へ渡す額（円）</label>
+                      <input inputMode='numeric' value={v.placeFee ?? ''} placeholder='例：13000'
+                        onChange={e => set(f, { placeFee: num(e.target.value) })} style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={{ ...label, color: '#1D4ED8' }}>弊社の固定額（円）</label>
+                      <input inputMode='numeric' value={v.companyFee ?? ''} placeholder='例：5000'
+                        onChange={e => set(f, { companyFee: num(e.target.value) })} style={inputStyle} />
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                {isSplit && (
+                  <div style={{ background: '#fff', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', marginTop: '8px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#DC2626', marginBottom: '2px' }}>土日祝の金額</div>
+                    <div className='form-grid-2' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ ...label, color: '#B45309' }}>取引先へ渡す額（円）</label>
+                        <input inputMode='numeric' value={v.weekend?.placeFee ?? ''} placeholder='例：4500'
+                          onChange={e => setWeekend(f, { placeFee: num(e.target.value) })} style={inputStyle} />
+                      </div>
+                      <div>
+                        <label style={{ ...label, color: '#1D4ED8' }}>弊社の固定額（円）</label>
+                        <input inputMode='numeric' value={v.weekend?.companyFee ?? ''} placeholder='空欄可'
+                          onChange={e => setWeekend(f, { companyFee: num(e.target.value) })} style={inputStyle} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '8px', lineHeight: 1.8 }}>
+                  {isSplit
+                    ? <>土日と祝日には「土日祝の金額」、それ以外の日には「平日の金額」が使われます。<br />土日祝で空欄にした欄は、平日の金額がそのまま使われます。</>
+                    : <>この形態は、どの日も同じ金額になります。空欄の項目は、下の「料金設定」の値が使われます。</>}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '12px' }}>
                   <div>
                     <label style={{ ...label, color: '#B45309' }}>取引先の歩合（売上の%）</label>
                     <input inputMode='decimal' value={v.sharePct ?? ''} placeholder='例：0'
@@ -97,7 +168,7 @@ export default function FormatFeesEditor({
                   </div>
                 </div>
                 <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '5px', lineHeight: 1.7 }}>
-                  空欄の項目は、下の「料金設定」の値が使われます。
+                  歩合は日によって変えられません（売上に対する率なので、日で変える必要が実務上ないため）。
                 </div>
 
                 <div style={{ marginTop: '12px' }}>
@@ -115,7 +186,10 @@ export default function FormatFeesEditor({
                         <button key={w} type='button'
                           onClick={() => {
                             const cur = Array.isArray(v.dows) ? v.dows : []
-                            set(f, { dows: sel ? cur.filter(x => x !== idx) : [...cur, idx] })
+                            // 押した順ではなく日→土の並びで持つ。
+                            // 出店者の画面にそのまま出るため
+                            const next = sel ? cur.filter(x => x !== idx) : [...cur, idx]
+                            set(f, { dows: next.sort((a, b) => a - b) })
                           }}
                           style={{ minWidth: '44px', minHeight: '44px', borderRadius: '8px', border: sel ? '1.5px solid #1D4ED8' : '1.5px solid #E2E8F0', background: sel ? '#1D4ED8' : '#fff', color: sel ? '#fff' : (idx === 0 ? '#DC2626' : idx === 6 ? '#1D4ED8' : '#64748B'), fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                           {w}

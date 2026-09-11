@@ -9,7 +9,7 @@ import { parseSns, snsHref, snsHandle, SNS_PLATFORMS, SNS_LABEL, SNS_PREFIX, SNS
 import { useRouter } from 'next/navigation'
 import DashboardFooter from '../../components/DashboardFooter'
 import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
-import { perDayFee, dayTypeFee } from '../../lib/placeFee'
+import { perDayFee, dayTypeFee, formatFee } from '../../lib/placeFee'
 import OnsiteSteps from './OnsiteSteps'
 import SiteSubmissionForm from './SiteSubmissionForm'
 
@@ -435,7 +435,7 @@ export default function SellerDashboard() {
   }
 
   // ===== 売上（出店者） =====
-  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string, schedule: unknown, day_type_fees: unknown }
+  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string, schedule: unknown, day_type_fees: unknown, format: string | null, format_fees: unknown }
   type SaleItem = { name: string, qty: string, price: string }
   type SellerSale = { id: string, application_id: string | null, sale_date: string, placeTitle: string, revenue: number, fee: number, acceptedAt: string | null, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
 
@@ -691,14 +691,20 @@ export default function SellerDashboard() {
   const calcFee = (revenue: number, a: SellerApp, ov: string = '', baseOverride: number | null = null, date: string | null = null) => {
     const { basis, rate } = taxOf(a, ov)
     const base = baseOverride != null ? baseOverride : (basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue)
-    // 金額の優先順位: 日程に入れたその日の額 → 平日/土日祝の額 → 案件全体の固定額
+    // 金額の優先順位: 形態ごとの額 → 日程に入れたその日の額
+    //   → 案件の平日/土日祝の額 → 案件全体の固定額
+    // 運営側の計算（app/admin/page.tsx の calcFees）と必ず同じ順にすること。
+    // ずれると、出店者の画面と請求額が食い違う
     const on = date || a.apply_date
+    const fmt = formatFee(a.format_fees, a.format, on)
     const day = perDayFee(a.schedule, on)
     const dt = dayTypeFee(a.day_type_fees, on)
-    const placeFixed = day.placeFee != null ? day.placeFee
+    const placeFixed = fmt.placeFee != null ? fmt.placeFee
+      : day.placeFee != null ? day.placeFee
       : dt.placeFee != null ? dt.placeFee
       : (a.place_fixed_unit === 'per_event' ? 0 : (a.price_fixed || 0))
-    const companyFixed = day.companyFee != null ? day.companyFee
+    const companyFixed = fmt.companyFee != null ? fmt.companyFee
+      : day.companyFee != null ? day.companyFee
       : dt.companyFee != null ? dt.companyFee
       : (a.company_fixed_unit === 'per_event' ? 0 : (a.company_fixed_amount || 0))
     const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
@@ -714,7 +720,7 @@ export default function SellerDashboard() {
     if (!uid) return []
     const { data } = await supabase
       .from('applications')
-      .select('id, place_id, apply_date, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees)')
+      .select('id, place_id, apply_date, format, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees)')
       .eq('seller_id', uid).eq('status', 'approved')
       .order('created_at', { ascending: false })
     const mapped: SellerApp[] = (data || []).map((a: any) => ({
@@ -727,6 +733,11 @@ export default function SellerDashboard() {
       apply_date: a.apply_date || '',
       schedule: a.places?.schedule ?? null,
       day_type_fees: a.places?.day_type_fees ?? null,
+      // 申込で選んだ形態と、案件の形態ごとの金額。
+      // これが無いと、キッチンカー以外の形態で申し込んだ人の画面に
+      // キッチンカーの金額が出てしまう
+      format: a.format ?? null,
+      format_fees: a.places?.format_fees ?? null,
     }))
     setMyApprovedApps(mapped)
     return mapped
