@@ -40,3 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# 調査で使う一時スクリプト。
+# リポジトリ直下に置かないと node_modules が見えないため、
+# DBを数えるときは直下に .mjs を作って消す運用になっている。
+# 消し忘れがコミットに混ざったことがあるので、ここで塞いでおく。
+_tmp*.mjs
+_seo_*.mjs
+tmp-*.mjs
