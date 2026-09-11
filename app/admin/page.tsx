@@ -14,6 +14,7 @@ import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee, formatFee, formatShare } from '../lib/placeFee'
 import { cancelResultMessage } from '../lib/purgeLog'
+import PurgeLogPanel from './PurgeLogPanel'
 import { sourceLabel } from '../lib/signupSource'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
@@ -3104,6 +3105,12 @@ const previewDoc = async (fileUrl: string) => {
                   </tbody>
                 </table>
               </div>
+
+              {/* 完全に削除した記録の控え。
+                  取り消した出店は行ごと消えるので、キャンセル料の請求は
+                  ここが唯一の入口になる（元の申込が無いため、
+                  応募者一覧の事前請求ボタンは出ない） */}
+              <PurgeLogPanel />
             </div>
           )}
 

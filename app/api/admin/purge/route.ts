@@ -46,6 +46,121 @@ async function requireAdmin(req: Request, db: any): Promise<{ uid: string } | Ne
 }
 
 
+// ===== 消した記録の控えを読む =====
+//
+// purge_log は RLS 有効・ポリシー0なので、画面から直接は読めない。
+// ここを通す。
+//
+// なぜ要るか:
+//   取り消した出店は行ごと消えるため、キャンセル料を請求するときの
+//   手がかりが控えにしか無い。読む口が無いと、控えは書き込み専用の
+//   置き場になってしまい、/cancel-policy の「キャンセル料が発生」
+//   「繰り返すと応募制限・アカウント停止」を実行できない。
+//
+// 一覧では detail を丸ごと返さない（やり取りの全文が入るため重い）。
+// 1件だけ id を指定したときに全部返す。
+export async function GET(req: Request) {
+  try {
+    const db = getAdmin()
+    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    const auth = await requireAdmin(req, db)
+    if (auth instanceof NextResponse) return auth
+
+    const u = new URL(req.url)
+    const id = (u.searchParams.get('id') || '').trim()
+    const kind = (u.searchParams.get('kind') || '').trim()
+    const sellerId = (u.searchParams.get('sellerId') || '').trim()
+    const kw = (u.searchParams.get('kw') || '').trim()
+    const limit = Math.min(Math.max(parseInt(u.searchParams.get('limit') || '100', 10) || 100, 1), 500)
+
+    // 1件だけ開く。やり取りの全文もここで返す
+    if (id) {
+      const { data, error } = await db
+        .from('purge_log')
+        .select('id, kind, target_id, summary, seller_id, place_id, apply_date, cancelled_at, detail, deleted_by, deleted_at')
+        .eq('id', id).maybeSingle()
+      if (error) {
+        if (isMissingPurgeColumns(error)) return needsSetup()
+        return NextResponse.json({ error: '取得に失敗しました: ' + error.message }, { status: 500 })
+      }
+      if (!data) return NextResponse.json({ error: '控えが見つかりませんでした' }, { status: 404 })
+      const who = await nameOf(db, data.seller_id)
+      return NextResponse.json({ item: { ...data, sellerName: who } })
+    }
+
+    let q = db
+      .from('purge_log')
+      .select('id, kind, target_id, summary, seller_id, place_id, apply_date, cancelled_at, deleted_by, deleted_at')
+      .order('deleted_at', { ascending: false })
+      .limit(limit)
+    if (kind === 'application' || kind === 'invoice') q = q.eq('kind', kind)
+    if (sellerId) q = q.eq('seller_id', sellerId)
+    // 案件名や理由で探せるようにする。summary は自由文なので前後一致で見る
+    if (kw) q = q.ilike('summary', '%' + kw.replace(/[%_]/g, '') + '%')
+
+    const { data, error } = await q
+    if (error) {
+      if (isMissingPurgeColumns(error)) return needsSetup()
+      return NextResponse.json({ error: '取得に失敗しました: ' + error.message }, { status: 500 })
+    }
+
+    // 出店者の名前をまとめて引く（1件ずつ引くと件数ぶん往復する）
+    const ids = Array.from(new Set((data || []).map((r: { seller_id?: string | null }) => r.seller_id).filter(Boolean)))
+    const nameMap = new Map<string, string>()
+    if (ids.length > 0) {
+      const { data: ps } = await db.from('profiles').select('id, name, shop_name').in('id', ids)
+      for (const p of (ps || []) as { id: string; name?: string; shop_name?: string }[]) {
+        nameMap.set(p.id, p.shop_name || p.name || '')
+      }
+    }
+
+    // 出店者ごとの取り消し回数。/cancel-policy の
+    // 「繰り返すと応募制限・アカウント停止」の判断に使う
+    const counts = new Map<string, number>()
+    for (const r of (data || []) as { kind: string; seller_id?: string | null }[]) {
+      if (r.kind !== 'application' || !r.seller_id) continue
+      counts.set(r.seller_id, (counts.get(r.seller_id) || 0) + 1)
+    }
+
+    return NextResponse.json({
+      items: (data || []).map((r: Record<string, unknown>) => ({
+        ...r,
+        sellerName: r.seller_id ? (nameMap.get(String(r.seller_id)) || '') : '',
+        sellerPurgeCount: r.seller_id ? (counts.get(String(r.seller_id)) || 0) : 0,
+      })),
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '不明なエラー'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}
+
+// 出店者の呼び名を1件引く
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function nameOf(db: any, sellerId: string | null | undefined): Promise<string> {
+  if (!sellerId) return ''
+  const { data } = await db.from('profiles').select('name, shop_name').eq('id', sellerId).maybeSingle()
+  return (data?.shop_name || data?.name || '') as string
+}
+
+// 20260911_purge_log_detail.sql を実行する前かどうか
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isMissingPurgeColumns(error: any): boolean {
+  const code = String(error?.code ?? '')
+  const msg = String(error?.message ?? '')
+  // 42703 = 列が無い / 42P01・PGRST205 = 表が無い / PGRST204 = 列が見つからない
+  return code === '42703' || code === '42P01' || code === 'PGRST205' || code === 'PGRST204'
+    || msg.includes('seller_id') || msg.includes('purge_log')
+}
+
+function needsSetup() {
+  return NextResponse.json({
+    error: '控えの表に列が足りません。Supabase の SQL Editor で '
+      + 'supabase/migrations/20260911_purge_log_detail.sql を実行してください。',
+    needsSetup: true,
+  }, { status: 503 })
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
