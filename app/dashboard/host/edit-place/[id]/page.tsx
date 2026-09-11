@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../../lib/supabase'
+import { isWeekendOrHoliday } from '../../../../lib/jpHoliday'
 import { geocodeAddress } from '../../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../../lib/categories'
 import { toYen, hasPerDayFee } from '../../../../lib/placeFee'
@@ -123,6 +124,11 @@ function EditPlacePageInner() {
   // これが無いと、31日ぶん追加したあとに1日ずつ金額を打ち直すことになる
   const [bulkPlaceFee, setBulkPlaceFee] = useState('')
   const [bulkCompanyFee, setBulkCompanyFee] = useState('')
+  // 平日と土日祝で金額が違う案件が多い。1回の操作で両方入れられるようにする。
+  // 分けないときは、上の2つの金額を全部の日に入れる
+  const [bulkSplit, setBulkSplit] = useState(false)
+  const [bulkWePlaceFee, setBulkWePlaceFee] = useState('')
+  const [bulkWeCompanyFee, setBulkWeCompanyFee] = useState('')
 
   // 毎月おなじ条件で翌月の日程を足す設定。
   // 常設の案件では毎月31日ぶんを手で入れ直していて、入れ忘れると募集が止まる
@@ -160,16 +166,24 @@ function EditPlacePageInner() {
     setSchedule(prev=>{
       const kept = prev.filter(d=>d.date)
       const room = 31 - kept.length
-      const pf = bulkPlaceFee.trim() === '' ? undefined : Number(bulkPlaceFee)
-      const cf = bulkCompanyFee.trim() === '' ? undefined : Number(bulkCompanyFee)
-      return [...kept, ...dates.slice(0, Math.max(0, room)).map(date=>({
-        date, start: bulkStart, end: bulkEnd,
-        ...(pf != null ? { placeFee: pf } : {}),
-        ...(cf != null ? { companyFee: cf } : {}),
-      }))]
+      const num = (v:string) => v.trim() === '' ? undefined : Number(v)
+      const wdPf = num(bulkPlaceFee), wdCf = num(bulkCompanyFee)
+      const wePf = bulkSplit ? num(bulkWePlaceFee) : wdPf
+      const weCf = bulkSplit ? num(bulkWeCompanyFee) : wdCf
+      return [...kept, ...dates.slice(0, Math.max(0, room)).map(date=>{
+        // 土日祝はもう一方の金額を使う（祝日も土日と同じ扱い）
+        const we = isWeekendOrHoliday(date)
+        const pf = we ? wePf : wdPf
+        const cf = we ? weCf : wdCf
+        return {
+          date, start: bulkStart, end: bulkEnd,
+          ...(pf != null ? { placeFee: pf } : {}),
+          ...(cf != null ? { companyFee: cf } : {}),
+        }
+      })]
     })
     // 金額を入れたのに入力欄が閉じていると、入った金額が見えない
-    if(bulkPlaceFee.trim() !== '' || bulkCompanyFee.trim() !== '') setPerDayOn(true)
+    if([bulkPlaceFee, bulkCompanyFee, bulkWePlaceFee, bulkWeCompanyFee].some(v=>v.trim() !== '')) setPerDayOn(true)
     setBulkOpen(false)
   }
   const req = <span style={{background:'#F5A623',color:'#fff',fontSize:'11px',padding:'2px 8px',borderRadius:'999px',marginLeft:'8px',fontWeight:'700'}}>必須</span>
@@ -477,25 +491,57 @@ async function refreshPublicPages(placeId?: string) {
                       </div>
                     </div>
 
-                    {/* 追加する全部の日に同じ金額を入れる。
-                        ここが無いと、31日ぶん入れたあとに1日ずつ打ち直すことになっていた */}
+                    {/* 追加する日に金額も入れる。
+                        ここが無いと、31日ぶん入れたあとに1日ずつ打ち直すことになっていた。
+                        平日と土日祝で金額が違う案件が多いので、1回で両方入れられるようにする */}
                     <div style={{marginTop:'12px',paddingTop:'12px',borderTop:'1px solid #DBEAFE'}}>
                       <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>この期間の料金（任意）</label>
-                      <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'6px'}}>
-                        <div>
-                          <label style={{fontSize:'12px',fontWeight:'700',color:'#B45309'}}>取引先へ渡す額（円）</label>
-                          <input inputMode='numeric' value={bulkPlaceFee} onChange={e=>setBulkPlaceFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='例：2000' style={{...inputStyle,marginTop:'4px'}}/>
-                        </div>
-                        <div>
-                          <label style={{fontSize:'12px',fontWeight:'700',color:'#1D4ED8'}}>弊社の固定額（円）</label>
-                          <input inputMode='numeric' value={bulkCompanyFee} onChange={e=>setBulkCompanyFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='空欄可' style={{...inputStyle,marginTop:'4px'}}/>
+
+                      <label style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'8px',marginBottom:'8px',cursor:'pointer'}}>
+                        <input type='checkbox' checked={bulkSplit} onChange={e=>setBulkSplit(e.target.checked)} style={{width:'18px',height:'18px',accentColor:'#1D4ED8',cursor:'pointer'}}/>
+                        <span style={{fontSize:'12.5px',fontWeight:700,color:'#1D4ED8'}}>平日と土日祝で金額を分ける</span>
+                      </label>
+
+                      <div style={{background:'#fff',border:'1px solid #DBEAFE',borderRadius:'8px',padding:'10px 12px'}}>
+                        <div style={{fontSize:'12px',fontWeight:800,color:'#334155',marginBottom:'6px'}}>{bulkSplit ? '平日の金額' : '金額'}</div>
+                        <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+                          <div>
+                            <label style={{fontSize:'12px',fontWeight:'700',color:'#B45309'}}>取引先へ渡す額（円）</label>
+                            <input inputMode='numeric' value={bulkPlaceFee} onChange={e=>setBulkPlaceFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='例：2000' style={{...inputStyle,marginTop:'4px'}}/>
+                          </div>
+                          <div>
+                            <label style={{fontSize:'12px',fontWeight:'700',color:'#1D4ED8'}}>弊社の固定額（円）</label>
+                            <input inputMode='numeric' value={bulkCompanyFee} onChange={e=>setBulkCompanyFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='空欄可' style={{...inputStyle,marginTop:'4px'}}/>
+                          </div>
                         </div>
                       </div>
-                      <div style={{fontSize:'11px',color:'#64748B',marginTop:'6px',lineHeight:1.7}}>
-                        入れると、追加する{bulkDates.length>0 ? bulkDates.length + '日' : 'すべての日'}に同じ金額が入ります。
-                        空欄のままなら「料金設定」の金額が使われます。<br />
-                        平日と土日で金額が違う場合は、曜日を分けて2回追加してください（例：平日だけで1回、土日だけでもう1回）。
+
+                      {bulkSplit && (
+                        <div style={{background:'#fff',border:'1px solid #FECACA',borderRadius:'8px',padding:'10px 12px',marginTop:'8px'}}>
+                          <div style={{fontSize:'12px',fontWeight:800,color:'#DC2626',marginBottom:'6px'}}>土日祝の金額</div>
+                          <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+                            <div>
+                              <label style={{fontSize:'12px',fontWeight:'700',color:'#B45309'}}>取引先へ渡す額（円）</label>
+                              <input inputMode='numeric' value={bulkWePlaceFee} onChange={e=>setBulkWePlaceFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='例：3000' style={{...inputStyle,marginTop:'4px'}}/>
+                            </div>
+                            <div>
+                              <label style={{fontSize:'12px',fontWeight:'700',color:'#1D4ED8'}}>弊社の固定額（円）</label>
+                              <input inputMode='numeric' value={bulkWeCompanyFee} onChange={e=>setBulkWeCompanyFee(e.target.value.replace(/[^0-9]/g,''))} placeholder='空欄可' style={{...inputStyle,marginTop:'4px'}}/>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{fontSize:'11px',color:'#64748B',marginTop:'8px',lineHeight:1.8}}>
+                        {bulkSplit
+                          ? <>追加する日のうち、土日と祝日には「土日祝の金額」、それ以外には「平日の金額」が入ります。<br />空欄のままの欄は「料金設定」の金額が使われます。</>
+                          : <>入れると、追加する{bulkDates.length>0 ? bulkDates.length + '日' : 'すべての日'}に同じ金額が入ります。空欄のままなら「料金設定」の金額が使われます。</>}
                       </div>
+                      {bulkSplit && bulkDates.length > 0 && (
+                        <div style={{fontSize:'11.5px',color:'#334155',marginTop:'6px',fontWeight:700}}>
+                          内訳：平日 {bulkDates.filter(d=>!isWeekendOrHoliday(d)).length}日 ／ 土日祝 {bulkDates.filter(d=>isWeekendOrHoliday(d)).length}日
+                        </div>
+                      )}
                     </div>
 
                     {/* 押す前に、何日ぶん入るかを出す。
