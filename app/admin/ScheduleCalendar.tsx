@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { snsHref } from '../lib/sns'
+import { cancelResultMessage } from '../lib/purgeLog'
 
 // 出店管理スケジュール。
 //
@@ -102,7 +103,8 @@ export default function ScheduleCalendar({
   //
   // テストで作った出店が一覧に残り続けて、本番の予定と見分けがつかない、
   // という運用上の困りごとから足したもの。
-  // 行は消さず status='cancelled' にするので、記録としては残る
+  // 取り消したら行ごと消す（app/api/applications/cancel-approved/route.ts）。
+  // 消す直前に purge_log へ控えを残すので、誰がいつ何を消したかは追える
   // （誰がいつ、どういう理由で外したかも残る）。
   const [cancelFor, setCancelFor] = useState<Slot | null>(null)
   const [cancelReason, setCancelReason] = useState('')
@@ -158,6 +160,14 @@ export default function ScheduleCalendar({
       // すでに取り消し済みなら、この画面からそのまま消せるようにする。
       // 「取り消したのに一覧に残る」が片づかない、が今回の困りごとの本体
       setCancelCanPurge(j.error === 'この出店はすでに取り消されています')
+      return
+    }
+    // 消せなかったときは、モーダルを閉じずに伝える。
+    // この一覧は承認済みだけを出すので、残った取消し済みの行は
+    // カレンダーから消えて見え、気づけない
+    if (j?.purged === false || j?.purgeLogged === false || j?.messagesPurged === false) {
+      setCancelErr(cancelResultMessage(j))
+      load()
       return
     }
     closeCancel()
@@ -723,7 +733,8 @@ export default function ScheduleCalendar({
                           この出店を取り消す（一覧から外す）
                         </button>
                         <div style={{ fontSize: '11.5px', color: '#94A3B8', marginTop: '6px', lineHeight: 1.8 }}>
-                          スケジュールと当日の一覧から外れます。記録は残るので、あとから誰がいつ外したかを追えます。
+                          この出店の記録を削除します。やり取りと当日の記録も消え、元に戻せません。<br />
+                          誰がいつ何を消したかの控えだけが、運営側に残ります。
                         </div>
                       </div>
                     </div>
@@ -746,13 +757,13 @@ export default function ScheduleCalendar({
               // 止まった理由が増えると画面より縦に長くなり、
               // 「取り消す」「やめる」が画面の外に出て押せなくなる。中でスクロールさせる
               maxHeight: '100%', overflowY: 'auto' }}>
-            <div style={{ fontSize: '15px', fontWeight: 900, color: '#B91C1C', marginBottom: '10px' }}>この出店を取り消します</div>
+            <div style={{ fontSize: '15px', fontWeight: 900, color: '#B91C1C', marginBottom: '10px' }}>この出店を取り消して削除します</div>
             <div style={{ fontSize: '13px', color: '#334155', lineHeight: 1.9, marginBottom: '14px' }}>
               <strong>{cancelFor.shopName}</strong>　{cancelFor.date}<br />
               {cancelFor.placeTitle}
             </div>
 
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・記録に残ります）</div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・運営の削除控えに残ります）</div>
             <input value={cancelReason} onChange={e => setCancelReason(e.target.value)}
               placeholder='例：テストで作成したデータのため'
               style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }} />

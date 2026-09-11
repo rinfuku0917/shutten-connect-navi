@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import DashboardFooter from '../../components/DashboardFooter'
 import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
 import { perDayFee, dayTypeFee, formatFee } from '../../lib/placeFee'
-import { showsCancelled } from '../../lib/cancelledWindow'
+import { showsToSeller } from '../../lib/cancelledVisibility'
 import OnsiteSteps from './OnsiteSteps'
 import SiteSubmissionForm from './SiteSubmissionForm'
 
@@ -856,12 +856,12 @@ export default function SellerDashboard() {
     setAppliesError('')
     if (!data) return
 
-    // 取り消された申込は、出店日から1ヶ月たったら一覧から外す。
+    // 取り消された申込は、出店者の画面には出さない。
     //
     // 取り消した申込をいつまで見せるかは app/lib/cancelledWindow.ts が唯一の正。
     // 同じ決まりを案件ページの「エントリー済み」でも使っている
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const visible = (data as any[]).filter(a => showsCancelled(a))
+    const visible = (data as any[]).filter(a => showsToSeller(a))
 
     const mapped: MyApply[] = visible.map((a: any) => {
       const s = statusMap[a.status] || { label: a.status, color: '#555', bg: '#F3F4F6' }
@@ -954,9 +954,12 @@ export default function SellerDashboard() {
     const uid = userData.user?.id
     if (!uid) return
     setMyId(uid)
+    // 取り消したものは出さない（app/lib/cancelledVisibility.ts）。
+    // ここだけ絞り込みが抜けていて、削除に失敗して残った取消しの行が
+    // 「メッセージはまだありません」というスレッドとして出ていた
     const { data: apps } = await supabase
       .from('applications')
-      .select('id, places(title, host_id)')
+      .select('id, status, places(title, host_id)')
       .eq('seller_id', uid)
       .order('created_at', { ascending: false })
     const { data: msgs } = await supabase
@@ -964,7 +967,7 @@ export default function SellerDashboard() {
       .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
       .order('sent_at', { ascending: true })
     const all = (msgs || []) as DbMessage[]
-    const list: MsgThread[] = (apps || []).map((a: any) => {
+    const list: MsgThread[] = (apps || []).filter((a: any) => showsToSeller(a)).map((a: any) => {
       const mine = all.filter(m => m.application_id === a.id)
       const last = mine.length > 0 ? mine[mine.length - 1].body : 'メッセージはまだありません'
       const un = mine.filter(m => m.sender_id !== uid && !m.read_at).length

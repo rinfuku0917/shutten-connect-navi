@@ -13,6 +13,7 @@ import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee, formatFee, formatShare } from '../lib/placeFee'
+import { cancelResultMessage } from '../lib/purgeLog'
 import { sourceLabel } from '../lib/signupSource'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
@@ -207,7 +208,9 @@ export default function AdminPage() {
         return
       }
       setCancelAppAsk(null); setCancelAppReason('')
-      showNotice('申込を取り消しました。', 'ok')
+      // 文言は app/lib/purgeLog.ts の cancelResultMessage が唯一の正。
+      // 消せなかった／控えを残せなかったときに運営が気づけるようにする
+      showNotice(cancelResultMessage(j), 'ok')
       loadPendingApps()
     } catch {
       setCancelAppErr('通信に失敗しました。もう一度お試しください。')
@@ -4004,25 +4007,27 @@ const previewDoc = async (fileUrl: string) => {
         open={!!cancelAppAsk}
         busy={cancelAppBusy}
         error={cancelAppErr}
-        title='この申込を取り消しますか？'
+        title='この申込を取り消して削除しますか？'
         body={
           cancelAppAsk
             ? `${cancelAppAsk.seller}／${cancelAppAsk.place}${cancelAppAsk.date ? '（' + cancelAppAsk.date + '）' : ''}\n\n` +
               '日程の間違いなど、出店者からの申し出で取り消すときにお使いください。\n' +
-              '出店者へ不採用の通知は送りません。募集者と運営には取消しのお知らせが届きます。'
+              '出店者へ不採用の通知は送りません。募集者と運営には取消しのお知らせが届きます。\n\n' +
+              'この申込の記録を削除します。やり取りも消え、元に戻せません。\n' +
+              '誰がいつ何を消したかの控えだけが、運営側に残ります。'
             : ''
         }
         extra={
           cancelAppAsk ? (
             <div>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・記録に残ります）</div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・運営の削除控えに残ります）</div>
               <input value={cancelAppReason} onChange={e => setCancelAppReason(e.target.value)} disabled={cancelAppBusy}
                 placeholder='例：出店者の申し出（日程の間違い）'
                 style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }} />
             </div>
           ) : null
         }
-        okLabel='取り消す'
+        okLabel='取り消して削除する'
         danger
         onOk={runCancelApp}
         onCancel={() => { if (!cancelAppBusy) { setCancelAppAsk(null); setCancelAppErr(null) } }}

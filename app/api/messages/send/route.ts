@@ -85,7 +85,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'このやり取りに書き込む権限がありません' }, { status: 403 })
     }
 
-    // 取り消した出店のやり取りは、運営が片づけるときに消える対象になる。
+    // 取り消した出店は、取り消したその場で行ごと消える
+    // （app/api/applications/cancel-approved/route.ts）。やり取りも一緒に消え、
+    // 消す直前に purge_log の控えへ写している。行が無くなったあとは
+    // 上の404で止まるので、運営も送れない。
+    //
+    // ここに来るのは、削除だけ失敗して取消し済みで残った出店。
     // 当事者どうしで続けると、あとから運営が確認できないまま消えるので止める。
     // 運営は続けられる（キャンセル料の話などを残す必要がある）
     if (app.status === 'cancelled' && !isAdmin) {

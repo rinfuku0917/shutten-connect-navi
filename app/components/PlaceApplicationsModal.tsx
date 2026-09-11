@@ -7,6 +7,7 @@ import NotifyChoice from './NotifyChoice'
 import SubmissionPanel from './SubmissionPanel'
 import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
+import { cancelResultMessage } from '../lib/purgeLog'
 
 // 案件ごとの応募者一覧。
 //
@@ -237,6 +238,11 @@ export default function PlaceApplicationsModal({
       }
       setCxAsk(null)
       setCxReason('')
+      // 消せなかった／控えを残せなかったときは、そのまま閉じずに伝える。
+      // 一覧には取消し済みとして残るので、気づかないと片づけ漏れになる
+      if (json?.purged === false || json?.purgeLogged === false || json?.messagesPurged === false) {
+        setErr(cancelResultMessage(json))
+      }
       await load()
     } catch {
       setCxErr('通信に失敗しました。もう一度お試しください。')
@@ -374,7 +380,10 @@ export default function PlaceApplicationsModal({
         }
         map.set(r.seller_id, cur)
       }
-      cur.rows.push({ id: r.id, apply_date: r.apply_date, format: r.format, status: r.status, seller_id: r.seller_id, created_at: r.created_at })
+      // cancelled_at と cancel_reason も詰める。詰めていなかったため、
+      // 下の「{取消し日} 取消し／{理由}」が一度も描画されていなかった。
+      // 削除に失敗して残った行を、運営が理由つきで見られる唯一の場所
+      cur.rows.push({ id: r.id, apply_date: r.apply_date, format: r.format, status: r.status, seller_id: r.seller_id, created_at: r.created_at, cancelled_at: r.cancelled_at, cancel_reason: r.cancel_reason })
     }
 
     // 承認待ちがある出店者を先に出す
@@ -439,7 +448,7 @@ export default function PlaceApplicationsModal({
 
   // 取り消した出店を、記録ごと完全に消す。
   //
-  // ふだんは status='cancelled' で残す（キャンセル料の根拠になるため）。
+  // 取り消したら行ごと消す（キャンセル料の根拠は purge_log の控えに残す）。
   // ただしテストで作った出店が一覧に残り続けると本物が埋もれるので、
   // 取り消し済みのものだけ消せるようにする。
   // 出店日の振り替え。取り消して入れ直してもらう必要がないようにする
@@ -1210,14 +1219,16 @@ export default function PlaceApplicationsModal({
             ? `${cxAsk.who}／${cxAsk.when}\n\n` +
               '出店者・募集者・運営にお知らせのメールが届きます。\n' +
               '確定後の取消しはキャンセル料の対象です（キャンセルポリシー）。\n' +
-              '売上の報告や請求書がある出店は取り消せません。'
+              '売上の報告や請求書がある出店は取り消せません。\n\n' +
+              'この出店の記録を削除します。やり取りと当日の記録も消え、元に戻せません。\n' +
+              '誰がいつ何を消したかの控えだけが、運営側に残ります。'
             : ''
         }
         extra={
           cxAsk ? (
             <div>
               <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                取消しの理由（任意・あとから見返せます）
+                取消しの理由（任意・運営の削除控えに残ります）
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                 {REASONS.map(v => {

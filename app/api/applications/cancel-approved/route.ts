@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { writePurgeLog, purgeSummary } from '../../../lib/purgeLog'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
@@ -10,13 +11,29 @@ import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 // 出店者・募集者の画面には取消しの入口を作らない（「連絡すれば消せる」と
 // 分かるとキャンセルが増えるため、運営が受けて処理する形を守る）。
 //
-// 行は消さずに status='cancelled' にする。理由:
-//   ・キャンセルポリシーに「承認後は理由・時期を問わずキャンセル料が発生」と
-//     書いてあり、消すと請求の根拠が残らない
-//   ・sales.application_id は ON DELETE SET NULL。消すと売上が
-//     「どの出店のものか」を失い、金額だけ浮く
+// 取り消したら、行ごと消す。
 //
-// お金の記録があるものは取り消させない。詳しくは canCancel() のコメント。
+// もとは status='cancelled' にして残していた。キャンセル料の請求の根拠が
+// 消えると困るからで、考え方としてはそちらが安全ではある。
+// ただ実際に運用してみると、取り消したものが出店者の画面にも運営の一覧にも
+// 残り続け、本物の記録が埋もれていった。運営の判断で、消す方に変えている。
+//
+// 消す前に purge_log へ1行だけ控えを残す
+// （案件名 / 出店日 / 出店者の屋号とID / 取り消した理由）。
+// 行が無くなっても「いつ・誰の・何を消したのか」は追えるようにしてある。
+// 出店者まで残しているのは、/cancel-policy が
+// 「承認後は理由・時期を問わずキャンセル料が発生」「事前連絡なく出店されなかった
+// 場合は応募制限またはアカウント停止の対象」と定めており、
+// どちらも「誰が」が分からないと実行できないため。
+//
+// 消せないことがあるのは次の場合で、そのときは従来どおり
+// status='cancelled' で残す（出店者の画面には出さない）。
+//   ・messages や applications の削除そのものが失敗した
+//   ・sales.application_id は ON DELETE SET NULL。売上が残っていると
+//     金額だけ浮くので、下の「お金の記録を守る」が先に取り消しを断っている
+//   ・削除の直前にも売上を数え直している（確認から削除までの隙を塞ぐため）
+//
+// お金の記録があるものは取り消させない。詳しくは「お金の記録を守る」の節。
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
@@ -63,7 +80,7 @@ export async function POST(req: Request) {
 
     const { data: app, error: aErr } = await db
       .from('applications')
-      .select('id, seller_id, place_id, apply_date, status, confirmed_at, checked_in_at, ready_at, opened_at, closed_at, left_at, checkin_seen_at')
+      .select('id, seller_id, place_id, apply_date, format, status, confirmed_at, checked_in_at, ready_at, opened_at, closed_at, left_at, checkin_seen_at')
       .eq('id', applicationId)
       .single()
     if (aErr || !app) return NextResponse.json({ error: '申込が見つかりません' }, { status: 404 })
@@ -100,8 +117,19 @@ export async function POST(req: Request) {
     // ⑶で見つけた請求書番号。⑷で同じ番号を二重に出さないため
     const seenInvoiceNos = new Set<string>()
 
-    const { data: sales } = await db
+    // 読み取りが失敗したときに「お金の記録は無い」と判断してはいけない。
+    // 行ごと消す作りにしたので、取り違えると取り返せない。
+    // 読めなかったら取り消しそのものを中断する
+    // （app/api/cron/sales-reminder/route.ts と同じ作法）。
+    const bail = (what: string, msg: string) =>
+      NextResponse.json({
+        error: what + 'を確認できなかったため、取り消しを中断しました。'
+          + 'もう一度お試しください（' + msg + '）',
+      }, { status: 500 })
+
+    const { data: sales, error: salesErr } = await db
       .from('sales').select('id, sale_date, revenue').eq('application_id', app.id)
+    if (salesErr) return bail('売上報告', salesErr.message)
     if (sales && sales.length > 0) {
       kinds.add('sales')
       blockers.push(
@@ -129,13 +157,14 @@ export async function POST(req: Request) {
 
     if (app.apply_date) {
       const period = String(app.apply_date).slice(0, 7)  // 2026-09
-      const { data: invs } = await db
+      const { data: invs, error: invErr } = await db
         .from('invoices').select('invoice_no, period, paid_status')
         .eq('seller_id', app.seller_id).eq('period', period)
         // 取り消した請求書は数えない。数えると、誤発行して取り消しただけの月に
         // 出店を一切取り消せなくなる（画面側はこの結果でボタンを押せなくするため、
         // 行き止まりになる）。voided_at が null のものだけが有効な請求書
         .is('voided_at', null)
+      if (invErr) return bail('請求書', invErr.message)
       if (invs && invs.length > 0) {
         kinds.add('invoice')
         for (const i of invs) seenInvoiceNos.add(i.invoice_no)
@@ -154,9 +183,10 @@ export async function POST(req: Request) {
     //    発行時に申込IDを控えている（application_id と items[].applicationId）ので、
     //    それでも確かめる。紙面で手で足した明細行には申込IDが無いので、そこは対象外
     {
-      const { data: byApp } = await db
+      const { data: byApp, error: byAppErr } = await db
         .from('invoices').select('invoice_no, paid_status, application_id, items')
         .eq('seller_id', app.seller_id).eq('kind', 'advance').is('voided_at', null)
+      if (byAppErr) return bail('事前請求', byAppErr.message)
       const hits = (byApp || []).filter(i => {
         if (seenInvoiceNos.has(i.invoice_no)) return false
         if (i.application_id === app.id) return true
@@ -194,34 +224,172 @@ export async function POST(req: Request) {
     }
 
     // ---- 取消しを記録する ----
-    const { error: upErr } = await db
+    //
+    // 知らせずに取り消したこと・当日の記録を消したことも書き残す。
+    // あとから「なぜ連絡が来ていないのか」「なぜ記録が無いのか」を追えるようにするため。
+    // 行は直後に消えるので、この文は控え（purge_log）にもそのまま渡す
+    const cancelReasonText = (() => {
+      const r = typeof reason === 'string' && reason.trim() ? reason.trim() : null
+      const tags: string[] = []
+      if (silent) tags.push('通知なしで取消し')
+      if (forced && hasOnsite) tags.push('当日の記録を消して取消し')
+      if (tags.length === 0) return r
+      return (r ? r + '（' : '') + tags.join('・') + (r ? '）' : '')
+    })()
+    const cancelledAt = new Date().toISOString()
+
+    const { error: upErr, count: upCount } = await db
       .from('applications')
       .update({
         status: 'cancelled',
-        cancelled_at: new Date().toISOString(),
+        cancelled_at: cancelledAt,
         cancelled_by: uid,
-        // 知らせずに取り消したこと・当日の記録を消したことを記録に残す。
-        // あとから「なぜ連絡が来ていないのか」「なぜ記録が無いのか」を追えるようにするため
-        cancel_reason: (() => {
-          const r = typeof reason === 'string' && reason.trim() ? reason.trim() : null
-          const tags: string[] = []
-          if (silent) tags.push('通知なしで取消し')
-          if (forced && hasOnsite) tags.push('当日の記録を消して取消し')
-          if (tags.length === 0) return r
-          return (r ? r + '（' : '') + tags.join('・') + (r ? '）' : '')
-        })(),
+        cancel_reason: cancelReasonText,
         // 当日の進行の記録は、取り消した出店に残しておく意味が無い。
         // 残すと「撤収済み」の印が取り消した出店に付いたままになる
         ...(forced && hasOnsite ? {
           confirmed_at: null, checked_in_at: null, ready_at: null,
           opened_at: null, closed_at: null, left_at: null, checkin_seen_at: null,
         } : {}),
-      })
+      }, { count: 'exact' })
       .eq('id', applicationId)
       // 同時に他から変わっていたら書き換えない
       .eq('status', wasPending ? 'pending' : 'approved')
     if (upErr) {
       return NextResponse.json({ error: '取消しに失敗しました: ' + upErr.message }, { status: 500 })
+    }
+    // 1行も書き換わらなかったら、読んだあとに他の誰かが状態を変えている。
+    // ここで止めないと、何も取り消していないのに控えを残して通知まで送ってしまう
+    if (upCount === 0) {
+      return NextResponse.json({
+        error: 'この出店の状態が、ほかの操作で変わりました。画面を読み直してからお試しください',
+      }, { status: 409 })
+    }
+
+    // ---- 行ごと消す ----
+    //
+    // 先に status='cancelled' を書いてから消しているのは、
+    // 途中で失敗しても「取り消されていない出店」が残らないようにするため。
+    // 消せたかどうかは purged で返し、画面の文言を変える。
+    let purged = false
+    let purgeLogged = false
+    let messagesPurged = true
+    {
+      // 控えに載せるものを集める。
+      //
+      // 下の通知の処理でも places と profiles を読んでいるが、あちらは
+      // 「通知なし（silent）」や RESEND_API_KEY が無い環境では通らない。
+      // 控えは必ず残さなければならないので、ここで別に読む。
+      // format_fees も取るのは、キャンセル料をあとから計算できるようにするため
+      const [{ data: place0 }, { data: seller0 }, { data: msgs }] = await Promise.all([
+        db.from('places').select('title, format_fees, price_fixed, company_fixed_amount')
+          .eq('id', app.place_id).maybeSingle(),
+        db.from('profiles').select('name, shop_name').eq('id', app.seller_id).maybeSingle(),
+        // やり取りは消える前に写す。/cancel-policy が連絡を
+        // 「必ずメッセージ機能を通じて」と定めているので、
+        // 事前の連絡があったのか無かったのかは、この会話にしか残っていない
+        db.from('messages')
+          .select('id, sender_id, body, file_url, created_at')
+          .eq('application_id', applicationId)
+          .order('created_at', { ascending: true }),
+      ])
+      const s0 = seller0 as { name?: string; shop_name?: string } | null
+      const p0 = place0 as { title?: string; format_fees?: unknown; price_fixed?: number; company_fixed_amount?: number } | null
+      const thread = (msgs || []) as { id: string; sender_id: string; body: string | null; file_url: string | null; created_at: string }[]
+
+      purgeLogged = await writePurgeLog(db, {
+        kind: 'application',
+        target_id: String(applicationId),
+        deleted_by: uid,
+        seller_id: app.seller_id,
+        place_id: app.place_id,
+        apply_date: app.apply_date,
+        cancelled_at: cancelledAt,
+        summary: purgeSummary({
+          placeTitle: p0?.title,
+          applyDate: app.apply_date,
+          // 屋号のほうが運営には通りがよい。両方あれば屋号を先に
+          sellerName: s0?.shop_name || s0?.name,
+          sellerId: app.seller_id,
+          // 「通知なしで取消し」などの印が付いた文をそのまま残す。
+          // 生の理由だけにすると、手動の完全削除（cancel_reason を渡す）と食い違う
+          reason: cancelReasonText,
+        }),
+        detail: {
+          format: app.format ?? null,
+          wasPending,
+          cancelReason: cancelReasonText,
+          // 金額はキャンセル料の算定に使う。消えたあとに引き直せない
+          fee: {
+            formatFees: p0?.format_fees ?? null,
+            priceFixed: p0?.price_fixed ?? null,
+            companyFixedAmount: p0?.company_fixed_amount ?? null,
+          },
+          // 当日どこまで進んでいたか（force で消す前の値）
+          onsite: {
+            confirmed_at: app.confirmed_at ?? null,
+            checked_in_at: app.checked_in_at ?? null,
+            ready_at: app.ready_at ?? null,
+            opened_at: app.opened_at ?? null,
+            closed_at: app.closed_at ?? null,
+            left_at: app.left_at ?? null,
+          },
+          messages: thread.map(m => ({
+            at: m.created_at,
+            from: m.sender_id === app.seller_id ? 'seller' : 'other',
+            fromId: m.sender_id,
+            body: m.body ?? '',
+            file: m.file_url ?? null,
+          })),
+        },
+      })
+
+      // 添付ファイルは行を消しても置き場に残る。
+      // 誰の添付でも消す（運営の片づけなので、所有者で絞らない。
+      // app/api/messages/retract/route.ts は本人のものだけを消す作りで、
+      // あちらの条件をそのまま持ってくると相手の添付が残る）
+      const files = thread.map(m => m.file_url).filter((f): f is string => !!f)
+      if (files.length > 0) {
+        try {
+          const { error: sErr } = await db.storage.from('message-attachments').remove(files)
+          if (sErr) console.error('添付ファイルの削除に失敗しました', sErr.message)
+        } catch (e) {
+          console.error('添付ファイルの削除に失敗しました', e)
+        }
+      }
+
+      // やり取りを先に消す。messages.application_id の外部キーが
+      // 削除を止める設定だと、残したままでは出店そのものを消せない
+      const { error: mErr } = await db.from('messages').delete().eq('application_id', applicationId)
+      if (mErr) {
+        messagesPurged = false
+        console.error('メッセージの削除に失敗しました', mErr.message)
+      }
+
+      // 確認してから消すまでの間に、売上が入っていないか数え直す。
+      // 承認済みなら運営も出店者も売上を入れられるので、
+      // 上の確認（お金の記録を守る）だけでは隙が残る
+      const { data: sales2, error: sales2Err } = await db
+        .from('sales').select('id').eq('application_id', applicationId).limit(1)
+      if (sales2Err || (sales2 && sales2.length > 0)) {
+        // 消さずに取消し済みのまま残す。出店者の画面には出ない
+        console.error('削除前の再確認で売上が見つかったため、行は残しました')
+      } else {
+        // 取り消してあるものだけ消す。書き換えの取り違えで
+        // 生きている出店を消さないための念押し
+        const { error: dErr, count: dCount } = await db
+          .from('applications').delete({ count: 'exact' })
+          .eq('id', applicationId).eq('status', 'cancelled')
+        if (dErr) {
+          // 消せなくても取り消し自体は済んでいる。
+          // 出店者の画面には取消しを出さないので、残っていても表には出ない
+          console.error('取り消した出店の削除に失敗しました', dErr.message)
+        } else if (dCount === 0) {
+          console.error('削除の対象が0件でした（ほかの操作で状態が変わった可能性）')
+        } else {
+          purged = true
+        }
+      }
     }
 
     // ---- 知らせる ----
@@ -322,7 +490,9 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true })
+    // purged … 行ごと消せたか。消せなかったときは画面でそう伝える
+    // （取り消し自体は済んでいるので、操作としては成功）
+    return NextResponse.json({ success: true, purged, purgeLogged, messagesPurged })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : '不明なエラー' }, { status: 500 })
   }

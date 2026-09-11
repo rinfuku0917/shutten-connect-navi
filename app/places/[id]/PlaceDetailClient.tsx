@@ -10,7 +10,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import { perDayFeeRange, perDayFee, dayTypeFee, allowedFormats, formatFeeOf, formatFee, formatAllowsDate, sortedDows, type FormatFees } from '../../lib/placeFee'
-import { showsCancelled, CANCELLED_VISIBLE_DAYS } from '../../lib/cancelledWindow'
+import { showsToSeller } from '../../lib/cancelledVisibility'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
 export type Place = {
@@ -144,7 +144,7 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
   const [entryDone, setEntryDone] = useState(false)
   // この案件に自分がすでに申し込んでいるか。申込済みなのに
   // 「エントリーする」と出ていると、済んでいないように見えてしまう。
-  type MyEntry = { id: string, apply_date: string | null, status: string, created_at: string | null }
+  type MyEntry = { id: string, apply_date: string | null, status: string }
   const [myEntries, setMyEntries] = useState<MyEntry[]>([])
 
   const loadMyEntries = async () => {
@@ -152,22 +152,16 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
     if (!user || !id) { setMyEntries([]); return }
     const { data } = await supabase
       .from('applications')
-      .select('id, apply_date, status, created_at')
+      .select('id, apply_date, status')
       .eq('place_id', id).eq('seller_id', user.id)
       .order('apply_date', { ascending: true })
-    // 取り消しから30日を過ぎたものは出さない（マイページと同じ決まり）。
-    // ここに入れ忘れていたため、取り消した申込がいつまでも
-    // 「エントリー済み」として残っていた
-    setMyEntries(((data || []) as MyEntry[]).filter(e => showsCancelled(e)))
+    // 取り消したものは出店者に出さない（app/lib/cancelledVisibility.ts）。
+    // ここに絞り込みを入れ忘れていたため、取り消した申込がいつまでも
+    // 「エントリー済み・審査中」として残っていた。
+    // 混ざっていると、申し込めるのに申し込み済みに見える
+    // （実際に再エントリーはできる状態だった）
+    setMyEntries(((data || []) as MyEntry[]).filter(e => showsToSeller(e)))
   }
-
-  // 生きている申込（審査中・承認済・不採用）と、取り消されたものを分ける。
-  //
-  // 取り消したものを「この案件はエントリー済みです」に混ぜると、
-  // 申し込めるのに申し込み済みに見える（実際に再エントリーはできる）。
-  // 取り消しの履歴はマイページで見られるので、ここでは件数だけ静かに出す。
-  const liveEntries = myEntries.filter(e => e.status !== 'cancelled')
-  const cancelledEntries = myEntries.filter(e => e.status === 'cancelled')
 
   const handleEntryClick = async () => {
     setEntryErr('')
@@ -507,14 +501,14 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                     <div style={{ fontSize: '13px', color: '#666', marginBottom: '16px', lineHeight: 1.7 }}>申込内容はマイページでご確認いただけます。</div>
                     <Link href="/dashboard/seller" style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', textDecoration: 'none' }}>マイページへ</Link>
                   </div>
-                ) : (!showEntry && liveEntries.length > 0) ? (
+                ) : (!showEntry && myEntries.length > 0) ? (
                   /* すでに申し込んでいる場合は、その状態を出す。
                      「エントリーする」だけだと未申込に見えてしまうため。 */
                   <>
                     <div style={{ background: '#ECFDF5', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px' }}>
                       <div style={{ fontSize: '14px', fontWeight: 900, color: '#16A34A', marginBottom: '8px' }}>この案件はエントリー済みです</div>
                       <div style={{ display: 'grid', gap: '8px' }}>
-                        {liveEntries.map(e => {
+                        {myEntries.map(e => {
                           const st = e.status === 'approved'
                             ? { label: '承認済', color: '#16A34A' }
                             : e.status === 'rejected'
@@ -550,13 +544,6 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                         })}
                       </div>
                     </div>
-                    {/* 取り消された申込は上の一覧に出さないが、
-                        何も触れないと「消えた」と不安になるので件数だけ出す */}
-                    {cancelledEntries.length > 0 && (
-                      <div className='jp-text' style={{ fontSize: '12px', color: '#64748B', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', marginBottom: '12px', lineHeight: 1.8 }}>
-                        取り消された申込が{cancelledEntries.length}件あります。内容はマイページでご確認いただけます（取り消しから{CANCELLED_VISIBLE_DAYS}日を過ぎると表示されなくなります）。
-                      </div>
-                    )}
                     <Link href="/dashboard/seller" style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '13px', borderRadius: '8px', fontWeight: '900', fontSize: '14px', textDecoration: 'none', marginBottom: '10px' }}>マイページで確認する</Link>
                     <button onClick={handleEntryClick} style={{ width: '100%', display: 'block', background: '#fff', color: '#3A9BD5', textAlign: 'center', padding: '12px', borderRadius: '8px', fontWeight: '700', fontSize: '13px', border: '1.5px solid #BFDBFE', cursor: 'pointer' }}>
                       別の日程を追加でエントリーする

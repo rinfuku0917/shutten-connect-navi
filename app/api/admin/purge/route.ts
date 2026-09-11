@@ -1,22 +1,24 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { writePurgeLog, purgeSummary } from '../../../lib/purgeLog'
 
-// テストで作った記録を、運営が完全に消す。
+// 取り消し済みの記録を、運営が完全に消す。
 //
-// なぜ要るか:
-//   出店の取消し（status='cancelled'）も請求書の取消し（voided_at）も、
-//   行を残す作りにしている。キャンセル料の根拠が消えると困るからで、
-//   ふだんはこれで正しい。
-//   ただしテストで作った出店や、二重に発行してしまった請求書が
-//   一覧に残り続けるのは別の話で、運営が片づけられないと
-//   本物の記録が埋もれていく。
+// 出店の取消しは、取り消したその場で行ごと消すようになった
+// （app/api/applications/cancel-approved/route.ts）。
+// それでもこの入口が残っているのは、次の2つのため。
+//   ・方針を変える前に取り消した出店が、status='cancelled' で残っている
+//   ・取り消しはできたが削除だけ失敗した出店が残る（応答の purged が false）
 //
-// 消せるのは「すでに取り消してあるもの」だけにする。
+// 請求書の取消しは、これまでどおり voided_at を立てて行を残す。
+// お金が動いた事実の証跡なので、消すかどうかは運営が1件ずつ決める。
 //   ・出店 … status='cancelled' で、売上報告も有効な請求書も無いもの
 //   ・請求書 … voided_at があり、入金確認済みでないもの
-// 一度取り消す手間を挟むことで、本番の記録を1回の操作で消せないようにしている。
+// どちらも「一度取り消してあるもの」だけに限っている。
 //
-// 消した内容は purge_log に残す。あとから「何を消したか」を追えるようにするため。
+// 消した内容は purge_log に残す。
+// 出店ぶんは、案件名・出店日・出店者の屋号とID・取り消した理由。
+// 行が無くなってもキャンセル料を請求できるようにするため（/cancel-policy）。
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getAdmin(): any {
@@ -43,22 +45,6 @@ async function requireAdmin(req: Request, db: any): Promise<{ uid: string } | Ne
   return { uid }
 }
 
-// 消した記録を残す。表が無くても本体の削除は止めない
-// 戻り値は「控えを残せたか」。表がまだ作られていなくても、本体の削除は止めない
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function writeLog(db: any, row: Record<string, unknown>): Promise<boolean> {
-  try {
-    const { error } = await db.from('purge_log').insert(row)
-    if (error) {
-      console.error('purge_log への記録に失敗しました', error.message)
-      return false
-    }
-    return true
-  } catch (e) {
-    console.error('purge_log への記録に失敗しました', e)
-    return false
-  }
-}
 
 export async function POST(req: Request) {
   try {
@@ -76,7 +62,7 @@ export async function POST(req: Request) {
 
       const { data: app } = await db
         .from('applications')
-        .select('id, seller_id, place_id, apply_date, status, cancel_reason, places(title)')
+        .select('id, seller_id, place_id, apply_date, status, cancel_reason, places(title), profiles!applications_seller_id_fkey(name, shop_name)')
         .eq('id', id).maybeSingle()
       if (!app) return NextResponse.json({ error: '出店が見つかりませんでした' }, { status: 404 })
 
@@ -110,13 +96,17 @@ export async function POST(req: Request) {
         }, { status: 409 })
       }
 
-      const logged = await writeLog(db, {
+      const logged = await writePurgeLog(db, {
         kind: 'application', target_id: id, deleted_by: uid,
-        summary: [
-          (app as { places?: { title?: string } }).places?.title || '(案件名なし)',
-          app.apply_date || '(日付なし)',
-          app.cancel_reason || '',
-        ].filter(Boolean).join(' / '),
+        summary: purgeSummary({
+          placeTitle: (app as { places?: { title?: string } }).places?.title,
+          applyDate: app.apply_date,
+          // 出店者も残す。消したあとにキャンセル料を請求できるようにするため
+          sellerName: (app as { profiles?: { name?: string; shop_name?: string } }).profiles?.shop_name
+            || (app as { profiles?: { name?: string } }).profiles?.name,
+          sellerId: app.seller_id,
+          reason: app.cancel_reason,
+        }),
       })
 
       // やり取りを先に消す。messages.application_id の外部キーが
@@ -161,8 +151,10 @@ export async function POST(req: Request) {
         )
       }
 
-      const logged = await writeLog(db, {
+      const logged = await writePurgeLog(db, {
         kind: 'invoice', target_id: id, deleted_by: uid,
+        // 請求書は載せる項目が出店と違う（番号・期間・金額）ので、
+        // purgeSummary は使わずここで組む
         summary: [inv.invoice_no, inv.period, '¥' + Number(inv.total || 0).toLocaleString(), inv.void_reason || '']
           .filter(Boolean).join(' / '),
       })
