@@ -87,3 +87,83 @@ export function toYen(raw: string | null | undefined): number | null {
   const n = parseInt(s, 10)
   return isNaN(n) ? null : n
 }
+
+// ===== 形態ごとの出店料と条件 =====
+//
+// 出店料の設定が案件に1組しかなく、キッチンカーの金額しか入れられなかった。
+// 物販や催事PRは金額が違うため、概要欄に文章で書いて運用していた。
+// 文章だと出店者が見落とすうえ、売上の計算にも入らない。
+//
+// 形態ごとに持てるようにする。未設定の案件はこれまでどおり案件全体の設定を使う。
+
+// 申込で選べる形態。既存データには「テント」も入っているため、
+// 表示のときだけ受け入れる（新しく選ばせるのは下の3つ）
+export const FORMATS = ['キッチンカー', '物販', '催事PR'] as const
+export type PlaceFormat = typeof FORMATS[number]
+
+export type FormatFee = {
+  placeFee?: number | null
+  companyFee?: number | null
+  sharePct?: number | null
+  companySharePct?: number | null
+  /** 区画の条件。画面にそのまま出す（例: 3m×5m・電源あり） */
+  note?: string | null
+  /** 出られる曜日（0=日 … 6=土）。空なら案件の日程すべて */
+  dows?: number[] | null
+}
+export type FormatFees = Record<string, FormatFee> | null
+
+// 形態別の設定が1つでも入っているか
+export function hasFormatFees(ff: unknown): boolean {
+  if (!ff || typeof ff !== 'object' || Array.isArray(ff)) return false
+  return Object.keys(ff as Record<string, unknown>).length > 0
+}
+
+// その案件で受け入れている形態。未設定なら全部（これまでどおり）
+export function allowedFormats(ff: unknown): string[] {
+  if (!hasFormatFees(ff)) return [...FORMATS]
+  const o = ff as Record<string, unknown>
+  // 設定にある順ではなく、決めた並びで返す（画面の並びを揃えるため）
+  const inSetting = FORMATS.filter(f => o[f])
+  // 決めた3つ以外の名前（旧「テント」など）が入っていれば後ろに付ける
+  const extra = Object.keys(o).filter(k => !FORMATS.includes(k as PlaceFormat))
+  return [...inSetting, ...extra]
+}
+
+// その形態の設定を取り出す
+export function formatFeeOf(ff: unknown, format: string | null | undefined): FormatFee | null {
+  if (!format || !hasFormatFees(ff)) return null
+  const o = ff as Record<string, FormatFee>
+  const v = o[format]
+  return v && typeof v === 'object' ? v : null
+}
+
+// その形態の固定額。入っていない項目は null（＝ひとつ上の設定を使う）
+export function formatFee(ff: unknown, format: string | null | undefined): { placeFee: number | null; companyFee: number | null } {
+  const v = formatFeeOf(ff, format)
+  if (!v) return { placeFee: null, companyFee: null }
+  return {
+    placeFee: typeof v.placeFee === 'number' ? v.placeFee : null,
+    companyFee: typeof v.companyFee === 'number' ? v.companyFee : null,
+  }
+}
+
+// その形態の歩合（%）。入っていなければ null
+export function formatShare(ff: unknown, format: string | null | undefined): { sharePct: number | null; companySharePct: number | null } {
+  const v = formatFeeOf(ff, format)
+  if (!v) return { sharePct: null, companySharePct: null }
+  return {
+    sharePct: typeof v.sharePct === 'number' ? v.sharePct : null,
+    companySharePct: typeof v.companySharePct === 'number' ? v.companySharePct : null,
+  }
+}
+
+// その形態で出られる日かどうか。曜日の指定が無ければ、案件の日程すべてが対象
+export function formatAllowsDate(ff: unknown, format: string | null | undefined, date: string | null | undefined): boolean {
+  const v = formatFeeOf(ff, format)
+  const dows = Array.isArray(v?.dows) ? v!.dows!.filter(n => Number.isInteger(n) && n >= 0 && n <= 6) : []
+  if (dows.length === 0 || !date) return true
+  const [y, m, d] = String(date).slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return true
+  return dows.includes(new Date(Date.UTC(y, m - 1, d)).getUTCDay())
+}

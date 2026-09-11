@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { isWeekendOrHoliday } from '../../../lib/jpHoliday'
+import FormatFeesEditor, { type FormatFeesValue } from '../../../components/FormatFeesEditor'
 import { geocodeAddress } from '../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../lib/categories'
 import { toYen } from '../../../lib/placeFee'
@@ -133,6 +134,10 @@ function NewPlacePageInner() {
   const [repLastAt, setRepLastAt] = useState<string | null>(null)
   const [repLastAdded, setRepLastAdded] = useState<number | null>(null)
 
+  // 形態（キッチンカー・物販・催事PR）ごとの出店料と条件。
+  // 以前はキッチンカーの金額しか入れられず、物販・催事PRは概要欄に文章で書いていた
+  const [formatFees, setFormatFees] = useState<FormatFeesValue>({})
+
   // その条件で入る日付。押す前に件数を出すため、画面からも使う
   const bulkDates = (() => {
     if(!bulkFrom || !bulkTo) return [] as string[]
@@ -233,6 +238,8 @@ function NewPlacePageInner() {
       repeat_end: repOn && repEnd !== '選択してください' ? repEnd : null,
       repeat_place_fee: repOn && repPlaceFee.trim() !== '' ? Number(repPlaceFee) : null,
       repeat_company_fee: repOn && repCompanyFee.trim() !== '' ? Number(repCompanyFee) : null,
+      // 形態ごとの出店料。1つも入れていなければ null（案件全体の設定を使う）
+      format_fees: Object.keys(formatFees).length > 0 ? formatFees : null,
       genres: genres,
       image_url: imageUrls[0] || '',
       images: imageUrls,
@@ -498,6 +505,14 @@ async function refreshPublicPages(placeId?: string) {
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* 形態ごとの出店料と条件。
+                  以前はキッチンカーの金額しか入れられず、物販・催事PRは
+                  概要欄に文章で書いていた。文章だと出店者が見落とし、
+                  売上の計算にも入らなかった */}
+              <div style={{marginTop:'10px'}}>
+                <FormatFeesEditor value={formatFees} onChange={setFormatFees} />
               </div>
 
               {/* 毎月おなじ条件で翌月の日程を足す。

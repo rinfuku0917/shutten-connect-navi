@@ -9,7 +9,7 @@ import SiteHeader from '../../components/SiteHeader'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
-import { perDayFeeRange, perDayFee } from '../../lib/placeFee'
+import { perDayFeeRange, perDayFee, allowedFormats, formatFeeOf, formatAllowsDate } from '../../lib/placeFee'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
 export type Place = {
@@ -41,6 +41,16 @@ export type Place = {
   details: Record<string, string> | null
   // 何ヶ月先まで申し込めるか。null は上限なし
   apply_within_months: number | null
+  // 形態（キッチンカー・物販・催事PR）ごとの出店料と条件。
+  // 未設定なら、これまでどおり全部の形態を選べて金額も案件全体の設定を使う
+  format_fees: Record<string, {
+    placeFee?: number | null
+    companyFee?: number | null
+    sharePct?: number | null
+    companySharePct?: number | null
+    note?: string | null
+    dows?: number[] | null
+  }> | null
 }
 
 // 案件フォームで選んだ値を、画面に出す日本語に直す
@@ -550,12 +560,38 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                   <>
                     <div style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', marginBottom: '14px' }}>出店形式を選択してください</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
-                      {['キッチンカー', 'テント'].map(opt => (
-                        <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', border: format === opt ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '12px 14px', fontSize: '14px', color: '#1a1a1a', background: format === opt ? '#FFFBEB' : '#fff' }}>
-                          <input type="radio" name="format" checked={format === opt} onChange={() => setFormat(opt)} style={{ accentColor: '#F5A623' }} />
-                          {opt}
-                        </label>
-                      ))}
+                      {/* 受け入れる形態は案件ごとに決める。
+                          設定していない案件は、これまでどおり全部出す */}
+                      {allowedFormats(place.format_fees).map(opt => {
+                        const ff = formatFeeOf(place.format_fees, opt)
+                        // その形態の金額。空欄の項目は案件全体の設定を使う
+                        const fixed = (ff?.placeFee ?? place.price_fixed ?? 0) + (ff?.companyFee ?? place.company_fixed_amount ?? 0)
+                        const pct = (ff?.sharePct ?? place.price_share_pct ?? 0) + (ff?.companySharePct ?? place.company_share_pct ?? 0)
+                        const dows = Array.isArray(ff?.dows) ? ff!.dows!.filter(n => n >= 0 && n <= 6) : []
+                        return (
+                          <label key={opt} style={{ display: 'block', cursor: 'pointer', border: format === opt ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '12px 14px', fontSize: '14px', color: '#1a1a1a', background: format === opt ? '#FFFBEB' : '#fff' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input type="radio" name="format" checked={format === opt} onChange={() => setFormat(opt)} style={{ accentColor: '#F5A623' }} />
+                              <span style={{ fontWeight: 700 }}>{opt}</span>
+                            </span>
+                            {/* 形態ごとの金額と条件。以前は概要欄に文章で書いていたので見落とされていた */}
+                            {ff && (
+                              <span style={{ display: 'block', marginTop: '6px', paddingLeft: '26px', fontSize: '12.5px', color: '#475569', lineHeight: 1.8 }}>
+                                出店料：
+                                {fixed === 0 && pct === 0
+                                  ? <span style={{ color: '#B45309' }}>要相談</span>
+                                  : <>
+                                      {fixed > 0 && <strong>{fixed.toLocaleString()}円/日</strong>}
+                                      {fixed > 0 && pct > 0 && ' ＋ '}
+                                      {pct > 0 && <strong>売上の{pct}%</strong>}
+                                    </>}
+                                {ff.note && <><br />区画：{ff.note}</>}
+                                {dows.length > 0 && <><br />出店できる曜日：{dows.map(d => ['日','月','火','水','木','金','土'][d]).join('・')}</>}
+                              </span>
+                            )}
+                          </label>
+                        )
+                      })}
                     </div>
                     <div style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', marginBottom: '8px' }}>出店希望日</div>
                     {place.schedule && place.schedule.filter(d => d.date).length > 0 ? (
@@ -565,9 +601,13 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                           // 申込の上限より先の日は選べない。日程そのものは案件の情報なので消さず、
                           // チェックだけできない形にして残す
                           const over = !!applyLimitStr && d.date > applyLimitStr
+                          // 選んだ形態で出られない曜日の日は選べない。
+                          // 日程そのものは案件の情報なので消さず、チェックだけできない形にする
+                          const wrongDow = !!format && !formatAllowsDate(place.format_fees, format, d.date)
+                          const off = over || wrongDow
                           return (
-                          <label key={d.date} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: over ? 'default' : 'pointer', border: selectedDates.includes(d.date) ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: over ? '#AAA' : '#1a1a1a', background: over ? '#FAFAFA' : (selectedDates.includes(d.date) ? '#FFFBEB' : '#fff') }}>
-                            <input type="checkbox" disabled={over} checked={selectedDates.includes(d.date)} onChange={() => toggleDate(d.date)} style={{ accentColor: '#F5A623' }} />
+                          <label key={d.date} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: off ? 'default' : 'pointer', border: selectedDates.includes(d.date) ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: off ? '#AAA' : '#1a1a1a', background: off ? '#FAFAFA' : (selectedDates.includes(d.date) ? '#FFFBEB' : '#fff') }}>
+                            <input type="checkbox" disabled={off} checked={selectedDates.includes(d.date)} onChange={() => toggleDate(d.date)} style={{ accentColor: '#F5A623' }} />
                             <span>
                               {/* どの日がいくらなのかを選ぶ場面なので、日付と時刻、項目名と金額が
                                   それぞれ別の行に分かれないよう、まとまりごとに包んでいる */}
@@ -579,6 +619,13 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                                 if (f.placeFee == null && f.companyFee == null) return null
                                 return <span className='nowrap-unit' style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {total.toLocaleString()}円</span>
                               })()}
+                              {/* なぜ選べないのかを、その日の横に出す。
+                                  灰色になっているだけでは理由が分からない */}
+                              {wrongDow && (
+                                <span style={{ marginLeft: '6px', fontSize: '11.5px', color: '#DC2626' }}>
+                                  この曜日は{format}では出店できません
+                                </span>
+                              )}
                             </span>
                           </label>
                           )

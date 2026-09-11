@@ -12,7 +12,7 @@ import { formatVehicleSize } from '../lib/vehicleSize'
 import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
-import { perDayFee, dayTypeFee, hasDayTypeFee } from '../lib/placeFee'
+import { perDayFee, dayTypeFee, hasDayTypeFee, formatFee, formatShare } from '../lib/placeFee'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
 import MailTemplates from './MailTemplates'
@@ -462,7 +462,7 @@ export default function AdminPage() {
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
-  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, schedule: unknown, day_type_fees: unknown }
+  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, schedule: unknown, day_type_fees: unknown, format_fees: unknown, format: string | null }
   const [approvedApps, setApprovedApps] = useState<ApprovedApp[]>([])
   const [saleAppId, setSaleAppId] = useState('')
   const [saleDate, setSaleDate] = useState('')
@@ -479,21 +479,31 @@ export default function AdminPage() {
 
   // 料金を計算（取引先分・弊社利益・お支払い総額を返す。per_event固定は日次では0扱い＝次フェーズ）
   // date を渡すと、その日に金額が設定されていればそちらを使う
-  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number; schedule?: unknown; day_type_fees?: unknown }, ov: string = '', date: string | null = null) => {
+  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number; schedule?: unknown; day_type_fees?: unknown; format_fees?: unknown; format?: string | null }, ov: string = '', date: string | null = null) => {
     const rate = ov === 'ex8' ? 8 : ov === 'ex10' ? 10 : (a.share_tax_rate || 8)
     const basis = ov === 'ex8' || ov === 'ex10' ? 'tax_excluded' : ov === 'as_entered' ? 'as_entered' : (a.share_tax_basis || 'as_entered')
     const base = basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
-    // 金額の優先順位: 日程に入れたその日の額 → 平日/土日祝の額 → 案件全体の固定額
+    // 金額の優先順位:
+    //   日程に入れたその日の額 → 形態（キッチンカー/物販/催事PR）ごとの額
+    //   → 平日/土日祝の額 → 案件全体の固定額
+    // 形態を日付より先にしないのは、特定の日のイベント価格をいちばん強くしたいため
     const day = perDayFee(a.schedule, date)
+    const fmt = formatFee(a.format_fees, a.format)
     const dt = dayTypeFee(a.day_type_fees, date)
     const placeFixed = day.placeFee != null ? day.placeFee
+      : fmt.placeFee != null ? fmt.placeFee
       : dt.placeFee != null ? dt.placeFee
       : (a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0))
     const companyFixed = day.companyFee != null ? day.companyFee
+      : fmt.companyFee != null ? fmt.companyFee
       : dt.companyFee != null ? dt.companyFee
       : (a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0))
-    const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
-    const companyFee = Math.floor(companyFixed + base * (a.company_share_pct || 0) / 100)
+    // 歩合も形態で変えられる（物販は固定額のみ、キッチンカーは歩合ありなど）
+    const fs = formatShare(a.format_fees, a.format)
+    const placePct = fs.sharePct != null ? fs.sharePct : (a.price_share_pct || 0)
+    const companyPct = fs.companySharePct != null ? fs.companySharePct : (a.company_share_pct || 0)
+    const placeFee = Math.floor(placeFixed + base * placePct / 100)
+    const companyFee = Math.floor(companyFixed + base * companyPct / 100)
     return { placeFee, companyFee, totalPay: placeFee + companyFee, basis, rate }
   }
 
@@ -501,7 +511,7 @@ export default function AdminPage() {
   const loadApprovedApps = async () => {
     const { data } = await supabase
       .from('applications')
-      .select('id, place_id, seller_id, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees), profiles!applications_seller_id_fkey(name)')
+      .select('id, place_id, seller_id, format, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees), profiles!applications_seller_id_fkey(name)')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
     const mapped: ApprovedApp[] = (data || []).map((a: any) => ({
@@ -512,7 +522,11 @@ export default function AdminPage() {
       company_fixed_unit: a.places?.company_fixed_unit || 'per_day', company_share_pct: a.places?.company_share_pct || 0,
       share_tax_basis: a.places?.share_tax_basis || 'as_entered', share_tax_rate: a.places?.share_tax_rate || 8,
       schedule: a.places?.schedule ?? null,
-      day_type_fees: a.places?.day_type_fees ?? null
+      day_type_fees: a.places?.day_type_fees ?? null,
+      // 形態（キッチンカー/物販/催事PR）ごとに金額が変わる案件があるため、
+      // 申込の形態と案件の形態別の設定を一緒に持つ
+      format_fees: a.places?.format_fees ?? null,
+      format: a.format ?? null
     }))
     setApprovedApps(mapped)
   }
