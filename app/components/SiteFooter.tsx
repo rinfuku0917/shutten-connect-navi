@@ -14,6 +14,15 @@ const cols: { head: string; icon: string; items: { href: string; label: string }
     { href: '/vendor/event', label: 'イベント・マルシェ・お祭り' },
     { href: '/vendor/cost', label: 'キッチンカーを呼ぶ費用' },
     { href: '/sellers', label: '登録キッチンカーを見る' },
+    // エリア別のページは、サイトマップに入れていたのに
+    // サイトの中のどこからも辿れなかった。検索エンジンは
+    // 「サイトマップにしか無いページ」を低く見るため、ここから繋ぐ。
+    // 全部の県を並べるとフッターが重くなるので、相談の多い4県だけ置き、
+    // 残りは /vendor のエリア一覧から辿れるようにしている
+    { href: '/vendor/area/tokyo', label: '東京のキッチンカー手配' },
+    { href: '/vendor/area/kanagawa', label: '神奈川のキッチンカー手配' },
+    { href: '/vendor/area/saitama', label: '埼玉のキッチンカー手配' },
+    { href: '/vendor/area/chiba', label: '千葉のキッチンカー手配' },
   ] },
   { head: 'キッチンカーで出店したい方', icon: '/ic-f-space.webp', items: [
     { href: '/space', label: '出店したい方へ' },

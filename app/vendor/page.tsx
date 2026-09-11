@@ -8,6 +8,7 @@ import MeetingRequestForm from '../components/MeetingRequestForm'
 import JsonLd from '../components/JsonLd'
 import { SITE_URL, OG_DEFAULT_IMAGE } from '../lib/seo'
 import { VENDOR_FAQ, faqJsonLd } from '../lib/faq'
+import { AREAS } from './area/areas'
 import FaqList from '../components/FaqList'
 
 // キッチンカーを呼びたい側（施設・イベント運営・企業・自治体）向けのページ。
@@ -316,6 +317,30 @@ export default function VendorPage() {
       </div>
 
       {/* 会員登録の前でも相談できる導線。掲載を迷っている段階の方向け */}
+
+      {/* エリア別のページへの入口。
+          サイトマップには入れていたのに、サイトの中のどこからも
+          辿れない状態だった（トップにも、このページにも1本も無かった）。
+          検索エンジンは「サイトマップにしか無いページ」を低く見るうえ、
+          「キッチンカー 派遣 東京」のような地域名つきの検索を
+          受けるのはまさにこのページなので、ここから辿れるようにする */}
+      <div style={{ background: '#FFFBF0', padding: '46px 24px' }}>
+        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+          <h2 className='jp-head' style={H2}>エリアごとの費用と会場の例</h2>
+          <p className='jp-text' style={{ fontSize: '14px', color: '#555', lineHeight: 1.9, margin: '14px 0 18px' }}>
+            お探しの地域のページに、費用の相場、その土地で相談の多い会場、
+            対応している出店者の数、募集中の案件をまとめています。
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            {AREAS.map(a => (
+              <Link key={a.slug} href={'/vendor/area/' + a.slug}
+                style={{ display: 'inline-block', border: '1.5px solid #F5A623', background: '#fff', color: '#B45309', borderRadius: '999px', padding: '10px 18px', fontSize: '14px', fontWeight: 700, textDecoration: 'none', minHeight: '44px', lineHeight: '24px' }}>
+                {a.name}のキッチンカー手配
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* 関連する記事。
           記事側からこのページへはリンクしているのに、こちらから記事へは
