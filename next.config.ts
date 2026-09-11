@@ -26,6 +26,22 @@ const REDIRECTS = MERGED_POSTS.map(m => ({
   permanent: true,
 }))
 
+// 作りかけのページが本番に出たままになっていた2本の後始末。
+//
+// app/login/login./page.tsx と app/register/registre/page.tsx という
+// ディレクトリが残っており、/login/login. と /register/registre として
+// 本番で開ける状態だった（どちらも200を返していた）。
+// サイトの中からリンクはしていないが、次の2つの害があった。
+//   ・/register/registre は古い登録フォームで、supabase.auth.signUp を
+//     実際に呼ぶ。ここから登録すると「何を見て知ったか」が記録されない
+//   ・/login/login. はログインの処理が入っていない。パスワードを入れて
+//     ボタンを押しても何も起きない
+// ディレクトリは消したうえで、開いた人が迷子にならないよう本物へ送る。
+REDIRECTS.push(
+  { source: '/register/registre', destination: '/register', permanent: true },
+  { source: '/login/login.', destination: '/login', permanent: true },
+)
+
 
 const nextConfig: NextConfig = {
   // 記事の本文に入っている画像は、Supabase のストレージから元の大きさのまま
