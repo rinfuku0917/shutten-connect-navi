@@ -15,7 +15,7 @@ import FaqList from '../../components/FaqList'
 // などで検索した主催者が着く想定。
 
 export const metadata: Metadata = {
-  title: { absolute: 'イベントのフード出店を手配 - 出店コネクトナビ' },
+  title: { absolute: 'イベントのキッチンカー手配・フード出店 - 出店コネクトナビ' },
   description:
     'イベントでの出店にお困りの方へ。マルシェ、地元のお祭り、商店街や自治会の催し、社内イベントへのフード出店・キッチンカーを手配します。1台からご相談可能、ご相談は無料です。',
   alternates: { canonical: '/vendor/event' },
@@ -166,7 +166,7 @@ export default function EventVendorPage() {
           <h1 className='jp-head' style={{ fontSize: 'clamp(19px,5.1vw,30px)', fontWeight: 900, color: '#fff', marginBottom: '16px', lineHeight: 1.45 }}>
             <span className='u'>イベントでの出店に</span><wbr /><span className='u'>お困りの方へ</span>
             <br />
-            <span className='u'>フード出店を手配します</span>
+            <span className='u'>キッチンカーと</span><wbr /><span className='u'>フード出店を手配します</span>
           </h1>
           <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
             小さなマルシェ、地元のお祭り、商店街や自治会の催し、学校行事、社内イベント。

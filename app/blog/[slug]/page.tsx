@@ -6,6 +6,7 @@ import type { Metadata } from 'next'
 import SiteHeader from '../../components/SiteHeader'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
+import PostCta from '../../components/PostCta'
 import JsonLd from '../../components/JsonLd'
 import { SITE_URL, ORG, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../lib/seo'
 import { firstImage } from '../../lib/postImage'
@@ -160,17 +161,20 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         <RelatedPlaces
           places={related}
           lead={
-            post.related_prefecture
-              ? `${post.related_prefecture}で募集中の出店場所です。`
-              : 'いま募集中の出店場所です。'
+            // 募集者向けの記事に来た人は、出店する場所を探してはいない。
+            // 枠は内部リンクとして残しつつ、
+            // 「どんな場所で実際に動いているか」の例として見せる
+            post.category === '募集者向け'
+              ? (post.related_prefecture
+                  ? `${post.related_prefecture}でいま募集している場所の例です。`
+                  : 'いま実際に募集している場所の例です。')
+              : (post.related_prefecture
+                  ? `${post.related_prefecture}で募集中の出店場所です。`
+                  : 'いま募集中の出店場所です。')
           }
         />
 
-        <div style={{ marginTop: '48px', padding: '28px', background: 'linear-gradient(135deg, #F5A623, #F9C349)', borderRadius: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '18px', fontWeight: 900, color: '#fff', marginBottom: '8px' }}>出店場所をお探しですか？</div>
-          <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.95)', marginBottom: '18px' }}>全国の出店場所と出店者をつなぐマッチングサービス。登録は無料です。</div>
-          <Link href="/register" style={{ display: 'inline-block', background: '#fff', color: '#B45309', padding: '12px 32px', borderRadius: '999px', fontWeight: 900, textDecoration: 'none', fontSize: '15px' }}>無料で登録する</Link>
-        </div>
+        <PostCta category={post.category} />
       </article>
 
       <SiteFooter />
