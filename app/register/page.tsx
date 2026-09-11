@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import { sourcesFor } from '../lib/signupSource'
 import { track } from '../lib/ga'
 
 const AREA_GROUPS: { region: string, prefs: string[] }[] = [
@@ -21,6 +22,10 @@ export default function RegisterPage() {
   const [name, setName] = useState('')
   const [nameKana, setNameKana] = useState('')
   const [company, setCompany] = useState('')
+  // 何を見て知ったか。どの入口から来た方なのかが分からないと、
+  // どこに手をかけるべきかの判断ができない
+  const [foundVia, setFoundVia] = useState('')
+  const [foundNote, setFoundNote] = useState('')
   const [address, setAddress] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -69,6 +74,8 @@ export default function RegisterPage() {
       name, role, name_kana: nameKana, address, phone,
     }
     if (company) metadata.shop_name = company
+    if (foundVia) metadata.found_via = foundVia
+    if (foundNote.trim()) metadata.found_note = foundNote.trim()
     if (role === 'seller' && areas.length > 0) metadata.areas = areas
     const { error: err } = await supabase.auth.signUp({
       email, password,
@@ -85,6 +92,9 @@ export default function RegisterPage() {
           shop_name: company || null,
           email, phone,
           areas: role === 'seller' ? areas : null,
+          // 何を見て知ったか。この API で記録も行う
+          found_via: foundVia || null,
+          found_note: foundNote.trim() || null,
         }),
       })
     } catch (e) {
@@ -190,6 +200,31 @@ export default function RegisterPage() {
               </div>
             </div>
           )}
+
+          {/* 何を見て知ったか。任意にしているのは、
+              必須にして登録の手前で離脱されるほうが損だから */}
+          <div style={{marginBottom:'24px'}}>
+            <label style={labelStyle}>
+              当サイトを何でお知りになりましたか？
+              <span style={{fontSize:'11px',fontWeight:400,color:'#999',marginLeft:'6px'}}>任意</span>
+            </label>
+            <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+              {sourcesFor(role).map(o => (
+                <label key={o.value} style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',border:foundVia===o.value?'2px solid #F5A623':'1px solid #E5D5A0',borderRadius:'8px',padding:'11px 13px',fontSize:'13.5px',color:'#1a1a1a',background:foundVia===o.value?'#FFF3C4':'#FFFBF0',minHeight:'44px'}}>
+                  <input type='radio' name='found_via' checked={foundVia===o.value}
+                    onChange={()=>{ setFoundVia(o.value); if(o.value!=='other') setFoundNote('') }}
+                    style={{accentColor:'#F5A623',width:'18px',height:'18px'}}/>
+                  {o.label}
+                </label>
+              ))}
+            </div>
+            {/* 「その他」と「紹介」は、中身が分かると次の手が打てる */}
+            {(foundVia === 'other' || foundVia === 'referral') && (
+              <input value={foundNote} onChange={e=>setFoundNote(e.target.value)}
+                placeholder={foundVia === 'referral' ? '紹介してくださった方・会社名（任意）' : 'どちらでお知りになりましたか（任意）'}
+                style={{...inputStyle,marginTop:'8px'}}/>
+            )}
+          </div>
 
           <button onClick={handleRegister} disabled={loading} style={{width:'100%',background:loading?'#ccc':'#F5A623',color:'#fff',border:'none',borderRadius:'8px',padding:'14px',fontSize:'15px',fontWeight:'900',cursor:loading?'not-allowed':'pointer',marginBottom:'16px',boxShadow:'0 4px 12px rgba(245,166,35,0.3)'}}>
             {loading?'登録中...':'この内容で無料登録する'}

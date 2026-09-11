@@ -13,6 +13,7 @@ import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee, formatFee, formatShare } from '../lib/placeFee'
+import { sourceLabel } from '../lib/signupSource'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
 import MailTemplates from './MailTemplates'
@@ -1668,7 +1669,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'blog' && authChecked) loadPosts() }, [tab, authChecked])
   useEffect(() => { if (tab === 'places' && authChecked) loadPlacesList() }, [tab, authChecked])
   useEffect(() => { if ((tab === 'sellers' || tab === 'dashboard') && authChecked) loadSellersList() }, [tab, authChecked])
-  useEffect(() => { if (tab === 'dashboard' && authChecked) loadStats() }, [tab, authChecked])
+  useEffect(() => { if (tab === 'dashboard' && authChecked) { loadStats(); loadSources() } }, [tab, authChecked])
   type ImportedSeller = { id: string, reg_no: number | null, registered_at: string | null, shop_name: string | null, rep_name: string | null, email: string | null, address: string | null, phone: string | null, area: string | null, genre: string | null }
   const [imported, setImported] = useState<ImportedSeller[]>([])
   const [importedLoading, setImportedLoading] = useState(false)
@@ -1732,6 +1733,27 @@ const previewDoc = async (fileUrl: string) => {
 
   type RecentApp = { id: string, name: string, place: string, date: string, status: string }
   const [statCounts, setStatCounts] = useState({ sellers: 0, hosts: 0, places: 0, monthApps: 0, gmv: 0, fee: 0, totalApps: 0, approvedApps: 0 })
+
+  // 「何を見て知ったか」の集計。どの入口から来た方が多いのかを見る
+  type SourceRow = { found_via: string | null; found_note: string | null; role: string | null; name: string | null; created_at: string }
+  const [sources, setSources] = useState<SourceRow[]>([])
+  const [sourcesErr, setSourcesErr] = useState('')
+  const loadSources = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const res = await fetch('/api/admin/signup-sources', {
+      headers: { Authorization: 'Bearer ' + session.access_token },
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setSourcesErr(j.needsSetup
+        ? '「何を見て知ったか」を保存する表がまだ作られていません。Supabase で 20260911_signup_source.sql を実行してください。'
+        : (j.error || '読み込めませんでした'))
+      return
+    }
+    setSourcesErr('')
+    setSources(j.items || [])
+  }
   const [recentApps, setRecentApps] = useState<RecentApp[]>([])
   const loadStats = async () => {
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
@@ -1959,6 +1981,90 @@ const previewDoc = async (fileUrl: string) => {
                     ))}
                   </div>
                 </div>
+              </div>
+
+              {/* 何を見て知ったか。どの入口から来た方が多いのかが分かると、
+                  どこに手をかけるべきかを決められる */}
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden', marginTop: '16px' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid #E2E8F0', fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span>何を見て知ったか</span>
+                  <span style={{ fontSize: '11px', fontWeight: 400, color: '#94A3B8' }}>新規登録のときに答えていただいたもの（任意）</span>
+                </div>
+                {sourcesErr ? (
+                  <div style={{ padding: '16px 18px', fontSize: '12.5px', color: '#B45309', background: '#FFFBEB', lineHeight: 1.8 }}>{sourcesErr}</div>
+                ) : sources.length === 0 ? (
+                  <div style={{ padding: '20px 18px', color: '#999', fontSize: '13px', lineHeight: 1.8 }}>
+                    まだ回答がありません。<br />
+                    <span style={{ fontSize: '12px' }}>この項目を作る前に登録された方は、ここには出ません。</span>
+                  </div>
+                ) : (() => {
+                  // 出店者と募集者で入口が違うため、分けて数える
+                  const tally = (role: string) => {
+                    const rows = sources.filter(x => x.role === role)
+                    const m = new Map<string, number>()
+                    for (const r of rows) m.set(r.found_via || '', (m.get(r.found_via || '') || 0) + 1)
+                    return { total: rows.length, list: Array.from(m.entries()).sort((a, b) => b[1] - a[1]) }
+                  }
+                  const groups: { role: string; label: string; color: string }[] = [
+                    { role: 'host', label: '募集する側（お店を呼びたい）', color: '#1D4ED8' },
+                    { role: 'seller', label: '出店する側', color: '#B45309' },
+                  ]
+                  return (
+                    <div style={{ padding: '14px 18px' }}>
+                      <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        {groups.map(g => {
+                          const t = tally(g.role)
+                          return (
+                            <div key={g.role}>
+                              <div style={{ fontSize: '12.5px', fontWeight: 800, color: g.color, marginBottom: '8px' }}>
+                                {g.label}<span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '6px' }}>{t.total}件</span>
+                              </div>
+                              {t.total === 0 ? (
+                                <div style={{ fontSize: '12px', color: '#94A3B8' }}>まだ回答がありません。</div>
+                              ) : t.list.map(([via, n]) => (
+                                <div key={via} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                  <div style={{ flex: 1, minWidth: 0, fontSize: '12px', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {sourceLabel(via)}
+                                  </div>
+                                  {/* 数だけだと比べにくいので、割合を棒で出す */}
+                                  <div style={{ width: '90px', height: '8px', background: '#F1F5F9', borderRadius: '999px', overflow: 'hidden', flexShrink: 0 }}>
+                                    <div style={{ width: Math.round(n / t.total * 100) + '%', height: '100%', background: g.color }} />
+                                  </div>
+                                  <div style={{ width: '58px', textAlign: 'right', fontSize: '11.5px', color: '#64748B', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                                    {n}件 {Math.round(n / t.total * 100)}%
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* 「紹介」「その他」は中身が分かると次の手が打てる */}
+                      {(() => {
+                        const notes = sources.filter(x => x.found_note)
+                        if (notes.length === 0) return null
+                        return (
+                          <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #F1F5F9' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#334155', marginBottom: '8px' }}>
+                              書いていただいた内容（{notes.length}件）
+                            </div>
+                            <div style={{ display: 'grid', gap: '6px' }}>
+                              {notes.slice(0, 12).map((x, i) => (
+                                <div key={i} style={{ fontSize: '12px', color: '#475569', lineHeight: 1.8 }}>
+                                  ・{sourceLabel(x.found_via)}：{x.found_note}
+                                  <span style={{ color: '#94A3B8', marginLeft: '6px' }}>
+                                    （{x.role === 'host' ? '募集側' : '出店側'}／{new Date(x.created_at).toLocaleDateString('ja-JP')}）
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )
+                })()}
               </div>
             </>
           )}
