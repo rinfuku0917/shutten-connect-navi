@@ -324,8 +324,15 @@ export default function PlaceApplicationsModal({
 
     // 事前請求の金額の初期値に使う、案件の固定の出店料
     const { data: pl } = await supabase
-      .from('places').select('price_fixed, company_fixed_amount').eq('id', placeId).maybeSingle()
+      .from('places').select('price_fixed, company_fixed_amount, schedule').eq('id', placeId).maybeSingle()
     setPlaceFixed((pl?.price_fixed || 0) + (pl?.company_fixed_amount || 0))
+    // 出店日の振り替えで選べる日。案件の日程に入っている、これから先の日だけ
+    {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sc: any[] = Array.isArray(pl?.schedule) ? pl.schedule : []
+      const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      setPlaceDays(sc.map(d => String(d?.date || '')).filter(d => d && d >= today).sort())
+    }
 
     // この案件のために入力された出店者情報。入っていればExcelはその内容で作られる
     const subs = new Map<string, string>()
@@ -435,6 +442,43 @@ export default function PlaceApplicationsModal({
   // ふだんは status='cancelled' で残す（キャンセル料の根拠になるため）。
   // ただしテストで作った出店が一覧に残り続けると本物が埋もれるので、
   // 取り消し済みのものだけ消せるようにする。
+  // 出店日の振り替え。取り消して入れ直してもらう必要がないようにする
+  const [placeDays, setPlaceDays] = useState<string[]>([])
+  const [chgAsk, setChgAsk] = useState<{ id: string; who: string; when: string; date: string | null } | null>(null)
+  const [chgDate, setChgDate] = useState('')
+  const [chgReason, setChgReason] = useState('')
+  const [chgNotify, setChgNotify] = useState(true)
+  const [chgBusy, setChgBusy] = useState(false)
+  const [chgErr, setChgErr] = useState<string | null>(null)
+  const runChangeDate = async () => {
+    if (!chgAsk || chgBusy) return
+    if (!chgDate) { setChgErr('新しい出店日を選んでください。'); return }
+    setChgBusy(true); setChgErr(null)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/applications/change-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+        body: JSON.stringify({ applicationId: chgAsk.id, newDate: chgDate, reason: chgReason.trim() || undefined, notify: chgNotify }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const blockers: string[] = Array.isArray(j?.blockers) ? j.blockers : []
+        setChgErr((j.error || '変更できませんでした。') + (blockers.length ? '\n\n・' + blockers.join('\n・') : ''))
+        return
+      }
+      setChgAsk(null); setChgDate(''); setChgReason('')
+      await load()
+    } catch {
+      setChgErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setChgBusy(false)
+    }
+  }
+  // その出店者が、その案件で押さえている日（振り替え先の候補から外す）
+  const takenBySeller = (sellerId: string) =>
+    new Set(sellers.find(x => x.id === sellerId)?.rows.filter(r => r.status !== 'cancelled').map(r => r.apply_date || '') || [])
+
   const [purgeAsk, setPurgeAsk] = useState<{ id: string; who: string; when: string } | null>(null)
   const [purgeBusy, setPurgeBusy] = useState(false)
   const [purgeErr, setPurgeErr] = useState<string | null>(null)
@@ -721,17 +765,35 @@ export default function PlaceApplicationsModal({
                                       「日程を間違えてエントリーした」という連絡に、
                                       これまでは「不採用」しか手が無かった */}
                                   {r.status === 'pending' && (
-                                    <button
-                                      type='button'
-                                      onClick={() => { setCxErr(null); setCxReason(''); setCxBlocked(false); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
-                                      title='日程の間違いなど、出店者から連絡を受けてこの申込を取り消します（不採用の通知は送りません）'
-                                      style={{ marginLeft: 'auto', background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
-                                    >
-                                      申込を取り消す
-                                    </button>
+                                    <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto', flexWrap: 'wrap' }}>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setChgErr(null); setChgReason(''); setChgNotify(true); setChgDate(''); setChgAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date }) }}
+                                        title='出店日だけを別の日に振り替えます（取り消して入れ直す必要はありません）'
+                                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        出店日を変える
+                                      </button>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setCxErr(null); setCxReason(''); setCxBlocked(false); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        title='日程の間違いなど、出店者から連絡を受けてこの申込を取り消します（不採用の通知は送りません）'
+                                        style={{ background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        申込を取り消す
+                                      </button>
+                                    </span>
                                   )}
                                   {r.status === 'approved' && (
                                     <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setChgErr(null); setChgReason(''); setChgNotify(true); setChgDate(''); setChgAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date }) }}
+                                        title='出店日だけを別の日に振り替えます（取り消して入れ直す必要はありません）'
+                                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        出店日を変える
+                                      </button>
                                       <button
                                         type='button'
                                         onClick={() => { setCxErr(null); setCxReason(''); setCxBlocked(false); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
@@ -866,6 +928,67 @@ export default function PlaceApplicationsModal({
         okLabel={ask?.status === 'approved' ? '承認する' : '不採用にする'}
         onOk={apply}
         onCancel={() => { if (!busy) { setAsk(null); setAskErr(null) } }}
+      />
+
+      {/* 出店日の振り替え。取り消して入れ直してもらう必要がないようにする */}
+      <ConfirmDialog
+        open={!!chgAsk}
+        busy={chgBusy}
+        error={chgErr}
+        title='出店日を変えますか？'
+        body={
+          chgAsk
+            ? `${chgAsk.who}／いまの出店日：${chgAsk.when}\n\n` +
+              '取り消して入れ直してもらう必要はありません。日付だけを振り替えます。'
+            : ''
+        }
+        extra={
+          chgAsk ? (() => {
+            // その出店者がすでに押さえている日は候補から外す（重ねての振り替えはできない）
+            const taken = takenBySeller(sellers.find(x => x.rows.some(r => r.id === chgAsk.id))?.id || '')
+            const cand = placeDays.filter(d => !taken.has(d))
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>新しい出店日</div>
+                  {cand.length === 0 ? (
+                    <div style={{ fontSize: '12.5px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', lineHeight: 1.8 }}>
+                      この案件に、振り替えられる空いた日程がありません。<br />
+                      先に案件の編集画面で日程を足してから、もう一度お試しください。
+                    </div>
+                  ) : (
+                    <select value={chgDate} onChange={e => setChgDate(e.target.value)} disabled={chgBusy}
+                      style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '16px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit', background: '#fff' }}>
+                      <option value=''>選んでください</option>
+                      {cand.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+                    </select>
+                  )}
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '5px', lineHeight: 1.7 }}>
+                    案件の日程に入っている、これから先の空いた日だけを選べます。
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・記録に残ります）</div>
+                  <input value={chgReason} onChange={e => setChgReason(e.target.value)} disabled={chgBusy}
+                    placeholder='例：出店者の申し出（日程の間違い）'
+                    style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '16px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }} />
+                </div>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                  <input type='checkbox' checked={chgNotify} onChange={e => setChgNotify(e.target.checked)} disabled={chgBusy}
+                    style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.8 }}>
+                    出店者・募集者・運営へ知らせる<br />
+                    <span style={{ color: '#94A3B8' }}>変更前と変更後の日付を書いたお知らせが届きます。テストの片づけならチェックを外してください。</span>
+                  </span>
+                </label>
+              </div>
+            )
+          })() : null
+        }
+        okLabel='この日に変える'
+        okDisabled={!chgDate}
+        onOk={runChangeDate}
+        onCancel={() => { if (!chgBusy) { setChgAsk(null); setChgErr(null) } }}
       />
 
       {/* 取り消した出店を完全に消す。テストデータの片づけ用 */}
