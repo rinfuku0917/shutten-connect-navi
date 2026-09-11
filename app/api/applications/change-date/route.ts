@@ -100,21 +100,41 @@ export async function POST(req: Request) {
       blockers.push('当日の進行（車両の搬入〜撤収）が記録されています。実際に出店された日は動かせません')
     }
 
-    // 請求書。その申込に紐づくもの、同じ月のもの、明細に載っているもの
+    // 請求書。その申込に紐づくもの、明細に載っているもの、
+    // そして「動かす前の月」と「動かした先の月」の両方を見る。
+    // 移動先の月だけ見ないと、すでに請求を出した月へ日付を入れられてしまい、
+    // 確定した請求書の中身と実際の出店がずれる
     const { data: invs } = await db
       .from('invoices').select('invoice_no, period, application_id, items')
       .eq('seller_id', app.seller_id).is('voided_at', null)
+    // items は jsonb だが、文字列で入っている行もある。文字列なら読み直す
+    const itemsOf = (raw: unknown): { applicationId?: string }[] => {
+      if (Array.isArray(raw)) return raw as { applicationId?: string }[]
+      if (typeof raw === 'string') {
+        try {
+          const v = JSON.parse(raw)
+          if (Array.isArray(v)) return v
+          if (v && Array.isArray(v.items)) return v.items
+        } catch { /* 読めない形は空として扱う */ }
+      }
+      if (raw && typeof raw === 'object' && Array.isArray((raw as { items?: unknown[] }).items)) {
+        return (raw as { items: { applicationId?: string }[] }).items
+      }
+      return []
+    }
+    const months = new Set(
+      [app.apply_date ? String(app.apply_date).slice(0, 7) : '', nd.slice(0, 7)].filter(Boolean),
+    )
     const hit = (invs || []).filter((i: { period?: string; application_id?: string; items?: unknown }) => {
       if (i.application_id === app.id) return true
-      const its = Array.isArray(i.items) ? i.items : []
-      if (its.some((it: { applicationId?: string }) => it?.applicationId === app.id)) return true
-      return !!app.apply_date && i.period === String(app.apply_date).slice(0, 7)
+      if (itemsOf(i.items).some(it => it?.applicationId === app.id)) return true
+      return !!i.period && months.has(i.period)
     })
     if (hit.length > 0) {
       blockers.push(
         '請求書が発行されています（'
-        + hit.map((i: { invoice_no: string }) => i.invoice_no).join('、')
-        + '）。先に「売上管理」でその請求書を取り消してください',
+        + hit.map((i: { invoice_no: string; period?: string }) => i.invoice_no + (i.period ? '／' + i.period : '')).join('、')
+        + '）。動かす前の月と動かす先の月の両方を見ています。先に「売上管理」でその請求書を取り消してください',
       )
     }
 
@@ -139,10 +159,12 @@ export async function POST(req: Request) {
     }
 
     // 同じ出店者が、その日に別の申込を持っていないか
+    // .neq('status','cancelled') だけだと、status が NULL の行が
+    // Postgres の NULL 比較で結果から落ちる。or で拾う
     const { data: dup } = await db
       .from('applications').select('id, status')
       .eq('place_id', app.place_id).eq('seller_id', app.seller_id).eq('apply_date', nd)
-      .neq('status', 'cancelled')
+      .or('status.is.null,status.neq.cancelled')
     if (dup && dup.length > 0) {
       return NextResponse.json({
         error: 'その日には、この出店者の申込がすでに入っています。重ねての振り替えはできません。',
@@ -160,14 +182,20 @@ export async function POST(req: Request) {
         date_change_reason: typeof reason === 'string' && reason.trim() ? reason.trim() : null,
       })
       .eq('id', applicationId)
-      .eq('status', app.status)   // 同時に他から変わっていたら書き換えない
+      // 同時に他から変わっていたら書き換えない。
+      // status だけだと、別の運営が先に日付を動かしていたときに
+      // 黙って上書きし、変更前の日付の記録も食い違う
+      .eq('status', app.status)
+      .eq('apply_date', app.apply_date)
       .select('id')
     if (upErr) {
       // 何ヶ月先まで申し込めるかの上限（データベース側の確認）で弾かれることがある
       return NextResponse.json({ error: '変更できませんでした: ' + upErr.message }, { status: 409 })
     }
     if (!upd || upd.length === 0) {
-      return NextResponse.json({ error: '変更できませんでした。画面を読み直してからお試しください' }, { status: 409 })
+      return NextResponse.json({
+        error: '変更できませんでした。この申込は、ほかの操作で日付か状態が変わった可能性があります。画面を読み直してからお試しください',
+      }, { status: 409 })
     }
 
     // ---- 知らせる ----

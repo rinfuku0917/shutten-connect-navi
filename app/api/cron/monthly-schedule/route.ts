@@ -92,8 +92,14 @@ export async function GET(req: Request) {
         if (jstLast === thisMonth) { continue }
       }
 
+      // Number(null) と Number('') は 0（日曜）になる。
+      // 曜日の配列に null や空文字が1つ混ざっているだけで、
+      // 指定していない日曜の日程が勝手に足されてしまうため、先に落とす
       const dows: number[] = Array.isArray(p.repeat_dows)
-        ? p.repeat_dows.map((x: unknown) => Number(x)).filter((n: number) => n >= 0 && n <= 6)
+        ? p.repeat_dows
+          .filter((x: unknown) => typeof x === 'number' || (typeof x === 'string' && x.trim() !== ''))
+          .map((x: unknown) => Number(x))
+          .filter((n: number) => Number.isInteger(n) && n >= 0 && n <= 6)
         : []
       if (dows.length === 0) { report.push({ title: p.title || '(案件名なし)', added: 0, note: '曜日が未設定のため見送り' }); continue }
 

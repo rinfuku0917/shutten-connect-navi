@@ -666,8 +666,14 @@ export default function AdminPage() {
     if (adminUid) {
       const { error } = await supabase.from('messages').update({ admin_seen_at: new Date().toISOString() })
         .eq('application_id', appId).neq('sender_id', adminUid).is('admin_seen_at', null)
-      if (error) console.error('既読の記録に失敗しました', error.message)
-      else loadThreads()
+      if (error) {
+        // 黙って失敗すると「未読の数字が減らない不具合」に見える。
+        // 何が起きたかを画面に出す
+        console.error('既読の記録に失敗しました', error.message)
+        showNotice('既読の記録に失敗しました（未読の数字が残ります）: ' + error.message)
+      } else loadThreads()
+    } else {
+      showNotice('ログインの情報が取れませんでした。既読の記録ができないため、読み込み直してください。')
     }
   }
 
@@ -1066,6 +1072,44 @@ export default function AdminPage() {
       console.error(e)
     }
     setReminding(false)
+  }
+
+  // 毎月の日程追加を、その場で1回だけ走らせる。
+  // ふだんは毎月1日に自動で動くが、設定したその日に確かめたいことがある
+  const [repeatRunning, setRepeatRunning] = useState(false)
+  const runMonthlySchedule = async () => {
+    if (!(await ask({
+      title: '翌月の日程を、いま追加しますか？',
+      body: '「毎月おなじ条件で日程を足す」を設定してある案件に、翌月ぶんの日程を入れます。\n\n'
+        + '・募集を終えた案件には入りません\n'
+        + '・すでに入っている日は飛ばします\n'
+        + '・入ったら募集者と運営にお知らせのメールが届きます\n\n'
+        + '同じ月に二度は入りません（今月すでに動いていれば、その案件は飛ばします）。',
+      okLabel: 'いま実行する',
+    }))) return
+    setRepeatRunning(true)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/cron/monthly-schedule', {
+        headers: { Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { showNotice('実行できませんでした: ' + (j.error || '不明なエラー')); setRepeatRunning(false); return }
+      if (!j.targets) showNotice('「毎月おなじ条件で日程を足す」を設定した案件がまだありません。案件の編集画面で設定してください。', 'info')
+      else if (!j.added) {
+        // 何も入らなかったときは、案件ごとの理由をそのまま出す
+        const notes = Array.isArray(j.report)
+          ? j.report.map((r: { title: string; note?: string }) => '・' + r.title + (r.note ? '：' + r.note : '')).join('\n')
+          : ''
+        showNotice('追加する日はありませんでした。\n' + notes, 'info')
+      } else {
+        showNotice(j.added + '日ぶんの日程を追加しました。募集者と運営にお知らせのメールを送りました。', 'ok')
+      }
+      loadPlacesList()
+    } catch {
+      showNotice('通信に失敗しました。もう一度お試しください。')
+    }
+    setRepeatRunning(false)
   }
 
   // ===== 旧サイトの会員CSVの取り込み =====
@@ -1908,6 +1952,23 @@ const previewDoc = async (fileUrl: string) => {
           {/* ===== 案件管理 ===== */}
           {tab === 'places' && (
             <>
+              {/* 毎月の日程追加の手動実行。ふだんは毎月1日に自動で動く。
+                  設定したその日に確かめられないと、来月まで分からない */}
+              <div style={{ background: '#F0FDF4', border: '1px solid #A7F3D0', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '200px', fontSize: '12.5px', color: '#15803D', lineHeight: 1.8 }}>
+                  <strong>毎月の日程追加</strong><br />
+                  <span style={{ color: '#64748B' }}>
+                    案件の編集画面で「毎月おなじ条件で日程を足す」を設定すると、毎月1日に翌月ぶんが入ります。
+                    設定した内容をその場で確かめたいときは、右のボタンで1回だけ実行できます。
+                  </span>
+                </div>
+                <button onClick={runMonthlySchedule} disabled={repeatRunning}
+                  title='「毎月おなじ条件で日程を足す」を設定した案件に、翌月ぶんの日程をいま入れます'
+                  style={{ background: repeatRunning ? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', fontSize: '12.5px', fontWeight: 800, cursor: repeatRunning ? 'wait' : 'pointer', flexShrink: 0, minHeight: '40px', fontFamily: 'inherit' }}>
+                  {repeatRunning ? '実行中…' : 'いま翌月ぶんを入れる'}
+                </button>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
                   <input type="text" placeholder="案件名・エリアで検索" style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', outline: 'none', flex: 1, minWidth: 0 }} />

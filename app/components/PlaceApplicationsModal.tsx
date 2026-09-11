@@ -479,6 +479,21 @@ export default function PlaceApplicationsModal({
   const takenBySeller = (sellerId: string) =>
     new Set(sellers.find(x => x.id === sellerId)?.rows.filter(r => r.status !== 'cancelled').map(r => r.apply_date || '') || [])
 
+  // その日に何台入っているか（承認済み＋審査中）。
+  // 定員はこのサイトでは表示だけで申込を止めていないため、
+  // 振り替えも止めない。ただし混んでいる日が分かるように数を出す
+  const countByDate = (() => {
+    const m = new Map<string, number>()
+    for (const sl of sellers) {
+      for (const r of sl.rows) {
+        if (r.status !== 'approved' && r.status !== 'pending') continue
+        const d = r.apply_date || ''
+        if (d) m.set(d, (m.get(d) || 0) + 1)
+      }
+    }
+    return m
+  })()
+
   const [purgeAsk, setPurgeAsk] = useState<{ id: string; who: string; when: string } | null>(null)
   const [purgeBusy, setPurgeBusy] = useState(false)
   const [purgeErr, setPurgeErr] = useState<string | null>(null)
@@ -960,7 +975,10 @@ export default function PlaceApplicationsModal({
                     <select value={chgDate} onChange={e => setChgDate(e.target.value)} disabled={chgBusy}
                       style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '16px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit', background: '#fff' }}>
                       <option value=''>選んでください</option>
-                      {cand.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+                      {cand.map(d => {
+                        const n = countByDate.get(d) || 0
+                        return <option key={d} value={d}>{fmtDate(d)}{n > 0 ? '（すでに' + n + '台）' : '（空き）'}</option>
+                      })}
                     </select>
                   )}
                   <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '5px', lineHeight: 1.7 }}>
