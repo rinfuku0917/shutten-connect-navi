@@ -10,6 +10,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import { perDayFeeRange, perDayFee, dayTypeFee, allowedFormats, formatFeeOf, formatFee, formatAllowsDate, sortedDows, type FormatFees } from '../../lib/placeFee'
+import { showsCancelled, CANCELLED_VISIBLE_DAYS } from '../../lib/cancelledWindow'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
 export type Place = {
@@ -143,7 +144,7 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
   const [entryDone, setEntryDone] = useState(false)
   // この案件に自分がすでに申し込んでいるか。申込済みなのに
   // 「エントリーする」と出ていると、済んでいないように見えてしまう。
-  type MyEntry = { id: string, apply_date: string | null, status: string }
+  type MyEntry = { id: string, apply_date: string | null, status: string, created_at: string | null }
   const [myEntries, setMyEntries] = useState<MyEntry[]>([])
 
   const loadMyEntries = async () => {
@@ -151,11 +152,22 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
     if (!user || !id) { setMyEntries([]); return }
     const { data } = await supabase
       .from('applications')
-      .select('id, apply_date, status')
+      .select('id, apply_date, status, created_at')
       .eq('place_id', id).eq('seller_id', user.id)
       .order('apply_date', { ascending: true })
-    setMyEntries((data || []) as MyEntry[])
+    // 取り消しから30日を過ぎたものは出さない（マイページと同じ決まり）。
+    // ここに入れ忘れていたため、取り消した申込がいつまでも
+    // 「エントリー済み」として残っていた
+    setMyEntries(((data || []) as MyEntry[]).filter(e => showsCancelled(e)))
   }
+
+  // 生きている申込（審査中・承認済・不採用）と、取り消されたものを分ける。
+  //
+  // 取り消したものを「この案件はエントリー済みです」に混ぜると、
+  // 申し込めるのに申し込み済みに見える（実際に再エントリーはできる）。
+  // 取り消しの履歴はマイページで見られるので、ここでは件数だけ静かに出す。
+  const liveEntries = myEntries.filter(e => e.status !== 'cancelled')
+  const cancelledEntries = myEntries.filter(e => e.status === 'cancelled')
 
   const handleEntryClick = async () => {
     setEntryErr('')
@@ -495,14 +507,14 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                     <div style={{ fontSize: '13px', color: '#666', marginBottom: '16px', lineHeight: 1.7 }}>申込内容はマイページでご確認いただけます。</div>
                     <Link href="/dashboard/seller" style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', textDecoration: 'none' }}>マイページへ</Link>
                   </div>
-                ) : (!showEntry && myEntries.length > 0) ? (
+                ) : (!showEntry && liveEntries.length > 0) ? (
                   /* すでに申し込んでいる場合は、その状態を出す。
                      「エントリーする」だけだと未申込に見えてしまうため。 */
                   <>
                     <div style={{ background: '#ECFDF5', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px' }}>
                       <div style={{ fontSize: '14px', fontWeight: 900, color: '#16A34A', marginBottom: '8px' }}>この案件はエントリー済みです</div>
                       <div style={{ display: 'grid', gap: '8px' }}>
-                        {myEntries.map(e => {
+                        {liveEntries.map(e => {
                           const st = e.status === 'approved'
                             ? { label: '承認済', color: '#16A34A' }
                             : e.status === 'rejected'
@@ -516,7 +528,7 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                               <span style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: 700 }}>
                                 {e.apply_date ? e.apply_date.replace(/-/g, '/') : '日程調整中'}
                               </span>
-                              {e.status !== 'rejected' ? (
+                              {e.status === 'approved' || e.status === 'pending' ? (
                                 // 出店者からの取り消しは受け付けない。
                                 // 気軽に取り消せると当日の欠席が増え、
                                 // 募集者は会場や書類の準備を進めているため。
@@ -524,6 +536,9 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                                 //
                                 // 取り消しの連絡先を伝える案内文なので、バッジと同じ11pxでは小さすぎる。
                                 // 13pxに上げ、折り返して自分の行に落ちたときに読めるよう右寄せもやめている
+                                //
+                                // 不採用と取消しには出さない。取消しに出すと
+                                // 「取消し」の札の横に「審査中です」と並んで出ていた
                                 <span className='jp-text' style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748B', lineHeight: 1.7 }}>
                                   {e.status === 'approved' ? '出店が決定しています。' : '審査中です。'}
                                   <br />
@@ -535,6 +550,13 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                         })}
                       </div>
                     </div>
+                    {/* 取り消された申込は上の一覧に出さないが、
+                        何も触れないと「消えた」と不安になるので件数だけ出す */}
+                    {cancelledEntries.length > 0 && (
+                      <div className='jp-text' style={{ fontSize: '12px', color: '#64748B', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', marginBottom: '12px', lineHeight: 1.8 }}>
+                        取り消された申込が{cancelledEntries.length}件あります。内容はマイページでご確認いただけます（取り消しから{CANCELLED_VISIBLE_DAYS}日を過ぎると表示されなくなります）。
+                      </div>
+                    )}
                     <Link href="/dashboard/seller" style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '13px', borderRadius: '8px', fontWeight: '900', fontSize: '14px', textDecoration: 'none', marginBottom: '10px' }}>マイページで確認する</Link>
                     <button onClick={handleEntryClick} style={{ width: '100%', display: 'block', background: '#fff', color: '#3A9BD5', textAlign: 'center', padding: '12px', borderRadius: '8px', fontWeight: '700', fontSize: '13px', border: '1.5px solid #BFDBFE', cursor: 'pointer' }}>
                       別の日程を追加でエントリーする
