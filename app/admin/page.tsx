@@ -594,7 +594,7 @@ export default function AdminPage() {
 
   // ===== メッセージ（管理者）=====
   type MsgThread = { application_id: string, sellerName: string, placeTitle: string, lastBody: string, unread: number, status: string, applyDate: string | null }
-  type AdminMsg = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, file_url?: string | null }
+  type AdminMsg = { id: string, application_id: string, sender_id: string, body: string, sent_at: string, read_at?: string | null, admin_seen_at?: string | null, file_url?: string | null }
   const [threads, setThreads] = useState<MsgThread[]>([])
   const [activeThread, setActiveThread] = useState<string | null>(null)
   const [threadMsgs, setThreadMsgs] = useState<AdminMsg[]>([])
@@ -629,7 +629,7 @@ export default function AdminPage() {
     const { data: msgs } = appIds.length > 0
       ? await supabase
         .from('messages')
-        .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
+        .select('id, application_id, sender_id, body, sent_at, read_at, admin_seen_at, file_url')
         .in('application_id', appIds)
         .order('sent_at', { ascending: true })
       : { data: [] }
@@ -638,7 +638,9 @@ export default function AdminPage() {
     const unreadOf = new Map<string, number>()
     for (const m of all) {
       lastOf.set(m.application_id, m)
-      if (m.sender_id !== uid && !m.read_at) {
+      // 運営の未読は admin_seen_at で数える。read_at は当事者（出店者・募集者）のもので、
+      // それを運営が埋めると、募集者がまだ読んでいないのに未読の印が消えてしまう
+      if (m.sender_id !== uid && !m.admin_seen_at) {
         unreadOf.set(m.application_id, (unreadOf.get(m.application_id) || 0) + 1)
       }
     }
@@ -654,14 +656,18 @@ export default function AdminPage() {
     setActiveThread(appId)
     const { data: msgs } = await supabase
       .from('messages')
-      .select('id, application_id, sender_id, body, sent_at, read_at, file_url')
+      .select('id, application_id, sender_id, body, sent_at, read_at, admin_seen_at, file_url')
       .eq('application_id', appId)
       .order('sent_at', { ascending: true })
     setThreadMsgs((msgs || []) as AdminMsg[])
-    // 相手（出店者）からの未読を既読化
+    // 運営が見た印を付ける。read_at には触らない。
+    // 同じ行を出店者と募集者も見るため、運営が read_at を埋めると
+    // 相手がまだ読んでいないのに未読の印が消える
     if (adminUid) {
-      await supabase.from('messages').update({ read_at: new Date().toISOString() })
-        .eq('application_id', appId).neq('sender_id', adminUid).is('read_at', null)
+      const { error } = await supabase.from('messages').update({ admin_seen_at: new Date().toISOString() })
+        .eq('application_id', appId).neq('sender_id', adminUid).is('admin_seen_at', null)
+      if (error) console.error('既読の記録に失敗しました', error.message)
+      else loadThreads()
     }
   }
 
