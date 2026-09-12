@@ -37,6 +37,9 @@ const CASES: { t: string; d: string; href?: string }[] = [
   { t: '自治体・公共施設の催しに呼びたい', d: '市民まつり、防災訓練、公園イベントなど。必要な許可や書類の確認も含めてサポートします。' },
   { t: 'マンション・団地の住民向けに呼びたい', d: '住民向けの催しや、買い物が不便な地域での定期販売など。' },
   { t: '毎週・毎月決まった曜日に来てほしい', d: '単発ではなく継続的な出店をご希望の場合も、曜日と条件を決めて募集できます。' },
+  // 「誘致」で探す施設の担当者が実際にいるのに、/vendor 系のどのファイルにも
+  // この語が1回も入っていなかった
+  { t: '施設にキッチンカーを誘致したい', d: '商業施設・スーパー・オフィスビル・ゴルフ場などへの誘致。区画の条件と収益の分け方から決められます。', href: '/blog/supermarket-food-truck' },
 ]
 
 const CAN_DO = [
@@ -117,7 +120,10 @@ export default function VendorPage() {
         </div>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <a href='#soudan' style={{ background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '16px', padding: '14px 36px', borderRadius: '999px', textDecoration: 'none', boxShadow: '0 4px 15px rgba(245,166,35,0.4)' }}>まずは相談する</a>
-          <Link href='/sellers' style={{ background: '#fff', color: '#111', fontWeight: 900, fontSize: '16px', padding: '14px 36px', borderRadius: '999px', textDecoration: 'none' }}>登録キッチンカーを見る</Link>
+          {/* 呼びたい方がまず知りたいのは「いくらかかるか」。
+              費用の節へ送る導線が、上に1本も無かった */}
+          <a href='#cost' style={{ background: '#fff', color: '#111', fontWeight: 900, fontSize: '16px', padding: '14px 36px', borderRadius: '999px', textDecoration: 'none' }}>費用の目安を見る</a>
+          <Link href='/sellers' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '16px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>登録キッチンカーを見る</Link>
           <Link href='/register' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '16px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>無料会員登録</Link>
         </div>
       </div>
@@ -252,8 +258,25 @@ export default function VendorPage() {
             <p className='jp-text' style={{ color: '#666', fontSize: '13px', marginBottom: '16px' }}>
               ご相談・お見積りは無料です。会員登録をされる場合も、初期費用や登録料はいただきません。
             </p>
+            {/* 「キッチンカー 派遣 料金」で来た方に、このページで答える節。
+                docs/seo-keywords.md は D-22d をこのページの担当と決めているが、
+                「派遣」と「料金」を並べた見出しがどこにも無かった。
+                金額の内訳は /vendor/cost に書いてあるので、そちらへ送る */}
+            <h3 className='jp-head' style={{ fontSize: '17px', fontWeight: 900, color: '#111', margin: '22px 0 8px' }}>
+              派遣料金はいくらですか
+            </h3>
+            <p className='jp-text' style={{ marginBottom: '10px' }}>
+              台数・時間・場所・曜日で変わるため、一律の派遣料金は設けていません。
+              出店者へお支払いいただく形ではなく、上の2つのどちらかで決まります。
+              1台からご相談いただけます。
+            </p>
+            <p className='jp-text' style={{ marginBottom: '16px' }}>
+              ご自身で募集される場合、掲載も出店者とのやり取りも無料です。
+              手配をお任せいただく場合の運営費は、会場の条件と台数をお聞きしてからお見積りします。
+              お見積りは無料です。
+            </p>
             <Link
-              href='/vendor/cost'
+              href='/vendor/cost#forms'
               style={{ display: 'inline-block', background: '#FFF8EC', border: '1px solid #F5D9A8', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}
             >
               キッチンカーを呼ぶ費用の相場とケース別の見積り例を見る →
@@ -361,6 +384,11 @@ export default function VendorPage() {
                 <li style={{ marginBottom: '10px' }}>
                   <Link href='/blog/invite-food-truck-free' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーを無料で呼ぶには？歩合のみ43件の仕組み</Link>
                   <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>主催者の持ち出しが0円になる条件を、実際の募集から説明しています。</div>
+                </li>
+                {/* イベント主催者向けの記事が、この枠から漏れていた */}
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/how-to-invite-kitchen-car' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>イベントにキッチンカーを呼ぶには？依頼の方法と費用・手順</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>お祭り・マルシェの主催者向け。台数の決め方と当日の進め方まで。</div>
                 </li>
           </ul>
         </div>
