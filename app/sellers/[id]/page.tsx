@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { isExcludedShop } from '../../lib/excludedShops'
 import { createClient } from '@supabase/supabase-js'
 import JsonLd from '../../components/JsonLd'
 import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../lib/seo'
@@ -19,7 +20,7 @@ import SellerDetailClient, { type Seller, type MenuItem, type Review, type SnsLi
 export const revalidate = 600
 
 // 一覧に出さない運営用のアカウント（出店者一覧と同じ扱い）
-const EXCLUDED_SHOP_NAMES = ['株式会社nav', '株式会社アーク']
+// 隠す屋号は app/lib/excludedShops.ts が唯一の正
 
 function client() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -112,7 +113,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
   const name = displayName(seller)
   // 運営用アカウントは検索結果に出さない
-  if (EXCLUDED_SHOP_NAMES.includes(name)) {
+  if (isExcludedShop(name)) {
     return { title: { absolute: `${name} - 出店コネクトナビ` }, robots: { index: false, follow: true } }
   }
   const { menus } = await fetchMenusAndReviews(id)
@@ -146,7 +147,7 @@ export default async function SellerDetailPage({ params }: { params: Promise<{ i
 
   return (
     <>
-      {seller && !EXCLUDED_SHOP_NAMES.includes(name) && (
+      {seller && !isExcludedShop(name) && (
         <>
           <JsonLd
             data={{

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next'
+import { isExcludedShop } from './lib/excludedShops'
 import { createClient } from '@supabase/supabase-js'
 import { isMergedAway } from './lib/mergedPosts'
 import { SITE_URL } from './lib/seo'
@@ -115,25 +116,81 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }
     }
 
-    // 掲載を承認した出店者
+    // 掲載を承認した出店者。
+    //
+    // **中身のあるページだけを申告する。**
+    // 申告していた1,538URLのうち1,386件（90%）が出店者ページで、
+    // そのうち641人は写真0枚・メニュー0件・紹介文なしだった。
+    // 実際に見える固有の文字は名前と都道府県で15字ほどしかなく、
+    // Googleは「クロール済み - インデックス未登録」に落とす。
+    // その数を申告しているぶん、増やしたいページの巡回が後回しになる。
+    //
+    // 外すのはサイトマップからだけで、ページは今までどおり見られる
+    // （公開ページへの noindex 追加は AGENTS.md で禁止している）。
+    // 写真やメニューを登録すれば、次の更新で自動的に入る。
+
+    // メニューを1件でも登録している出店者。先にまとめて引く
+    // （1人ずつ確かめると人数ぶん往復する）
+    //
+    // ここが読めなかったときに絞り込みをかけてはいけない。
+    // メニューだけを登録している出店者が全員こぼれ、
+    // サイトマップが黙って縮む。読めなかったら絞らずに全員申告する
+    // （これまでの動きに戻る）。
+    const hasMenu = new Set<string>()
+    let menusOk = true
+    for (let from = 0; ; from += CHUNK) {
+      const { data, error } = await db
+        .from('menus').select('seller_id').range(from, from + CHUNK - 1)
+      if (error) { menusOk = false; break }
+      if (!data || data.length === 0) break
+      for (const m of data) { if (m.seller_id) hasMenu.add(String(m.seller_id)) }
+      if (data.length < CHUNK) break
+    }
+
+    // いったん全員ぶんを組み立てて、中身があるものだけを選ぶ。
+    // 「選んだ結果がほとんど空になった」ときに気づけるようにするため、
+    // 一度ためてから決める
+    const sellerUrls: { id: string; created_at: string | null; worth: boolean }[] = []
     for (let from = 0; ; from += CHUNK) {
       const { data, error } = await db
         .from('profiles')
-        .select('id, created_at')
+        .select('id, created_at, shop_name, photos, bio')
         .eq('role', 'seller')
         .eq('approval_status', 'approved')
         .range(from, from + CHUNK - 1)
       if (error || !data || data.length === 0) break
       for (const s of data) {
         if (!s.id) continue
-        urls.push({
-          url: `${SITE_URL}/sellers/${s.id}`,
-          lastModified: when(s.created_at) ?? now,
-          changeFrequency: 'monthly',
-          priority: 0.5,
-        })
+        // 運営用のアカウントは、一覧と同じく申告しない
+        if (isExcludedShop(s.shop_name)) continue
+        // 写真1枚以上・メニュー1件以上・紹介文30字以上のいずれかを満たすもの。
+        // 30字は「名前と都道府県だけ」との差が出る目安
+        const photos = Array.isArray(s.photos) ? s.photos.filter(Boolean) : []
+        const bio = typeof s.bio === 'string' ? s.bio.trim() : ''
+        // menus が読めなかったときは絞らない（上のコメントの理由）
+        const worth = !menusOk
+          || photos.length > 0 || hasMenu.has(String(s.id)) || bio.length >= 30
+        sellerUrls.push({ id: String(s.id), created_at: s.created_at ?? null, worth })
       }
       if (data.length < CHUNK) break
+    }
+
+    // 歯止め。
+    //   写真・メニュー・紹介文のどれかが読めなくなると（列名が変わった、
+    //   列ごとの参照制限が入った）、全員が「中身なし」に見えて
+    //   出店者ページがサイトマップから丸ごと消える。
+    //   想定では半分ほどが残るので、9割以上が落ちるのは絞り込みではなく
+    //   読み取りの異常。そのときは絞らずに全員申告する。
+    const kept = sellerUrls.filter(x => x.worth).length
+    const tooMany = sellerUrls.length >= 20 && kept < sellerUrls.length * 0.1
+    for (const s of sellerUrls) {
+      if (!tooMany && !s.worth) continue
+      urls.push({
+        url: `${SITE_URL}/sellers/${s.id}`,
+        lastModified: when(s.created_at) ?? now,
+        changeFrequency: 'monthly',
+        priority: 0.5,
+      })
     }
   } catch {
     // 取得に失敗しても、静的ページ分のサイトマップは返す

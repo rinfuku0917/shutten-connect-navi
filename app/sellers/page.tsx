@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { isExcludedShop } from '../lib/excludedShops'
 import { createClient } from '@supabase/supabase-js'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
@@ -7,7 +8,7 @@ import Link from 'next/link'
 import SellersBrowser, { type Seller } from './SellersBrowser'
 import { sortForListing } from './sellerName'
 
-const EXCLUDED_SHOP_NAMES = ['株式会社nav', '株式会社アーク']
+// 隠す屋号は app/lib/excludedShops.ts が唯一の正
 
 export const revalidate = 600
 
@@ -60,7 +61,7 @@ export default async function SellersPage() {
     // 写真と店名がそろっているものを前に、どちらも無いものを後ろに並べる。
     // 一覧は画像の並びなので、絵も名前も無いカードが混ざると空いて見える。
     sellers = sortForListing(
-      all.filter((s) => !EXCLUDED_SHOP_NAMES.includes((s.shop_name ?? '').trim())),
+      all.filter((s) => !isExcludedShop(s.shop_name)),
     )
   } catch (e) {
     errorMessage = e instanceof Error ? e.message : '不明なエラーが発生しました'
