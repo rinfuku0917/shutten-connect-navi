@@ -8,8 +8,6 @@ import SiteFooter from '../../../components/SiteFooter'
 import MeetingRequestForm from '../../../components/MeetingRequestForm'
 import JsonLd from '../../../components/JsonLd'
 import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../../lib/seo'
-import { COST_FAQ, faqJsonLd } from '../../../lib/faq'
-import FaqList from '../../../components/FaqList'
 import { AREAS, findArea, type Area } from '../areas'
 
 // 「キッチンカー 呼びたい 費用 東京」のように、地名を足して調べる人向けのページ。
@@ -108,7 +106,6 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
   return (
     <div>
       <SiteHeader />
-      <JsonLd data={faqJsonLd(COST_FAQ)} />
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'ホーム', path: '/' },
@@ -332,12 +329,25 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
         </div>
       </div>
 
-      {/* FAQ */}
-      <div style={{ background: '#fff', padding: '48px 24px' }}>
+      {/* 費用のよくある質問は /vendor/cost に置いている。ここには出さない。
+          12問1,478字の同じ文章が、/vendor/cost と10県で計11ページに
+          並んでいた。県ごとの固有原稿は326字ほどなので、
+          共通文がその4.5倍あり、どの県のページも中身が同じに見えていた。
+          県別のFAQを新しく作る手もあるが、実際の運用で確かめていない
+          答えを10県ぶん創作することになるので採らない。 */}
+      <div style={{ background: '#fff', padding: '40px 24px' }}>
         <div style={{ maxWidth: '820px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>費用についてよくある質問</h2>
-          <p className='jp-text' style={LEAD}>ここに無いことも、お気軽にお尋ねください。</p>
-          <FaqList items={COST_FAQ} />
+          <h2 className='jp-head' style={H2}>費用についてのご質問</h2>
+          <p className='jp-text' style={LEAD}>
+            支払いの形、1台あたりの目安、キャンセルの扱いなど、
+            費用についてよくいただくご質問は{area.name}でも共通です。
+          </p>
+          <div style={{ textAlign: 'center' }}>
+            <Link href='/vendor/cost#faq'
+              style={{ display: 'inline-block', background: '#FFF8EC', border: '1px solid #F5D9A8', borderRadius: '10px', padding: '13px 22px', fontSize: '14px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}>
+              費用についてよくある質問を見る（12問） →
+            </Link>
+          </div>
         </div>
       </div>
 

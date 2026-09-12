@@ -498,8 +498,8 @@ export default function VendorCostPage() {
         </div>
       </div>
 
-      {/* FAQ */}
-      <div style={{ background: '#fff', padding: '52px 24px' }}>
+      {/* FAQ。エリア別のページからここへ送っているので、目印を消さないこと */}
+      <div id='faq' style={{ background: '#fff', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '820px', margin: '0 auto' }}>
           <h2 className='jp-head sec-head' style={H2}>費用についてよくある質問<Image src='/ic-cost-faq.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>ここに無いことも、お気軽にお尋ねください。</p>
