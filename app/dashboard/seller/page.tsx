@@ -566,6 +566,8 @@ export default function SellerDashboard() {
   type MyInvoice = {
     id: string, invoice_no: string, period: string, issued_on: string, due_on: string | null,
     total: number, paid_status: string, paid_on: string | null, paid_name: string | null,
+    // 運営が確認した実際の入金額。請求額と違うときだけ入る
+    paid_amount?: number | null,
     paid_reported_at: string | null, paid_confirmed_at: string | null,
     // sales = その月の売上をまとめた請求 / advance = 出店日の前に出す事前請求
     kind?: string | null,
@@ -1807,7 +1809,27 @@ export default function SellerDashboard() {
                           </div>
                         )}
                         {iv.paid_status === 'paid' && (
-                          <div style={{ fontSize: '12px', color: '#16A34A', marginBottom: '8px', lineHeight: 1.8 }}>ご入金を確認いたしました。ありがとうございました。</div>
+                          <div style={{ fontSize: '12px', color: '#16A34A', marginBottom: '8px', lineHeight: 1.8 }}>
+                            {iv.paid_on ? iv.paid_on.replace(/-/g, '/') + ' のご入金を確認いたしました。' : 'ご入金を確認いたしました。'}
+                            ありがとうございました。
+                            {/* 請求額と違う額で確認されている場合は、そのことを伝える。
+                                黙っていると、次の請求で「払ったはず」の食い違いになる */}
+                            {typeof iv.paid_amount === 'number' && iv.paid_amount !== iv.total && (
+                              <>
+                                <br />
+                                <span style={{ color: iv.paid_amount < iv.total ? '#B91C1C' : '#B45309', fontWeight: 700 }}>
+                                  確認した金額：¥{iv.paid_amount.toLocaleString()}
+                                  {iv.paid_amount < iv.total
+                                    ? '（ご請求額との差 ¥' + (iv.total - iv.paid_amount).toLocaleString() + '）'
+                                    : '（ご請求額より ¥' + (iv.paid_amount - iv.total).toLocaleString() + '多くお振込みいただいています）'}
+                                </span>
+                                <br />
+                                <span style={{ color: '#64748B' }}>
+                                  差額についてご不明な点は、運営（info@connect-navi.com）までお問い合わせください。
+                                </span>
+                              </>
+                            )}
+                          </div>
                         )}
                         {/* 当月分がまだ確定していないことを、押す前に知らせる。
                             ボタンだけ置いて押させると、落とせない理由が分からない */}

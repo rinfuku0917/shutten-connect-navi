@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     if (action === 'mine') {
       const { data, error } = await db
         .from('invoices')
-        .select('id, invoice_no, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, kind')
+        .select('id, invoice_no, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_amount, kind')
         .eq('seller_id', uid)
         // 取り消した請求書は出店者には見せない
         .is('voided_at', null)
@@ -139,7 +139,7 @@ export async function POST(req: Request) {
     if (action === 'list') {
       const { data, error } = await db
         .from('invoices')
-        .select('id, invoice_no, seller_id, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_memo, kind, voided_at, void_reason')
+        .select('id, invoice_no, seller_id, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_memo, paid_amount, kind, voided_at, void_reason')
         .order('issued_on', { ascending: false })
         .limit(300)
       if (error) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })
@@ -158,7 +158,7 @@ export async function POST(req: Request) {
 
     // ===== 管理者：入金を確認する / 取り消す =====
     if (action === 'confirm') {
-      const { invoiceId, memo, undo } = body
+      const { invoiceId, memo, undo, paidAmount, paidOn } = body
       if (!invoiceId) return NextResponse.json({ error: '請求書が指定されていません' }, { status: 400 })
 
       const { data: inv, error: gErr } = await db
@@ -168,10 +168,32 @@ export async function POST(req: Request) {
       // 取り消しは、間違えて確認済みにしたときに戻すためのもの。
       // 出店者から振込の報告が来ていた場合は「確認中」に戻す。
       // 未入金に落としてしまうと、振込日や名義が画面から消えて督促してしまう。
-      const patch = undo
-        ? { paid_status: inv.paid_reported_at ? 'reported' : 'unpaid', paid_confirmed_at: null }
+      const patch: Record<string, unknown> = undo
+        ? {
+          paid_status: inv.paid_reported_at ? 'reported' : 'unpaid',
+          paid_confirmed_at: null,
+          // 実際に受け取った額も戻す。残すと「未入金なのに入金額がある」になる
+          paid_amount: null,
+        }
         : { paid_status: 'paid', paid_confirmed_at: new Date().toISOString() }
-      if (typeof memo === 'string') (patch as Record<string, unknown>).paid_memo = memo.slice(0, 500)
+      if (typeof memo === 'string') patch.paid_memo = memo.slice(0, 500)
+
+      // 実際に受け取った額。請求額と違うとき（一部入金・振込手数料の
+      // 差引き・過入金）に入れる。空欄なら請求額どおりとして null のまま。
+      //
+      // 0円や負の額は受け取らない。押し間違いで「入金済み・0円」が
+      // できてしまうと、回収済みに見えて取りこぼす
+      if (!undo && paidAmount != null && String(paidAmount).trim() !== '') {
+        const n = parseInt(String(paidAmount).replace(/[^0-9]/g, ''), 10)
+        if (!n || n <= 0) {
+          return NextResponse.json({ error: '入金額は1円以上で入れてください（空欄なら請求額どおりになります）' }, { status: 400 })
+        }
+        patch.paid_amount = n
+      }
+      // 入金日。出店者の申告と違う日に着金していることがある
+      if (!undo && typeof paidOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(paidOn)) {
+        patch.paid_on = paidOn
+      }
 
       const { data: upd, error: uErr3 } = await db.from('invoices').update(patch).eq('id', invoiceId).select('id')
       if (uErr3) return NextResponse.json({ error: '更新に失敗しました: ' + uErr3.message }, { status: 500 })

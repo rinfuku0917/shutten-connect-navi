@@ -968,6 +968,8 @@ export default function AdminPage() {
     issued_on: string, due_on: string | null, total: number, paid_status: string,
     paid_on: string | null, paid_name: string | null,
     paid_reported_at: string | null, paid_confirmed_at: string | null, paid_memo: string | null,
+    // 実際に受け取った額。請求額と違うとき（一部入金・振込手数料の差引き・過入金）だけ入る
+    paid_amount?: number | null,
     // sales=売上から作った請求 / advance=出店日の前に出した出店料の請求
     kind?: string | null,
     // 取り消した請求書。行は残したまま印だけ付けている
@@ -975,6 +977,44 @@ export default function AdminPage() {
     void_reason?: string | null,
   }
   const [payRows, setPayRows] = useState<PayRow[]>([])
+  // 督促の対象だけを抜き出せるようにする。
+  // 「超過」は各行に出るが、件数が増えると目で探すことになる
+  const [payFilter, setPayFilter] = useState<'all' | 'unpaid' | 'overdue' | 'reported' | 'paid'>('all')
+  const [remindBusy, setRemindBusy] = useState('')
+
+  // 入金の督促を1件送る。
+  // 自動では送らない。すでに振り込んでいる行き違いが常にありうるので、
+  // 一覧を見て1件ずつ判断して押してもらう
+  const remindPayment = async (row: PayRow) => {
+    if (remindBusy) return
+    const sent = String(row.paid_memo || '').match(/\[督促 (\d{4}-\d{2}-\d{2})\]/)
+    const ok = await ask({
+      title: '入金の督促を送りますか？',
+      body: row.sellerName + ' さん\n' + row.invoice_no + '（¥' + row.total.toLocaleString() + '）\n\n'
+        + '「ご入金を確認できておりません」という内容のメールが出店者へ届きます。\n'
+        + 'すでに振り込まれている行き違いの可能性もあるため、文面では確認のお願いにとどめています。'
+        + (sent ? '\n\n※前回 ' + sent[1].replace(/-/g, '/') + ' に送っています。' : ''),
+      okLabel: '督促を送る',
+    })
+    if (!ok) return
+    setRemindBusy(row.id)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/payment-remind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+        body: JSON.stringify({ invoiceId: row.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { showNotice(j.error || '送れませんでした'); return }
+      showNotice('督促を送りました（' + (j.sentTo || '') + '）', 'ok')
+      await loadPayments()
+    } catch {
+      showNotice('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setRemindBusy('')
+    }
+  }
   const [payLoading, setPayLoading] = useState(false)
   const [payBusy, setPayBusy] = useState('')
 
@@ -1002,14 +1042,38 @@ export default function AdminPage() {
   }
 
   // 入金を確認する／取り消す。確認したときだけ出店者へお礼のメールが届く。
+  //
+  // 確認のときは、実際に受け取った額を入れられるようにする。
+  // 請求額どおりのことが多いので空欄で進めてよく、
+  // 一部入金・振込手数料の差引き・過入金のときだけ入れる
   const confirmPayment = async (row: PayRow, undo: boolean) => {
-    const msg = undo
-      ? '「入金確認済み」を取り消します。よろしいですか？（出店者へのメールは送られません）'
-      : row.sellerName + ' さんの ' + row.invoice_no + '（¥' + row.total.toLocaleString() + '）の入金を確認済みにします。\n出店者へ確認のお知らせメールが届きます。よろしいですか？'
-    if (!(await ask({ title: undo ? '入金確認を取り消しますか？' : '入金を確認済みにしますか？', body: msg, okLabel: undo ? '取り消す' : '確認済みにする', danger: undo }))) return
+    let amount = ''
+    if (!undo) {
+      // 入力つきの確認は askText（真偽と文字を返す）
+      const res = await askText({
+        title: '入金を確認済みにしますか？',
+        body: row.sellerName + ' さんの ' + row.invoice_no + '（請求額 ¥' + row.total.toLocaleString() + '）\n\n'
+          + '出店者へ確認のお知らせメールが届きます。',
+        okLabel: '確認済みにする',
+        input: {
+          label: '実際に入金された額（円・空欄なら請求額どおり）',
+          placeholder: '例：' + Math.max(row.total - 440, 0).toLocaleString() + '（振込手数料が引かれていた場合）',
+        },
+      })
+      if (!res.ok) return
+      amount = res.text.replace(/[^0-9]/g, '')
+    } else {
+      const ok = await ask({
+        title: '入金確認を取り消しますか？',
+        body: '「入金確認済み」を取り消します。入金額の記録も消えます。\nよろしいですか？（出店者へのメールは送られません）',
+        okLabel: '取り消す',
+        danger: true,
+      })
+      if (!ok) return
+    }
     setPayBusy(row.id)
     try {
-      await callPayApi({ action: 'confirm', invoiceId: row.id, undo })
+      await callPayApi({ action: 'confirm', invoiceId: row.id, undo, paidAmount: amount || undefined })
       await loadPayments()
     } catch (e) {
       showNotice(e instanceof Error ? e.message : '更新に失敗しました')
@@ -2794,6 +2858,41 @@ const previewDoc = async (fileUrl: string) => {
                   </button>
                   </div>
                 </div>
+                {/* 督促の対象だけを抜き出せるようにする。
+                    「超過」は各行に出るが、件数が増えると目で探すことになる。
+                    滞納＝支払期限を過ぎて、まだ入金を確認できていないもの */}
+                {payRows.length > 0 && (() => {
+                  const nd0 = new Date()
+                  const today0 = nd0.getFullYear() + '-' + String(nd0.getMonth() + 1).padStart(2, '0') + '-' + String(nd0.getDate()).padStart(2, '0')
+                  const alive = payRows.filter(x => !x.voided_at)
+                  const counts = {
+                    all: payRows.length,
+                    unpaid: alive.filter(x => x.paid_status === 'unpaid').length,
+                    overdue: alive.filter(x => x.paid_status !== 'paid' && x.due_on && x.due_on < today0).length,
+                    reported: alive.filter(x => x.paid_status === 'reported').length,
+                    paid: alive.filter(x => x.paid_status === 'paid').length,
+                  }
+                  const tabs: { key: typeof payFilter; label: string; color: string }[] = [
+                    { key: 'all', label: 'すべて', color: '#64748B' },
+                    { key: 'overdue', label: '滞納（督促対象）', color: '#B91C1C' },
+                    { key: 'unpaid', label: '未入金', color: '#DC2626' },
+                    { key: 'reported', label: '振込報告あり', color: '#B45309' },
+                    { key: 'paid', label: '入金確認済', color: '#16A34A' },
+                  ]
+                  return (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                      {tabs.map(t => {
+                        const on = payFilter === t.key
+                        return (
+                          <button key={t.key} type='button' onClick={() => setPayFilter(t.key)}
+                            style={{ fontSize: '12px', fontWeight: 700, padding: '8px 12px', minHeight: '40px', borderRadius: '999px', cursor: 'pointer', fontFamily: 'inherit', border: '1px solid ' + (on ? t.color : '#E2E8F0'), background: on ? t.color : '#fff', color: on ? '#fff' : t.color }}>
+                            {t.label} {counts[t.key]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
                 {payRows.length === 0 ? (
                   <div style={{ padding: '20px', textAlign: 'center', color: '#999', fontSize: '12px' }}>
                     {payLoading ? '読み込み中...' : '発行済みの請求書はまだありません。'}
@@ -2801,7 +2900,15 @@ const previewDoc = async (fileUrl: string) => {
                 ) : (
                   /* 横に長い表はスマホで切れてしまうため、1件ずつのカードで出す */
                   <div style={{ display: 'grid', gap: '10px' }}>
-                    {payRows.map(r => {
+                    {payRows.filter(r => {
+                      if (payFilter === 'all') return true
+                      // 取り消した請求書は、状態で絞るときは出さない
+                      if (r.voided_at) return false
+                      const nd1 = new Date()
+                      const today1 = nd1.getFullYear() + '-' + String(nd1.getMonth() + 1).padStart(2, '0') + '-' + String(nd1.getDate()).padStart(2, '0')
+                      if (payFilter === 'overdue') return r.paid_status !== 'paid' && !!r.due_on && r.due_on < today1
+                      return r.paid_status === payFilter
+                    }).map(r => {
                       const st = r.paid_status === 'paid'
                         ? { label: '入金確認済', color: '#16A34A', bg: '#ECFDF5', border: '#BBF7D0' }
                         : r.paid_status === 'reported'
@@ -2859,6 +2966,17 @@ const previewDoc = async (fileUrl: string) => {
                             <div>
                               <div style={{ fontSize: '10px', color: '#64748B' }}>請求額（税込）</div>
                               <div style={{ fontSize: '16px', fontWeight: 900, color: '#1a1a1a' }}>¥{r.total.toLocaleString()}</div>
+                              {/* 請求額と違う額が入金されたときだけ、実額と差を出す。
+                                  請求額だけ出していると、足りない入金に気づけない */}
+                              {typeof r.paid_amount === 'number' && r.paid_amount !== r.total && (
+                                <div style={{ fontSize: '11px', fontWeight: 700, color: r.paid_amount < r.total ? '#B91C1C' : '#B45309', lineHeight: 1.6, marginTop: '2px' }}>
+                                  入金 ¥{r.paid_amount.toLocaleString()}
+                                  <br />
+                                  {r.paid_amount < r.total
+                                    ? '不足 ¥' + (r.total - r.paid_amount).toLocaleString()
+                                    : '過入金 ¥' + (r.paid_amount - r.total).toLocaleString()}
+                                </div>
+                              )}
                             </div>
                             <div>
                               <div style={{ fontSize: '10px', color: '#64748B' }}>対象月</div>
@@ -2887,6 +3005,25 @@ const previewDoc = async (fileUrl: string) => {
                                 {payBusy === r.id ? '…' : '入金を確認'}
                               </button>
                             )}
+                            {/* 入金の督促。確認済みと取消し済みには出さない。
+                                前回いつ送ったかをボタンの下に出して、連打を防ぐ */}
+                            {r.paid_status !== 'paid' && !r.voided_at && (() => {
+                              const m = String(r.paid_memo || '').match(/\[督促 (\d{4}-\d{2}-\d{2})\]/)
+                              return (
+                                <span style={{ display: 'inline-flex', flexDirection: 'column', gap: '2px' }}>
+                                  <button onClick={() => remindPayment(r)} disabled={remindBusy === r.id}
+                                    title='「ご入金を確認できておりません」というメールを出店者へ送ります'
+                                    style={{ background: '#fff', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: remindBusy === r.id ? 'wait' : 'pointer' }}>
+                                    {remindBusy === r.id ? '送信中…' : '入金を督促する'}
+                                  </button>
+                                  {m && (
+                                    <span style={{ fontSize: '10.5px', color: '#94A3B8' }}>
+                                      前回 {m[1].replace(/-/g, '/')} に送信
+                                    </span>
+                                  )}
+                                </span>
+                              )
+                            })()}
                             {/* 間違えて出した請求書を取り消す。行は消さず、番号も残す */}
                             {r.voided_at ? (
                               <>
