@@ -124,7 +124,7 @@ export default function VendorPage() {
               費用の節へ送る導線が、上に1本も無かった */}
           <a href='#cost' style={{ background: '#fff', color: '#111', fontWeight: 900, fontSize: '16px', padding: '14px 36px', borderRadius: '999px', textDecoration: 'none' }}>費用の目安を見る</a>
           <Link href='/sellers' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '16px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>登録キッチンカーを見る</Link>
-          <Link href='/register' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '16px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>無料会員登録</Link>
+          <Link href='/register?role=host' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '16px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>無料会員登録</Link>
         </div>
       </div>
 

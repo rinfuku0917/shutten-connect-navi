@@ -342,10 +342,15 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
             支払いの形、1台あたりの目安、キャンセルの扱いなど、
             費用についてよくいただくご質問は{area.name}でも共通です。
           </p>
-          <div style={{ textAlign: 'center' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
             <Link href='/vendor/cost#faq'
               style={{ display: 'inline-block', background: '#FFF8EC', border: '1px solid #F5D9A8', borderRadius: '10px', padding: '13px 22px', fontSize: '14px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}>
               費用についてよくある質問を見る（12問） →
+            </Link>
+            {/* イベント向けのページへ。エリア別からは1本も無かった */}
+            <Link href='/vendor/event'
+              style={{ display: 'inline-block', background: '#fff', border: '1px solid #E7DCC8', borderRadius: '10px', padding: '13px 22px', fontSize: '14px', fontWeight: 800, color: '#64748B', textDecoration: 'none' }}>
+              イベント・マルシェ・お祭りの手配 →
             </Link>
           </div>
         </div>

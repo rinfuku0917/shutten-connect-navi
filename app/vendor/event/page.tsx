@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import { AREAS } from '../area/areas'
 import SiteHeader from '../../components/SiteHeader'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
@@ -305,6 +306,36 @@ export default function EventVendorPage() {
             <br />
             そのイベントに合った形と金額をご提案します。
           </p>
+
+          {/* 費用の詳しいページとエリア別のページへ。
+              このページは費用の目安を自前で持っているのに、
+              詳しいページへ送る導線が1本も無かった。
+              金額は /vendor/cost と一致させること */}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '18px' }}>
+            <Link href='/vendor/cost'
+              style={{ display: 'inline-block', background: '#FFF8EC', border: '1px solid #F5D9A8', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}>
+              費用の相場とケース別の見積り例 →
+            </Link>
+            <Link href='/vendor#soudan'
+              style={{ display: 'inline-block', background: '#fff', border: '1px solid #E7DCC8', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: 800, color: '#64748B', textDecoration: 'none' }}>
+              キッチンカーの手配・派遣について →
+            </Link>
+          </div>
+
+          {/* エリア別のページへ。開催地から探す方の導線 */}
+          <div style={{ marginTop: '22px', paddingTop: '18px', borderTop: '1px solid #EEE' }}>
+            <div style={{ fontSize: '13px', fontWeight: 800, color: '#334155', textAlign: 'center', marginBottom: '10px' }}>
+              開催地から費用と会場の例を見る
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {AREAS.map(a => (
+                <Link key={a.slug} href={'/vendor/area/' + a.slug}
+                  style={{ fontSize: '12.5px', fontWeight: 700, color: '#B45309', background: '#fff', border: '1px solid #F5D9A8', borderRadius: '999px', padding: '7px 14px', textDecoration: 'none' }}>
+                  {a.name}
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

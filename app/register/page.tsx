@@ -18,7 +18,22 @@ const AREA_GROUPS: { region: string, prefs: string[] }[] = [
 ]
 
 export default function RegisterPage() {
-  const [role, setRole] = useState<'seller'|'host'>('seller')
+  // 呼びたい方の導線から来たときは「お店を呼びたい」を選んだ状態で開く。
+  //
+  // これまでURLから役割を受け取れず、募集者向けのページから来ても
+  // 「出店したい」が選ばれていた。選び直しは1クリックだが、
+  // 気づかないまま出店者として登録してしまう
+  // （出店エリアの入力を求められて、そこで初めて気づく）。
+  //
+  // useSearchParams を使うと Suspense の囲みが要るので、
+  // 初期値を決めるときに一度だけ URL を読む。
+  // サーバー描画では window が無いので既定の seller になり、
+  // ブラウザで動き出した時点で入れ替わる
+  const [role, setRole] = useState<'seller'|'host'>(() => {
+    if (typeof window === 'undefined') return 'seller'
+    const r = new URLSearchParams(window.location.search).get('role')
+    return r === 'host' ? 'host' : 'seller'
+  })
   const [name, setName] = useState('')
   const [nameKana, setNameKana] = useState('')
   const [company, setCompany] = useState('')
@@ -44,7 +59,11 @@ export default function RegisterPage() {
       setError('必須項目をすべて入力してください'); return
     }
     if(password.length < 6) { setError('パスワードは6文字以上で入力してください'); return }
-    if(role === 'seller' && areas.length === 0) { setError('出店エリアを1つ以上選択してください'); return }
+    if(role === 'seller' && areas.length === 0) {
+      setError('出店エリアを1つ以上選択してください。'
+        + 'キッチンカーを呼びたい方は、上の「お店を呼びたい」をお選びください')
+      return
+    }
     setLoading(true); setError('')
 
     // Supabase の signUp は既存アドレスでもエラーを返さないため、先に重複を確認する。
