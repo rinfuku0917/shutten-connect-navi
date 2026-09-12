@@ -47,3 +47,49 @@ export function sourceLabel(value: string | null | undefined): string {
   const hit = [...HOST_SOURCES, ...SELLER_SOURCES].find(s => s.value === value)
   return hit ? hit.label : value
 }
+
+// ===== お問い合わせフォームの「きっかけ」 =====
+//
+// なぜ登録の一覧と分けるのか:
+//   お問い合わせに来る方は、まだ会員ではない。営業からの連絡（sales）や
+//   展示会（expo）はここには出さず、自分で辿り着く経路だけを並べる。
+//
+// なぜ値は同じにするのか:
+//   値（search / instagram / line …）を登録側と同じにしておくと、
+//   ダッシュボードの「何を見て知ったか」で、登録と問い合わせを
+//   同じ物差しで数えられる。ここだけ別の値にすると、
+//   あとから足し合わせられなくなる。
+export const CONTACT_SOURCES: SignupSource[] = [
+  { value: 'search', label: 'Web検索（Google・Yahoo!など）' },
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'line', label: '公式LINE' },
+  { value: 'referral', label: '知人・他店舗からの紹介' },
+  { value: 'seen_onsite', label: 'イベント会場で見た' },
+  { value: 'paper', label: 'チラシ・資料・郵送物' },
+  { value: 'other', label: 'その他' },
+]
+
+// ===== お問い合わせフォームの「やり取りの履歴」 =====
+//
+// 初めての方か、すでに関係がある方かで、社内の引き継ぎ先が変わる。
+// 「担当者から案内を受けた」を分けているのは、
+// 営業が動いた結果の問い合わせを数えられるようにするため。
+export type ContactHistory = { value: string; label: string; asksRep: boolean }
+
+export const CONTACT_HISTORIES: ContactHistory[] = [
+  { value: 'first', label: '初めてお問い合わせする', asksRep: false },
+  { value: 'past', label: '過去にやり取り・出店したことがある', asksRep: true },
+  { value: 'from_rep', label: '弊社の担当者から直接案内を受けた', asksRep: true },
+]
+
+/** その選択のときに担当者名をたずねるか */
+export function asksRepName(value: string | null | undefined): boolean {
+  return CONTACT_HISTORIES.some(h => h.value === value && h.asksRep)
+}
+
+/** 記録された値から画面に出す名前を引く。一覧から消した値もそのまま出せる */
+export function historyLabel(value: string | null | undefined): string {
+  if (!value) return '未回答'
+  const hit = CONTACT_HISTORIES.find(h => h.value === value)
+  return hit ? hit.label : value
+}

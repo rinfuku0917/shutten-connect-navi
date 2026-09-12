@@ -15,7 +15,7 @@ import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee, formatFee, formatShare } from '../lib/placeFee'
 import { cancelResultMessage } from '../lib/purgeLog'
 import PurgeLogPanel from './PurgeLogPanel'
-import { sourceLabel } from '../lib/signupSource'
+import { sourceLabel, historyLabel } from '../lib/signupSource'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
 import MailTemplates from './MailTemplates'
@@ -1308,6 +1308,10 @@ export default function AdminPage() {
     id: string; name: string; email: string; message: string
     status: string; admin_memo: string | null; handled_at: string | null
     mail_sent: boolean; mail_error: string | null; created_at: string
+    // どこ経由で来たか・すでに関係がある方かどうか。
+    // 20260912_contact_source.sql を実行する前の問い合わせには入っていない
+    found_via?: string | null; found_note?: string | null
+    contact_history?: string | null; rep_name?: string | null
   }
   const [contacts, setContacts] = useState<ContactRow[]>([])
   const [contactsLoading, setContactsLoading] = useState(false)
@@ -3534,6 +3538,29 @@ const previewDoc = async (fileUrl: string) => {
                             <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top', width: '96px' }}>メール</td>
                             <td style={{ padding: '3px 0', color: '#1a1a1a' }}>{c.email}</td>
                           </tr>
+                          {/* どこ経由で来たか。入っていない問い合わせ
+                              （列を足す前のもの）には行を出さない */}
+                          {c.found_via && (
+                            <tr>
+                              <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top' }}>きっかけ</td>
+                              <td style={{ padding: '3px 0', color: '#1a1a1a' }}>
+                                {sourceLabel(c.found_via)}
+                                {c.found_note && <span style={{ color: '#64748B' }}>（{c.found_note}）</span>}
+                              </td>
+                            </tr>
+                          )}
+                          {c.contact_history && (
+                            <tr>
+                              <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top' }}>弊社とのやり取り</td>
+                              <td style={{ padding: '3px 0', color: '#1a1a1a' }}>
+                                {/* 初めてでない方は、引き継ぎ先を探す手がかりになるので目立たせる */}
+                                <span style={{ fontWeight: c.contact_history === 'first' ? 400 : 700, color: c.contact_history === 'first' ? '#1a1a1a' : '#B45309' }}>
+                                  {historyLabel(c.contact_history)}
+                                </span>
+                                {c.rep_name && <span style={{ color: '#B45309', fontWeight: 700 }}>／担当：{c.rep_name}</span>}
+                              </td>
+                            </tr>
+                          )}
                           <tr>
                             <td style={{ padding: '3px 8px 3px 0', color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top' }}>お問い合わせ内容</td>
                             <td style={{ padding: '3px 0', color: '#1a1a1a', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{c.message}</td>

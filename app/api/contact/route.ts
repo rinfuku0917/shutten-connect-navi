@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
 import { sendAdminMail } from '../../lib/notifyRecipients'
+import { CONTACT_SOURCES, CONTACT_HISTORIES, asksRepName, sourceLabel, historyLabel } from '../../lib/signupSource'
 
 // 公開ページ（/contact）から届くお問い合わせ。
 //
@@ -132,7 +133,7 @@ export async function POST(req: Request) {
     }
 
     // ===== 公開ページ：お問い合わせの受付 =====
-    const { name, email, message } = body
+    const { name, email, message, foundVia, foundNote, contactHistory, repName } = body
 
     if (!name || !email || !message) {
       return NextResponse.json({ error: '必須項目が未入力です' }, { status: 400 })
@@ -144,6 +145,19 @@ export async function POST(req: Request) {
     const nm = String(name).trim()
     const em = String(email).trim()
     const msg = String(message).trim()
+
+    // ---- きっかけとやり取りの履歴 ----
+    //
+    // 画面から来た文字をそのまま入れない。一覧にある値だけを受け付ける。
+    // 一覧に無い値は「未回答」として扱い、問い合わせ自体は通す
+    // （選択肢を変えたあとに古い画面から送られても、問い合わせを落とさないため）。
+    const via = CONTACT_SOURCES.some(o => o.value === foundVia) ? String(foundVia) : null
+    const hist = CONTACT_HISTORIES.some(o => o.value === contactHistory) ? String(contactHistory) : null
+    const note = typeof foundNote === 'string' ? foundNote.trim().slice(0, 200) : ''
+    // 担当者名は、たずねる選択のときだけ残す。
+    // 画面で切り替えたあとの取り残しをここでも落とす
+    const rep = (hist && asksRepName(hist) && typeof repName === 'string')
+      ? repName.trim().slice(0, 100) : ''
 
     // 長すぎるものは受け付けない。黙って切ると、お客様には「送信できた」と見えたまま
     // 末尾が消える。切るのではなく、その場で知らせて書き直してもらう
@@ -170,10 +184,19 @@ export async function POST(req: Request) {
     if (url && serviceKey) {
       db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
       const { data, error } = await db
-        .from('contacts').insert({ name: nm, email: em, message: msg }).select('id').maybeSingle()
+        .from('contacts').insert({
+          name: nm, email: em, message: msg,
+          found_via: via, found_note: note || null,
+          contact_history: hist, rep_name: rep || null,
+        }).select('id').maybeSingle()
       if (error) {
-        // 記録に失敗してもメールは送る。少なくとも運営には届く
+        // 列がまだ無い環境（20260912_contact_source.sql を実行する前）でも
+        // 問い合わせを落とさない。名前・メール・内容だけで入れ直す
         console.error('お問い合わせの記録に失敗しました', error.message)
+        const { data: d2, error: e2 } = await db
+          .from('contacts').insert({ name: nm, email: em, message: msg }).select('id').maybeSingle()
+        if (e2) console.error('お問い合わせの記録に失敗しました（再試行）', e2.message)
+        else rowId = d2?.id ?? null
       } else {
         rowId = data?.id ?? null
       }
@@ -189,11 +212,35 @@ export async function POST(req: Request) {
 
     // 文面は管理画面（メール文面タブ）で書き換えられる
     const def = MAIL_DEF_BY_KEY['contact']
+    // 差し込みに使う文字。画面に出すのと同じ言い方にする
+    const viaText = via ? sourceLabel(via) + (note ? '（' + note + '）' : '') : '未回答'
+    const histText = hist ? historyLabel(hist) : '未回答'
+    const repText = rep || '（記載なし）'
+
     const mail = await renderMailStandalone('contact', { subject: def.subject, body: def.body }, {
       'お名前': nm,
       'メールアドレス': em,
       '内容': msg,
+      'きっかけ': viaText,
+      'やり取りの履歴': histText,
+      '担当者名': repText,
     })
+
+    // 文面は管理画面から書き換えられる。すでに書き換えてある環境では
+    // 新しい差し込み（きっかけ・やり取りの履歴・担当者名）が入っていないので、
+    // そのままでは経路が届かない。入っていなければ末尾に足す。
+    //
+    // 「差し込みを足したのに届かない」が、この機能でいちばん起きやすい
+    // 取りこぼしなので、文面の側に頼らず、ここで必ず載るようにしている
+    const hasNew = mail.text.includes(viaText) && mail.text.includes(histText)
+    const mailText = hasNew ? mail.text : (
+      mail.text
+      + '\n\n━━━━━━━━━━━━━━━━━━\n'
+      + '【きっかけ】' + viaText + '\n'
+      + '【弊社とのやり取り】' + histText + '\n'
+      + (rep ? '【弊社の担当者】' + rep + '\n' : '')
+      + '━━━━━━━━━━━━━━━━━━'
+    )
 
     const resend = new Resend(apiKey)
     // info@ に単独で送り、追加の宛先には1件ずつ送る（1件の失敗で全員に届かなくなるのを防ぐ）
@@ -201,7 +248,7 @@ export async function POST(req: Request) {
       from: '出店コネクトナビ <' + FROM_EMAIL + '>',
       replyTo: em,
       subject: mail.subject,
-      text: mail.text,
+      text: mailText,
     })
 
     if (error) {

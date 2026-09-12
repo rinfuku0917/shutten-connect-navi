@@ -5,6 +5,7 @@ import SiteFooter from '../components/SiteFooter'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
+import { CONTACT_SOURCES, CONTACT_HISTORIES, asksRepName } from '../lib/signupSource'
 import { track } from '../lib/ga'
 
 // お問い合わせ本文の上限。API 側（app/api/contact/route.ts）と同じ数字にする
@@ -14,6 +15,12 @@ export default function ContactPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
+  // どこ経由で来たか。経路が分からないと、次に力を入れる場所が決められない
+  const [foundVia, setFoundVia] = useState('')
+  const [foundNote, setFoundNote] = useState('')
+  // 初めての方か、すでに関係がある方か。社内の引き継ぎ先が変わる
+  const [history, setHistory] = useState('')
+  const [repName, setRepName] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [errMsg, setErrMsg] = useState('')
 
@@ -23,13 +30,30 @@ export default function ContactPage() {
       setStatus('error')
       return
     }
+    if (!foundVia) {
+      setErrMsg('「当サービスを知ったきっかけ」をお選びください')
+      setStatus('error')
+      return
+    }
+    if (!history) {
+      setErrMsg('「弊社とのやり取り」をお選びください')
+      setStatus('error')
+      return
+    }
     setStatus('sending')
     setErrMsg('')
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, message }),
+        body: JSON.stringify({
+          name, email, message,
+          foundVia,
+          foundNote,
+          contactHistory: history,
+          // 担当者名をたずねない選択に変えたあとも値が残らないよう、ここで落とす
+          repName: asksRepName(history) ? repName : '',
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -40,6 +64,7 @@ export default function ContactPage() {
       setStatus('done')
       track('contact_submit')
       setName(''); setEmail(''); setMessage('')
+      setFoundVia(''); setFoundNote(''); setHistory(''); setRepName('')
     } catch {
       setErrMsg('通信エラーが発生しました')
       setStatus('error')
@@ -82,6 +107,60 @@ export default function ContactPage() {
               <label style={labelStyle}><Image src='/ic-c-mail.webp' alt='' width={18} height={18} style={{ display: 'inline-block', width: '18px', height: '18px', verticalAlign: '-3px', marginRight: '7px' }} />メールアドレス <span style={{ color: '#DC2626' }}>*</span></label>
               <input style={inputStyle} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" />
             </div>
+            {/* どこ経由で来たかと、すでに関係がある方かどうか。
+                問い合わせを受けたあとの動きが変わるので、内容より前に置く。
+                選択肢の値は app/lib/signupSource.ts が唯一の正で、
+                会員登録の「何を見て知ったか」と同じ値にしてある
+                （ダッシュボードで同じ物差しで数えられるようにするため） */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={labelStyle}>当サービスを知ったきっかけ <span style={{ color: '#DC2626' }}>*</span></label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {CONTACT_SOURCES.map(o => (
+                  <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '9px 4px', minHeight: '44px', fontSize: '15px', color: '#1a1a1a' }}>
+                    <input type='radio' name='foundVia' value={o.value}
+                      checked={foundVia === o.value}
+                      onChange={() => setFoundVia(o.value)}
+                      style={{ width: '20px', height: '20px', accentColor: '#F5A623', cursor: 'pointer', flex: '0 0 auto' }} />
+                    <span>{o.label}</span>
+                  </label>
+                ))}
+              </div>
+              {/* 「その他」を選んだ方に、どこで知ったのかを書ける場所を出す。
+                  ここが無いと「その他」の中身が分からないままになる */}
+              {foundVia === 'other' && (
+                <input style={{ ...inputStyle, marginTop: '8px' }} value={foundNote}
+                  onChange={(e) => setFoundNote(e.target.value)} maxLength={200}
+                  placeholder='どこでお知りになりましたか（任意）' />
+              )}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={labelStyle}>弊社とのやり取り <span style={{ color: '#DC2626' }}>*</span></label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {CONTACT_HISTORIES.map(o => (
+                  <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '9px 4px', minHeight: '44px', fontSize: '15px', color: '#1a1a1a' }}>
+                    <input type='radio' name='contactHistory' value={o.value}
+                      checked={history === o.value}
+                      onChange={() => setHistory(o.value)}
+                      style={{ width: '20px', height: '20px', accentColor: '#F5A623', cursor: 'pointer', flex: '0 0 auto' }} />
+                    <span>{o.label}</span>
+                  </label>
+                ))}
+              </div>
+              {/* すでに関係がある方のときだけ、担当者名の欄を出す。
+                  分かる場合だけでよいので任意。社内の引き継ぎが早くなる */}
+              {asksRepName(history) && (
+                <div style={{ marginTop: '8px' }}>
+                  <input style={inputStyle} value={repName}
+                    onChange={(e) => setRepName(e.target.value)} maxLength={100}
+                    placeholder='弊社の担当者名（例：山田）' />
+                  <div style={{ fontSize: '12px', color: '#92400E', marginTop: '6px', lineHeight: 1.7 }}>
+                    お分かりになる場合のみご記入ください。空欄でも送信できます。
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div style={{ marginBottom: '24px' }}>
               <label style={labelStyle}><Image src='/ic-c-message.webp' alt='' width={18} height={18} style={{ display: 'inline-block', width: '18px', height: '18px', verticalAlign: '-3px', marginRight: '7px' }} />お問い合わせ内容 <span style={{ color: '#DC2626' }}>*</span></label>
               <textarea style={{ ...inputStyle, minHeight: '140px', resize: 'vertical', fontFamily: 'inherit' }} value={message} onChange={(e) => setMessage(e.target.value)} maxLength={MAX_MESSAGE} placeholder="お問い合わせ内容をご記入ください" />
