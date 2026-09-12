@@ -14,7 +14,9 @@ import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee, formatFee, formatShare } from '../lib/placeFee'
 import { cancelResultMessage } from '../lib/purgeLog'
+import { syncSalesToSheet } from '../lib/sheetSync'
 import PurgeLogPanel from './PurgeLogPanel'
+import SheetSyncPanel from './SheetSyncPanel'
 import { sourceLabel, historyLabel } from '../lib/signupSource'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
@@ -625,8 +627,11 @@ export default function AdminPage() {
     // 品目名を「合計」として1件だけ入れ、報告書の合計食数に反映させる
     const qty = parseInt(saleQty, 10) || 0
     if (qty > 0) row.items = [{ name: '合計', qty, price: null }]
-    const { error } = await supabase.from('sales').insert(row)
+    // 入れたIDを受け取る。経理用シートへ送るのに必要
+    const { data: inserted, error } = await supabase.from('sales').insert(row).select('id')
     if (error) { showNotice('保存失敗: ' + error.message); setSaleSaving(false); return }
+    // 経理用シートへ送る。待たない（送れなくても報告は残っている）
+    void syncSalesToSheet(((inserted || []) as { id: string }[]).map(r => r.id))
     setSaleAppId(''); setSaleDate(''); setSaleRevenue('')
     setSaleWeather(''); setSaleCustomers(''); setSaleQty('')
     setSaleSaving(false)
@@ -3133,6 +3138,10 @@ const previewDoc = async (fileUrl: string) => {
                   </tbody>
                 </table>
               </div>
+
+              {/* 経理用シートへの連携の状態。
+                  送れていないものが何件あるかを常に見られるようにしておく */}
+              <SheetSyncPanel />
 
               {/* 完全に削除した記録の控え。
                   取り消した出店は行ごと消えるので、キャンセル料の請求は

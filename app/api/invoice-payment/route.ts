@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { resendSheetForInvoice } from '../../lib/sheetSend'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
 import { sendAdminMail } from '../../lib/notifyRecipients'
 
@@ -176,6 +177,9 @@ export async function POST(req: Request) {
       if (uErr3) return NextResponse.json({ error: '更新に失敗しました: ' + uErr3.message }, { status: 500 })
       if (!upd || upd.length === 0) return NextResponse.json({ error: '更新できませんでした' }, { status: 500 })
 
+      // 経理用シートの「入金状況」「入金日」「入金額」が変わるので送り直す
+      await resendSheetForInvoice(db, String(invoiceId))
+
       // 入金を確認したときだけ、出店者へお礼を送る
       const apiKey = process.env.RESEND_API_KEY
       if (!undo && apiKey && inv.paid_status !== 'paid') {
@@ -239,6 +243,8 @@ export async function POST(req: Request) {
         void_reason: typeof reason === 'string' && reason.trim() ? reason.trim() : null,
       }).eq('id', invoiceId)
       if (vErr) return NextResponse.json({ error: '取り消しに失敗しました: ' + vErr.message }, { status: 500 })
+      // 経理用シートの「発行状況」が「取消し済み」に変わるので送り直す
+      await resendSheetForInvoice(db, String(invoiceId))
       return NextResponse.json({ success: true, invoiceNo: inv.invoice_no })
     }
 
@@ -252,6 +258,8 @@ export async function POST(req: Request) {
       }).eq('id', invoiceId).select('invoice_no')
       if (rErr) return NextResponse.json({ error: '戻せませんでした: ' + rErr.message }, { status: 500 })
       if (!up || up.length === 0) return NextResponse.json({ error: '対象が見つかりませんでした' }, { status: 404 })
+      // 「取消し済み」から「発行済み」に戻るので送り直す
+      await resendSheetForInvoice(db, String(invoiceId))
       return NextResponse.json({ success: true, invoiceNo: up[0].invoice_no })
     }
 

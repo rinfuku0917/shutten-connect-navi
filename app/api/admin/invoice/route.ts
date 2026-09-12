@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { perDayFee } from '../../../lib/placeFee'
+import { sendSalesToSheet } from '../../../lib/sheetSend'
 
 // 出店者への請求書を組み立てる。
 // action='preview' は番号を採番せず内容だけ返す（確認用）。
@@ -524,6 +525,10 @@ export async function POST(req: Request) {
     if (iErr) {
       return NextResponse.json({ error: '請求書の記録に失敗しました: ' + iErr.message }, { status: 500 })
     }
+    // 経理用シートの「請求書ID」「発行状況」が変わるので送り直す。
+    // 待つが、失敗しても発行は成功として返す（送れなかった売上は
+    // sheet_error に残り、管理画面から送り直せる）
+    await sendSalesToSheet(admin, items.map((i: { saleId: string }) => i.saleId))
     return NextResponse.json({
       ...payload, invoiceNo, dueOn: due,
       items: useItems, subtotal: sub2, tax: tax2, total: sub2 + tax2, itemCount: useItems.length,

@@ -11,6 +11,7 @@ import DashboardFooter from '../../components/DashboardFooter'
 import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
 import { perDayFee, dayTypeFee, formatFee } from '../../lib/placeFee'
 import { showsToSeller } from '../../lib/cancelledVisibility'
+import { syncSalesToSheet } from '../../lib/sheetSync'
 import OnsiteSteps from './OnsiteSteps'
 import SiteSubmissionForm from './SiteSubmissionForm'
 
@@ -515,9 +516,11 @@ export default function SellerDashboard() {
     const cust = parseInt(rpCustomers, 10)
     if (!isNaN(cust) && cust > 0) row.customers = cust
     if (rpNote.trim()) row.note = rpNote.trim()
-    const { error } = await supabase.from('sales').insert(row)
+    const { data: ins1, error } = await supabase.from('sales').insert(row).select('id')
     setRpSaving(false)
     if (error) { showNotice('報告の保存に失敗しました: ' + error.message); return }
+    // 経理用シートへ送る。待たない（送れなくても報告は残っている）
+    void syncSalesToSheet(((ins1 || []) as { id: string }[]).map(r => r.id))
     setReportFor(null)
     await loadMySales()
     await loadUnreported()
@@ -816,8 +819,9 @@ export default function SellerDashboard() {
     const cust = parseInt(saleCustomers, 10)
     if (!isNaN(cust) && cust > 0) row.customers = cust
     if (saleNote.trim()) row.note = saleNote.trim()
-    const { error } = await supabase.from('sales').insert(row)
+    const { data: ins2, error } = await supabase.from('sales').insert(row).select('id')
     if (error) { showNotice('保存失敗: ' + error.message); setSaleSaving(false); return }
+    void syncSalesToSheet(((ins2 || []) as { id: string }[]).map(r => r.id))
     setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleRev8(''); setSaleRev10(''); setSaleItems([]); setSaleSaving(false)
     setSaleWeather(''); setSaleCustomers(''); setSaleNote('')
     loadMySales()
