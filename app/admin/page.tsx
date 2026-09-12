@@ -243,6 +243,30 @@ export default function AdminPage() {
     window.history.pushState({ tab: 'docs' }, '', u.toString())
     window.scrollTo({ top: 0 })
   }
+  // 出店承認から、その出店者とのやり取りを開く。
+  //
+  // なぜ要るか:
+  //   出店者から「担当者に直接聞きたい」という要望が上がっていた。
+  //   これまでは出店承認の画面で相手を確かめてから、メッセージタブへ移り、
+  //   一覧の中から同じ人をもう一度探す必要があった。
+  //   審査中の申込もやり取りの一覧に入る（loadThreads は pending も読む）ので、
+  //   承認前から連絡できる。
+  //
+  //   開く経路が増えても食い違わないよう、ここに1本化する。
+  const openMessageThread = (applicationId: string) => {
+    if (!applicationId) return
+    setTab('messages')
+    try { localStorage.setItem('adminTab', 'messages') } catch { /* 保存できなくても動く */ }
+    // やり取りの本体を読む。一覧（threads）の読み込みはタブの効果が受け持つ。
+    // 相手の名前は一覧が届いてから入るが、本文の読み込みはこれで足りる
+    openThread(applicationId)
+    // 履歴に積む。返事を送ったあと、戻るで出店承認へ帰れるようにする
+    const u = new URL(window.location.href)
+    u.searchParams.set('tab', 'messages')
+    window.history.pushState({ tab: 'messages' }, '', u.toString())
+    window.scrollTo({ top: 0 })
+  }
+
   // 売上の一覧から、その出店者の登録情報（連絡先・エリア・ジャンル）へ移る。
   // 運営だけが見られる情報なので、公開ページ /sellers/[id] ではなく
   // 出店者管理タブを開く。公開ページは連絡先を出さない作りのため
@@ -3316,6 +3340,15 @@ const previewDoc = async (fileUrl: string) => {
                       {a.sellerId && (
                         <a href={'/sellers/' + a.sellerId + '?preview=1'} target='_blank' rel='noopener noreferrer' style={{ background: '#EBF6FD', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>プロフィールを見る</a>
                       )}
+                      {/* 相手を確かめたその場で連絡できるようにする。
+                          審査中でもやり取りの一覧に入るので、承認前から送れる */}
+                      <button
+                        type='button'
+                        onClick={() => openMessageThread(a.id)}
+                        title={a.sellerName + ' とのやり取りを開きます'}
+                        style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px', whiteSpace: 'nowrap' }}>
+                        担当者にメッセージを送る
+                      </button>
                       {/* この案件のために入力した現場情報。あれば青、無ければ灰色で「未入力」と分かるようにする */}
                       <button
                         type='button'

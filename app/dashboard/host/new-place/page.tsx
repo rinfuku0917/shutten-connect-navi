@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { isWeekendOrHoliday } from '../../../lib/jpHoliday'
 import FormatFeesEditor, { type FormatFeesValue } from '../../../components/FormatFeesEditor'
+import DowPresets from '../../../components/DowPresets'
 import { geocodeAddress } from '../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../lib/categories'
 import { toYen } from '../../../lib/placeFee'
@@ -416,11 +417,9 @@ async function refreshPublicPages(placeId?: string) {
                           )
                         })}
                       </div>
-                      <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'8px'}}>
-                        <button type='button' onClick={()=>setBulkDows([0,1,2,3,4,5,6])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>毎日</button>
-                        <button type='button' onClick={()=>setBulkDows([1,2,3,4,5])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>平日だけ</button>
-                        <button type='button' onClick={()=>setBulkDows([0,6])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>土日だけ</button>
-                      </div>
+                      {/* 曜日のまとめ選び。形態ごとの「出られる曜日」でも
+                          同じものを使っている（app/components/DowPresets.tsx） */}
+                      <DowPresets current={bulkDows} onPick={setted => setBulkDows(setted)} />
                     </div>
 
                     <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'12px'}}>
@@ -543,11 +542,9 @@ async function refreshPublicPages(placeId?: string) {
                         )
                       })}
                     </div>
-                    <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'8px'}}>
-                      <button type='button' onClick={()=>setRepDows([0,1,2,3,4,5,6])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>毎日</button>
-                      <button type='button' onClick={()=>setRepDows([1,2,3,4,5])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>平日だけ</button>
-                      <button type='button' onClick={()=>setRepDows([0,6])} style={{background:'#fff',color:'#64748B',border:'1px solid #E2E8F0',borderRadius:'999px',padding:'6px 12px',fontSize:'11.5px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>土日だけ</button>
-                    </div>
+                    {/* 曜日のまとめ選び。形態ごとの「出られる曜日」でも
+                        同じものを使っている（app/components/DowPresets.tsx） */}
+                    <DowPresets current={repDows} onPick={setted => setRepDows(setted)} />
 
                     <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'12px'}}>
                       <div>

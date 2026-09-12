@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { FORMATS, type FormatFee } from '../lib/placeFee'
+import DowPresets from './DowPresets'
 
 // 形態（キッチンカー・物販・催事PR・テント・ブース）ごとの出店料と条件を入れる欄。
 //
@@ -197,9 +198,15 @@ export default function FormatFeesEditor({
                       )
                     })}
                   </div>
+                  {/* まとめて選べるようにする。1つずつ押すのは手間で、
+                      まとめて日程追加と毎月の自動更新には既に同じものがある。
+                      同じ部品を使って、言い方と見た目を揃えている */}
+                  <DowPresets current={Array.isArray(v.dows) ? v.dows : null}
+                    onPick={dows => set(f, { dows })} />
                   <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '5px', lineHeight: 1.7 }}>
                     何も選ばなければ、案件の日程すべてに出られます。
-                    曜日を選ぶと、その形態はその曜日の日だけ申し込めます。
+                    曜日を選ぶと、その形態はその曜日の日だけ申し込めます。<br />
+                    「土日だけ」に祝日は入りません（月曜の祝日は「平日だけ」に入ります）。
                   </div>
                 </div>
               </div>
