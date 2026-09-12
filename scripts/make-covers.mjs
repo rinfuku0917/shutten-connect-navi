@@ -38,6 +38,12 @@ const COVERS = [
   ['mall-food-truck-event',
    '車両を売りたい方へのフォルダ②/安心取引アイコン④.png',
    ['#F1F0FA', '#D6D4EE']],
+  // 遊休スペースの活用。町の空いた区画にキッチンカーとテントが
+  // 入っている絵柄を使う（全国対応の地図では主題と合わなかった）。
+  // 配色は既存6枚と重ならないものにしている
+  ['vacant-space-food-truck',
+   '新サイト上部の4つのアイコンフォルダ①/登録出店者アイコン② .png',
+   ['#FBF6EC', '#EFE0C6']],
 ]
 
 fs.mkdirSync(OUT, { recursive: true })
