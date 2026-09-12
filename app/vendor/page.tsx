@@ -391,6 +391,11 @@ export default function VendorPage() {
                   <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>お祭り・マルシェの主催者向け。台数の決め方と当日の進め方まで。</div>
                 </li>
           </ul>
+          {/* 呼びたい方向けの記事をまとめた入口へ。
+              ここに4本しか出していないので、続きへ送る */}
+          <Link href='/blog/category/host' style={{ display: 'inline-block', marginTop: '6px', fontSize: '13.5px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}>
+            呼びたい方向けの記事をすべて見る →
+          </Link>
         </div>
       </div>
 

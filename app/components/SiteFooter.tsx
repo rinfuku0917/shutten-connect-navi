@@ -14,6 +14,7 @@ const cols: { head: string; icon: string; items: { href: string; label: string }
     { href: '/vendor/event', label: 'イベント・マルシェ・お祭り' },
     { href: '/vendor/cost', label: 'キッチンカーを呼ぶ費用' },
     { href: '/sellers', label: '登録キッチンカーを見る' },
+    { href: '/blog/category/host', label: '呼びたい方向けの記事' },
     // エリア別のページは、サイトマップに入れていたのに
     // サイトの中のどこからも辿れなかった。検索エンジンは
     // 「サイトマップにしか無いページ」を低く見るため、ここから繋ぐ。

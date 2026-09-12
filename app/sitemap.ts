@@ -45,6 +45,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/vendor`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${SITE_URL}/vendor/event`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${SITE_URL}/vendor/cost`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.9 },
+    // 呼びたい方向けの記事をまとめた入口。これまで分類の絞り込みは
+    // /blog?category=募集者向け という形しかなく、検索の対象になっていなかった
+    { url: `${SITE_URL}/blog/category/host`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${SITE_URL}/vendor/area/tokyo`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${SITE_URL}/vendor/area/saitama`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${SITE_URL}/vendor/area/kanagawa`, lastModified: STATIC_UPDATED, changeFrequency: 'weekly', priority: 0.8 },

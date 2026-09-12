@@ -4,7 +4,7 @@ import type { Metadata } from 'next'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
-import { firstImage, thumbnailUrl } from '../lib/postImage'
+import PostCard from '../components/PostCard'
 import { POST_CATEGORIES } from '../lib/postCategories'
 import { MERGED_SLUGS_FILTER } from '../lib/mergedPosts'
 
@@ -80,7 +80,9 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
           {POST_CATEGORIES.map(c => (
             <Link
               key={c}
-              href={qs({ category: c, page: 1 })}
+              // 「募集者向け」は固有のURLを持つページがあるので、そちらへ送る。
+              // クエリだけの出し分けは検索の対象にしない決まり（AGENTS.md）
+              href={c === '募集者向け' ? '/blog/category/host' : qs({ category: c, page: 1 })}
               style={{ padding: '9px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 800, textDecoration: 'none', border: '1px solid ' + (category === c ? '#F5A623' : '#E7DCC8'), background: category === c ? '#F5A623' : '#fff', color: category === c ? '#fff' : '#64748B' }}
             >
               {c}
@@ -92,26 +94,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#999', fontSize: '14px' }}>{category ? `「${category}」の記事はまだありません。` : '記事を準備中です。もうしばらくお待ちください。'}</div>
         ) : (
           <div style={{ display: 'grid', gap: '16px' }}>
-            {posts.map(post => (
-              <Link key={post.id} href={'/blog/' + post.slug} style={{ textDecoration: 'none', display: 'block', background: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px', padding: '20px', color: 'inherit' }}>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                  {(() => {
-                    const img = firstImage(post.content)
-                    return img
-                      ? <img src={thumbnailUrl(img)} alt="" width={96} height={96} loading="lazy" decoding="async" style={{ width: '96px', height: '96px', objectFit: 'cover', borderRadius: '10px', flexShrink: 0 }} />
-                      : <div style={{ fontSize: '40px', flexShrink: 0 }}>{post.cover_emoji || '📝'}</div>
-                  })()}
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      {post.category && <span style={{ background: '#FFF3E0', color: '#B45309', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>{post.category}</span>}
-                      {post.published_at && <span style={{ color: '#94A3B8', fontSize: '11px' }}>{new Date(post.published_at).toLocaleDateString('ja-JP')}</span>}
-                    </div>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a1a1a', lineHeight: 1.5 }}>{post.title}</div>
-                    {post.excerpt && <div style={{ fontSize: '13px', color: '#64748B', marginTop: '6px', lineHeight: 1.6 }}>{post.excerpt}</div>}
-                  </div>
-                </div>
-              </Link>
-            ))}
+            {posts.map(post => <PostCard key={post.id} post={post} />)}
           </div>
         )}
         {totalPages > 1 && (
