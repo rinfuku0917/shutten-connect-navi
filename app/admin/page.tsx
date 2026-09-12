@@ -1317,6 +1317,10 @@ export default function AdminPage() {
     id: string; name: string; company: string | null; email: string; phone: string | null
     method: string; preferred_dates: string | null; message: string | null
     status: string; admin_memo: string | null; created_at: string
+    // どこ経由で来たか・すでに関係がある方かどうか。
+    // 20260912_meeting_source.sql を実行する前の相談には入っていない
+    found_via?: string | null; found_note?: string | null
+    contact_history?: string | null; rep_name?: string | null
   }
   const METHOD_LABEL: Record<string, string> = { zoom: 'Zoom希望', in_person: '直接お会いしたい', both: 'どちらでも可' }
   const MEET_STATUS: Record<string, { label: string, color: string, bg: string }> = {
@@ -3576,6 +3580,14 @@ const previewDoc = async (fileUrl: string) => {
                           {([
                             ['ご担当者', m.name],
                             ['連絡先', [m.email, m.phone].filter(Boolean).join(' ／ ')],
+                            // どこ経由で来たか。入っていない相談には行を出さない
+                            ['きっかけ', m.found_via
+                              ? sourceLabel(m.found_via) + (m.found_note ? '（' + m.found_note + '）' : '')
+                              : ''],
+                            // 初めてでない方は、引き継ぎ先を探す手がかりになる
+                            ['弊社とのやり取り', m.contact_history
+                              ? historyLabel(m.contact_history) + (m.rep_name ? '／担当：' + m.rep_name : '')
+                              : ''],
                             ['ご希望の日時', m.preferred_dates || ''],
                             ['ご相談内容', m.message || ''],
                           ] as [string, string][]).filter(r => r[1]).map(([label, val]) => (

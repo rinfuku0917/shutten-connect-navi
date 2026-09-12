@@ -2,7 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
-import { sourceLabel } from '../../../lib/signupSource'
+import { sourceLabel, historyLabel } from '../../../lib/signupSource'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
@@ -10,7 +10,7 @@ const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { role, name, shop_name, email, phone, areas, found_via, found_note } = body
+    const { role, name, shop_name, email, phone, areas, found_via, found_note, contact_history, rep_name } = body
 
     // 「何を見て知ったか」を先に記録する。
     // メールより前に置くのは、送信に失敗しても回答が消えないようにするため。
@@ -63,7 +63,14 @@ export async function POST(req: Request) {
       ? '\n\n──────────\n何を見て知ったか：' + sourceLabel(String(found_via))
         + (found_note ? '（' + String(found_note) + '）' : '')
       : ''
-    const text = mail.text + viaLine
+    // やり取りの履歴。初めてでない方に初回の案内を送ってしまうと失礼になるので、
+    // 折り返す前に分かるようにしておく。
+    // 相談フォーム（/api/meeting-request）からだけ入ってくる
+    const histLine = contact_history
+      ? '\n弊社とのやり取り：' + historyLabel(String(contact_history))
+        + (rep_name ? '（担当：' + String(rep_name) + '）' : '')
+      : ''
+    const text = mail.text + viaLine + histLine
 
     // info@ に単独で送り、追加の宛先には1件ずつ送る（1件の失敗で全員に届かなくなるのを防ぐ）
     const { error } = await sendAdminMail(resend, 'member', {

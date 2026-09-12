@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { CONTACT_SOURCES, CONTACT_HISTORIES, asksRepName } from '../../lib/signupSource'
 
 // 募集者からの打ち合わせ希望。
 //   action 未指定 … 申し込みの登録（募集者が使う）
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
     }
 
     // ===== 募集者：申し込みの登録 =====
-    const { hostId, name, company, email, phone, method, preferredDates, message } = body
+    const { hostId, name, company, email, phone, method, preferredDates, message, foundVia, foundNote, contactHistory, repName } = body
     if (!name || !String(name).trim()) {
       return NextResponse.json({ error: 'ご担当者名を入力してください' }, { status: 400 })
     }
@@ -111,6 +112,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '打ち合わせの方法をお選びください' }, { status: 400 })
     }
 
+    // ---- きっかけとやり取りの履歴 ----
+    //
+    // 画面から来た文字をそのまま入れない。一覧にある値だけを受け付ける。
+    // 一覧に無い値は「未回答」として扱い、相談そのものは通す
+    // （選択肢を変えたあとに古い画面から送られても、相談を落とさないため）。
+    const via = CONTACT_SOURCES.some(o => o.value === foundVia) ? String(foundVia) : null
+    const hist = CONTACT_HISTORIES.some(o => o.value === contactHistory) ? String(contactHistory) : null
+    const note = typeof foundNote === 'string' ? foundNote.trim().slice(0, 200) : ''
+    // 担当者名は、たずねる選択のときだけ残す。
+    // 画面で切り替えたあとの取り残しをここでも落とす
+    const rep = (hist && asksRepName(hist) && typeof repName === 'string')
+      ? repName.trim().slice(0, 100) : ''
+
     const { error } = await admin.from('meeting_requests').insert({
       host_id: hostId || null,
       name: String(name).trim(),
@@ -120,9 +134,26 @@ export async function POST(req: Request) {
       method,
       preferred_dates: preferredDates ? String(preferredDates).trim() : null,
       message: message ? String(message).trim() : null,
+      found_via: via, found_note: note || null,
+      contact_history: hist, rep_name: rep || null,
     })
     if (error) {
-      return NextResponse.json({ error: '送信に失敗しました: ' + error.message }, { status: 500 })
+      // 列がまだ無い環境（20260912_meeting_source.sql を実行する前）でも
+      // 相談を落とさない。経路なしで入れ直す
+      console.error('相談の記録に失敗しました', error.message)
+      const { error: e2 } = await admin.from('meeting_requests').insert({
+        host_id: hostId || null,
+        name: String(name).trim(),
+        company: company ? String(company).trim() : null,
+        email: String(email).trim(),
+        phone: phone ? String(phone).trim() : null,
+        method,
+        preferred_dates: preferredDates ? String(preferredDates).trim() : null,
+        message: message ? String(message).trim() : null,
+      })
+      if (e2) {
+        return NextResponse.json({ error: '送信に失敗しました: ' + e2.message }, { status: 500 })
+      }
     }
 
     // 運営へ通知（失敗しても申し込みは成功扱い）
@@ -133,6 +164,10 @@ export async function POST(req: Request) {
         body: JSON.stringify({
           role: 'host', name: String(name).trim(),
           shop_name: company || null, email: String(email).trim(), phone: phone || null,
+          // どこ経由で来たか・すでに関係がある方かを通知にも載せる。
+          // 折り返す前に分かっているほうが、話の入り方が変わる
+          found_via: via, found_note: note || null,
+          contact_history: hist, rep_name: rep || null,
         }),
       })
     } catch (e) {

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { track } from '../lib/ga'
+import { CONTACT_SOURCES, CONTACT_HISTORIES, asksRepName } from '../lib/signupSource'
 
 // 打ち合わせ・ご相談の申し込みフォーム。
 // 会員登録の前でも相談できるよう、ログインしていなくても送信できる。
@@ -13,7 +14,14 @@ const METHODS = [
   { v: 'both', l: 'どちらでも可' },
 ]
 
-const empty = { name: '', company: '', email: '', phone: '', method: 'both', preferredDates: '', message: '' }
+const empty = {
+  name: '', company: '', email: '', phone: '', method: 'both', preferredDates: '', message: '',
+  // どこ経由で来たか。相談はお問い合わせより成約に近いので、
+  // こちらのほうが経路を知る価値が高い
+  foundVia: '', foundNote: '',
+  // 初めての方か、すでに関係がある方か。社内の引き継ぎ先が変わる
+  contactHistory: '', repName: '',
+}
 
 export default function MeetingRequestForm({
   onClose,
@@ -34,13 +42,20 @@ export default function MeetingRequestForm({
     setErr('')
     if (!form.name.trim()) { setErr('ご担当者名を入力してください'); return }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setErr('メールアドレスをご確認ください'); return }
+    if (!form.foundVia) { setErr('「当サービスを知ったきっかけ」をお選びください'); return }
+    if (!form.contactHistory) { setErr('「弊社とのやり取り」をお選びください'); return }
     setSending(true)
     // ログインしていれば、どのアカウントからの相談か分かるようにIDも送る
     const { data: { user } } = await supabase.auth.getUser()
     const res = await fetch('/api/meeting-request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, hostId: user?.id || null }),
+      body: JSON.stringify({
+        ...form,
+        // 担当者名をたずねない選択に変えたあとも値が残らないよう、ここで落とす
+        repName: asksRepName(form.contactHistory) ? form.repName : '',
+        hostId: user?.id || null,
+      }),
     })
     const j = await res.json()
     setSending(false)
@@ -114,6 +129,63 @@ export default function MeetingRequestForm({
               placeholder={f.ph} style={input} />
           </div>
         ))}
+      </div>
+
+      {/* どこ経由で来たかと、すでに関係がある方かどうか。
+          お問い合わせフォーム（app/contact/page.tsx）と同じ選択肢・同じ値。
+          値は app/lib/signupSource.ts が唯一の正で、会員登録の
+          「何を見て知ったか」とも揃えてある（まとめて数えられるようにするため） */}
+      <div style={{ marginBottom: '14px' }}>
+        <label style={{ ...label, fontWeight: 700, color: '#1a1a1a', fontSize: '13px', marginBottom: '6px' }}>
+          当サービスを知ったきっかけ<span style={{ color: '#DC2626' }}> *</span>
+        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+          {CONTACT_SOURCES.map(o => (
+            <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '7px 2px', minHeight: '40px', fontSize: '13.5px', color: '#1a1a1a' }}>
+              <input type='radio' name='mrFoundVia' value={o.value}
+                checked={form.foundVia === o.value}
+                onChange={() => setForm({ ...form, foundVia: o.value })}
+                style={{ width: '18px', height: '18px', accentColor: '#1D4ED8', cursor: 'pointer', flex: '0 0 auto' }} />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+        {/* 「その他」の中身が分からないままにならないよう、書ける場所を出す */}
+        {form.foundVia === 'other' && (
+          <input value={form.foundNote} maxLength={200}
+            onChange={e => setForm({ ...form, foundNote: e.target.value })}
+            placeholder='どこでお知りになりましたか（任意）'
+            style={{ ...input, marginTop: '6px' }} />
+        )}
+      </div>
+
+      <div style={{ marginBottom: '14px' }}>
+        <label style={{ ...label, fontWeight: 700, color: '#1a1a1a', fontSize: '13px', marginBottom: '6px' }}>
+          弊社とのやり取り<span style={{ color: '#DC2626' }}> *</span>
+        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+          {CONTACT_HISTORIES.map(o => (
+            <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '7px 2px', minHeight: '40px', fontSize: '13.5px', color: '#1a1a1a' }}>
+              <input type='radio' name='mrHistory' value={o.value}
+                checked={form.contactHistory === o.value}
+                onChange={() => setForm({ ...form, contactHistory: o.value })}
+                style={{ width: '18px', height: '18px', accentColor: '#1D4ED8', cursor: 'pointer', flex: '0 0 auto' }} />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+        {/* すでに関係がある方のときだけ、担当者名の欄を出す。
+            分かる場合だけでよいので任意。社内の引き継ぎが早くなる */}
+        {asksRepName(form.contactHistory) && (
+          <div style={{ marginTop: '6px' }}>
+            <input value={form.repName} maxLength={100}
+              onChange={e => setForm({ ...form, repName: e.target.value })}
+              placeholder='弊社の担当者名（例：山田）' style={input} />
+            <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '5px', lineHeight: 1.7 }}>
+              お分かりになる場合のみご記入ください。空欄でも送信できます。
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: '12px' }}>
