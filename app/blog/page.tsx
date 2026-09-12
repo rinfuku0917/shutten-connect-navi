@@ -10,11 +10,46 @@ import { MERGED_SLUGS_FILTER } from '../lib/mergedPosts'
 
 export const revalidate = 60
 
-export const metadata: Metadata = {
-  // layout の template が二重に付かないよう absolute で指定する
-  title: { absolute: 'お役立ち情報 - 出店コネクトナビ' },
-  description: 'キッチンカー・屋台の開業や出店に役立つ情報をお届けします。開業費用、営業許可、出店場所の探し方、収益アップのコツなど、出店者と募集者のための実践ガイド。',
-  alternates: { canonical: '/blog' },
+// ページ送りと分類の絞り込みは、それぞれ中身の違うページになる。
+// 正規URLを /blog に固定していたため、2ページ目の記事が
+// どのページの一部なのかをGoogleに伝えられていなかった
+// （本番で /blog と /blog?page=2 は中身が違うのに、
+// どちらも canonical が /blog を指していた）。
+//
+// AGENTS.md の「canonical は必ず自ページを指定する」に合わせて、
+// ページごと・分類ごとに自分を指す。
+//
+// 2ページ目以降を検索対象から外す（noindex）のは採らない。
+// 公開ページへの noindex 追加は禁止している。
+export async function generateMetadata(
+  { searchParams }: { searchParams: Promise<{ page?: string; category?: string }> },
+): Promise<Metadata> {
+  const sp = await searchParams
+  const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
+  const category = POST_CATEGORIES.includes((sp.category ?? '') as (typeof POST_CATEGORIES)[number]) ? sp.category! : null
+
+  // 表示しているものと同じ組み合わせで自ページを作る。
+  // 画面のページ送り（qs）と同じ形にすること。食い違うと、
+  // リンク先と正規URLが別のURLになる
+  const q = new URLSearchParams()
+  if (category) q.set('category', category)
+  if (page > 1) q.set('page', String(page))
+  const qsStr = q.toString()
+  const self = qsStr ? `/blog?${qsStr}` : '/blog'
+
+  // 2ページ目以降と分類つきは、題も分ける。
+  // 同じ題のページが並ぶと、どれを出すかGoogleが決められない
+  const name = category ? `${category}の記事` : 'お役立ち情報'
+  const withPage = page > 1 ? `${name}（${page}ページ目）` : name
+
+  return {
+    // layout の template が二重に付かないよう absolute で指定する
+    title: { absolute: `${withPage} - 出店コネクトナビ` },
+    description: category
+      ? `${category}に関する記事の一覧です。キッチンカー・屋台の出店と募集に役立つ情報をまとめています。`
+      : 'キッチンカー・屋台の開業や出店に役立つ情報をお届けします。開業費用、営業許可、出店場所の探し方、収益アップのコツなど、出店者と募集者のための実践ガイド。',
+    alternates: { canonical: self },
+  }
 }
 
 type Post = {
