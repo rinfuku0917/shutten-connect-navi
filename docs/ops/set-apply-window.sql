@@ -1,7 +1,7 @@
 -- 案件ごとの「何ヶ月先まで申し込めるか」を系列ごとに入れる。
 --
 --   1ヶ月  イオン / サンユーストアー / スーパーあさの / さがみや
---   3ヶ月  Olympic / MEGAドン・キホーテ
+--   4ヶ月  Olympic / MEGAドン・キホーテ（2026-09-14 に3ヶ月から変更）
 --   それ以外は空のまま（＝上限なし）。必要になったら管理画面で個別に入れる。
 --
 -- 先に 20260904_apply_window.sql を流しておくこと。
@@ -20,7 +20,7 @@
 select
   case
     when title ilike '%Olympic%' or title like '%オリンピック%'
-      or title like '%ドン・キホーテ%' or title like '%ドンキホーテ%' then '3ヶ月'
+      or title like '%ドン・キホーテ%' or title like '%ドンキホーテ%' then '4ヶ月'
     when title like '%イオン%' or title like '%サンユー%'
       or title like '%あさの%'   or title like '%さがみや%' or title like '%サガミヤ%' then '1ヶ月'
   end                                as 入れる上限,
@@ -39,12 +39,12 @@ order by 入れる上限, title;
 -- ────────────────────────────────────────────
 -- ② 上限を入れる
 -- ────────────────────────────────────────────
--- 3ヶ月を先に入れる。
+-- 4ヶ月を先に入れる。
 -- 「MEGAドン・キホーテ 高井戸店（旧Olympic 高井戸店）」のように
--- 両方の名前が入った案件があるが、どちらも3ヶ月なので結果は変わらない。
+-- 両方の名前が入った案件があるが、どちらも4ヶ月なので結果は変わらない。
 
 update public.places
-   set apply_within_months = 3
+   set apply_within_months = 4
  where title ilike '%Olympic%'
     or title like '%オリンピック%'
     or title like '%ドン・キホーテ%'
@@ -57,8 +57,8 @@ update public.places
      or title like '%あさの%'
      or title like '%さがみや%'
      or title like '%サガミヤ%')
-   -- 3ヶ月を入れた案件を上書きしない（名前が重なる案件への保険）
-   and apply_within_months is distinct from 3;
+   -- 4ヶ月を入れた案件を上書きしない（名前が重なる案件への保険）
+   and apply_within_months is distinct from 4;
 
 
 -- ────────────────────────────────────────────
@@ -75,7 +75,7 @@ order by apply_within_months nulls last;
 
 -- 系列ごとの内訳。想定は
 --   1ヶ月  イオン23 / サンユー15 / あさの1 / さがみや1  = 40件
---   3ヶ月  Olympic16 / MEGAドンキ1                      = 17件
+--   4ヶ月  Olympic16 / MEGAドンキ1                      = 17件
 -- ※ 2026-09-02 時点の公開案件での数。増えていれば件数は変わる
 
 select apply_within_months as 上限, title as 案件名

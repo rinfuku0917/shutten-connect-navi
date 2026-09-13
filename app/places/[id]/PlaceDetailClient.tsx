@@ -180,7 +180,8 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
   const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
   // 何ヶ月先まで申し込めるかの上限（places.apply_within_months）。
-  // 施設が先の予定に答えられないため、イオン系は1ヶ月、Olympic系は3ヶ月に絞っている。
+  // 施設が先の予定に答えられないため、イオン系は1ヶ月、Olympic・ドンキ系は4ヶ月に絞っている
+  // （2026-09-14 に3ヶ月から4ヶ月へ。公開した12月後半の日程に申し込めなかったため）。
   // 未設定の案件は null＝上限なしで、これまでどおりどの日でも選べる。
   //
   // 月末は暦どおりに丸める（1月31日の1ヶ月先は2月28日）。

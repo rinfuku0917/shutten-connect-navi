@@ -766,10 +766,11 @@ async function refreshPublicPages(placeId?: string) {
                   <option value='1'>1ヶ月先まで</option>
                   <option value='2'>2ヶ月先まで</option>
                   <option value='3'>3ヶ月先まで</option>
+                  <option value='4'>4ヶ月先まで</option>
                   <option value='6'>6ヶ月先まで</option>
                   <option value='12'>12ヶ月先まで</option>
                 </select>
-                <div style={{fontSize:'12px',color:'#64748B',marginTop:'4px'}}>これより先の日付は、出店者の画面で選べなくなります。施設が先の予定に答えられない場合に設定してください。イオン系は1ヶ月、Olympic・ドンキは3ヶ月です。</div>
+                <div style={{fontSize:'12px',color:'#64748B',marginTop:'4px'}}>これより先の日付は、出店者の画面で選べなくなります。施設が先の予定に答えられない場合に設定してください。イオン系は1ヶ月、Olympic・ドンキは4ヶ月です。上限より先の日程を公開すると、その日は申し込めないので、公開する日程に合わせて広げてください。</div>
               </div>
             )}
 
