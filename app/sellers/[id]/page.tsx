@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import { isExcludedShop } from '../../lib/excludedShops'
 import { createClient } from '@supabase/supabase-js'
 import JsonLd from '../../components/JsonLd'
@@ -43,6 +44,22 @@ async function fetchSeller(id: string): Promise<Seller | null> {
     .eq('approval_status', 'approved')
     .maybeSingle()
   return (data as Seller) ?? null
+}
+
+// 出店者の行そのものがあるか（承認状態は問わない）。
+//
+// 未承認の出店者は、運営や本人が ?preview=1 でブラウザ側から見られるように
+// 404 にしていない。そのせいで存在しないIDでも200を返し、ソフト404になっていた。
+// 行が本当に無いときだけ404を返す。中身は返さないので、未承認の情報は漏れない。
+// 読めなかったときは「ある」とみなす（本物のページを404にしないため）。
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+async function sellerExists(id: string): Promise<boolean> {
+  if (!UUID.test(id)) return false
+  const db = client()
+  if (!db) return true
+  const { data, error } = await db.from('profiles').select('id').eq('id', id).eq('role', 'seller').maybeSingle()
+  if (error) return true
+  return !!data
 }
 
 async function fetchMenusAndReviews(id: string): Promise<{ menus: MenuItem[]; reviews: Review[]; sns: SnsLink[] }> {
@@ -138,6 +155,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function SellerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const seller = await fetchSeller(id)
+  // 行そのものが無いIDは404にする（ソフト404を出さない）
+  if (!seller && !(await sellerExists(id))) notFound()
   const { menus, reviews, sns } = seller ? await fetchMenusAndReviews(id) : { menus: [], reviews: [], sns: [] }
 
   const name = seller ? displayName(seller) : ''

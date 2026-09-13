@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import { getSiteStats } from '../lib/siteStats'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
@@ -70,7 +71,9 @@ const SETSUBI = [
   ['希望メニュー・NGメニュー', '出してほしいもの、避けてほしいもの'],
 ]
 
-export default function VendorPage() {
+export default async function VendorPage() {
+  // 手書きしていた店舗数を、作り直すたびに数える（app/lib/siteStats.ts）
+  const stats = await getSiteStats()
   // スマホでの文字の大きさを 24px → 21px に落とす。
   // 24px だと1行に13文字しか入らず、「出店コネクトナビでできること」が
   // 「出店コネクトナ / ビでできること」と割れていた。21px なら15文字入る。
@@ -155,7 +158,7 @@ export default function VendorPage() {
           <h2 className='jp-head sec-head' style={H2}>出店コネクトナビでできること<Image src='/ic-v-can.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             キッチンカー事業者と、出店場所をお持ちの施設・主催者をつなぐサービスです。
-            現在 3,521 店舗の出店者が登録しています。
+            現在 {stats.sellers.toLocaleString()} 店舗の出店者が登録しています。
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px' }}>
             {CAN_DO.map(c => (

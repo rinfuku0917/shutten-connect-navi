@@ -395,7 +395,8 @@ img[width='1'][height='1'] { display: inline !important; }
   gap: 8px;
   margin: 0 0 12px;
 }
-.top3-foothead h4 {
+.top3-foothead .top3-foothead-text {
+  display: block;
   font-size: 12px;
   color: #456254;      /* siteTheme の footerMuted と同じ */
   font-weight: 700;
@@ -459,7 +460,8 @@ img[width='1'][height='1'] { display: inline !important; }
   }
   /* パソコン向けに付けた下の余白を、帯では消す（帯どうしを隙間なく並べる） */
   .top3-foothead { margin: 0; }
-  .top3-foothead h4 {
+  .top3-foothead .top3-foothead-text {
+    display: block;
     color: #fff;
     font-size: 13.5px;
     margin: 0;

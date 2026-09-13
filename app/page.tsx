@@ -9,6 +9,7 @@ import { MERGED_SLUGS_FILTER } from './lib/mergedPosts'
 import JsonLd from './components/JsonLd'
 import { SITE_URL, SITE_NAME, ORG } from './lib/seo'
 import CountUp from './components/CountUp'
+import { getSiteStats } from './lib/siteStats'
 
 
 // title と description は layout.tsx の既定をそのまま使う。
@@ -46,7 +47,7 @@ type NewPlace = {
   applications: { count: number }[]
   urgent: boolean | null
 }
-type WorkPlace = { id: string; title: string; image_url: string | null }
+type WorkPlace = { id: string; title: string; image_url: string | null; closed: boolean | null }
 type BlogPost = { id: string; slug: string; title: string; category: string | null; cover_emoji: string | null; published_at: string | null; content: string | null }
 
 // ヒーロー下2入口カード用の線画アイコン（見本デザイン準拠）
@@ -132,13 +133,16 @@ async function loadTop(): Promise<{ newPlaces: NewPlace[]; works: WorkPlace[]; p
       client.from('places')
         .select('id,title,prefecture,image_url,posted_at,schedule,open_days,urgent,applications(count)')
         .eq('status', 'published')
+        // 新着には募集中だけを出す。終了した案件が「新着」に並ぶと、
+        // 押しても応募できないページに送ることになる
+        .eq('closed', false)
         // 取り消された申込は「人気」の判定に入れない
         .neq('applications.status', 'cancelled')
         .order('pinned', { ascending: false })
         .order('posted_at', { ascending: false })
         .limit(4),
       client.from('places')
-        .select('id,title,image_url')
+        .select('id,title,image_url,closed')
         .eq('status', 'published')
         .not('image_url', 'is', null)
         .order('pinned', { ascending: false })
@@ -164,7 +168,7 @@ async function loadTop(): Promise<{ newPlaces: NewPlace[]; works: WorkPlace[]; p
 }
 
 export default async function Home() {
-  const { newPlaces, works, posts } = await loadTop()
+  const [{ newPlaces, works, posts }, stats] = await Promise.all([loadTop(), getSiteStats()])
 
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ja-JP').replaceAll('/', '.') : ''
 
@@ -259,8 +263,9 @@ export default async function Home() {
       <div style={{ ...wrap, padding: '28px 20px 36px' }}>
         <div className='top3-stats'>
           {([
-            { img: '/ic-top-sellers.webp', value: 3521, label: '登録出店者' },
-            { img: '/ic-top-places.webp', value: 301, suffix: '+', label: '出店場所' },
+            // 手書きをやめ、ページを作り直すたびに数える（app/lib/siteStats.ts）
+            { img: '/ic-top-sellers.webp', value: stats.sellers, label: '登録出店者' },
+            { img: '/ic-top-places.webp', value: stats.places, suffix: '+', label: '出店場所' },
             { img: '/ic-top-line.webp', value: 2000, suffix: '+', label: 'LINE登録' },
             { img: '/ic-top-area.webp', text: '全国対応', label: '対応エリア拡大中', small: true },
           ] as { img: string; value?: number; suffix?: string; text?: string; label: string; small?: boolean }[]).map(s => (
@@ -381,12 +386,22 @@ export default async function Home() {
           </div>
           <div className='top3-works'>
             {works.length === 0 && <div style={{ color: C.muted, fontSize: '14px' }}>読み込み中...</div>}
-            {works.map(w => (
-              <Link key={w.id} href={'/places/' + w.id} className='top3-work' style={{ textDecoration: 'none', color: C.ink }}>
-                <div style={{ height: '80px', background: w.image_url ? `url(${w.image_url}) center/cover no-repeat` : 'linear-gradient(135deg,#dfe8ef,#c9d6e2)', borderRadius: '10px' }}></div>
-                <div style={{ padding: '7px 2px 0', fontSize: '12px', fontWeight: 700, textAlign: 'center', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{w.title}</div>
-              </Link>
-            ))}
+            {/* 実績の紹介なので、募集が終わった場所も出す。
+                ただし終わった案件にはリンクを張らない（AGENTS.md の
+                「削除・終了した案件へのリンクを残さない」）。
+                終了した案件のページは検索対象から外しているので、
+                トップから内部リンクを送っても評価の無駄になる */}
+            {works.map(w => {
+              const inner = (
+                <>
+                  <div style={{ height: '80px', background: w.image_url ? `url(${w.image_url}) center/cover no-repeat` : 'linear-gradient(135deg,#dfe8ef,#c9d6e2)', borderRadius: '10px' }}></div>
+                  <div style={{ padding: '7px 2px 0', fontSize: '12px', fontWeight: 700, textAlign: 'center', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{w.title}</div>
+                </>
+              )
+              return w.closed
+                ? <div key={w.id} className='top3-work' style={{ color: C.ink }}>{inner}</div>
+                : <Link key={w.id} href={'/places/' + w.id} className='top3-work' style={{ textDecoration: 'none', color: C.ink }}>{inner}</Link>
+            })}
           </div>
         </div>
       </section>

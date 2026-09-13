@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import PlaceDetailClient, { type Place } from './PlaceDetailClient'
 import JsonLd from '../../components/JsonLd'
@@ -37,6 +38,27 @@ async function fetchPlace(id: string): Promise<Place | null> {
     .eq('status', 'published')
     .maybeSingle()
   return (data as Place) ?? null
+}
+
+// 案件の行そのものがあるか（公開状態は問わない）。
+//
+// なぜ要るか:
+//   公開中でない案件は、募集者本人がブラウザ側で見られるように 404 にしていない。
+//   ところがその作りのせいで、存在しないIDでも200で「見つかりません」を返していた。
+//   Search Console はこれを「ソフト404」として数え、クロールの無駄になる。
+//   行が本当に無いときだけ404を返す。中身は返さないので、非公開の案件の情報は漏れない。
+//
+// 読めなかったとき（鍵が無い・通信の失敗）は「ある」とみなす。
+// 本物のページを404にしてしまうほうが害が大きい。
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+async function placeExists(id: string): Promise<boolean> {
+  // IDの形になっていないものは、案件ではない
+  if (!UUID.test(id)) return false
+  const client = db()
+  if (!client) return true
+  const { data, error } = await client.from('places').select('id').eq('id', id).maybeSingle()
+  if (error) return true
+  return !!data
 }
 
 // 検索結果に出す説明文。案件の説明が無い場合は場所と募集内容から作る。
@@ -88,7 +110,11 @@ export default async function PlaceDetailPage({ params }: { params: Promise<{ id
 
   // 公開中でない案件は、募集者本人なら見られる可能性があるので
   // ここでは 404 にせず、ブラウザ側の読み込みに任せる。
-  if (!place) return <PlaceDetailClient id={id} initialPlace={null} />
+  // ただし、行そのものが無いIDは404にする（ソフト404を出さない）。
+  if (!place) {
+    if (!(await placeExists(id))) notFound()
+    return <PlaceDetailClient id={id} initialPlace={null} />
+  }
 
   const image = place.image_url || (Array.isArray(place.images) ? place.images[0] : null)
 

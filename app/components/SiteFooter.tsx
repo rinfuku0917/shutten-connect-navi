@@ -87,7 +87,10 @@ export default function SiteFooter() {
                     <span className='top3-foothead-icon'>
                       <Image src={col.icon} alt='' width={19} height={19} style={{ width: '19px', height: '19px' }} />
                     </span>
-                    <h4>{col.head}</h4>
+                    {/* 列名は本文の見出しではないので h 要素にしない。
+                        h4 にしていたため、各ページで h1 の次が h4 になり
+                        見出しの階層が飛んでいた（docs/seo-keywords.md の「残っている点」） */}
+                    <span className='top3-foothead-text'>{col.head}</span>
                     {/* ＋が45度回って×になる。よくある質問の開閉と同じ動き */}
                     <span className='top3-footacc-mark' aria-hidden='true'>＋</span>
                   </label>
