@@ -73,7 +73,9 @@ async function getPosts(page: number, category: string | null): Promise<{ posts:
     .not('slug', 'in', MERGED_SLUGS_FILTER)
   // 絞り込みはサーバー側で行う（クライアントで絞ると、その分もHTMLに出ないため）
   if (category) q = q.eq('category', category)
-  const { data, count } = await q.order('published_at', { ascending: false }).range(start, end)
+  const { data, count } = await q.order('published_at', { ascending: false })
+    // 同じ日時に公開した記事がページをまたいで重複・欠落しないよう、並びを固定する
+    .order('slug', { ascending: true }).range(start, end)
   return { posts: (data as Post[]) || [], total: count || 0 }
 }
 

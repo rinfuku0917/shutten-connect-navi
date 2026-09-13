@@ -6,7 +6,7 @@
 // ここが1か所の正になっていて、次の3つが同じ表を見る。
 //   1. next.config.ts … 古いURLから統合先へ301（実際は308）で転送する
 //   2. app/sitemap.ts … 統合元を検索エンジンに申告しない
-//   3. app/blog/page.tsx と app/page.tsx … 記事一覧に出さない
+//   3. app/blog/page.tsx・app/page.tsx・app/blog/category/host/page.tsx … 記事一覧に出さない
 //
 // なぜ status='draft' に頼らないか:
 //   統合元は下書きに戻す運用にしていたが、2026-09-02 に

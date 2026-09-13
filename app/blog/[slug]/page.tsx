@@ -10,11 +10,19 @@ import PostCta from '../../components/PostCta'
 import JsonLd from '../../components/JsonLd'
 import { SITE_URL, ORG, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../lib/seo'
 import { firstImage } from '../../lib/postImage'
-import { preparePostBody, extractFaq } from '../../lib/postBody'
+import { preparePostBody, extractFaq, boldForJapanese } from '../../lib/postBody'
 import { POST_IMAGE_SIZES } from '../../lib/postImageSizes'
 import RelatedPlaces, { fetchRelatedPlaces } from '../../components/RelatedPlaces'
 
 export const revalidate = 60
+
+// 空の配列を返すと、ビルド時には1本も作らず、初めて開かれたときに作ってキャッシュし、
+// 60秒ごとに作り直す（ISR）。これが無いと revalidate を書いていても
+// 毎回その場で描画していた（2026-09-13 に本番のヘッダーで確認）。
+// Next 16 の仕様: node_modules/next/dist/docs/01-app/03-api-reference/04-functions/generate-static-params.md
+export async function generateStaticParams() {
+  return []
+}
 
 type Post = {
   id: string; slug: string; title: string; content: string
@@ -67,18 +75,29 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const post = await getPost(slug)
   if (!post) notFound()
 
-  let raw = await marked.parse(post.content)
+  // 日本語の太字が崩れないよう、先に <strong> にしてから変換する（postBody.ts）
+  let raw = await marked.parse(boldForJapanese(post.content))
   raw = raw.split('<table>').join('<div class="table-wrap"><table>')
   raw = raw.split('</table>').join('</table></div>')
   // 本文中の h1 を h2 に落とし、h2 に id を振って目次を作る
   const { html, toc } = preparePostBody(raw, POST_IMAGE_SIZES)
   // 本文に「よくある質問」があるときだけ FAQPage を出す
   const faq = extractFaq(html)
-  const dateStr = post.published_at ? new Date(post.published_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
+  const fmtDate = (s: string) => new Date(s).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' })
+  const dateStr = post.published_at ? fmtDate(post.published_at) : ''
+  // 書き直した記事は、公開日だけだと古い情報に見える。
+  // 構造化データの dateModified と画面の表示を揃えるため、日付が違うときは更新日も出す
+  const updatedStr = post.updated_at ? fmtDate(post.updated_at) : ''
+  const showUpdated = !!updatedStr && updatedStr !== dateStr
   const image = firstImage(post.content)
 
   // 記事に設定した都道府県・カテゴリに合う案件を4件だけ引く
   const related = await fetchRelatedPlaces(post.related_prefecture ?? null, post.related_category ?? null, 4)
+  // 都道府県の案件が足りないと、ほかの県の案件で枠を埋める（RelatedPlaces.tsx）。
+  // そのときに「兵庫県でいま募集している場所」と書くと中身と合わないので、
+  // 並んだ案件がすべてその県のときだけ県名を出す
+  const allInPref = !!post.related_prefecture && related.length > 0
+    && related.every(p => p.prefecture === post.related_prefecture)
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -132,16 +151,22 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
         <div style={{ marginTop: '20px', marginBottom: '8px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           {post.category && <span style={{ background: '#FFF3E0', color: '#B45309', fontSize: '12px', padding: '3px 12px', borderRadius: '999px', fontWeight: 700 }}>{post.category}</span>}
-          {dateStr && <span style={{ color: '#94A3B8', fontSize: '12px' }}>{dateStr}</span>}
+          {dateStr && <span style={{ color: '#94A3B8', fontSize: '12px' }}>{showUpdated ? `公開 ${dateStr}` : dateStr}</span>}
+          {showUpdated && <span style={{ color: '#94A3B8', fontSize: '12px' }}>更新 {updatedStr}</span>}
         </div>
 
         {/* 記事タイトルはスマホで3行前後に折り返るため、jp-head で文節の切れ目に寄せる。
             タイトルはデータベース由来で .u の区切りを入れられないため、
             word-break: auto-phrase に対応するブラウザ（Android の Chrome など）でだけ効く。
             iPhone の Safari では従来どおりの折り返しのままになる */}
-        <h1 className='jp-head' style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 900, color: '#1a1a1a', lineHeight: 1.4, margin: '0 0 28px' }}>
-          <span style={{ marginRight: '8px' }}>{post.cover_emoji || '📝'}</span>{post.title}
-        </h1>
+        {/* 絵文字は飾りなので h1 の外に置く。h1 の中にあると、見出しの文字が
+            「🏢記事タイトル」になり、title と一致しなくなる */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '0 0 28px' }}>
+          <span aria-hidden='true' style={{ fontSize: 'clamp(24px, 4vw, 34px)', lineHeight: 1.4, flex: '0 0 auto' }}>{post.cover_emoji || '📝'}</span>
+          <h1 className='jp-head' style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 900, color: '#1a1a1a', lineHeight: 1.4, margin: 0 }}>
+            {post.title}
+          </h1>
+        </div>
 
         {toc.length >= 2 && (
           <nav aria-label='目次' style={{ background: '#fff', border: '1px solid #F0E3D0', borderRadius: '12px', padding: '18px 20px', marginBottom: '32px' }}>
@@ -165,10 +190,10 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             // 枠は内部リンクとして残しつつ、
             // 「どんな場所で実際に動いているか」の例として見せる
             post.category === '募集者向け'
-              ? (post.related_prefecture
+              ? (allInPref
                   ? `${post.related_prefecture}でいま募集している場所の例です。`
                   : 'いま実際に募集している場所の例です。')
-              : (post.related_prefecture
+              : (allInPref
                   ? `${post.related_prefecture}で募集中の出店場所です。`
                   : 'いま募集中の出店場所です。')
           }

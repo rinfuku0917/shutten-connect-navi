@@ -29,7 +29,7 @@ export default function PostCta({ category }: { category?: string | null }) {
   // 登録の前に話せる窓口（/vendor#soudan）を主にして、
   // 「いくらかかるか」に答えるページ（/vendor/cost）を添える
   const primary = forHost
-    ? { href: '/vendor#soudan', label: '出店の相談をする' }
+    ? { href: '/vendor#soudan', label: 'キッチンカーの手配を相談する' }
     : { href: '/register', label: '無料で登録する' }
   const secondary = forHost ? { href: '/vendor/cost', label: '費用の目安を見る' } : null
 

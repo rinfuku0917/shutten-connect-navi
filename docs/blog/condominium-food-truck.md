@@ -11,7 +11,7 @@ excerpt: マンションの敷地にキッチンカーは呼べます。出店�
 data_snapshot: 2026-09-13
 ---
 
-![マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料](https://app.connect-navi.com/covers/condominium-food-truck.webp)
+![マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料](https://app.connect-navi.com/covers/condominium-food-truck-photo.webp)
 
 駅からはバス便で、いちばん近いスーパーは坂の下。住民の年齢が上がり、夕方の買い物がつらいという声が理事会に届く。来客用の駐車場は平日ほとんど埋まらず、中庭の広場は夏祭りの日しか使われていない。
 

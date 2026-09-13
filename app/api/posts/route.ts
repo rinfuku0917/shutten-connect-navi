@@ -54,6 +54,7 @@ export async function GET(req: Request) {
     .select('*')
     .eq('status', 'published')
     .order('published_at', { ascending: false })
+    .order('slug', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ posts: data })
 }

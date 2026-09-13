@@ -8,7 +8,7 @@
 
 update posts set
   title = 'マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料',
-  content = '![マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料](https://app.connect-navi.com/covers/condominium-food-truck.webp)
+  content = '![マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料](https://app.connect-navi.com/covers/condominium-food-truck-photo.webp)
 
 駅からはバス便で、いちばん近いスーパーは坂の下。住民の年齢が上がり、夕方の買い物がつらいという声が理事会に届く。来客用の駐車場は平日ほとんど埋まらず、中庭の広場は夏祭りの日しか使われていない。
 
@@ -178,7 +178,7 @@ update posts set
 where slug = 'condominium-food-truck';
 
 insert into posts (slug, title, content, excerpt, category, cover_emoji, meta_description, target_keyword, related_prefecture, related_category, status)
-select 'condominium-food-truck', 'マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料', '![マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料](https://app.connect-navi.com/covers/condominium-food-truck.webp)
+select 'condominium-food-truck', 'マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料', '![マンションにキッチンカーを誘致する方法｜管理組合の決め方と出店料](https://app.connect-navi.com/covers/condominium-food-truck-photo.webp)
 
 駅からはバス便で、いちばん近いスーパーは坂の下。住民の年齢が上がり、夕方の買い物がつらいという声が理事会に届く。来客用の駐車場は平日ほとんど埋まらず、中庭の広場は夏祭りの日しか使われていない。
 

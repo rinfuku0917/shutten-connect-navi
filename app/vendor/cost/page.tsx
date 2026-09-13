@@ -533,7 +533,20 @@ export default function VendorCostPage() {
                   <Link href='/blog/how-to-call-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの呼び方は？決めることは4つ</Link>
                   <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>日程・会場の条件・台数・出店料の形。相談から当日までの流れ。</div>
                 </li>
+                {/* 2026-09-13 に公開した記事。場面ごとの呼び方への入口 */}
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/host-fee-setting-guide' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>商業施設・オフィスビルにキッチンカーを導入する効果とは</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>施設側から見た出店料の決め方。固定・歩合・併用が、場所の種類でどう分かれるか。</div>
+                </li>
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/office-welfare-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>社食の代わりにキッチンカーを福利厚生に</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>会社の持ち出しを抑えて、社員の昼食を用意する方法。</div>
+                </li>
           </ul>
+          {/* 呼びたい方向けの記事をまとめた入口へ。/vendor と同じ導線 */}
+          <Link href='/blog/category/host' style={{ display: 'inline-block', marginTop: '6px', fontSize: '13.5px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}>
+            呼びたい方向けの記事をすべて見る →
+          </Link>
         </div>
       </div>
 

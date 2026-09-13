@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { MERGED_SLUGS_FILTER } from '../../../lib/mergedPosts'
 import { createClient } from '@supabase/supabase-js'
 import SiteHeader from '../../../components/SiteHeader'
 import SiteFooter from '../../../components/SiteFooter'
@@ -50,7 +51,11 @@ async function getPosts(): Promise<PostCardData[]> {
     .select('id, slug, title, excerpt, category, cover_emoji, published_at, content')
     .eq('status', 'published')
     .eq('category', CATEGORY)
+    // 別の記事に統合したものは出さない（app/lib/mergedPosts.ts）。
+    // /blog と トップでは除外していたのに、この一覧だけ漏れていた
+    .not('slug', 'in', MERGED_SLUGS_FILTER)
     .order('published_at', { ascending: false })
+    .order('slug', { ascending: true })
   return (data || []) as PostCardData[]
 }
 
@@ -97,7 +102,7 @@ export default async function HostCategoryPage() {
         {/* 先に進みたい方の導線。記事を読まずに相談したい方が多い */}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '30px' }}>
           <Link href='/vendor#soudan' style={{ background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '14px', padding: '12px 24px', borderRadius: '999px', textDecoration: 'none', minHeight: '44px', boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center' }}>
-            出店の相談をする
+            キッチンカーの手配を相談する
           </Link>
           <Link href='/vendor/cost' style={{ background: '#fff', color: '#B45309', fontWeight: 800, fontSize: '14px', border: '1.5px solid #F5D9A8', padding: '12px 22px', borderRadius: '999px', textDecoration: 'none', minHeight: '44px', boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center' }}>
             費用の目安を見る

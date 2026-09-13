@@ -21,6 +21,26 @@ function stripTags(html: string): string {
     .trim()
 }
 
+// マークダウンの太字（**…**）を、変換の前に <strong> に置き換える。
+//
+// なぜ要るか:
+//   marked は CommonMark の規則どおりに太字を判定する。この規則は英語向けで、
+//   閉じの ** の直前が記号（% 」 ） など）で、直後が普通の文字だと閉じと見なさない。
+//   日本語の原稿では「**35件が10%**で」「**「土日推奨」**と」のような書き方が自然に出るため、
+//   2026-09-13 に公開した記事で ** が記号のまま画面に出ていた（6本・6か所）。
+//   原稿を1か所ずつ直しても、次に書く記事でまた起きるので、表示の側で直す。
+//
+// 置き換えるのは、同じ行の中で閉じている **…** だけ。
+// コードブロック（``` で囲んだ部分）の中は触らない。
+export function boldForJapanese(md: string): string {
+  return md
+    .split(/(^```[\s\S]*?^```)/m)
+    .map((part, i) => (i % 2 === 1
+      ? part
+      : part.replace(/\*\*(?=\S)([^*\n]*?\S)\*\*/g, '<strong>$1</strong>')))
+    .join('')
+}
+
 export type FaqItem = { question: string; answer: string }
 
 // 本文の「よくある質問」から、質問と答えの組を取り出す。
@@ -86,8 +106,15 @@ function rewriteImages(html: string, sizes: Record<string, { w: number; h: numbe
     if (!src.includes('.supabase.co/storage/v1/object/public/') && !src.includes('app.connect-navi.com/covers/')) return whole
     n += 1
     const rest = (before + after).trim()
-    // AIで作った表紙は 1536x1024 で固定。一覧に無くても大きさを入れられる
-    const generated = /\/blog-images\/covers\//.test(src) ? { w: 1536, h: 1024 } : null
+    // AIで作った表紙は 1536x1024 で固定。一覧に無くても大きさを入れられる。
+    // public/covers の表紙（scripts/make-covers.mjs・scripts/photo-covers.mjs）は
+    // どちらも 1200x630 で書き出している。一覧（npm run blog:images）は webp の
+    // 大きさを読めず、2026-09-13 に足した表紙が大きさ無しで出ていた
+    const generated = /\/blog-images\/covers\//.test(src)
+      ? { w: 1536, h: 1024 }
+      : /app\.connect-navi\.com\/covers\/[a-z0-9-]+\.webp$/.test(src)
+        ? { w: 1200, h: 630 }
+        : null
     const size = sizes[src] ?? generated
     const dim = size ? ` width="${size.w}" height="${size.h}"` : ''
     const srcset = WIDTHS.map(w => `${optimized(src, w)} ${w}w`).join(', ')

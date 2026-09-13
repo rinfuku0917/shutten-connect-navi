@@ -154,6 +154,8 @@ async function loadTop(): Promise<{ newPlaces: NewPlace[]; works: WorkPlace[]; p
         // 別の記事に統合したものは出さない（app/lib/mergedPosts.ts）
         .not('slug', 'in', MERGED_SLUGS_FILTER)
         .order('published_at', { ascending: false })
+        // 同じ日時に公開した記事の並びが、作り直すたびに入れ替わらないようにする
+        .order('slug', { ascending: true })
         .limit(3),
     ])
     return {

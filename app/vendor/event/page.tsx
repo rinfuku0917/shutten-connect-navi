@@ -389,7 +389,20 @@ export default function EventVendorPage() {
                   <Link href='/blog/mall-food-truck-event' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>商業施設でキッチンカーの催事を組むには？条件の決め方</Link>
                   <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>施設側の実例。単発と常設で、集まり方がどう変わるか。</div>
                 </li>
+                {/* 2026-09-13 に公開した記事。場面ごとの呼び方への入口 */}
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/school-festival-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>学園祭・文化祭にキッチンカーを呼ぶには？</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>実行委員会向け。準備を始める時期、学校の許可と保健所の扱いまで。</div>
+                </li>
+                <li style={{ marginBottom: '10px' }}>
+                  <Link href='/blog/municipal-event-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>自治体イベントにキッチンカーを公募する方法</Link>
+                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>市民まつりや公園の催しの担当者向け。募集要項に書く項目と選考の進め方。</div>
+                </li>
           </ul>
+          {/* 呼びたい方向けの記事をまとめた入口へ。/vendor と同じ導線 */}
+          <Link href='/blog/category/host' style={{ display: 'inline-block', marginTop: '6px', fontSize: '13.5px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}>
+            呼びたい方向けの記事をすべて見る →
+          </Link>
         </div>
       </div>
 
