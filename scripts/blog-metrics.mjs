@@ -18,6 +18,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
+const OFFICIAL = JSON.parse(fs.readFileSync(new URL('../app/lib/officialStats.json', import.meta.url), 'utf8'))
 
 const SNAPSHOT = 'docs/blog/metrics.json'
 const save = process.argv.includes('--save')
@@ -241,6 +242,11 @@ const M = [
   ['商業施設:千葉県', live.filter(p => venueOf(p) === '商業施設・モール' && p.prefecture === '千葉県').length, ['mall']],
   ['商業施設:埼玉県', live.filter(p => venueOf(p) === '商業施設・モール' && p.prefecture === '埼玉県').length, ['mall']],
   ['学校:歩合', kindIn('学校・専門学校・大学', '歩合'), ['supermarket', 'mall', 'campus', 'festival']],
+  // 登録出店者数。数えずに営業資料の数字を使う（app/lib/officialStats.json。トップと同じ値）。
+  // 記事で「登録出店者」と書くときはこれ。エリア・ジャンルなどの内訳は、
+  // 出店者ページを公開している店（公開中の出店者）でしか数えられないので、
+  // 内訳を書くときは必ず「公開している◯店のうち」と母数を分けて書く
+  ['登録出店者', OFFICIAL.sellers, ['offers', 'hostfee', 'campus', 'festival', 'office', 'gov', 'condo', 'vacant']],
   ['公開中の出店者', sellers.length, ['offers', 'supermarket', 'hostfee', 'campus', 'festival', 'office', 'gov', 'condo', 'vacant']],
   ['写真あり', sellers.filter(s => (s.photos ?? []).length > 0).length, ['offers', 'gov', 'vacant']],
   ['メニューあり', sellers.filter(s => menuBySeller.has(s.id)).length, ['offers', 'hostfee', 'gov']],
