@@ -2191,7 +2191,7 @@ const previewDoc = async (fileUrl: string) => {
                 <div style={{ flex: 1, minWidth: '200px', fontSize: '12.5px', color: '#15803D', lineHeight: 1.8 }}>
                   <strong>毎月の日程追加</strong><br />
                   <span style={{ color: '#64748B' }}>
-                    案件の編集画面で「毎月おなじ条件で日程を足す」を設定すると、毎月1日に翌月ぶんが入ります。
+                    案件の編集画面で「毎月おなじ条件で日程を足す」を設定すると、毎月1日の朝9時に翌月ぶんが入ります。
                     設定した内容をその場で確かめたいときは、右のボタンで1回だけ実行できます。
                   </span>
                 </div>

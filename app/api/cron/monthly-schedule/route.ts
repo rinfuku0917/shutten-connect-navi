@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { verifyCronCaller } from '../../../lib/cronAuth'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
 
-// 案件の日程を、毎月おなじ条件で足す。Vercel の定期実行（毎月1日）から呼ばれる。
+// 案件の日程を、毎月おなじ条件で足す。Vercel の定期実行（毎月1日 9:00 日本時間）から呼ばれる。
 //
 // なぜ要るか:
 //   常設の案件（毎週末に出る場所など）では、毎月おなじ条件の日程を
@@ -21,6 +21,7 @@ import { sendAdminMail } from '../../../lib/notifyRecipients'
 // 足さないもの:
 //   ・募集終了（closed）の案件 … 勝手に募集が続くのを防ぐ
 //   ・曜日の指定が無い案件 … 何を足すか決まらない
+//   ・販売時間が決まっていない案件 … 足した日の時間が「選択してください」のまま公開されてしまう
 
 // 案件の数だけ順に処理し、そのぶんメールも送るため
 export const maxDuration = 300
@@ -102,6 +103,10 @@ export async function GET(req: Request) {
           .filter((n: number) => Number.isInteger(n) && n >= 0 && n <= 6)
         : []
       if (dows.length === 0) { report.push({ title: p.title || '(案件名なし)', added: 0, note: '曜日が未設定のため見送り' }); continue }
+      if (!p.repeat_start || !p.repeat_end) {
+        report.push({ title: p.title || '(案件名なし)', added: 0, note: '販売時間が未設定のため見送り' })
+        continue
+      }
 
       const cur: Day[] = Array.isArray(p.schedule) ? (p.schedule as Day[]) : []
       // 1. 終わった日を外す。外さないと上限に当たって翌月ぶんが入らない
@@ -120,8 +125,8 @@ export async function GET(req: Request) {
 
       const rows: Day[] = add.map(date => ({
         date,
-        start: p.repeat_start || '選択してください',
-        end: p.repeat_end || '選択してください',
+        start: p.repeat_start,
+        end: p.repeat_end,
         ...(p.repeat_place_fee != null ? { placeFee: Number(p.repeat_place_fee) } : {}),
         ...(p.repeat_company_fee != null ? { companyFee: Number(p.repeat_company_fee) } : {}),
       }))

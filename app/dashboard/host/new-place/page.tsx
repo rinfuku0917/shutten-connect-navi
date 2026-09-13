@@ -203,6 +203,14 @@ function NewPlacePageInner() {
     if(!form.title || !form.prefecture || form.prefecture==='選択してください') {
       setErrMsg('イベント・施設名と都道府県は必須です'); return
     }
+    // 毎月の自動追加は、曜日と販売時間が決まっていないと正しい日程が作れない。
+    // 時間を選ばずに保存すると、足した日の時間が「選択してください」のまま公開されていた
+    if(repOn) {
+      if(repDows.length === 0) { setErrMsg('「毎月おなじ条件で日程を足す」の出店する曜日を選んでください'); return }
+      if(repStart === '選択してください' || repEnd === '選択してください') {
+        setErrMsg('「毎月おなじ条件で日程を足す」の販売開始・販売終了を選んでください'); return
+      }
+    }
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     if(!user) { setErrMsg('ログインが必要です'); setSaving(false); return }
@@ -522,7 +530,7 @@ async function refreshPublicPages(placeId?: string) {
                   <span style={{fontSize:'13px',fontWeight:700,color:'#15803D',lineHeight:1.7}}>
                     毎月おなじ条件で、翌月の日程を自動で足す<br />
                     <span style={{fontSize:'11.5px',fontWeight:400,color:'#64748B'}}>
-                      毎月1日に、下の曜日・時間・料金で翌月ぶんが入ります。入ったらメールでお知らせします。
+                      毎月1日の朝9時に、下の曜日・時間・料金で翌月ぶんが入ります（今月ぶんは入りません）。入ったらメールでお知らせします。
                     </span>
                   </span>
                 </label>
@@ -571,7 +579,7 @@ async function refreshPublicPages(placeId?: string) {
                     <div style={{fontSize:'11px',color:'#64748B',marginTop:'8px',lineHeight:1.8}}>
                       ・募集を終了した案件には足しません。<br />
                       ・日程の上限は31日です。足す前に、終わった日は日程から外れます。<br />
-                      ・平日と土日で金額が違う場合は、この設定では片方の金額になります。「日によって金額を変える」で個別に直してください。
+                      ・ここの料金は、足す日すべてに同じ額が入ります。上の「形態ごとの出店料と条件」に金額を入れてある形態は、そちらが優先されます（平日と土日祝を分けたい場合は、上で分けて、ここは空欄で構いません）。
                     </div>
 
                     {repLastAt && (
