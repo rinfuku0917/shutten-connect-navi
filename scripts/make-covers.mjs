@@ -44,13 +44,47 @@ const COVERS = [
   ['vacant-space-food-truck',
    '新サイト上部の4つのアイコンフォルダ①/登録出店者アイコン② .png',
    ['#FBF6EC', '#EFE0C6']],
+  // 2026-09-13 募集者向けの書き直し2本と新規5本。
+  // 素材が13点しかないので絵柄の重複は避けられない。重ねるときは
+  // 同じ「募集者向け」の一覧で隣り合わない記事にし、配色を変えている
+  ['host-fee-setting-guide',
+   '出店場所を探したい方への箇所、アイコン③/安心のマッチングアイコン③.png',
+   ['#EEF7F5', '#CDE8E1']],
+  // 横長のバナー画像は背景ごと使う（'full'）。透明の余白が無いので、枠いっぱいに敷く
+  ['regular-event-schedule',
+   '新サイト下部の「まずは無料で会員登録」のバナー差し替え/会員登録バナー_採用版.jpg',
+   null, 'full'],
+  ['campus-food-truck',
+   '新サイト上部の4つのアイコンフォルダ①/登録出店者アイコン①_正しいもの.png',
+   ['#EDF6FD', '#CFE6F7']],
+  ['school-festival-food-truck',
+   '新サイト下部の「まずは無料で会員登録」のバナー差し替え/新サイト一番下の「まずは無料で会員登録」のバナーの差し替え.png',
+   null, 'full'],
+  ['office-welfare-food-truck',
+   '出店場所を探したい方への箇所、アイコン③/高立地の場所を簡単発見①.png',
+   ['#F6F3EE', '#E4DCCF']],
+  ['municipal-event-food-truck',
+   '新サイト上部の4つのアイコンフォルダ①/全国対応アイコン④ .png',
+   ['#F2F7FC', '#D9E6F3']],
+  // 管理組合で話し合って決める記事なので、会議の絵柄
+  ['condominium-food-truck',
+   '車両を売りたい方へのフォルダ②/直接交渉アイコン③.png',
+   ['#F5F1FA', '#E1D8EE']],
 ]
 
 fs.mkdirSync(OUT, { recursive: true })
 
-for (const [slug, rel, [c1, c2]] of COVERS) {
+for (const [slug, rel, colors, mode] of COVERS) {
   const src = path.join(SRC, rel)
   if (!fs.existsSync(src)) { console.error(`  素材が見つからない: ${rel}`); continue }
+
+  if (mode === 'full') {
+    const dest = path.join(OUT, `${slug}.webp`)
+    await sharp(src).resize({ width: W, height: H, fit: 'cover' }).webp({ quality: 84 }).toFile(dest)
+    console.log(`  ${String(Math.round(fs.statSync(dest).size / 1024)).padStart(3)}KB  ${slug}.webp`)
+    continue
+  }
+  const [c1, c2] = colors
 
   // 透明の余白を切り、高さいっぱいに近づける。
   //

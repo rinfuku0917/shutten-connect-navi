@@ -131,6 +131,17 @@ const dayFees = p => {
 const chainOf = p => /Olympic|オリンピック/i.test(p.title ?? '') ? 'Olympic'
   : /サンユー/.test(p.title ?? '') ? 'サンユーストアー' : '独立'
 
+// 募集の曜日（自由記述）。open_days は配列で入っている
+const daysText = p => Array.isArray(p.open_days) ? p.open_days.join(' ').trim() : ''
+// 「毎日」「月〜日」「毎週月曜日〜日曜日」「月,火,…,日」「全曜日」「全日出店可」を、全曜日出店可として数える。
+// 「月曜日〜日曜日」は曜日が挟まるので、月の直後の「曜日」を許す（最初の版はこれを拾えず5件漏れていた）
+const ALL_DAYS = /毎日|全曜日|全日|月(?:曜日?)?\s*[〜～~-]\s*日|月[^土]{0,12}火[^土]{0,12}水[^土]{0,12}木[^土]{0,12}金[^日]{0,6}土[^日]{0,6}日/
+// 「土日推奨」「週末推奨」「週末／推奨」「土曜日・日曜日（推奨）」
+const WEEKEND_PUSH = /(?:土日|週末|土曜日・日曜日)[^平]{0,6}推奨/
+
+// 学校の種類（案件名で判断）
+const schoolKind = p => /大学|短期大学|短大/.test(p.title ?? '') ? '大学' : /専門|学院|学園|カレッジ/.test(p.title ?? '') ? '専門' : 'その他'
+
 const median = a => { const s = [...a].sort((x, y) => x - y); return s[Math.floor((s.length - 1) / 2)] }
 const genresOf = s => {
   let v = s.genre
@@ -143,6 +154,8 @@ const genresOf = s => {
 // ---- ここから集計 ----
 const places = await all('places')
 const live = places.filter(p => p.status === 'published' && !p.closed)
+// 募集終了も含めた、これまでに掲載した案件。「これまでに◯件」と書くときの母数
+const published = places.filter(p => p.status === 'published')
 const sellers = await all('public_sellers')
 const menus = await all('menus')
 
@@ -318,6 +331,47 @@ const M = [
   ['差額:2500円', both.filter(x => x.we - x.wd === 2500).length, ['weekday']],
   ['差額:5500円', both.filter(x => x.we - x.wd === 5500).length, ['weekday']],
   ['差額の中央値', median(both.filter(x => x.wd < x.we).map(x => x.we - x.wd)), ['fee', 'weekday']],
+
+  // 2026-09-13 に足したもの（その2）。曜日・時間帯と、オフィスの内訳。
+  //
+  // open_days / open_time は自由記述で、入っている案件も一部だけ
+  // （曜日は募集中110件のうち約50件、時刻は約26件）。記事では必ず
+  // 「曜日が書いてある◯件のうち」と母数を書くこと。全体の性質として書かない。
+  ['商業施設:曜日の記載あり', live.filter(p => venueOf(p) === '商業施設・モール' && daysText(p)).length, ['schedule']],
+  ['商業施設:全曜日出店可', live.filter(p => venueOf(p) === '商業施設・モール' && ALL_DAYS.test(daysText(p))).length, ['schedule']],
+  ['商業施設:土日推奨', live.filter(p => venueOf(p) === '商業施設・モール' && WEEKEND_PUSH.test(daysText(p))).length, ['schedule']],
+  ['商業施設:時刻の記載あり', live.filter(p => venueOf(p) === '商業施設・モール' && p.open_time).length, ['schedule']],
+  ['商業施設:固定で曜日の額を分ける', live.filter(p => venueOf(p) === '商業施設・モール' && feeKindOf(p) === '固定' && dayFees(p)?.曜日の記載 && dayFees(p).wd !== dayFees(p).we).length, ['schedule', 'mall']],
+  ['商業施設:固定で曜日の額を分けない', live.filter(p => venueOf(p) === '商業施設・モール' && feeKindOf(p) === '固定' && !(dayFees(p)?.曜日の記載 && dayFees(p).wd !== dayFees(p).we)).length, ['schedule', 'mall']],
+  ['スーパー:時刻の記載あり', live.filter(p => venueOf(p) === 'スーパー・食品店' && p.open_time).length, ['schedule']],
+  ['スーパー:土日推奨', live.filter(p => venueOf(p) === 'スーパー・食品店' && WEEKEND_PUSH.test(daysText(p))).length, ['schedule']],
+  ['スーパー:曜日の記載あり', live.filter(p => venueOf(p) === 'スーパー・食品店' && daysText(p)).length, ['schedule']],
+  ['オフィス:歩合', kindIn('オフィス・事業所', '歩合'), ['hostfee']],
+  ['オフィス:応相談', kindIn('オフィス・事業所', '応相談'), ['hostfee']],
+  ['オフィス:歩合15%', live.filter(p => venueOf(p) === 'オフィス・事業所' && /15\s*%/.test(norm(p.fee))).length, ['hostfee']],
+  ['オフィス:神奈川県', live.filter(p => venueOf(p) === 'オフィス・事業所' && p.prefecture === '神奈川県').length, ['hostfee', 'office']],
+
+  // 2026-09-13 に足したもの（その3）。新しく書く募集者向けの記事が使う内訳。
+  //
+  // 「これまでに掲載した」数は、募集終了も含めた公開済みの案件で数える。
+  // 募集中の数とは母数が違うので、記事では必ず「これまでに」と書き分けること。
+  ['公開済みの案件（終了含む）', published.length, ['campus', 'festival', 'gov']],
+  ['掲載累計:学校', published.filter(p => venueOf(p) === '学校・専門学校・大学').length, ['campus', 'festival']],
+  ['掲載累計:イベント', published.filter(p => venueOf(p) === 'イベント・お祭り').length, ['festival', 'gov']],
+  ['掲載累計:公園・道の駅・公共', published.filter(p => venueOf(p) === '公園・道の駅・公共').length, ['gov']],
+  ['掲載累計:オフィス', published.filter(p => venueOf(p) === 'オフィス・事業所').length, ['office']],
+  ['掲載累計:マンション・住宅', published.filter(p => venueOf(p) === 'マンション・住宅').length, ['condo']],
+  ['学校:専門学校・学院', live.filter(p => venueOf(p) === '学校・専門学校・大学' && schoolKind(p) === '専門').length, ['campus']],
+  ['学校:大学・短大', live.filter(p => venueOf(p) === '学校・専門学校・大学' && schoolKind(p) === '大学').length, ['campus']],
+  ['学校:単発', live.filter(p => venueOf(p) === '学校・専門学校・大学' && p.place_type === 'event').length, ['campus', 'festival']],
+  ['学校:歩合10%', live.filter(p => venueOf(p) === '学校・専門学校・大学' && /(^|[^0-9])10\s*%/.test(norm(p.fee))).length, ['campus', 'festival']],
+  ['学校:歩合15%', live.filter(p => venueOf(p) === '学校・専門学校・大学' && /15\s*%/.test(norm(p.fee))).length, ['campus', 'festival']],
+  ['学校:東京都', live.filter(p => venueOf(p) === '学校・専門学校・大学' && p.prefecture === '東京都').length, ['campus']],
+  ['学校:時刻の記載あり', live.filter(p => venueOf(p) === '学校・専門学校・大学' && p.open_time).length, ['campus', 'schedule']],
+  ['エリア:群馬', areas['群馬'] ?? 0, ['gov', 'condo']],
+  ['エリア:栃木', areas['栃木'] ?? 0, ['gov', 'condo']],
+  ['エリア:兵庫', areas['兵庫'] ?? 0, ['gov', 'condo']],
+  ['エリア:京都', areas['京都'] ?? 0, ['gov', 'condo']],
 ]
 
 const ARTICLES = {
@@ -330,6 +384,13 @@ const ARTICLES = {
   documents: 'kitchen-car-required-documents（必要書類）',
   mall: 'mall-food-truck-event（商業施設の催事）',
   vacant: 'vacant-space-food-truck（遊休スペースの活用）',
+  schedule: 'regular-event-schedule（定期開催の曜日と時間帯）',
+  hostfee: 'host-fee-setting-guide（商業施設・オフィスビルへの導入効果）',
+  campus: 'campus-food-truck（大学・専門学校の構内）',
+  festival: 'school-festival-food-truck（学園祭）',
+  office: 'office-welfare-food-truck（社食・福利厚生）',
+  gov: 'municipal-event-food-truck（自治体のイベント）',
+  condo: 'condominium-food-truck（マンション・団地）',
 }
 
 const now = Object.fromEntries(M.map(([k, v]) => [k, v]))
