@@ -261,7 +261,9 @@ export default async function Home() {
 
       {/* STATS */}
       <div style={{ ...wrap, padding: '28px 20px 36px' }}>
-        <div className='top3-stats'>
+        {/* data-counted … 実際に数えられたか（1）、控えの値を出しているか（0）。
+            見た目では区別がつかないので、確かめられるように残す */}
+        <div className='top3-stats' data-counted={stats.counted ? '1' : '0'}>
           {([
             // 手書きをやめ、ページを作り直すたびに数える（app/lib/siteStats.ts）
             { img: '/ic-top-sellers.webp', value: stats.sellers, label: '登録出店者' },
