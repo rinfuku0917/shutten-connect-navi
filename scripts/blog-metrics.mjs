@@ -127,6 +127,10 @@ const dayFees = p => {
   return null
 }
 
+// スーパーのチェーン。記事は社名を伏せて「チェーンA／B」と書いている（mall は社名を出している）
+const chainOf = p => /Olympic|オリンピック/i.test(p.title ?? '') ? 'Olympic'
+  : /サンユー/.test(p.title ?? '') ? 'サンユーストアー' : '独立'
+
 const median = a => { const s = [...a].sort((x, y) => x - y); return s[Math.floor((s.length - 1) / 2)] }
 const genresOf = s => {
   let v = s.genre
@@ -179,9 +183,9 @@ const M = [
   ['募集中の案件', live.length, ['fee', 'location', 'weekday', 'offers', 'parking', 'supermarket', 'documents']],
   ['常設', live.filter(p => p.place_type === 'regular').length, ['fee', 'location', 'offers', 'parking', 'supermarket']],
   ['単発イベント', live.filter(p => p.place_type === 'event').length, ['fee', 'location']],
-  ['場所:スーパー', cnt(venues, 'スーパー・食品店'), ['location', 'weekday', 'supermarket', 'documents']],
-  ['場所:学校', cnt(venues, '学校・専門学校・大学'), ['location', 'weekday', 'supermarket', 'documents']],
-  ['場所:商業施設', cnt(venues, '商業施設・モール'), ['location', 'weekday', 'supermarket', 'documents']],
+  ['場所:スーパー', cnt(venues, 'スーパー・食品店'), ['location', 'weekday', 'supermarket', 'documents', 'mall', 'vacant']],
+  ['場所:学校', cnt(venues, '学校・専門学校・大学'), ['location', 'weekday', 'supermarket', 'documents', 'mall', 'vacant']],
+  ['場所:商業施設', cnt(venues, '商業施設・モール'), ['location', 'weekday', 'supermarket', 'documents', 'mall', 'vacant']],
   ['場所:イベント', cnt(venues, 'イベント・お祭り'), ['location']],
   ['場所:オフィス', cnt(venues, 'オフィス・事業所'), ['location', 'weekday']],
   ['都道府県:東京都', prefs['東京都'] ?? 0, ['location', 'weekday', 'offers']],
@@ -283,6 +287,37 @@ const M = [
   // 上限だけ集計しておらず、裏づけの無い数字になっていた
   ['平日の最大', Math.max(...fixedRegular.map(p => dayFees(p).wd)), ['fee', 'parking']],
   ['週末の最大', Math.max(...fixedRegular.map(p => dayFees(p).we)), ['fee', 'parking']],
+
+  // 2026-09-13 に足したもの。
+  //
+  // 記事の数字直しで、別の担当が数え直したところ、次の数字は指標が無く
+  // 「確かめられない」になっていた。実際に数えると、学校の常設は26→28件、
+  // チェーンAのスーパーは17→18件に変わっていたのに、点検では1つも
+  // 出てこなかった。数字がずれても、それを使う記事が「直す記事」に
+  // 挙がらないということになる。記事に載せている粒度は、ここで数える。
+  ['都道府県:三重県', prefs['三重県'] ?? 0, ['location']],
+  ['学校:常設', live.filter(p => venueOf(p) === '学校・専門学校・大学' && p.place_type === 'regular').length, ['weekday']],
+  // スーパーは2社のチェーンが大半を占める。記事はそれを前提に
+  // 「固定制はすべてチェーン2社」「独立店は歩合」と書いている
+  ['スーパー:チェーンA(Olympic)', live.filter(p => venueOf(p) === 'スーパー・食品店' && chainOf(p) === 'Olympic').length, ['supermarket', 'mall']],
+  ['スーパー:チェーンB(サンユー)', live.filter(p => venueOf(p) === 'スーパー・食品店' && chainOf(p) === 'サンユーストアー').length, ['supermarket', 'mall']],
+  ['スーパー:独立店', live.filter(p => venueOf(p) === 'スーパー・食品店' && chainOf(p) === '独立').length, ['supermarket', 'mall']],
+  ['スーパー:固定のうちチェーン', live.filter(p => venueOf(p) === 'スーパー・食品店' && feeKindOf(p) === '固定' && chainOf(p) !== '独立').length, ['supermarket', 'mall']],
+  ['スーパー:独立店のうち歩合', live.filter(p => venueOf(p) === 'スーパー・食品店' && chainOf(p) === '独立' && feeKindOf(p) === '歩合').length, ['supermarket', 'mall']],
+  ['スーパー:チェーンAの3000/4500円', live.filter(p => venueOf(p) === 'スーパー・食品店' && chainOf(p) === 'Olympic' && feeKindOf(p) === '固定' && dayFees(p)?.wd === 3000 && dayFees(p)?.we === 4500).length, ['supermarket', 'weekday']],
+  ['商業施設:イオン系', live.filter(p => venueOf(p) === '商業施設・モール' && /イオン|そよら|AEON/i.test(p.title)).length, ['mall']],
+  // 固定額ごとの件数。fee の記事が「3,000円（17件）」のように書いている
+  ['常設固定:平日3000円', fixedRegular.filter(p => dayFees(p).wd === 3000).length, ['fee']],
+  ['常設固定:平日5000円', fixedRegular.filter(p => dayFees(p).wd === 5000).length, ['fee']],
+  ['常設固定:週末4500円', fixedRegular.filter(p => dayFees(p).we === 4500).length, ['fee']],
+  ['常設固定:週末5000円', fixedRegular.filter(p => dayFees(p).we === 5000).length, ['fee']],
+  // 平日が安い案件の差額の分布。weekday の記事が表にしている
+  ['差額:1000円', both.filter(x => x.we - x.wd === 1000).length, ['weekday']],
+  ['差額:1500円', both.filter(x => x.we - x.wd === 1500).length, ['weekday']],
+  ['差額:2000円', both.filter(x => x.we - x.wd === 2000).length, ['weekday']],
+  ['差額:2500円', both.filter(x => x.we - x.wd === 2500).length, ['weekday']],
+  ['差額:5500円', both.filter(x => x.we - x.wd === 5500).length, ['weekday']],
+  ['差額の中央値', median(both.filter(x => x.wd < x.we).map(x => x.we - x.wd)), ['fee', 'weekday']],
 ]
 
 const ARTICLES = {
@@ -294,6 +329,7 @@ const ARTICLES = {
   supermarket: 'supermarket-food-truck（スーパーに誘致する）',
   documents: 'kitchen-car-required-documents（必要書類）',
   mall: 'mall-food-truck-event（商業施設の催事）',
+  vacant: 'vacant-space-food-truck（遊休スペースの活用）',
 }
 
 const now = Object.fromEntries(M.map(([k, v]) => [k, v]))
