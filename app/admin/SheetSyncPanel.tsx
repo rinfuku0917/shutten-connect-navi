@@ -99,7 +99,8 @@ export default function SheetSyncPanel() {
         <div style={{ marginTop: '10px' }}>
           {!state.configured && (
             <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 12px', fontSize: '12.5px', color: '#92400E', lineHeight: 1.8, marginBottom: '10px' }}>
-              まだ連携していません。経理用シートの「拡張機能 → Apps Script」に
+              まだ連携していません。経理シートの「拡張機能 → Apps Script」には貼らないでください（既存のLINE連携が止まります）。
+              script.google.com で新しいプロジェクトを作って
               <code style={{ background: '#fff', padding: '1px 5px', borderRadius: '4px', margin: '0 3px' }}>docs/sheet-webhook.gs</code>
               を貼ってデプロイし、出てきた URL と合い鍵を Vercel の環境変数
               （SHEET_WEBHOOK_URL / SHEET_WEBHOOK_SECRET）に入れて再デプロイしてください。
