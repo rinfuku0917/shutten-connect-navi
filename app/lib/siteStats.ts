@@ -14,12 +14,16 @@ import { createClient } from '@supabase/supabase-js'
 // 2026-09-13 時点でトップに手書きされていた値。数えられないときだけ使う
 const FALLBACK = { sellers: 3521, places: 301 }
 
-export type SiteStats = { sellers: number; places: number; counted: boolean }
+// reason … 数えた値を使えなかった理由。画面には出さない。
+//   /api/site-stats で確かめられるようにするため（2026-09-13、本番で控えの値が
+//   出ていたのに、鍵が無いのか・読めないのか・少なすぎたのかが分からなかった）
+export type SiteStatsReason = 'ok' | 'no-key' | 'sellers-error' | 'sellers-low' | 'places-error' | 'places-low' | 'exception'
+export type SiteStats = { sellers: number; places: number; counted: boolean; reason: SiteStatsReason }
 
 export async function getSiteStats(): Promise<SiteStats> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return { ...FALLBACK, counted: false }
+  if (!url || !key) return { ...FALLBACK, counted: false, reason: 'no-key' }
   try {
     const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
     const [s, p] = await Promise.all([
@@ -39,8 +43,10 @@ export async function getSiteStats(): Promise<SiteStats> {
       // 最初の版は読めたかどうかだけを見ていて、半分を切って控えの値に
       // 差し替えたときも true になっていた
       counted: okSellers && okPlaces,
+      reason: s.error ? 'sellers-error' : !okSellers ? 'sellers-low'
+        : p.error ? 'places-error' : !okPlaces ? 'places-low' : 'ok',
     }
   } catch {
-    return { ...FALLBACK, counted: false }
+    return { ...FALLBACK, counted: false, reason: 'exception' }
   }
 }
