@@ -28,14 +28,17 @@ export async function getSiteStats(): Promise<SiteStats> {
       // これまでに掲載した出店場所（募集終了を含む）。トップでは「◯+」と出す
       db.from('places').select('id', { count: 'exact', head: true }).eq('status', 'published'),
     ])
-    const sellers = s.error || typeof s.count !== 'number' ? FALLBACK.sellers : s.count
-    const places = p.error || typeof p.count !== 'number' ? FALLBACK.places : p.count
-    // 手書きの値より大きく減っていたら、数え方か権限の異常とみなして手書きの値を出す
-    // （登録は基本的に増える一方なので、半分を切ることは普通は起きない）
+    // 数えた値を使えるか。読めなかった、または手書きの値の半分を切っていたら使わない
+    // （登録は基本的に増える一方なので、半分を切るのは数え方か権限の異常）
+    const okSellers = !s.error && typeof s.count === 'number' && s.count >= FALLBACK.sellers / 2
+    const okPlaces = !p.error && typeof p.count === 'number' && p.count >= FALLBACK.places / 2
     return {
-      sellers: sellers < FALLBACK.sellers / 2 ? FALLBACK.sellers : sellers,
-      places: places < FALLBACK.places / 2 ? FALLBACK.places : places,
-      counted: !s.error && !p.error,
+      sellers: okSellers ? (s.count as number) : FALLBACK.sellers,
+      places: okPlaces ? (p.count as number) : FALLBACK.places,
+      // 画面の値が「両方とも実際に数えた値」のときだけ true。
+      // 最初の版は読めたかどうかだけを見ていて、半分を切って控えの値に
+      // 差し替えたときも true になっていた
+      counted: okSellers && okPlaces,
     }
   } catch {
     return { ...FALLBACK, counted: false }
