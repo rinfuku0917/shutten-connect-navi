@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import { SITE_URL } from '../lib/seo'
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
@@ -32,8 +33,12 @@ export default function ResetPasswordPage() {
       console.error('登録の確認に失敗しました', e)
     }
 
+    // リンクの行き先は SITE_URL（正規のドメイン）。window.location.origin にしない理由と、
+    // Supabase の Redirect URLs との関係は app/register/page.tsx の signUp の所に書いた。
+    // implicit フローなので、この画面と違うドメインに着地しても /reset-password/update で
+    // セッションが立つ（# 側のトークンを読むだけで、この画面の保存領域は使わない）。
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: 'https://app.connect-navi.com/reset-password/update',
+      redirectTo: `${SITE_URL}/reset-password/update`,
     })
     if (error) {
       setMsg('送信に失敗しました。時間をおいて再度お試しください。')

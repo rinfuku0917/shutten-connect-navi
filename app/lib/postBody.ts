@@ -7,6 +7,8 @@
 // 見出しの文字から id を作ると日本語がURLエンコードされて読みにくいので、
 // 出てきた順の連番（sec-1, sec-2 …）にしている。
 
+import { isOptimizableImage, isOwnCover } from './postImage'
+
 export type TocItem = { id: string; text: string }
 
 // タグを取り除いて、目次に出す文字だけにする
@@ -103,7 +105,8 @@ function rewriteImages(html: string, sizes: Record<string, { w: number; h: numbe
   let n = 0
   return html.replace(/<img\s([^>]*?)src="(https:\/\/[^"]+)"([^>]*?)>/g, (whole, before: string, src: string, after: string) => {
     // 変換の対象は許可したホストだけ。それ以外はそのまま返す
-    if (!src.includes('.supabase.co/storage/v1/object/public/') && !src.includes('app.connect-navi.com/covers/')) return whole
+    // （app. とルートの両方の表紙を受け付ける。判定は postImage.ts にまとめてある）
+    if (!isOptimizableImage(src)) return whole
     n += 1
     const rest = (before + after).trim()
     // AIで作った表紙は 1536x1024 で固定。一覧に無くても大きさを入れられる。
@@ -112,7 +115,7 @@ function rewriteImages(html: string, sizes: Record<string, { w: number; h: numbe
     // 大きさを読めず、2026-09-13 に足した表紙が大きさ無しで出ていた
     const generated = /\/blog-images\/covers\//.test(src)
       ? { w: 1536, h: 1024 }
-      : /app\.connect-navi\.com\/covers\/[a-z0-9-]+\.webp$/.test(src)
+      : isOwnCover(src) && /\/covers\/[a-z0-9-]+\.webp$/.test(src)
         ? { w: 1200, h: 630 }
         : null
     const size = sizes[src] ?? generated

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyCronCaller } from '../../../lib/cronAuth'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
+import { SITE_URL } from '../../../lib/seo'
 
 // 案件の日程を、毎月おなじ条件で足す。Vercel の定期実行（毎月1日 9:00 日本時間）から呼ばれる。
 //
@@ -166,7 +167,8 @@ export async function GET(req: Request) {
                 '内容をご確認ください。変更や取り下げは案件の編集画面から行えます。',
                 'くり返しを止めたい場合は、編集画面の「毎月おなじ条件で日程を足す」を外してください。',
                 '',
-                'https://app.connect-navi.com/dashboard/host',
+                // ドメインは SITE_URL から。ルートドメインへ移ったときに古いリンクを送らないため
+                `${SITE_URL}/dashboard/host`,
               ].join('\n'),
             })
           } catch (e) {

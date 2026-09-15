@@ -13,6 +13,8 @@ import type { NextConfig } from "next";
 //
 // 一度ここに書いた行は消さないこと。消すと転送が切れて404になる。
 import { MERGED_POSTS } from './app/lib/mergedPosts'
+import { OWN_HOSTS } from './app/lib/seo'
+import { OLD_SITE_REDIRECTS } from './app/lib/oldSiteRedirects'
 
 // 統合した記事の転送先。対応表は app/lib/mergedPosts.ts にまとめてある
 // （サイトマップと記事一覧も同じ表を見るので、書く場所を1か所にしている）。
@@ -42,6 +44,11 @@ REDIRECTS.push(
   { source: '/login/login.', destination: '/login', permanent: true },
 )
 
+// 旧サイト（connect-navi.com の WordPress）の URL の転送。
+// 対応表と、どれをここで扱い、どれを proxy.ts で扱うかは app/lib/oldSiteRedirects.ts に書いてある。
+// 旧 URL のパスは新サイトに無いので、ルートへ移る前から入れておいても新のページは巻き込まない。
+REDIRECTS.push(...OLD_SITE_REDIRECTS)
+
 
 const nextConfig: NextConfig = {
   // 記事の本文に入っている画像は、Supabase のストレージから元の大きさのまま
@@ -55,14 +62,17 @@ const nextConfig: NextConfig = {
         hostname: 'mieflxcdthcpyrysfahs.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
-      {
-        // 記事の表紙（public/covers）。本文には絶対URLで書く必要があるため
-        // （og:image と一覧のサムネイルが本文の1枚目の画像を使う）、
-        // 自サイトのホストもここに書いておく
-        protocol: 'https',
-        hostname: 'app.connect-navi.com',
+      // 記事の表紙（public/covers）。本文には絶対URLで書く必要があるため
+      // （og:image と一覧のサムネイルが本文の1枚目の画像を使う）、
+      // 自サイトのホストもここに書いておく。
+      // DB の記事本文には app.connect-navi.com の URL が残り、ルートへ移った後の記事は
+      // connect-navi.com になるので、両方を許可する（一覧は app/lib/seo.ts の OWN_HOSTS。
+      // app/lib/postImage.ts の判定も同じ表を見ていて、ずれると画像が 400 になる）
+      ...OWN_HOSTS.map(hostname => ({
+        protocol: 'https' as const,
+        hostname,
         pathname: '/covers/**',
-      },
+      })),
     ],
   },
   async redirects() {

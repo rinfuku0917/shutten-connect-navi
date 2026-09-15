@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
+import { SITE_URL } from '../../../lib/seo'
 
 // 案件に応募している出店者へ、まとめて連絡する。
 //
@@ -208,7 +209,8 @@ export async function POST(req: Request) {
           '宛名': p.name || 'ご担当者',
           '案件名': place.title || '案件',
           '案内文': '下のリンクを開くと、マイページの「メッセージ」が開きます。',
-          'メッセージ画面のURL': 'https://app.connect-navi.com/dashboard/seller?tab=messages',
+          // ドメインは SITE_URL から。ルートドメインへ移ったときに古いリンクを送らないため
+          'メッセージ画面のURL': `${SITE_URL}/dashboard/seller?tab=messages`,
         })
         const { error } = await resend.emails.send({
           from: '出店コネクトナビ <' + FROM_EMAIL + '>',

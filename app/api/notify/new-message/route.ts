@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
+import { SITE_URL } from '../../../lib/seo'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
@@ -68,9 +69,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '受信者取得失敗' }, { status: 500 })
     }
 
+    // ドメインは SITE_URL から。ルートドメインへ移ったときに古いリンクを送らないため
     const dashUrl = recipientIsHost
-      ? 'https://app.connect-navi.com/dashboard/host/messages'
-      : 'https://app.connect-navi.com/dashboard/seller?tab=messages'
+      ? `${SITE_URL}/dashboard/host/messages`
+      : `${SITE_URL}/dashboard/seller?tab=messages`
 
     // 文面は管理画面（メール文面タブ）で書き換えられる
     const def = MAIL_DEF_BY_KEY['new-message']

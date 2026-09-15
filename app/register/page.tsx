@@ -6,6 +6,7 @@ import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import { sourcesFor } from '../lib/signupSource'
 import { track } from '../lib/ga'
+import { SITE_URL } from '../lib/seo'
 
 const AREA_GROUPS: { region: string, prefs: string[] }[] = [
   { region: '関東', prefs: ['東京','神奈川','千葉','埼玉','茨城','群馬','栃木'] },
@@ -96,9 +97,16 @@ export default function RegisterPage() {
     if (foundVia) metadata.found_via = foundVia
     if (foundNote.trim()) metadata.found_note = foundNote.trim()
     if (role === 'seller' && areas.length > 0) metadata.areas = areas
+    // 確認メールのリンクの行き先は SITE_URL（正規のドメイン）にする。
+    // window.location.origin にしないのは、プレビュー（*.vercel.app）や手元の
+    // localhost から登録したときに、そのホストが確認メールに入ってしまうため。
+    // このサイトの Supabase は implicit フロー（トークンが URL の # 側に付く）なので、
+    // 登録した画面と着地するドメインが違ってもログインは成立する。
+    // SITE_URL が Supabase の Redirect URLs に無いと、Supabase は黙って Site URL へ送る。
+    // ドメインを変えるときは、先に Supabase 側へ新しいドメインを足しておくこと。
     const { error: err } = await supabase.auth.signUp({
       email, password,
-      options: { data: metadata, emailRedirectTo: 'https://app.connect-navi.com/login' }
+      options: { data: metadata, emailRedirectTo: `${SITE_URL}/login` }
     })
     if(err) { setError(err.message); setLoading(false); return }
     // 管理者へ新規登録メール通知（失敗しても登録は成功させる）

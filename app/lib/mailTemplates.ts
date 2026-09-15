@@ -7,6 +7,13 @@
 //   編集画面（管理画面のメール文面タブ）は、この一覧を読んで
 //   何を編集できるかと、使える差し込みを出している。
 //   新しいメールを足したら、ここにも足すこと。
+//
+// 文面の中のリンクは SITE_URL（app/lib/seo.ts）から組み立てる。
+// ドメインを直書きすると、ルートドメインへ移った後も古いドメインのリンクを送り続けるため。
+// ただし管理画面で上書きして mail_templates に保存した文面は、保存した時点の
+// URL が文字のまま入っている。ドメインを変えたときは、そちらも SQL で直す必要がある。
+
+import { SITE_URL } from './seo'
 
 export type MailVars = Record<string, string>
 
@@ -94,7 +101,7 @@ export const MAIL_DEFS: MailDef[] = [
 {{出店の一覧}}
 
 ▼ 売上報告はこちら（開くと「売上報告」の画面が出ます）
-https://app.connect-navi.com/dashboard/seller?tab=sales
+${SITE_URL}/dashboard/seller?tab=sales
 
 すでにご報告いただいている場合は、行き違いですのでご容赦ください。
 ご不明な点がございましたら、info@connect-navi.com までご連絡ください。
@@ -121,7 +128,7 @@ https://app.connect-navi.com/dashboard/seller?tab=sales
 新しく会員登録をしていただく必要はございません。
 
 ▼ こちらからパスワードをお決めください
-https://app.connect-navi.com/reset-password
+${SITE_URL}/reset-password
 
  ① 上のページで、ご登録のメールアドレスを入力
  ② 届いたメールのリンクを開く
@@ -159,7 +166,7 @@ https://app.connect-navi.com/reset-password
 
 下のリンクを開くと、マイページの「書類管理」が開きます。
 そこから同じ書類をもう一度アップロードしてください。
-https://app.connect-navi.com/dashboard/seller?tab=docs`,
+${SITE_URL}/dashboard/seller?tab=docs`,
     vars: [
       { name: 'お名前', note: '出店者の登録名' },
       { name: '書類の種類', note: '営業許可証、食品衛生責任者証など' },
@@ -179,7 +186,7 @@ https://app.connect-navi.com/dashboard/seller?tab=docs`,
 担当者とメッセージでやり取りを進め、当日に向けてご準備ください。
 
 下のリンクを開くと、マイページの「メッセージ」が開きます。
-https://app.connect-navi.com/dashboard/seller?tab=messages`,
+${SITE_URL}/dashboard/seller?tab=messages`,
     vars: [
       { name: 'お名前', note: '出店者の名前' },
       { name: '案件名', note: '申し込まれた案件の名前' },
@@ -199,7 +206,7 @@ https://app.connect-navi.com/dashboard/seller?tab=messages`,
 
 ご応募いただきありがとうございました。
 他の案件も掲載しておりますので、ぜひご覧ください。
-https://app.connect-navi.com/places`,
+${SITE_URL}/places`,
     vars: [
       { name: 'お名前', note: '出店者の名前' },
       { name: '案件名', note: '申し込まれた案件の名前' },
@@ -220,7 +227,7 @@ https://app.connect-navi.com/places`,
 希望日程: {{希望日程}}
 
 ダッシュボードで詳細を確認し、ご対応ください。
-https://app.connect-navi.com/dashboard/host`,
+${SITE_URL}/dashboard/host`,
     vars: [
       { name: '宛名', note: '募集者の名前' },
       { name: '案件名', note: '申し込まれた案件の名前' },
@@ -263,7 +270,7 @@ https://app.connect-navi.com/dashboard/host`,
 エリア: {{エリア}}
 
 管理画面で詳細を確認してください。
-https://app.connect-navi.com/admin`,
+${SITE_URL}/admin`,
     vars: [
       { name: '種別', note: '出店者（出店したい）または募集者（お店を呼びたい）' },
       { name: 'お名前', note: '登録された氏名' },
@@ -319,7 +326,7 @@ https://app.connect-navi.com/admin`,
 振込名義: {{振込名義}}
 
 ▼ 入金の確認はこちら（管理画面 → 売上管理 → 入金状況）
-https://app.connect-navi.com/admin`,
+${SITE_URL}/admin`,
     vars: [
       { name: '屋号', note: '報告した出店者の屋号' },
       { name: '請求書番号', note: '2026-0042 のような番号' },
@@ -406,7 +413,7 @@ https://app.connect-navi.com/admin`,
 
 キャンセルポリシーにより、承認後の取消しはキャンセル料の対象です。
 請求が必要かどうかをご確認ください。
-https://app.connect-navi.com/admin`,
+${SITE_URL}/admin`,
     vars: [
       { name: '案件名', note: '取り消された案件の名前' },
       { name: '出店日', note: '取り消された出店日。未定なら「日程指定なし」' },
@@ -429,7 +436,7 @@ https://app.connect-navi.com/admin`,
 出店者: {{屋号}}
 
 空いた枠に別の出店者をお探しの場合は、運営までご連絡ください。
-https://app.connect-navi.com/dashboard/host`,
+${SITE_URL}/dashboard/host`,
     vars: [
       { name: '宛名', note: '募集者の名前' },
       { name: '案件名', note: '取り消された案件の名前' },
@@ -452,7 +459,7 @@ https://app.connect-navi.com/dashboard/host`,
 
 なお、出店が確定したあとの取消しはキャンセル料の対象となります。
 金額は案件ごとに定めております。追ってご案内いたします。
-https://app.connect-navi.com/cancel-policy
+${SITE_URL}/cancel-policy
 
 ご不明な点がございましたら、このメールにご返信ください。`,
     vars: [
