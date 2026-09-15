@@ -7,7 +7,7 @@ import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
 import MeetingRequestForm from '../components/MeetingRequestForm'
 import JsonLd from '../components/JsonLd'
-import { SITE_URL, OG_DEFAULT_IMAGE } from '../lib/seo'
+import { SITE_URL, OG_DEFAULT_IMAGE, organizationRef } from '../lib/seo'
 import { VENDOR_FAQ, faqJsonLd } from '../lib/faq'
 import { AREAS } from './area/areas'
 import FaqList from '../components/FaqList'
@@ -93,7 +93,8 @@ export default async function VendorPage() {
           serviceType: 'キッチンカーの手配・派遣',
           description:
             'イベント・商業施設・オフィス・自治体の催しへキッチンカーを手配するサービス。出店者の募集から条件の調整、当日の運営までを代行します。',
-          provider: { '@type': 'Organization', name: '株式会社nav', url: SITE_URL },
+          // 運営会社の本体はトップに出し、ここは同じ @id で指す（AGENTS.md の構造化データの項）
+          provider: organizationRef(),
           areaServed: { '@type': 'Country', name: '日本' },
           url: `${SITE_URL}/vendor`,
         }}

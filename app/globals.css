@@ -111,6 +111,13 @@ img[width='1'][height='1'] { display: inline !important; }
   .detail-2col { grid-template-columns: 1fr !important; }
 }
 
+/* 関連する出店場所（app/components/RelatedPlaces.tsx）: スマホでは1列にする。
+   記事ページはページ内の style で同じ指定をしているが、募集終了した案件のページでも
+   使うようになったので共通にする。2列のままだと幅375pxで案件名が数文字ずつ折り返る */
+@media (max-width: 560px) {
+  .related-places-grid { grid-template-columns: 1fr !important; }
+}
+
 /* トップページ: スマホでグリッドを畳む */
 .top-vendor-grid { max-width: 100%; }
 .top-2card-grid { max-width: 100%; }

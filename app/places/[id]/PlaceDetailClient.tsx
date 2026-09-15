@@ -126,7 +126,15 @@ function feeNodes(p: Place): ReactNode {
 // initialPlace が null のときは、公開前の案件を募集者本人が見ている場合。
 // その場合だけ、以前と同じようにブラウザ側で読み込む
 // （誰に見せてよいかはデータベース側の権限設定が判断する）。
-export default function PlaceDetail({ id, initialPlace }: { id: string; initialPlace: Place | null }) {
+//
+// openNearby / openNearbyCount は、募集終了した案件のときだけサーバーから渡す、
+// 同じ都道府県で募集中の案件の一覧（描画済み）とその件数。
+export default function PlaceDetail({ id, initialPlace, openNearby = null, openNearbyCount = 0 }: {
+  id: string
+  initialPlace: Place | null
+  openNearby?: ReactNode
+  openNearbyCount?: number
+}) {
   const [place, setPlace] = useState<Place | null>(initialPlace)
   const [loading, setLoading] = useState(initialPlace === null)
   // 料金はログイン済みなら表示する（エントリー可否の判定とは別）。
@@ -288,6 +296,11 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
   }
 
   const tag = place.place_type === 'event' ? 'イベント' : '常設'
+  // 募集終了した案件から案内する先。同じ県に募集中の案件があれば、その県で絞った一覧へ。
+  // 無ければ全国の一覧へ（0件の絞り込み一覧に送ると、そこでまた行き止まりになる）
+  const openListHref = place.closed && place.prefecture && openNearbyCount > 0
+    ? '/places?pref=' + encodeURIComponent(place.prefecture)
+    : '/places'
   // images に入っていない古い案件は、image_url の1枚だけを表示する
   const photos = (Array.isArray(place.images) ? place.images.filter(Boolean) : [])
   if (photos.length === 0 && place.image_url) photos.push(place.image_url)
@@ -320,6 +333,27 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
         <Link href="/places" style={{ color: '#3A9BD5', textDecoration: 'none', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginBottom: '20px' }}>
           ← 一覧に戻る
         </Link>
+
+        {/* 募集終了のお知らせ。
+            終了した案件も実績として検索に出すので、検索から直接来た人が最初に目にする位置に置く。
+            これまでは案件名の上の小さな「募集終了」の札と、右の申込欄の見出しだけで、
+            スマホでは申込欄がページの下に回るため、読み進めるまで応募できないと分からなかった。
+            見出し（h2〜）にはしない。ページの主題は案件名の h1 で、これはお知らせのため */}
+        {place.closed && (
+          <div style={{ background: '#FEF2F2', border: '2px solid #E02020', borderRadius: '12px', padding: '16px 20px', marginBottom: '24px' }}>
+            <p className='jp-text' style={{ fontSize: '17px', fontWeight: 900, color: '#C81E1E', margin: 0, lineHeight: 1.5 }}>
+              この案件の募集は終了しました
+            </p>
+            <p className='jp-text' style={{ fontSize: '13px', color: '#475569', margin: '6px 0 12px', lineHeight: 1.8 }}>
+              {openNearbyCount > 0
+                ? `このページは出店実績として掲載しています。${place.prefecture}で募集中の案件はページの下でもご覧いただけます。`
+                : 'このページは出店実績として掲載しています。募集中の案件は一覧からお探しください。'}
+            </p>
+            <Link href={openListHref} style={{ display: 'inline-block', background: '#F5A623', color: '#fff', textDecoration: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '14px', fontWeight: 900 }}>
+              {openNearbyCount > 0 ? `${place.prefecture}で募集中の案件を見る →` : '募集中の案件を探す →'}
+            </Link>
+          </div>
+        )}
 
         <div className='detail-2col' style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '28px', alignItems: 'start' }}>
           <div>
@@ -491,7 +525,7 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
                     <div className='jp-text' style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.9, marginBottom: '16px' }}>
                       この案件の募集は終了しています。同じ場所で新しい募集が出ることがありますので、ほかの案件もご覧ください。
                     </div>
-                    <Link href='/places' style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '13px', borderRadius: '8px', fontWeight: 900, fontSize: '14px', textDecoration: 'none' }}>
+                    <Link href={openListHref} style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '13px', borderRadius: '8px', fontWeight: 900, fontSize: '14px', textDecoration: 'none' }}>
                       募集中の案件を探す
                     </Link>
                   </div>
@@ -684,6 +718,9 @@ export default function PlaceDetail({ id, initialPlace }: { id: string; initialP
             </div>
           </div>
         </div>
+
+        {/* 募集終了した案件のときだけ、同じ県で募集中の案件を並べる（サーバーで描いたもの） */}
+        {place.closed && openNearby}
       </div>
 
 

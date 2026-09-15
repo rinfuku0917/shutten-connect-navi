@@ -8,7 +8,7 @@ import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import PostCta from '../../components/PostCta'
 import JsonLd from '../../components/JsonLd'
-import { SITE_URL, ORG, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../lib/seo'
+import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd, organizationRef } from '../../lib/seo'
 import { firstImage } from '../../lib/postImage'
 import { preparePostBody, extractFaq, boldForJapanese } from '../../lib/postBody'
 import { POST_IMAGE_SIZES } from '../../lib/postImageSizes'
@@ -108,8 +108,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     dateModified: post.updated_at || post.published_at || undefined,
     image: image ? [image] : undefined,
     mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE_URL}/blog/${post.slug}` },
-    author: { '@type': 'Organization', name: ORG.name, url: SITE_URL },
-    publisher: { '@type': 'Organization', name: ORG.name, url: SITE_URL },
+    // 運営会社の本体はトップに出し、ここは同じ @id で指す（AGENTS.md の構造化データの項）
+    author: organizationRef(),
+    publisher: organizationRef(),
   }
 
   return (

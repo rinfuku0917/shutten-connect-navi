@@ -7,7 +7,7 @@ import BackButton from '../../../components/BackButton'
 import SiteFooter from '../../../components/SiteFooter'
 import MeetingRequestForm from '../../../components/MeetingRequestForm'
 import JsonLd from '../../../components/JsonLd'
-import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd } from '../../../lib/seo'
+import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd, organizationRef } from '../../../lib/seo'
 import { AREAS, findArea, type Area } from '../areas'
 
 // 「キッチンカー 呼びたい 費用 東京」のように、地名を足して調べる人向けのページ。
@@ -121,7 +121,8 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
           name: `${area.name}のキッチンカー手配・派遣`,
           serviceType: 'キッチンカー手配',
           description: `${area.name}のイベント・商業施設・オフィス・学校へキッチンカーを手配するサービス。出店者の募集から条件の調整、当日の運営まで承ります。`,
-          provider: { '@type': 'Organization', name: '株式会社nav', url: SITE_URL },
+          // 運営会社の本体はトップに出し、ここは同じ @id で指す（AGENTS.md の構造化データの項）
+          provider: organizationRef(),
           areaServed: { '@type': 'AdministrativeArea', name: area.dbPref },
           url: `${SITE_URL}/vendor/area/${area.slug}`,
         }}

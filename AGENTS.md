@@ -29,13 +29,23 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## sitemap / robots
 - `app/sitemap.ts` は公開ページを網羅する。新しい公開ページ種別を足したらここにも足す
-- 募集終了（closed=true）の案件はサイトマップに入れない
+- 募集終了（closed=true）の案件も出店実績としてサイトマップに入れ、noindex にしない（2026-09 に変更）。
+  ページ上部で終了を知らせ、同じ都道府県の募集中の案件（無ければ /places）へつなぐこと。
+  優先度は募集中より低くする。下書き・非公開（status≠published）は入れない
 - admin / dashboard / api 配下の Disallow を維持する。公開側を誤って Disallow しない
 
 ## 構造化データ（JSON-LD）
-- places/[id]：Place（または Event）＋ BreadcrumbList
+- places/[id]：Place ＋ BreadcrumbList。Event にするのは、出店形態がイベント（place_type='event'）で、
+  運営が一般の人が来場できる催しと印を付け（places.public_event = true。2026-09 時点で列は未作成）、日程に日付がある案件だけ。
+  place_type だけで Event にしない（社内イベント・参加登録の要る学会・学内の営業日・オープンキャンパスなど、
+  Google の Event の対象外が event 型に混ざっているため）。
+  常設は日付があっても Event にしない（毎日・毎週の営業日の一覧で、催しではないため）。
+  Event に offers は付けない（出店料は出店者が払う額で、来場者向けの価格ではないため）。
+  Event の organizer に運営会社（株式会社nav / organizationRef()）を入れない（主催は案件ごとの別の団体で、主催者の列は DB に無いため）
 - ブログ記事：Article ＋ BreadcrumbList
-- トップ：Organization ＋ WebSite
+- トップ：Organization ＋ WebSite ＋ FAQPage（画面の「よくある質問」と同じ一覧から作る）
+- Organization の本体はトップにだけ出す。ほかのページで運営会社を指すとき（記事の author・publisher、Service の provider など）は
+  `organizationRef()`（app/lib/seo.ts）を使い、Organization を直接書かない。layout に置いて全ページへ重複させない
 - 入れる値はDBの実データのみ。レビュー数・評価など存在しない値を創作しない
 - 画面に出していない内容を構造化データにだけ書かない（FAQなど）
 
@@ -47,7 +57,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## 内部リンク
 - ブログ記事の下部に「関連する出店場所」への内部リンク枠を維持する
 - 都道府県での絞り込み一覧から案件詳細への回遊導線を保つ
-- 削除・終了した案件へのリンクを残さない
+- 削除した案件・非公開（status≠published）の案件へのリンクを残さない。
+  募集終了（closed=true）の案件は実績として検索に出すので、案件一覧などからリンクしてよい（サイトマップにしか無い孤立ページにしない）。
+  ただし記事の「関連する出店場所」枠と、終了案件ページの「募集中の出店場所」枠には出さない（応募先を探す人向けの枠のため）
 
 ## パフォーマンス
 - 画像は next/image を使い width / height を必ず指定する（CLS防止）

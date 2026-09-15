@@ -7,7 +7,8 @@ import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
 import { firstImage, thumbnailUrl } from './lib/postImage'
 import { MERGED_SLUGS_FILTER } from './lib/mergedPosts'
 import JsonLd from './components/JsonLd'
-import { SITE_URL, SITE_NAME, ORG } from './lib/seo'
+import { SITE_URL, SITE_NAME, ORG, ORG_ID, organizationRef } from './lib/seo'
+import { faqJsonLd } from './lib/faq'
 import CountUp from './components/CountUp'
 import { getSiteStats } from './lib/siteStats'
 
@@ -48,6 +49,21 @@ type NewPlace = {
   urgent: boolean | null
 }
 type WorkPlace = { id: string; title: string; image_url: string | null; closed: boolean | null }
+
+// トップの「よくある質問」。
+// 画面の表示と構造化データ（FAQPage）で同じ一覧を使う。
+// 画面に出していない Q&A を構造化データにだけ書くと Google の規約違反になるので、
+// 質問を足す・消すときはここだけを直す（両方に自動で反映される）。
+// cta（案内リンク）は画面だけのもので、構造化データには答えの文章だけを入れる。
+type TopFaq = { q: string; a: string; open?: boolean; cta?: { href: string; label: string } }
+const TOP_FAQ: TopFaq[] = [
+  { q: '登録に費用はかかりますか？', a: '会員登録・案件の閲覧・応募はすべて無料です。出店が決定した際の手数料については、案件ごとにご案内しています。', open: true },
+  { q: '出店までの流れを教えてください', a: '会員登録 → 案件を探して応募 → 主催者とのマッチング・調整 → 出店当日、という流れです。詳しくは「ご利用の流れ」をご覧ください。' },
+  { q: 'キッチンカーを呼びたいのですが、どうすればいいですか？', a: '施設や敷地の情報（場所・希望日・想定人数など）をお問い合わせフォームからお送りいただくだけでOKです。出店者の募集から選定・当日の調整まで、運営がまとめてサポートします。掲載やご相談は無料です。', cta: { href: '/vendor', label: 'キッチンカーを呼びたい方はこちら' } },
+  { q: 'イベントを開催したいのですが、何から始めればいいですか？', a: '「まだ企画段階」という状態からでもご相談いただけます。開催日・場所・規模の目安をお知らせいただければ、キッチンカーの台数やジャンルの選定、募集スケジュールまで一緒に組み立てます。', cta: { href: '/contact', label: 'まずは相談してみる' } },
+  { q: 'どのエリアに対応していますか？', a: '現在、全国のイベント・施設に対応しており、順次エリアを拡大しています。お近くの案件はサイト内で検索できます。' },
+  { q: 'キャンセルは可能ですか？', a: 'やむを得ない事情でのキャンセルにも対応しています。詳細な条件は案件ごとにご確認いただけます。' },
+]
 type BlogPost = { id: string; slug: string; title: string; category: string | null; cover_emoji: string | null; published_at: string | null; content: string | null }
 
 // ヒーロー下2入口カード用の線画アイコン（見本デザイン準拠）
@@ -183,6 +199,8 @@ export default async function Home() {
         data={{
           '@context': 'https://schema.org',
           '@type': 'Organization',
+          // 案件ページの Event などは、この @id で同じ会社を指す（app/lib/seo.ts の organizationRef）
+          '@id': ORG_ID,
           name: ORG.name,
           alternateName: SITE_NAME,
           url: SITE_URL,
@@ -198,9 +216,11 @@ export default async function Home() {
           name: SITE_NAME,
           url: SITE_URL,
           inLanguage: 'ja',
-          publisher: { '@type': 'Organization', name: ORG.name, url: SITE_URL },
+          publisher: organizationRef(),
         }}
       />
+      {/* 下の「よくある質問」と同じ一覧から作る */}
+      <JsonLd data={faqJsonLd(TOP_FAQ)} />
 
       {/* HERO: イラスト画像1枚敷き（PC=横 / スマホ=縦を picture で出し分け） */}
       <header style={{ background: C.cream }}>
@@ -391,10 +411,10 @@ export default async function Home() {
           <div className='top3-works'>
             {works.length === 0 && <div style={{ color: C.muted, fontSize: '14px' }}>読み込み中...</div>}
             {/* 実績の紹介なので、募集が終わった場所も出す。
-                ただし終わった案件にはリンクを張らない（AGENTS.md の
-                「削除・終了した案件へのリンクを残さない」）。
-                終了した案件のページは検索対象から外しているので、
-                トップから内部リンクを送っても評価の無駄になる */}
+                終わった案件にはリンクを張っていない（以前の AGENTS.md の決まりに合わせたもの）。
+                2026-09 に終了した案件のページも実績として検索に出す方針に変わり、
+                AGENTS.md でも「一覧から終了案件へリンクしてよい」に改めたが、
+                トップの見た目を変える判断は別なので、ここは据え置いている */}
             {works.map(w => {
               const inner = (
                 <>
@@ -419,14 +439,7 @@ export default async function Home() {
                 <h2 className={maru.className + ' top3-sechead-bar'} style={{ fontSize: '22px', fontWeight: 900, lineHeight: 1.3 }}>よくある質問</h2>
                 <img src='/ic-mikan.webp' alt='' style={{ width: '58px', height: '58px', objectFit: 'contain', flexShrink: 0 }} />
               </div>
-              {([
-                { q: '登録に費用はかかりますか？', a: '会員登録・案件の閲覧・応募はすべて無料です。出店が決定した際の手数料については、案件ごとにご案内しています。', open: true },
-                { q: '出店までの流れを教えてください', a: '会員登録 → 案件を探して応募 → 主催者とのマッチング・調整 → 出店当日、という流れです。詳しくは「ご利用の流れ」をご覧ください。' },
-                { q: 'キッチンカーを呼びたいのですが、どうすればいいですか？', a: '施設や敷地の情報（場所・希望日・想定人数など）をお問い合わせフォームからお送りいただくだけでOKです。出店者の募集から選定・当日の調整まで、運営がまとめてサポートします。掲載やご相談は無料です。', cta: { href: '/vendor', label: 'キッチンカーを呼びたい方はこちら' } },
-                { q: 'イベントを開催したいのですが、何から始めればいいですか？', a: '「まだ企画段階」という状態からでもご相談いただけます。開催日・場所・規模の目安をお知らせいただければ、キッチンカーの台数やジャンルの選定、募集スケジュールまで一緒に組み立てます。', cta: { href: '/contact', label: 'まずは相談してみる' } },
-                { q: 'どのエリアに対応していますか？', a: '現在、全国のイベント・施設に対応しており、順次エリアを拡大しています。お近くの案件はサイト内で検索できます。' },
-                { q: 'キャンセルは可能ですか？', a: 'やむを得ない事情でのキャンセルにも対応しています。詳細な条件は案件ごとにご確認いただけます。' },
-              ] as { q: string; a: string; open?: boolean; cta?: { href: string; label: string } }[]).map(f => (
+              {TOP_FAQ.map(f => (
                 <details key={f.q} className='top3-faq' open={f.open} style={{ background: '#fff', border: '1px solid ' + C.line, borderRadius: '10px', marginBottom: '10px' }}>
                   <summary style={{ cursor: 'pointer', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, fontSize: '14.5px' }}>
                     <span style={{ width: '24px', height: '24px', flexShrink: 0, borderRadius: '6px', background: C.gold, color: '#fff', fontWeight: 900, display: 'grid', placeItems: 'center', fontSize: '13px' }}>Q</span>

@@ -7,7 +7,7 @@ import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import MeetingRequestForm from '../../components/MeetingRequestForm'
 import JsonLd from '../../components/JsonLd'
-import { SITE_URL, breadcrumbJsonLd, OG_DEFAULT_IMAGE } from '../../lib/seo'
+import { SITE_URL, breadcrumbJsonLd, OG_DEFAULT_IMAGE, organizationRef } from '../../lib/seo'
 import { EVENT_FAQ, VENDOR_FAQ, faqJsonLd } from '../../lib/faq'
 import FaqList from '../../components/FaqList'
 
@@ -143,7 +143,8 @@ export default function EventVendorPage() {
           serviceType: 'イベントのフード出店手配',
           description:
             'マルシェ、地元のお祭り、商店街の催し、学校行事、社内イベントなどへ、フード出店・キッチンカーを手配するサービス。出店者の募集から条件の調整、当日の運営までを代行します。',
-          provider: { '@type': 'Organization', name: '株式会社nav', url: SITE_URL },
+          // 運営会社の本体はトップに出し、ここは同じ @id で指す（AGENTS.md の構造化データの項）
+          provider: organizationRef(),
           areaServed: { '@type': 'Country', name: '日本' },
           url: `${SITE_URL}/vendor/event`,
         }}

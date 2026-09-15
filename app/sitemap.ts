@@ -34,6 +34,19 @@ function when(...vals: unknown[]): Date | undefined {
   return undefined
 }
 
+// 日付として使えるもののうち、いちばん新しいもの。
+// 募集終了した案件は、ふつうは「終了にした日」（closed_at）が最後の変更になる。
+// ただ掲載日（posted_at）は公開し直すたびに入り直す（app/api/admin/set-place-status）ので、
+// 終了にした後で非公開→公開と戻すと終了日より新しくなる。書いた順ではなく新しいほうを選ぶ
+function latest(...vals: unknown[]): Date | undefined {
+  let best: Date | undefined
+  for (const v of vals) {
+    const d = when(v)
+    if (d && (!best || d > best)) best = d
+  }
+  return best
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
   // 静的ページの更新日。毎回の生成時刻を入れると「毎時更新」と誤って伝わるので、
@@ -75,24 +88,41 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const urls: MetadataRoute.Sitemap = []
 
   try {
-    // 公開中の案件
+    // 公開中の案件（募集終了したものも含む）。
+    //
+    // 募集終了した案件も載せる（2026-09 に運営が決定）。
+    // 施設名・写真・日程は出店実績として検索に出す価値があり、ページも noindex にしていない
+    // （app/places/[id]/page.tsx）。ページ上部で終了を知らせ、同じ県の募集中の案件へつないでいる。
+    // 下書き・非公開は今までどおり載せない（status で絞る）。
+    //
+    // 並び替えを付けないと、分けて取るときに行がずれて重複・欠落することがあるので id で固定する
     for (let from = 0; ; from += CHUNK) {
       const { data, error } = await db
         .from('places')
-        .select('id, posted_at, created_at, closed_at')
+        .select('id, posted_at, created_at, closed, closed_at')
         .eq('status', 'published')
-        // 募集終了した案件は載せない。応募できないページに検索から人を送らないため
-        .eq('closed', false)
+        .order('id', { ascending: true })
         .range(from, from + CHUNK - 1)
       if (error || !data || data.length === 0) break
       for (const p of data) {
         if (!p.id) continue
-        urls.push({
-          url: `${SITE_URL}/places/${p.id}`,
-          lastModified: when(p.posted_at, p.created_at) ?? now,
-          changeFrequency: 'weekly',
-          priority: 0.7,
-        })
+        if (p.closed) {
+          // 終了した案件は、この先ほとんど中身が変わらない。
+          // 募集中の案件より低くして、巡回を募集中のほうへ回してもらう
+          urls.push({
+            url: `${SITE_URL}/places/${p.id}`,
+            lastModified: latest(p.closed_at, p.posted_at, p.created_at) ?? now,
+            changeFrequency: 'yearly',
+            priority: 0.3,
+          })
+        } else {
+          urls.push({
+            url: `${SITE_URL}/places/${p.id}`,
+            lastModified: when(p.posted_at, p.created_at) ?? now,
+            changeFrequency: 'weekly',
+            priority: 0.7,
+          })
+        }
       }
       if (data.length < CHUNK) break
     }
