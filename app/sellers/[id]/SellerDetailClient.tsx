@@ -10,7 +10,8 @@ import { snsHref } from '../../lib/sns'
 import { formatVehicleSize } from '../../lib/vehicleSize'
 
 export type Seller = {
-  id: string; name: string | null; shop_name: string | null
+  // 本名（profiles.name）はここに持たない。公開ページに出さないため（app/sellers/[id]/page.tsx のコメント参照）
+  id: string; shop_name: string | null
   genre: string[] | string | null; areas: string[] | null; photos: string[] | null
   // 出店者がマイページで入力しているのに、これまで公開ページに出ていなかった項目
   bio?: string | null
@@ -38,7 +39,7 @@ type Props = {
 
 // 公開ページで出す列。サーバー側（page.tsx）と同じ並びにしておく
 const SELLER_COLUMNS =
-  'id, name, shop_name, genre, areas, photos, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods'
+  'id, shop_name, genre, areas, photos, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods'
 
 const SNS_LABEL: Record<string, string> = {
   instagram: 'Instagram', twitter: 'X（Twitter）', youtube: 'YouTube', tiktok: 'TikTok',
@@ -219,7 +220,7 @@ function SellerDetailInner({ id, initialSeller, initialMenus, initialReviews, in
                 その規則を詳細ページにも当てると、全項目を埋めた出店者のページに
                 「（店名未登録）」と出てしまう。ページのタイトルとSNS共有では
                 元から法人名を出しているので、見出しだけが食い違っていた。 */}
-            <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1C1917', margin: '0 0 8px', lineHeight: 1.3 }}>{shopName || (seller.shop_name ?? '').trim() || (seller.name ?? '').trim() || <span style={{ color: '#A8A29E' }}>（店名未登録）</span>}</h1>
+            <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1C1917', margin: '0 0 8px', lineHeight: 1.3 }}>{shopName || (seller.shop_name ?? '').trim() || 'キッチンカー出店者'}</h1>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {genres.length > 0 ? genres.map((g) => (<span key={g} style={chip('#FEF3E2', '#9A5B0A')}>{g}</span>)) : <span style={{ fontSize: '13px', color: '#A8A29E' }}>ジャンル未設定</span>}
             </div>

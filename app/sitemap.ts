@@ -193,6 +193,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         if (!s.id) continue
         // 運営用のアカウントは、一覧と同じく申告しない
         if (isExcludedShop(s.shop_name)) continue
+        // 屋号を登録していない出店者は申告しない。
+        // 公開ページは本名を出さない作りにしたので（app/sellers/[id]/page.tsx）、
+        // 屋号が無いページは誰の紹介か分からない。ページ側も noindex にしてある
+        if (!String(s.shop_name ?? '').trim()) continue
         // 写真1枚以上・メニュー1件以上・紹介文30字以上のいずれかを満たすもの。
         // 30字は「名前と都道府県だけ」との差が出る目安
         const photos = Array.isArray(s.photos) ? s.photos.filter(Boolean) : []

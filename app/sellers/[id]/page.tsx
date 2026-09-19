@@ -38,7 +38,7 @@ async function fetchSeller(id: string): Promise<Seller | null> {
   if (!db) return null
   const { data } = await db
     .from('profiles')
-    .select('id, name, shop_name, genre, areas, photos, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods')
+    .select('id, shop_name, genre, areas, photos, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods')
     .eq('id', id)
     .eq('role', 'seller')
     .eq('approval_status', 'approved')
@@ -94,8 +94,21 @@ function toArray(v: string[] | string | null): string[] {
   return t.split(/[,、，]/).map(x => x.trim()).filter(Boolean)
 }
 
+// 公開ページに出す名前。
+//
+// **本名（profiles.name）は絶対に使わない。**
+// 以前は屋号が空のときに本名で埋めていたため、屋号を入れていない出店者
+// 304人の本名が、ページのタイトル・見出し・説明文・構造化データに出ていた
+// （2026-09-19 に出店者ご本人から申し出があった）。
+// 屋号が無い場合は一般的な言い方にし、あわせて検索には出さない（下の noindex）。
+const NO_SHOP_NAME = 'キッチンカー出店者'
+
+function shopNameOf(s: Seller): string {
+  return (s.shop_name ?? '').trim()
+}
+
 function displayName(s: Seller): string {
-  return (s.shop_name || s.name || '出店者').trim()
+  return shopNameOf(s) || NO_SHOP_NAME
 }
 
 // 検索結果に出す説明文。120字前後に収める。
@@ -135,11 +148,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
   const { menus } = await fetchMenusAndReviews(id)
   const description = summarize(seller, menus)
+  // 屋号が無いページは、誰の紹介なのかが分からないまま検索に出ることになる。
+  // 本名を出さない代わりに、検索にも出さない（サイトマップと一覧からも外す）
+  const noShopName = !shopNameOf(seller)
   const photo = seller.photos && seller.photos.length > 0 ? seller.photos[0] : null
 
   return {
     title: { absolute: `${name}｜キッチンカー・出店者情報 - 出店コネクトナビ` },
     description,
+    ...(noShopName ? { robots: { index: false, follow: true } } : {}),
     alternates: { canonical: `/sellers/${seller.id}` },
     openGraph: {
       title: `${name}｜キッチンカー・出店者情報`,
