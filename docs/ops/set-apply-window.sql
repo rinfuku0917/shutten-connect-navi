@@ -1,6 +1,6 @@
 -- 案件ごとの「何ヶ月先まで申し込めるか」を系列ごとに入れる。
 --
---   1ヶ月  イオン / サンユーストアー / スーパーあさの / さがみや
+--   4ヶ月  イオン / サンユーストアー / スーパーあさの / さがみや（2026-09-20 に1ヶ月から変更）
 --   4ヶ月  Olympic / MEGAドン・キホーテ（2026-09-14 に3ヶ月から変更）
 --   それ以外は空のまま（＝上限なし）。必要になったら管理画面で個別に入れる。
 --
@@ -22,7 +22,7 @@ select
     when title ilike '%Olympic%' or title like '%オリンピック%'
       or title like '%ドン・キホーテ%' or title like '%ドンキホーテ%' then '4ヶ月'
     when title like '%イオン%' or title like '%サンユー%'
-      or title like '%あさの%'   or title like '%さがみや%' or title like '%サガミヤ%' then '1ヶ月'
+      or title like '%あさの%'   or title like '%さがみや%' or title like '%サガミヤ%' then '4ヶ月'
   end                                as 入れる上限,
   title                              as 案件名,
   prefecture                         as 都道府県,
@@ -51,7 +51,7 @@ update public.places
     or title like '%ドンキホーテ%';
 
 update public.places
-   set apply_within_months = 1
+   set apply_within_months = 4
  where (title like '%イオン%'
      or title like '%サンユー%'
      or title like '%あさの%'
@@ -74,7 +74,7 @@ group by apply_within_months
 order by apply_within_months nulls last;
 
 -- 系列ごとの内訳。想定は
---   1ヶ月  イオン23 / サンユー15 / あさの1 / さがみや1  = 40件
+--   4ヶ月  イオン23 / サンユー15 / あさの1 / さがみや1  = 40件（2026-09-20 に1ヶ月から変更）
 --   4ヶ月  Olympic16 / MEGAドンキ1                      = 17件
 -- ※ 2026-09-02 時点の公開案件での数。増えていれば件数は変わる
 
