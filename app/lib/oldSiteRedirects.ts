@@ -42,15 +42,6 @@ const PATHS: PathRedirect[] = [
   { from: '/mypage/organizer', to: '/login' },
   { from: '/mypage/vendor/password_reminde', to: '/reset-password' },
   { from: '/mypage/organizer/password_reminde', to: '/reset-password' },
-  // 旧マイページの下の階層すべて。
-  //
-  // なぜ必要か:
-  //   旧マイページは /mypage/organizer/index.php のように index.php で終わるものが多い。
-  //   Vercel の基盤側の防御が .php を含むアドレスを転送より前に403で止めるため
-  //   （パス単位では解除できない。解除はIPアドレス単位のみ）、
-  //   .php の付かない形で来たものは、せめてログイン画面へ送る。
-  //   2026-09-20、運営から「旧マイページを開くと403の黒い画面が出る」との指摘。
-  { from: '/mypage/:path*', to: '/login' },
 
   // 固定ページ
   { from: '/privacy_policy', to: '/privacy' },
@@ -62,8 +53,6 @@ const PATHS: PathRedirect[] = [
   { from: '/pt_product/feed', to: '/space' },
   // 旧は403だった /search の入口。配下の .php は proxy.ts で扱う
   { from: '/search', to: '/places' },
-  // 旧の検索ページの下の階層すべて（上の .php の個別指定に当たらなかったもの）
-  { from: '/search/:path*', to: '/places' },
 
   // 記事（日本語スラッグ）。/feed は記事のコメントRSS、長いものは記事の添付画像のページ
   // 本文が旧会員向けのログイン案内なので、記事一覧よりログインへ
@@ -154,6 +143,16 @@ const PATTERNS: { source: string; destination: string }[] = [
   { source: '/category/:path*', destination: '/blog' },
   { source: '/tag/:path*', destination: '/blog' },
   { source: '/author/:path*', destination: '/blog' },
+  // 旧マイページ・旧検索ページの下の階層。
+  //
+  // 個別指定（上の PATHS と proxy.ts の .php）に当たらなかったものを受ける。
+  //   Vercel の基盤側の防御が .php を含むアドレスを転送より前に403で止める
+  //   （パス単位では解除できず、解除はIPアドレス単位のみ）。
+  //   .php の付かない形で来たものは、せめて行き先を示す。
+  //   2026-09-20、運営から「旧マイページを開くと403の画面が出る」との指摘。
+  // 新サイトに /mypage /search のページは無いので、巻き込む心配はない
+  { source: '/mypage/:path*', destination: '/login' },
+  { source: '/search/:path*', destination: '/places' },
   { source: '/:yyyy(\\d{4})/:mm(\\d{2})?/:dd(\\d{2})?', destination: '/blog' },
 ]
 
