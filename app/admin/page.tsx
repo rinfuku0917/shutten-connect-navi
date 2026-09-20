@@ -708,6 +708,34 @@ export default function AdminPage() {
     setThreads(list)
   }
 
+  // 自分（運営）が送ったメッセージを取り消す。
+  //
+  // なぜ運営の画面にも要るか:
+  //   取り消しは出店者・募集者の画面にだけ付いていて、運営の画面には無かった。
+  //   運営が送った文面を打ち間違えても消せず、2026-09-20 に指摘があった。
+  //   消せるのは自分が送ったものだけで、送信から60分まで
+  //   （確かめているのは app/api/messages/retract/route.ts）
+  const retractAdminMsg = async (messageId: string) => {
+    if (!(await ask({
+      title: 'このメッセージを取り消しますか？',
+      body: '相手の画面からも消えます。添付ファイルも一緒に消えます。\n送信から60分を過ぎたものは取り消せません。',
+      okLabel: '取り消す',
+      danger: true,
+    }))) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { showNotice('ログインが必要です'); return }
+    const res = await fetch('/api/messages/retract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ messageId }),
+    })
+    const result = await res.json().catch(() => ({}))
+    if (!res.ok) { showNotice('取り消せませんでした: ' + (result.error || '不明なエラー')); return }
+    if (activeThread) await openThread(activeThread)
+    await loadThreads()
+    showNotice('メッセージを取り消しました', 'ok')
+  }
+
   // 選択スレッドのメッセージを読み込み、既読化する
   const openThread = async (appId: string) => {
     setActiveThread(appId)
@@ -3344,6 +3372,16 @@ const previewDoc = async (fileUrl: string) => {
                               {m.body && <div>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, true)}
                             </div>
+                            {/* 送信から60分までは取り消せる。過ぎたものはボタンを出さない
+                                （押しても断られるだけなので、出さないほうが分かりやすい） */}
+                            {(!m.sent_at || Date.now() - new Date(m.sent_at).getTime() <= 60 * 60 * 1000) && (
+                              <div style={{ textAlign: 'right', marginTop: '2px' }}>
+                                <button onClick={() => retractAdminMsg(m.id)}
+                                  style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline', fontFamily: 'inherit' }}>
+                                  送信を取り消す
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
