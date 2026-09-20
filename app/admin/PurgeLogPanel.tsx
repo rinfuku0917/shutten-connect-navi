@@ -141,16 +141,16 @@ export default function PurgeLogPanel() {
     if (!billFor.seller_id) { setBillErr('この控えには出店者が記録されていないため、ここからは請求できません。'); return }
     setBillBusy(true); setBillErr(null)
     try {
-      const { data: u } = await supabase.auth.getUser()
-      const uid = u.user?.id
-      if (!uid) { setBillErr('ログインしなおしてからお試しください。'); return }
+      // サーバーは body の id を信じない。アクセストークンで本人確認する
+      const { data: sess } = await supabase.auth.getSession()
+      const token = sess.session?.access_token
+      if (!token) { setBillErr('ログインしなおしてからお試しください。'); return }
       // 申込の行はもう無いので、applicationId は送らない。
       // 出店者・対象月・金額・摘要だけで1枚出す
       const res = await fetch('/api/admin/invoice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({
-          requesterId: uid,
           action: 'advance',
           sellerId: billFor.seller_id,
           period: billPeriod,

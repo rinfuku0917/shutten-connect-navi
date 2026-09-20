@@ -113,13 +113,15 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
   const [dueOn, setDueOn] = useState('')
 
   const call = async (action: 'preview' | 'issue' | 'open', due?: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setErr('ログインが必要です'); setLoading(false); return }
+    // サーバーは body の id を信じない。アクセストークンで本人確認する
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) { setErr('ログインが必要です'); setLoading(false); return }
     const res = await fetch('/api/admin/invoice', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({
-        requesterId: user.id, sellerId, period, action, dueOn: due,
+        sellerId, period, action, dueOn: due,
         invoiceNo: openNo || undefined,
         edited: action === 'issue' ? editedPayload() : undefined,
       }),
@@ -193,13 +195,14 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
 
   // 発行済みの請求書の修正を保存する
   const saveEdits = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { showNotice('ログインが必要です'); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) { showNotice('ログインが必要です'); return }
     setSaving(true)
     const res = await fetch('/api/admin/invoice', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({
-        requesterId: user.id,
         // 番号で開いているときは、その1枚だけを直す
         sellerId: sellerId || inv?.sellerId || '',
         period: period || inv?.period || '',

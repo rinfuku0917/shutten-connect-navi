@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 import { SITE_URL } from '../../../lib/seo'
+import { NO_SHOP_NAME } from '../../../lib/sellerNames'
 
 // 案件に応募している出店者へ、まとめて連絡する。
 //
@@ -141,12 +142,17 @@ export async function POST(req: Request) {
     }
     const sellerIds = Array.from(oneBySeller.keys())
 
-    // 宛先の下見。送る前に「誰に届くか」を画面で確かめてもらう
+    // 宛先の下見。送る前に「誰に届くか」を画面で確かめてもらう。
+    //
+    // 読み先は公開用ビューではなく profiles（ここはサービスキーなので直接読める）。
+    // ビューからは本名（name）を外したため、そのままでは名前が引けなくなる。
+    // 本名を混ぜるのは運営が見るときだけ。募集者には屋号だけを見せる
+    // （2026-09-19 に出店者ご本人から「本名が出ている」と申し出があった）。
     if (preview) {
       const { data: profs } = await db
-        .from('public_sellers').select('id, shop_name, name').in('id', sellerIds)
+        .from('profiles').select('id, shop_name, name').in('id', sellerIds)
       const nameOf = new Map((profs || []).map((p: { id: string; shop_name?: string; name?: string }) =>
-        [p.id, p.shop_name || p.name || '（名称未設定）']))
+        [p.id, (p.shop_name || '').trim() || (isAdmin ? (p.name || '').trim() : '') || NO_SHOP_NAME]))
       return NextResponse.json({
         preview: true,
         placeTitle: place.title || '',
@@ -196,12 +202,23 @@ export async function POST(req: Request) {
     }
 
     const { data: profs } = await db
-      .from('profiles').select('id, name, email').in('id', sellerIds)
+      .from('profiles').select('id, name, shop_name, email').in('id', sellerIds)
+
+    // 届かなかった人は呼び出し元に返して画面に出す。
+    // 返す名前は、運営なら本名・メール、募集者なら屋号だけにする。
+    // 以前は誰が呼んでも本名（無ければメールアドレス）を返していたため、
+    // 募集者の画面に出店者の本名とメールが出ていた
+    // （2026-09-19 に出店者ご本人から本名の件で申し出があり、あわせて直した）
+    const failedLabel = (p: { name?: string | null; shop_name?: string | null; email?: string | null }) =>
+      isAdmin
+        ? ((p.name || '').trim() || (p.email || '').trim() || '(名前なし)')
+        : ((p.shop_name || '').trim() || NO_SHOP_NAME)
+
     const resend = new Resend(apiKey)
     const def = MAIL_DEF_BY_KEY['new-message']
     let first = true
     for (const p of profs || []) {
-      if (!p.email) { failed.push(p.name || '(名前なし)'); continue }
+      if (!p.email) { failed.push(failedLabel(p)); continue }
       if (!first) await sleep(SEND_INTERVAL_MS)
       first = false
       try {
@@ -217,13 +234,13 @@ export async function POST(req: Request) {
           to: p.email, subject: mail.subject, text: mail.text,
         })
         if (error) {
-          failed.push(p.name || p.email)
+          failed.push(failedLabel(p))
           console.error('まとめて連絡の通知に失敗しました', p.email, error.message)
         } else {
           mailed += 1
         }
       } catch (e) {
-        failed.push(p.name || p.email)
+        failed.push(failedLabel(p))
         console.error('まとめて連絡の通知に失敗しました', p.email, e)
       }
     }

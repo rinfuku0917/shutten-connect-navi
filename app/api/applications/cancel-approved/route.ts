@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { writePurgeLog, purgeSummary } from '../../../lib/purgeLog'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
+import { NO_SHOP_NAME } from '../../../lib/sellerNames'
 
 // 承認済みの出店を、運営が取り消す。
 //
@@ -416,7 +417,14 @@ export async function POST(req: Request) {
           .from('profiles').select('name, shop_name, email').eq('id', app.seller_id).single()
 
         const placeTitle = place?.title || '案件'
-        const shopName = seller?.shop_name || seller?.name || '出店者'
+        // 宛先によって名前を変える。
+        //
+        // 運営あての控えは、屋号が無ければ本名で書く（どの申込か追うため）。
+        // 募集者あては屋号だけにする。屋号が未登録の人でも本名は渡さない
+        // （2026-09-19 に出店者ご本人から申し出。app/lib/sellerNames.ts）。
+        // まとめて連絡（api/messages/broadcast）と同じ分け方
+        const adminShopName = seller?.shop_name || seller?.name || '出店者'
+        const hostShopName = (seller?.shop_name || '').trim() || NO_SHOP_NAME
         const dateText = app.apply_date || '日程指定なし'
         const reasonText = (typeof reason === 'string' && reason.trim()) ? reason.trim() : '記載なし'
         const resend = new Resend(apiKey)
@@ -453,7 +461,7 @@ export async function POST(req: Request) {
           const mail = await renderMail(db, 'cancel-admin', { subject: def.subject, body: def.body }, {
             '案件名': placeTitle,
             '出店日': dateText,
-            '屋号': shopName,
+            '屋号': adminShopName,
             '取消しの理由': reasonText,
             '募集者': hostName,
           })
@@ -473,7 +481,7 @@ export async function POST(req: Request) {
             '宛名': host.name || 'ご担当者',
             '案件名': placeTitle,
             '出店日': dateText,
-            '屋号': shopName,
+            '屋号': hostShopName,
           }, '募集者')
         }
 

@@ -76,12 +76,14 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
   useEffect(() => {
     ;(async () => {
       if (!no) { setErr('請求書番号が指定されていません'); setLoading(false); return }
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setErr('ログインが必要です'); setLoading(false); return }
+      // サーバーは body の id を信じない。アクセストークンで本人確認する
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) { setErr('ログインが必要です'); setLoading(false); return }
       const res = await fetch('/api/admin/invoice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requesterId: user.id, action: 'open', invoiceNo: no, forReceipt: true }),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ action: 'open', invoiceNo: no, forReceipt: true }),
       })
       const j = await res.json()
       if (!res.ok) { setErr(j.error || '領収書を作成できませんでした'); setLoading(false); return }

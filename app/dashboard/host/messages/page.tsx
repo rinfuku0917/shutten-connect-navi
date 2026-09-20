@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import MessageAttachment from '../../../components/MessageAttachment'
 import { supabase } from '../../../lib/supabase'
+import { NO_SHOP_NAME } from '../../../lib/sellerNames'
 import BackButton from '../../../components/BackButton'
 
 type DbMessage = { id: string, application_id: string, sender_id: string | null, body: string, sent_at: string, file_url?: string | null }
@@ -136,8 +137,14 @@ export default function HostMessages() {
     if (sellerIds.length > 0) {
       // 出店者の表示名は公開用のビューから引く。
       // profiles には連絡先が入っているため、募集者からは直接読ませない。
-      const { data: profs } = await supabase.from('public_sellers').select('id, shop_name, name').in('id', sellerIds)
-      for (const p of profs || []) nameOf.set(p.id, p.shop_name || p.name || '（名称未設定）')
+      //
+      // 出すのは屋号だけ。以前は屋号が空のとき本名（name）で埋めていたが、
+      // 本名は運営の業務でしか使わないため、募集者には見せない
+      // （2026-09-19 に出店者ご本人から申し出。ビューからも name を外した）。
+      // 屋号が無い人は公開ページと同じ「キッチンカー出店者」で揃える。
+      // スレッドは案件名と出店日を添えて並べるので、相手はそれでたどれる。
+      const { data: profs } = await supabase.from('public_sellers').select('id, shop_name').in('id', sellerIds)
+      for (const p of profs || []) nameOf.set(p.id, (p.shop_name || '').trim() || NO_SHOP_NAME)
     }
 
     // 各スレッドの最新メッセージ

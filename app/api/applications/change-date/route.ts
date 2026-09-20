@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
+import { NO_SHOP_NAME } from '../../../lib/sellerNames'
 
 // 申込の出店日を振り替える。
 //
@@ -208,11 +209,18 @@ export async function POST(req: Request) {
         : { data: null }
       const resend = new Resend(apiKey)
       const placeTitle = place?.title || '案件'
-      const shopName = seller?.shop_name || seller?.name || '(出店者)'
+      // 宛先によって名前を変える。
+      //
+      // 運営あての控えは、屋号が無ければ本名で書く（どの申込か追うため）。
+      // 募集者あては屋号だけにする。屋号が未登録の人でも本名は渡さない
+      // （2026-09-19 に出店者ご本人から申し出。app/lib/sellerNames.ts）。
+      // 出店者あてはご本人なので、運営あてと同じ書き方でよい
+      const adminShopName = seller?.shop_name || seller?.name || '(出店者)'
+      const hostShopName = (seller?.shop_name || '').trim() || NO_SHOP_NAME
       const beforeText = before ? jpDate(before) : '（日付なし）'
       const afterText = jpDate(nd)
 
-      const body = [
+      const bodyFor = (shopName: string) => [
         placeTitle + ' の出店日を変更しました。',
         '',
         '出店者：' + shopName,
@@ -222,25 +230,26 @@ export async function POST(req: Request) {
         '',
         'ご不明な点は運営（info@connect-navi.com）までご連絡ください。',
       ].filter(Boolean).join('\n')
+      const body = bodyFor(adminShopName)
 
-      const send = async (to: string, name: string, who: string) => {
+      const send = async (to: string, name: string, who: string, text: string) => {
         try {
           await resend.emails.send({
             from: '出店コネクトナビ <' + FROM_EMAIL + '>',
             to,
             subject: '【出店コネクトナビ】出店日の変更（' + placeTitle + '）',
-            text: (name ? name + ' 様\n\n' : '') + body,
+            text: (name ? name + ' 様\n\n' : '') + text,
           })
         } catch (e) {
           console.error(who + 'への日程変更の通知に失敗しました', e)
         }
       }
-      if (seller?.email) await send(seller.email, seller.name || 'ご担当者', '出店者')
-      if (host?.email) await send(host.email, host.name || 'ご担当者', '募集者')
+      if (seller?.email) await send(seller.email, seller.name || 'ご担当者', '出店者', body)
+      if (host?.email) await send(host.email, host.name || 'ご担当者', '募集者', bodyFor(hostShopName))
       try {
         const { error } = await sendAdminMail(resend, 'cancel', {
           from: '出店コネクトナビ <' + FROM_EMAIL + '>',
-          subject: '【運営】出店日の変更（' + placeTitle + '／' + shopName + '）',
+          subject: '【運営】出店日の変更（' + placeTitle + '／' + adminShopName + '）',
           text: body,
         })
         if (error) console.error('運営への日程変更の通知に失敗しました', error.message)

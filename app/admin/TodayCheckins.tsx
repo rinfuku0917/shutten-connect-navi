@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAdminSellerNames, adminDisplayName } from '../lib/adminSellerNames'
 
 // 本日の受付状況。
 //
@@ -68,6 +69,13 @@ export default function TodayCheckins() {
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  // 引けた本名を読み直しをまたいで持ち回す。
+  // この画面は30秒ごとに読み直すので、毎回引き直すと同じ本名を何度も取りに行く。
+  // asked には「一度聞いた id」を入れる。本名が登録されていない人を
+  // 毎回聞き直さないため（引けた人は names に入る）
+  const nameCache = useRef<{ names: Map<string, string>; asked: Set<string> }>({
+    names: new Map(), asked: new Set(),
+  })
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -86,12 +94,40 @@ export default function TodayCheckins() {
     // 店舗名は公開用のビューから引く（profiles には連絡先が入っている）
     const ids = Array.from(new Set(list.map(a => a.seller_id).filter(Boolean)))
     const [{ data: sellers }, { data: sales }] = await Promise.all([
-      supabase.from('public_sellers').select('id, shop_name, name').in('id', ids),
+      supabase.from('public_sellers').select('id, shop_name').in('id', ids),
       supabase.from('sales').select('application_id').in('application_id', list.map(a => a.id)),
     ])
-    const nameById = new Map<string, string>()
+    // 屋号が未登録の人は本名で照合するしかない（当日、現場の誰かと突き合わせるため）。
+    // 本名は公開用ビューから外したので、運営だけが通れる API から引く
+    // （2026-09-19。ビューの name は anon キーで誰でも読めてしまっていた）。
+    // ここは運営しか開かない画面なので、今までどおり本名まで出してよい。
+    //
+    // 引くのは「屋号が空で、まだ聞いていない人」だけ。
+    // 屋号がある人の本名は下の adminDisplayName で捨てるので、はじめから触らない。
+    // 30秒ごとの読み直しで同じ人を何度も引かないよう、引けた分は持ち回す
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const s of (sellers ?? []) as any[]) nameById.set(s.id, s.shop_name || s.name || '(出店者)')
+    const sellerRows = (sellers ?? []) as any[]
+    const cache = nameCache.current
+    const needRealName = sellerRows
+      .filter(s => !((s.shop_name || '') as string).trim() && !cache.asked.has(s.id))
+      .map(s => s.id as string)
+    if (needRealName.length > 0) {
+      try {
+        const got = await fetchAdminSellerNames(needRealName)
+        for (const id of needRealName) cache.asked.add(id)
+        for (const [id, n] of got) cache.names.set(id, n)
+      } catch (e) {
+        // 引けなくても当日の受付は続けられる（屋号か「(出店者)」で出る）。
+        // ただし黙って名前が消えると現場で突き合わせられないので、画面に出す。
+        // asked には入れない（次の読み直しでもう一度試す）
+        console.error('出店者名を引けませんでした', e)
+        setErr(e instanceof Error ? e.message : '出店者名を引けませんでした')
+      }
+    }
+    const nameById = new Map<string, string>()
+    for (const s of sellerRows) {
+      nameById.set(s.id, adminDisplayName(s.shop_name, cache.names.get(s.id), '(出店者)'))
+    }
     const reported = new Set((sales ?? []).map((s: { application_id: string }) => s.application_id))
 
     setRows(list.map(a => ({

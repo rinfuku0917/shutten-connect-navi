@@ -29,10 +29,17 @@ export async function POST(req: Request) {
     if (error) return NextResponse.json({ exists: false, checked: false })
 
     const hit = data && data.length > 0 ? data[0] : null
+    // 役割は出店者・募集者のときだけ返す。
+    //
+    // 登録画面は「（出店者として登録済みです）」と添えるためにこれを使う。
+    // ただし運営（admin）まで返すと、この入口は認証なしで呼べるので、
+    // アドレスを順に試して運営アカウントを見つける材料になる。
+    // 運営のアドレスは、登録しようとした人に伝える必要がない
+    const role = hit?.role === 'seller' || hit?.role === 'host' ? hit.role : null
     return NextResponse.json({
       exists: !!hit,
       checked: true,
-      role: hit?.role ?? null,
+      role,
     })
   } catch {
     return NextResponse.json({ exists: false, checked: false })

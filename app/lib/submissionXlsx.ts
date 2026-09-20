@@ -19,6 +19,7 @@
 //   メニュー表ヘッダ = EDF2F9（同じ色みの薄い方。見出しとの段差を残すため）
 
 import { snsHref } from './sns'
+import { submissionShopName, type SellerNameResolver } from './sellerNames'
 
 export type SubmissionMenuItem = { name: string; detail: string; price: string }
 export type SubmissionSeller = {
@@ -115,6 +116,13 @@ export async function exportPlaceSubmission(
   // 承認前の出店者も入れるかどうか。誰に来てもらうかを決める前に、
   // 応募の中身をExcelで見比べたいときに使う。
   includePending = false,
+  // 屋号が未登録の出店者を、本名で埋めるための引き当て。
+  //
+  // 運営の画面からだけ渡す（app/lib/adminSellerNames.ts の fetchAdminSellerNames）。
+  // 募集者もこのExcelを出すので、渡されなければ本名は使わず
+  // 「(屋号未登録)」と書く。本名は運営の業務でしか使わないため
+  // （2026-09-19 に出店者ご本人から申し出があり、公開用ビューから name を外した）。
+  resolveRealNames?: SellerNameResolver,
 ): Promise<number> {
   const wanted = includePending ? ['approved', 'pending'] : ['approved']
   const { data: apps, error } = await supabase
@@ -136,7 +144,7 @@ export async function exportPlaceSubmission(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sellerIds = Array.from(new Set(rows.map((a: any) => a.seller_id)))
   const [{ data: sellerRows }, { data: sns }, { data: menuRows }, { data: subRows }] = await Promise.all([
-    supabase.from('public_sellers').select('id, shop_name, name, genre, takeout_bag, payment_methods').in('id', sellerIds),
+    supabase.from('public_sellers').select('id, shop_name, genre, takeout_bag, payment_methods').in('id', sellerIds),
     supabase.from('sns_links').select('seller_id, url').eq('platform', 'instagram').in('seller_id', sellerIds),
     supabase.from('menus').select('seller_id, name, detail, price, sort_order, created_at')
       .in('seller_id', sellerIds)
@@ -167,6 +175,31 @@ export async function exportPlaceSubmission(
   const subBySeller = new Map<string, any>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const s of (subRows ?? []) as any[]) subBySeller.set(s.seller_id, s)
+
+  // 屋号が未登録の人だけ、運営が実行したときに本名で埋める。
+  // 募集者が実行したときは空の Map のままで、「(屋号未登録)」と書かれる。
+  //
+  // 引く相手は「屋号が空の人」だけに絞る。本名は要るときにだけ触る
+  // （屋号がある人の本名は、引いても下の submissionShopName で捨てられる）。
+  // 案件の出店者が全員屋号を登録していれば、1件も引かずに済む
+  const needRealName = (sellerIds as string[]).filter(id => {
+    const sub = subBySeller.get(id)
+    const p = sellerById.get(id) || {}
+    return !((sub?.shop_name || p.shop_name || '') as string).trim()
+  })
+  // 引けなかったら、途中まで埋まったExcelを作らずにここで止める。
+  // 黙って「(屋号未登録)」に落ちた書類がそのまま施設へ渡るほうが困るため
+  let realNameById = new Map<string, string>()
+  if (resolveRealNames) {
+    try {
+      realNameById = await resolveRealNames(needRealName)
+    } catch (e) {
+      throw new Error(
+        (e instanceof Error ? e.message : '出店者名を引けませんでした')
+        + '。店舗名が正しく入らないため、Excelは作成していません',
+      )
+    }
+  }
 
   const priceText = (price: number | null, yen: boolean) =>
     yen ? menuPriceYen(price) : menuPriceLabel(price)
@@ -199,7 +232,7 @@ export async function exportPlaceSubmission(
     const sub = subBySeller.get(a.seller_id)
     if (sub) {
       return {
-        shopName: sub.shop_name || p.shop_name || p.name || '',
+        shopName: submissionShopName(sub.shop_name || p.shop_name, realNameById.get(a.seller_id)),
         instagram: snsHref('instagram', sub.instagram) || sub.instagram || '',
         genre: genreLabel(sub.genre),
         takeoutBag: sub.takeout_bag || '',
@@ -208,7 +241,7 @@ export async function exportPlaceSubmission(
       }
     }
     return {
-      shopName: p.shop_name || p.name || '',
+      shopName: submissionShopName(p.shop_name, realNameById.get(a.seller_id)),
       instagram: snsHref('instagram', instaBySeller.get(a.seller_id)) || instaBySeller.get(a.seller_id) || '',
       genre: genreLabel(p.genre),
       takeoutBag: p.takeout_bag || '',

@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import MeetingRequestForm from '../../components/MeetingRequestForm'
 import { exportPlaceSubmission } from '../../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../../lib/salesReportXlsx'
+import { NO_SHOP_NAME } from '../../lib/sellerNames'
 import ClosedToggle from '../../components/ClosedToggle'
 import DuplicateButton from '../../components/DuplicateButton'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -109,12 +110,18 @@ export default function HostDashboard() {
       // 募集者からは他人の profiles が読めなくなり、応募者が全員
       // 「(出店者)」と表示されるようになっていた。
       // public_sellers は公開してよい項目だけを出すビューなので、こちらを使う。
+      //
+      // 出すのは屋号だけ。以前は屋号が空のとき本名（name）で埋めていたが、
+      // 本名は運営の業務でしか使わないため、募集者には見せない
+      // （2026-09-19 に出店者ご本人から申し出。ビューからも name を外した）。
+      // 屋号が無い人は公開ページと同じ「キッチンカー出店者」で揃える。
+      // どの応募かは、案件名・出店日・応募の中身・提出書類でたどれる。
       const sellerIds = [...new Set((appData || []).map((a: any) => a.seller_id).filter(Boolean))]
       const nameById = new Map<string, string>()
       if (sellerIds.length > 0) {
         const { data: sellers } = await supabase
-          .from('public_sellers').select('id, shop_name, name').in('id', sellerIds)
-        for (const s of sellers || []) nameById.set(s.id, s.shop_name || s.name || '')
+          .from('public_sellers').select('id, shop_name').in('id', sellerIds)
+        for (const s of sellers || []) nameById.set(s.id, (s.shop_name || '').trim() || NO_SHOP_NAME)
       }
 
       const mapped: HostApp[] = (appData || []).map((a: any) => ({

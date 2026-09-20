@@ -11,6 +11,7 @@ import { geocodeAddress } from '../lib/geocode'
 import { formatVehicleSize } from '../lib/vehicleSize'
 import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
+import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { compareByTitle } from '../lib/placeSort'
 import { perDayFee, dayTypeFee, hasDayTypeFee, formatFee, formatShare } from '../lib/placeFee'
 import { cancelResultMessage } from '../lib/purgeLog'
@@ -1091,7 +1092,8 @@ export default function AdminPage() {
   const downloadSalesReportXlsx = async (placeId: string, title: string) => {
     setRepXlsxBusy(placeId)
     try {
-      const n = await exportPlaceSalesReport(supabase, placeId, title)
+      // 運営が出すExcelなので、屋号が未登録の人は本名で埋める（募集者が出すときは埋めない）
+      const n = await exportPlaceSalesReport(supabase, placeId, title, fetchAdminSellerNames)
       if (n === 0) showNotice('この案件には、まだ売上の報告がありません')
     } catch (e) {
       showNotice(e instanceof Error ? e.message : '出力に失敗しました')
@@ -1707,7 +1709,8 @@ export default function AdminPage() {
   const downloadSubmitXlsx = async (placeId: string, title: string) => {
     setSubmitXlsxBusy(placeId)
     try {
-      const n = await exportPlaceSubmission(supabase, placeId, title)
+      // 運営が出すExcelなので、屋号が未登録の人は本名で埋める（募集者が出すときは埋めない）
+      const n = await exportPlaceSubmission(supabase, placeId, title, 'daily', false, fetchAdminSellerNames)
       if (n === 0) showNotice('この案件には、出店日が入った承認済みの申込がまだありません')
     } catch (e) {
       showNotice(e instanceof Error ? e.message : '出力に失敗しました')

@@ -7,6 +7,7 @@ import NotifyChoice from './NotifyChoice'
 import SubmissionPanel from './SubmissionPanel'
 import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
+import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { cancelResultMessage } from '../lib/purgeLog'
 
 // 案件ごとの応募者一覧。
@@ -164,14 +165,14 @@ export default function PlaceApplicationsModal({
     // 通常の発行では応答で置き換える（通信失敗のときに導線が消えないように）
     if (force) { setAdvDup(null); setAdvOverlap(null) }
     try {
-      const { data: u } = await supabase.auth.getUser()
-      const uid = u.user?.id
-      if (!uid) { setAdvErr('ログインしなおしてからお試しください。'); return }
+      // サーバーは body の id を信じない。アクセストークンで本人確認する
+      const { data: sess } = await supabase.auth.getSession()
+      const token = sess.session?.access_token
+      if (!token) { setAdvErr('ログインしなおしてからお試しください。'); return }
       const res = await fetch('/api/admin/invoice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({
-          requesterId: uid,
           action: 'advance',
           sellerId: advAsk.sellerId,
           applicationId: advAsk.id,
@@ -265,7 +266,9 @@ export default function PlaceApplicationsModal({
     setSalesBusy(true)
     setXlsxMsg(null)
     try {
-      const n = await exportPlaceSalesReport(supabase, placeId, placeTitle)
+      // この画面は運営しか開かない（app/admin/page.tsx からのみ）。
+      // 屋号が未登録の人は本名で埋める
+      const n = await exportPlaceSalesReport(supabase, placeId, placeTitle, fetchAdminSellerNames)
       setXlsxMsg(n === 0
         ? '売上の報告がまだ届いていません。出店者が報告すると、ここから書き出せます。'
         : `${n}日分のシートで保存しました。`)
@@ -280,7 +283,7 @@ export default function PlaceApplicationsModal({
     setXlsxBusy(format)
     setXlsxMsg(null)
     try {
-      const n = await exportPlaceSubmission(supabase, placeId, placeTitle, format, withPending)
+      const n = await exportPlaceSubmission(supabase, placeId, placeTitle, format, withPending, fetchAdminSellerNames)
       if (n === 0) {
         setXlsxMsg(
           withPending

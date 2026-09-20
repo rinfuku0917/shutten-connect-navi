@@ -54,11 +54,31 @@ function mdLabel(isoDate: string | null | undefined): string {
 
 const NUMBER_START: Record<string, number> = { '2026': 42 }
 
+// 呼び出し元を、アクセストークンから確かめる。
+//
+// 【なぜ body の requesterId をやめたか】
+//   以前はこの入口だけ「誰として呼んでいるか」を body の requesterId で決めており、
+//   Authorization ヘッダを一度も見ていなかった。
+//   action:'open' は「運営でなくても row.seller_id === requesterId なら中身を返す」
+//   ため、出店者のUUIDと請求書番号の組を当てれば、未ログインのまま
+//   その人の本名（personName）と請求内容が取れる状態だった。
+//   出店者のUUIDは公開ページから拾え、請求書番号は連番なので、
+//   番号を1つ固定してUUIDを順に当てれば必ず1件当たる。
+//   公開用ビューから本名の列を外しても（20260919_public_sellers_no_name.sql）、
+//   この経路は閉じないので、ここで塞ぐ。
+//
+//   ほかの /api/admin/*（purge・seller-names）と同じ形に揃えた。
+//   profiles を読むのはサービスロールキーなので、RLS ではなくここが唯一の関門。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyAdmin(admin: any, requesterId: string) {
-  const { data, error } = await admin.from('profiles').select('role').eq('id', requesterId).maybeSingle()
-  if (error || !data || data.role !== 'admin') return false
-  return true
+async function resolveCaller(req: Request, db: any): Promise<{ uid: string; isAdmin: boolean } | null> {
+  const authHeader = req.headers.get('authorization') || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  if (!token) return null
+  const { data, error } = await db.auth.getUser(token)
+  const uid = data?.user?.id
+  if (error || !uid) return null
+  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
+  return { uid, isAdmin: me?.role === 'admin' }
 }
 
 // 案件の料金設定から、請求件名に載せる条件（「10%」「5,000円/日」など）を作る。
@@ -84,12 +104,20 @@ function feeLabel(place: any, saleDate?: string | null): string {
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, sellerId, period, action, dueOn, edited, amount, label, applicationId, applicationIds, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
+    // requesterId は受け取らない。誰として呼んでいるかは
+    // Authorization: Bearer のアクセストークンだけで決める（resolveCaller）
+    const { sellerId, period, action, dueOn, edited, amount, label, applicationId, applicationIds, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
 
     const url0 = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key0 = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!url0 || !key0) {
       return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    }
+
+    const adminO = createClient(url0, key0, { auth: { autoRefreshToken: false, persistSession: false } })
+    const caller = await resolveCaller(req, adminO)
+    if (!caller) {
+      return NextResponse.json({ error: 'ログインしなおしてからお試しください' }, { status: 401 })
     }
 
     // ===== 発行済みの請求書を、番号だけで開き直す =====
@@ -103,11 +131,10 @@ export async function POST(req: Request) {
     // 記録した invoices の行をそのまま返すしかない。
     if (action === 'open') {
       const no = typeof invoiceNoParam === 'string' ? invoiceNoParam.trim() : ''
-      if (!requesterId || !no) {
+      if (!no) {
         return NextResponse.json({ error: '請求書番号が指定されていません' }, { status: 400 })
       }
-      const adminO = createClient(url0, key0, { auth: { autoRefreshToken: false, persistSession: false } })
-      const isAdmin = await verifyAdmin(adminO, requesterId)
+      const isAdmin = caller.isAdmin
 
       const { data: row } = await adminO
         .from('invoices')
@@ -121,7 +148,7 @@ export async function POST(req: Request) {
       // 取り消した請求書も、出店者には出さない（無効になったものが
       // 手元に残ると、支払い済みかどうかの取り違えが起きる）。
       if (!isAdmin) {
-        if (!row || row.seller_id !== requesterId || row.voided_at) {
+        if (!row || row.seller_id !== caller.uid || row.voided_at) {
           return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
         }
         // 当月分はまだ確定していないので渡さない。
@@ -182,22 +209,22 @@ export async function POST(req: Request) {
       })
     }
 
-    if (!requesterId || !sellerId || !period) {
+    // open 以外（下見・発行・修正・事前請求）は運営だけ。
+    // 引数の検査より先に見る。運営でない相手に「対象月の形式が不正です」などと
+    // 返すと、入力の当たり外れを教えることになるため
+    if (!caller.isAdmin) {
+      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
+    }
+
+    if (!sellerId || !period) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
     if (!/^\d{4}-\d{2}$/.test(period)) {
       return NextResponse.json({ error: '対象月の形式が不正です' }, { status: 400 })
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-    const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-    }
+    // 以降で使うクライアントは、上で作ったサービスロールのものと同じでよい
+    const admin = adminO
 
     // 対象月の範囲
     const [y, m] = period.split('-').map(Number)

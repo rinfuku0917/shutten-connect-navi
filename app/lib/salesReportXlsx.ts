@@ -11,6 +11,7 @@
 // 全セル細線・列幅 A=28 / B=38 / C=16）。
 
 import { jaSheetName } from './submissionXlsx'
+import { submissionShopName, type SellerNameResolver } from './sellerNames'
 
 export type SalesReportItem = { name: string; price: number | null; qty: number }
 export type SalesReportSeller = {
@@ -90,8 +91,16 @@ export async function buildSalesReportWorkbook(sheets: SalesReportSheet[]) {
 
 // 案件の売上報告を集めてExcelでダウンロードする。
 // 戻り値: 出力した日数（0 = 報告がまだ無い）
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function exportPlaceSalesReport(supabase: any, placeId: string, placeTitle: string): Promise<number> {
+export async function exportPlaceSalesReport(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  placeId: string,
+  placeTitle: string,
+  // 屋号が未登録の出店者を、本名で埋めるための引き当て。
+  // 運営の画面からだけ渡す。募集者が出すときは本名を使わない
+  // （提出用Excelと同じ考え方。app/lib/sellerNames.ts を参照）
+  resolveRealNames?: SellerNameResolver,
+): Promise<number> {
   const { data, error } = await supabase
     .from('sales')
     .select('sale_date, revenue, items, weather, customers, note, seller_id')
@@ -102,15 +111,38 @@ export async function exportPlaceSalesReport(supabase: any, placeId: string, pla
 
   // 出店者の表示名は公開用のビューから引く。
   // profiles には連絡先が入っているため、募集者からは直接読ませない。
+  // 屋号が未登録の人は、運営が出すときだけ本名で埋める（resolveRealNames）。
+  // 募集者が出すときは「(屋号未登録)」と書く
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sellerIds = Array.from(new Set((data as any[]).map(s => s.seller_id).filter(Boolean)))
   const nameById = new Map<string, string>()
   if (sellerIds.length > 0) {
     const { data: sellers } = await supabase
-      .from('public_sellers').select('id, name, shop_name').in('id', sellerIds)
+      .from('public_sellers').select('id, shop_name').in('id', sellerIds)
+    // 屋号を見てから引く（以前は Promise.all で同時に走らせていた）。
+    // 本名が要るのは屋号が空の人だけなので、待ってから相手を絞るほうが
+    // 触る本名が少なくて済む。全員が屋号を登録していれば1件も引かない
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const x of (sellers ?? []) as any[]) {
-      nameById.set(x.id, x.shop_name || x.name || '(出店者)')
+    const rowsByIdIn = (sellers ?? []) as any[]
+    const shopNameById = new Map<string, string>(
+      rowsByIdIn.map(x => [x.id as string, ((x.shop_name || '') as string).trim()]),
+    )
+    const needRealName = (sellerIds as string[]).filter(id => !shopNameById.get(id))
+    // 引けなかったら、途中まで埋まったExcelを作らずにここで止める
+    // （提出用Excelと同じ考え方。app/lib/submissionXlsx.ts を参照）
+    let realNameById = new Map<string, string>()
+    if (resolveRealNames) {
+      try {
+        realNameById = await resolveRealNames(needRealName)
+      } catch (e) {
+        throw new Error(
+          (e instanceof Error ? e.message : '出店者名を引けませんでした')
+          + '。店舗名が正しく入らないため、Excelは作成していません',
+        )
+      }
+    }
+    for (const x of rowsByIdIn) {
+      nameById.set(x.id, submissionShopName(x.shop_name, realNameById.get(x.id)))
     }
   }
 

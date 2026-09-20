@@ -81,8 +81,10 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
       supabase.from('application_submissions')
         .select('shop_name, instagram, genre, takeout_bag, payment_methods, menus, note')
         .eq('place_id', placeId).eq('seller_id', sellerId).maybeSingle(),
+      // 本名（name）は読まない。この画面で入れた値は募集者と施設に渡るため、
+      // 取得もしないでおく（app/sellers/[id]/page.tsx と同じ構え）
       supabase.from('profiles')
-        .select('shop_name, name, genre, takeout_bag, payment_methods')
+        .select('shop_name, genre, takeout_bag, payment_methods')
         .eq('id', sellerId).maybeSingle(),
       supabase.from('sns_links').select('url').eq('seller_id', sellerId).eq('platform', 'instagram').maybeSingle(),
       supabase.from('menus').select('name, detail, price, sort_order, created_at')
@@ -107,7 +109,15 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
       setNote(sub.note || '')
     } else {
       setExisting(false)
-      setShopName(prof?.shop_name || prof?.name || '')
+      // 屋号が未登録でも本名では埋めない。
+      //
+      // ここで入れた値は application_submissions.shop_name に保存され、
+      // 募集者が出す施設提出Excelの店舗名欄にそのまま載る（募集者は RLS で
+      // 自分の案件の提出内容を読める）。本名で埋めると、画面では自分の名前を
+      // 見ているだけに見えても、保存した先の読み手は募集者と施設になる。
+      // 空欄で始めて、屋号かお店の名前をご自身で入れてもらう
+      // （2026-09-19 に出店者ご本人から本名の件で申し出があり直した）
+      setShopName(prof?.shop_name || '')
       // プロフィールから写すときも、入力欄に出すのはアカウント名だけ
       setInstagram(snsHandle('instagram', sns?.url))
       setGenres(parseGenres(prof?.genre))
@@ -198,6 +208,11 @@ export default function SiteSubmissionForm({ supabase, placeId, placeTitle, sell
             <div>
               <label style={label} htmlFor='sub-shop'>店舗名</label>
               <input id='sub-shop' value={shopName} onChange={e => setShopName(e.target.value)} style={input} />
+              {/* 屋号が未登録だと空欄で始まる。ここはそのまま施設への提出書類に
+                  載る欄なので、本名ではなくお店の名前を入れてもらう */}
+              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
+                施設へ提出する書類に載る名前です。屋号（お店の名前）を入れてください。
+              </div>
             </div>
 
             <div>

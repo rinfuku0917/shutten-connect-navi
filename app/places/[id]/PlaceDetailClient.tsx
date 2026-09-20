@@ -248,11 +248,16 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
     setSubmitting(false)
     setEntryDone(true)
     await loadMyEntries()
-    // ホストへ申込通知（失敗しても応募は成功させる）
+    // ホストへ申込通知（失敗しても応募は成功させる）。
+    // 通知の入口は body の sellerId を信じないので、アクセストークンを添える
     try {
+      const { data: sess } = await supabase.auth.getSession()
       await fetch('/api/notify/new-application', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + (sess.session?.access_token || ''),
+        },
         body: JSON.stringify({ placeId: id, sellerId: user.id, dates }),
       })
     } catch (e) {
