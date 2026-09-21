@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 // 出店料の入金の督促を、1件ずつ送る。
 //
@@ -22,29 +22,8 @@ const REPLY_TO = 'info@connect-navi.com'
 // 出店者に2通届くのは避けたい
 const recentSends = new Map<string, number>()
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Ctx = { db: any; uid: string }
-
-async function requireAdmin(req: Request): Promise<Ctx | NextResponse> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
-  const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return { db, uid }
-}
+// 呼び出し元は app/lib/apiAuth.ts の requireAdmin で確かめる。
+// body のIDは信用しない（名乗るだけで運営になれてしまうため）
 
 // 督促を送った記録を、メモの先頭に足す。
 // 既に入っているメモは消さない（運営が手で書いた内容が消えると困る）

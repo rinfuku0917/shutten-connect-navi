@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { renderMailStandalone, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
 import { sendAdminMail } from '../../lib/notifyRecipients'
 import { CONTACT_SOURCES, CONTACT_HISTORIES, asksRepName, sourceLabel, historyLabel } from '../../lib/signupSource'
+import { requireAdmin } from '../../lib/apiAuth'
+import { callerIp, createRateLimiter } from '../../lib/rateLimit'
 
 // 公開ページ（/contact）から届くお問い合わせ。
 //
@@ -33,36 +35,32 @@ const MISSING_TABLE_MSG =
   'お問い合わせを保存する表がまだ作られていません。'
   + 'Supabase の SQL Editor で supabase/migrations/20260908_contacts.sql を実行してください。'
 
-function getAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-// 呼び出し元が本当に運営としてログインしているかを、アクセストークンで確かめる。
+// 運営の操作（一覧・対応状況の更新・削除）は app/lib/apiAuth.ts の requireAdmin を通す。
 //
 // body に入れて送られてきたIDは信用しない。それを信じると、
 // 管理者のUUIDを1つ知っているだけで、ログインしていない誰でも
 // お問い合わせ全件（お名前・メールアドレス・相談内容）を読めてしまう。
 // 管理者のUUIDは出店者が自分の売上行（sales.accepted_by）から拾える。
 //
-// app/api/admin/sales-accept/route.ts と同じやり方。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function requireAdmin(req: Request, admin: any): Promise<{ uid: string } | NextResponse> {
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+// この入口は、公開ページからの問い合わせ（認証なし）と運営の操作が
+// 同じ POST に同居している。関門を掛けるのは action の分岐の中だけにすること。
 
-  const { data: userData, error: uErr } = await admin.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await admin.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return { uid }
-}
+// 公開の受付は認証なしなので、発信元ごとの回数で止める。
+// 止めないと、URLを知った相手に contacts へ偽の行を積まれ、
+// 運営の受信箱（info@ ＋ notify_recipients の追加宛先）も埋められる
+// （/api/notify/new-seller と同じ害）。
+//
+// 上限は new-seller より緩めでよい。お問い合わせは1人1回で、
+// 本文を書く時間もかかるので、手で操作していて当たることはない。
+// 記憶は関門ごとに別なので、ここの連打で登録の通知や相談は止まらない
+// 上限に当たるとお問い合わせ自体を受け付けない（記録が正本なので、
+// 落とすなら記録も作らない）。そのため、正規のお客様を弾かない側に倒す。
+// 携帯キャリアや会社の共有IPからまとまって送られても当たらない値にしてある
+// （1人1回のお問い合わせで1分5件・1時間30件に当たることはない）
+const isTooMany = createRateLimiter([
+  { ms: 60 * 1000, max: 5 },
+  { ms: 60 * 60 * 1000, max: 30 },
+])
 
 export async function POST(req: Request) {
   try {
@@ -72,11 +70,9 @@ export async function POST(req: Request) {
     // お名前とメールアドレスが入るため contacts は RLS でクライアントから触れない。
     // 管理画面からの読み書きはすべてここ（サービスロール）を通す。
     if (body.action === 'list' || body.action === 'status' || body.action === 'delete') {
-      const admin = getAdmin()
-      if (!admin) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-      const auth = await requireAdmin(req, admin)
+      const auth = await requireAdmin(req)
       if (auth instanceof NextResponse) return auth
-      const uid = auth.uid
+      const { db: admin, uid } = auth
 
       if (body.action === 'list') {
         const { data, error } = await admin
@@ -133,6 +129,15 @@ export async function POST(req: Request) {
     }
 
     // ===== 公開ページ：お問い合わせの受付 =====
+    // 運営の分岐より後、記録より前に回数で切る
+    if (isTooMany(callerIp(req))) {
+      console.warn('お問い合わせが連打の上限に当たりました', callerIp(req))
+      return NextResponse.json(
+        { error: '送信が続いています。少し時間をおいてからお試しください' },
+        { status: 429 },
+      )
+    }
+
     const { name, email, message, foundVia, foundNote, contactHistory, repName } = body
 
     if (!name || !email || !message) {

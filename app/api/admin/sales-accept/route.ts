@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 // 売上報告の受理。運営が「受け取った」ことを記録する。
 //
@@ -13,30 +13,8 @@ import { NextResponse } from 'next/server'
 // ブラウザからの更新ポリシーが本番にあるか確認できないため、
 // サービスロールを持つこのAPIを通す。
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Ctx = { db: any; uid: string }
-
-async function requireAdmin(req: Request): Promise<Ctx | NextResponse> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
-  const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
-  // 呼び出し元をアクセストークンで確かめる。body のIDは信用しない
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return { db, uid }
-}
+// 呼び出し元は app/lib/apiAuth.ts の requireAdmin で確かめる。
+// body のIDは信用しない（名乗るだけで運営になれてしまうため）
 
 export async function POST(req: Request) {
   const ctx = await requireAdmin(req)

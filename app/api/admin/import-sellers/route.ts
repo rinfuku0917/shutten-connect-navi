@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getAdminClient, serverConfigResponse } from '../../../lib/apiAuth'
 import { verifyCronCaller } from '../../../lib/cronAuth'
 
 // 旧サイトの会員CSVを取り込む。管理画面からのみ実行できる。
@@ -30,15 +30,16 @@ type Seller = {
 
 export async function POST(req: Request) {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
     // 管理画面からのログイン、または運用の鍵（CRON_SECRET）でのみ実行できる。
     // 鍵での実行は、移行作業などで管理画面を開けないときに使う。
+    // 名乗りを先に見る。鍵の有無（サーバーの設定状態）を先に返すと、
+    // トークンも鍵も持たない相手に 500 を教えることになる
+    // （AGENTS.md「APIの権限判定ルール」の見る順）
     const auth = await verifyCronCaller(req)
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
+    const db = getAdminClient()
+    if (!db) return serverConfigResponse()
 
     const body = await req.json()
     const dryRun = !!body.dryRun

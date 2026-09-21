@@ -21,7 +21,10 @@ import { NextResponse } from 'next/server'
 //   requireAdmin   … 運営だけが通る入口（ほとんどがこれ）
 //   requireCaller  … 「運営なら全件、本人なら自分の分だけ」のように、
 //                    403 を即返さず uid と役割の両方が要る入口
-//                    （/api/admin/invoice の action:'open' など）
+//                    （/api/admin/invoice の action:'open' など）。
+//                    運営でないと通らないと決めた枝では denyNotAdmin を通す
+//   denyNotAdmin   … 「運営でない」と「いま役割が読めない」の書き分け。
+//                    requireCaller を使う入口で 403 を返す唯一の窓口
 //   resolveCaller  … 上の2つの土台。すでにクライアントを作ってある入口だけ直に使う
 //                    （トークン無しの相手に 401 を返す順は呼び出し側の責任になる）
 
@@ -92,10 +95,27 @@ export async function resolveCaller(req: Request, db: AdminClient): Promise<Call
 }
 
 /** 役割を確かめられなかったときの応答。403 と取り違えないよう別の番号にする */
-function roleCheckFailedResponse(): NextResponse {
+export function roleCheckFailedResponse(): NextResponse {
   // 権限が無いのではなく、いま確かめられないだけなので 503。
   // 運営には「もう一度お試しください」と伝わる文面にする
   return NextResponse.json({ error: '権限確認に失敗しました。少し待ってもう一度お試しください' }, { status: 503 })
+}
+
+/**
+ * 「運営でないと通らない」と判定した瞬間に返す応答。
+ *
+ * ★requireCaller を使う入口では、`if (!caller.isAdmin) return 403` と書かないこと。
+ *   caller.isAdmin は false でも「運営ではない」証拠にならない
+ *   （役割を読めなかっただけのことがある）。この関数を通せば、
+ *   読めなかったときは 503、読めたうえで運営でないときだけ 403 になる。
+ *
+ * 所有で通る枝（自分の出店・自分の請求書・自分が送ったメッセージなど）では
+ * 呼ばない。そこは役割が読めなくても答えが変わらないので、
+ * profiles の一瞬の不調で操作を止める必要がない。
+ */
+export function denyNotAdmin(caller: Caller, message = '運営のみが操作できます'): NextResponse {
+  if (caller.roleError) return roleCheckFailedResponse()
+  return NextResponse.json({ error: message }, { status: 403 })
 }
 
 export type AdminCaller = { uid: string; db: AdminClient }
@@ -117,7 +137,8 @@ export type AdminCaller = { uid: string; db: AdminClient }
 export async function requireAdmin(req: Request, db?: AdminClient): Promise<AdminCaller | NextResponse> {
   const ctx = await requireCaller(req, db)
   if (ctx instanceof NextResponse) return ctx
-  if (!ctx.caller.isAdmin) return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
+  // 役割が読めなかったときは 503。denyNotAdmin がその書き分けを持っている
+  if (!ctx.caller.isAdmin) return denyNotAdmin(ctx.caller)
   return { uid: ctx.caller.uid, db: ctx.db }
 }
 
@@ -127,8 +148,18 @@ export type CallerContext = { caller: Caller; db: AdminClient }
  * 「運営なら全件・本人なら自分の分だけ」型の入口の関門。
  *
  * 役割での足切りはしないので、403 を返すかどうかは呼び出し側で決める。
- * 見る順は requireAdmin と同じ（トークン無し→401、鍵無し→500、
- * 検証失敗→401、役割が読めない→503）。
+ * 見る順は トークン無し→401、鍵無し→500、検証失敗→401。
+ *
+ * ★役割の読み取りの失敗（roleError）で足切りはしない。
+ *   この関門を通る入口には「所有で通る枝」が必ずあり
+ *   （自分の出店の記録・自分の請求書・自分が送ったメッセージなど）、
+ *   そこは役割が読めなくても答えが変わらない。ここで 503 を返すと、
+ *   profiles の一瞬の不調で、以前は通っていた操作まで止まる
+ *   （当日の進行は現場のスマホから1出店で6回押される導線）。
+ *   代わりに roleError をそのまま caller に載せて返す。
+ *   「運営でないと通らない」と判定する側が denyNotAdmin を通せば、
+ *   読めなかったときは 503、読めたうえで運営でないときだけ 403 になる。
+ *   `if (!caller.isAdmin) return 403` と直に書かないこと。
  *
  * resolveCaller を直に使うと、サービスロールのクライアントを先に作ることになり、
  * 鍵の無い環境では名乗っていない相手にも 500（設定状態）を返してしまう。
@@ -153,7 +184,6 @@ export async function requireCaller(
 
   const caller = await resolveCaller(req, client)
   if (!caller) return NextResponse.json({ error: authMessage ?? '認証に失敗しました' }, { status: 401 })
-  if (caller.roleError) return roleCheckFailedResponse()
 
   return { caller, db: client }
 }

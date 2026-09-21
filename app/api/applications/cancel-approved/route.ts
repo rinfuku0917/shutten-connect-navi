@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, denyNotAdmin } from '../../../lib/apiAuth'
 import { writePurgeLog, purgeSummary } from '../../../lib/purgeLog'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
@@ -44,28 +44,24 @@ const recentSends = new Map<string, number>()
 
 export async function POST(req: Request) {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-    const db = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    // 呼び出し元をアクセストークンで確かめる（bodyのIDは信用しない）
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
+    // 呼び出し元をアクセストークンで確かめる（bodyのIDは信用しない）。
+    //
+    // 関門は requireCaller を使う（requireAdmin ではない）。
+    // 403 の文面「運営のみが出店を取り消せます」は、取り消しという
+    // 元に戻せない操作について画面で意味を持っているので残したい。
+    // requireAdmin は文面を差し替えられないため、足切りだけここで書く。
+    // 見る順（トークン無し→401、鍵無し→500、検証失敗→401）は共通の関門に任せる。
+    // 役割が読めなかったときの 503 は denyNotAdmin が書き分ける
+    const ctx = await requireCaller(req)
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    const uid = caller.uid
 
     // 運営だけが押せる。募集者にも applications の更新権限があるため、
     // RLS では絞れない。ここで確かめる。
-    const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-    if (me?.role !== 'admin') {
-      return NextResponse.json({ error: '運営のみが出店を取り消せます' }, { status: 403 })
+    if (!caller.isAdmin) {
+      // 役割が読めなかったときは 403 ではなく 503（denyNotAdmin が書き分ける）
+      return denyNotAdmin(caller, '運営のみが出店を取り消せます')
     }
 
     // notify=false は「知らせずに取り消す」。

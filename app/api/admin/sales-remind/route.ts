@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 // 売上報告の督促を、1件ずつ送る。
 //
@@ -14,29 +14,8 @@ import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 const REPLY_TO = 'info@connect-navi.com'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Ctx = { db: any; uid: string }
-
-async function requireAdmin(req: Request): Promise<Ctx | NextResponse> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
-  const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return { db, uid }
-}
+// 呼び出し元は app/lib/apiAuth.ts の requireAdmin で確かめる。
+// body のIDは信用しない（名乗るだけで運営になれてしまうため）
 
 // この出店枠へ前回いつ送ったか。画面に出して連打を防ぐ
 export async function GET(req: Request) {
@@ -74,12 +53,21 @@ export async function POST(req: Request) {
 
   // 対象の出店枠を取る。
   // profiles への結合は外部キー名を明示する（seller_id と cancelled_by の2本あるため）
-  const { data: app, error: aErr } = await db
+  const { data: appRow, error: aErr } = await db
     .from('applications')
     .select('id, seller_id, apply_date, status, places(title), profiles!applications_seller_id_fkey(name, shop_name, email)')
     .eq('id', applicationId)
     .maybeSingle()
   if (aErr) return NextResponse.json({ error: '出店の取得に失敗: ' + aErr.message }, { status: 500 })
+  // 結合（places / profiles）は、このプロジェクトが表の型を生成していないため
+  // 配列として推論される。実体はどちらも1件なので、1件として受け取り直す
+  const app = appRow as unknown as {
+    seller_id: string | null
+    status: string | null
+    apply_date: string | null
+    places: { title: string | null } | null
+    profiles: { name: string | null; shop_name: string | null; email: string | null } | null
+  } | null
   if (!app) return NextResponse.json({ error: '対象の出店が見つかりません' }, { status: 404 })
 
   // 画面を経由しない呼び出しも含めて、ここで条件を確かめ直す
@@ -153,10 +141,11 @@ export async function POST(req: Request) {
     .eq('application_id', applicationId).eq('status', 'sent')
     .order('sent_at', { ascending: false })
 
+  const sentRows = log || []
   return NextResponse.json({
     success: true,
     sentTo: email,
-    count: (log || []).length,
-    lastSentAt: (log || []).length > 0 ? log[0].sent_at : null,
+    count: sentRows.length,
+    lastSentAt: sentRows.length > 0 ? sentRows[0].sent_at : null,
   })
 }

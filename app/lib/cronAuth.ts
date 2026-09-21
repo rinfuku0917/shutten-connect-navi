@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { getAdminClient, resolveCaller } from './apiAuth'
 
 // 定期実行のAPIを呼べる相手かどうかを判定する。
 //
@@ -8,6 +8,12 @@ import { createClient } from '@supabase/supabase-js'
 //
 // CRON_SECRET が未設定のときに素通りさせると、URLを知っているだけで
 // 記事の投稿や出店者へのメール送信ができてしまうため、必ず拒否する。
+//
+// 2の判定は app/lib/apiAuth.ts の resolveCaller に寄せている。
+// もとはここに getUser + profiles.role の写しがあり、role の読み取りの
+// error を見ていなかったため、DBが一瞬落ちただけで 401「権限がありません」に
+// 落ちていた（AGENTS.md の「役割の読み取り自体が失敗したときは
+// 403 ではなく 503」と食い違っていた）。
 
 export type CronAuthResult = { ok: true } | { ok: false; status: number; error: string }
 
@@ -33,27 +39,32 @@ export function looksLikeCronKeyCall(req: Request): boolean {
 
 export async function verifyCronCaller(req: Request): Promise<CronAuthResult> {
   const secret = process.env.CRON_SECRET
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!secret) return { ok: false, status: 500, error: 'CRON_SECRET が設定されていません' }
 
   const authHeader = req.headers.get('authorization') || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
 
-  // 1. 定期実行から
+  // 1. 定期実行から。鍵の照合を先に行う
+  //    （順を逆にすると、鍵の生の値が Supabase の認証ログに残る）
   if (token && token === secret) return { ok: true }
   // URLに鍵を付ける呼び方も残す（Vercel以外から叩くとき用）
   if (new URL(req.url).searchParams.get('key') === secret) return { ok: true }
 
   // 2. 管理画面から（ログイン中の管理者）
-  if (token && url && serviceKey) {
-    const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-    const { data: userData } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uid) {
-      const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-      if (me?.role === 'admin') return { ok: true }
+  if (token) {
+    const db = getAdminClient()
+    // 名乗っている相手なので、サーバーの設定不足はそのまま伝えてよい。
+    // 見る順を requireCaller（トークン無し→401、鍵無し→500）にそろえる
+    if (!db) return { ok: false, status: 500, error: 'サーバー設定エラー' }
+
+    const caller = await resolveCaller(req, db)
+    if (caller?.roleError) {
+      // 役割が「読めなかった」のを「運営ではない」と同じ扱いにしない。
+      // DBが一瞬落ちただけで「権限がありません」と言われると、
+      // 権限を失ったのか一時的な不調なのか切り分けられない
+      return { ok: false, status: 503, error: '権限確認に失敗しました。少し待ってもう一度お試しください' }
     }
+    if (caller?.isAdmin) return { ok: true }
   }
 
   return { ok: false, status: 401, error: '権限がありません' }

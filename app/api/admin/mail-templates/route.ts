@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { MAIL_DEFS, MAIL_DEF_BY_KEY, fillVars } from '../../../lib/mailTemplates'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 // 送信メールの文面の編集。
 //
@@ -13,29 +13,8 @@ import { MAIL_DEFS, MAIL_DEF_BY_KEY, fillVars } from '../../../lib/mailTemplates
 // mail_templates は RLS を有効にしてポリシーを作っていない。
 // サービスロールを持つこのAPIだけが読み書きできる。
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Ctx = { db: any; uid: string }
-
-async function requireAdmin(req: Request): Promise<Ctx | NextResponse> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
-  const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return { db, uid }
-}
+// 呼び出し元は app/lib/apiAuth.ts の requireAdmin で確かめる。
+// 戻り値の uid は、上書きを保存した人（updated_by）として残すのに使う
 
 // 一覧。既定の文面と、上書きがあればその内容も返す
 export async function GET(req: Request) {

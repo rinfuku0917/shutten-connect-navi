@@ -16,6 +16,7 @@ import { compareByTitle } from '../lib/placeSort'
 import { hasDayTypeFee, hasMinGuarantee, hasFormatFees, hasFormatMin, dayFeeOf, feeCondition, allowedFormats, buildMinGuaranteeJson, toYen, type FeeSource } from '../lib/placeFee'
 import { selectWithOptionalColumn, isMissingColumn } from '../lib/optionalColumn'
 import { cancelResultMessage } from '../lib/purgeLog'
+import { hasLikeWildcard, hasOrReservedChar, likePattern, LIKE_SEARCH_NG_MESSAGE } from '../lib/likeSearch'
 import { syncSalesToSheet } from '../lib/sheetSync'
 import PurgeLogPanel from './PurgeLogPanel'
 import SheetSyncPanel from './SheetSyncPanel'
@@ -1923,11 +1924,33 @@ export default function AdminPage() {
     const to = from + IMPORTED_PER_PAGE - 1
     let q = supabase.from('imported_sellers').select('id, reg_no, registered_at, shop_name, rep_name, email, address, phone, area, genre', { count: 'exact' })
     const kw = importedKw.trim()
-    if (kw) { q = q.or('shop_name.ilike.%' + kw + '%,rep_name.ilike.%' + kw + '%,email.ilike.%' + kw + '%') }
-    const { data, count } = await q.order('reg_no', { ascending: false }).range(from, to)
+    if (kw) {
+      // 検索語をそのままパターンに埋めない（app/lib/likeSearch.ts）。
+      // email を対象に含んでいるので、_ を逃がさないと taro_yamada が
+      // taroXyamada にも当たる。カンマは .or() の項の区切りなので、
+      // 入ったままだと問い合わせそのものが壊れる
+      if (hasLikeWildcard(kw) || hasOrReservedChar(kw)) {
+        setImported([])
+        setImportedTotal(0)
+        setImportedLoading(false)
+        showNotice(LIKE_SEARCH_NG_MESSAGE)
+        return
+      }
+      const p = likePattern(kw)
+      q = q.or('shop_name.ilike.%' + p + '%,rep_name.ilike.%' + p + '%,email.ilike.%' + p + '%')
+    }
+    // error を受け取る。受け取らないと、壊れた問い合わせが「0件」として
+    // 画面に出て、登録済みの人が未登録に見える（名簿は1,000件を超える）
+    const { data, count, error } = await q.order('reg_no', { ascending: false }).range(from, to)
+    setImportedLoading(false)
+    if (error) {
+      setImported([])
+      setImportedTotal(0)
+      showNotice('取り込み名簿の読み込みに失敗しました: ' + error.message)
+      return
+    }
     setImported((data || []) as ImportedSeller[])
     setImportedTotal(count || 0)
-    setImportedLoading(false)
   }
   useEffect(() => { if (tab === 'imported' && authChecked) loadImported() }, [tab, authChecked, importedPage])
 

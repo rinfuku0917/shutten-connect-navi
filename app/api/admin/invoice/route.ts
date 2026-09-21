@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireCaller } from '../../../lib/apiAuth'
+import { requireCaller, denyNotAdmin, roleCheckFailedResponse } from '../../../lib/apiAuth'
 import { feeCondition, dayFeeOf, minTotalOn } from '../../../lib/placeFee'
 import { selectWithOptionalColumn } from '../../../lib/optionalColumn'
 import { sendSalesToSheet } from '../../../lib/sheetSend'
@@ -158,6 +158,10 @@ export async function POST(req: Request) {
       // 手元に残ると、支払い済みかどうかの取り違えが起きる）。
       if (!isAdmin) {
         if (!row || row.seller_id !== caller.uid || row.voided_at) {
+          // 自分あてではない請求書を開けるのは運営だけ。ここへ来た時点で
+          // 「運営でないと通らない」ので、役割が読めていなかったのなら
+          // 「見つかりません」ではなく 503 を返す（本物の運営に無いと言わない）
+          if (caller.roleError) return roleCheckFailedResponse()
           return NextResponse.json({ error: '請求書 ' + no + ' が見つかりませんでした' }, { status: 404 })
         }
         // 当月分はまだ確定していないので渡さない。
@@ -223,8 +227,9 @@ export async function POST(req: Request) {
     // 返すと、入力の当たり外れを教えることになるため
     if (!caller.isAdmin) {
       // 文面は共通の関門（app/lib/apiAuth.ts の requireAdmin）に合わせる。
-      // ここを写して新しい入口を作る人が出るので、言い方を分岐させない
-      return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
+      // ここを写して新しい入口を作る人が出るので、言い方を分岐させない。
+      // 役割が読めなかったときは 403 ではなく 503（denyNotAdmin が書き分ける）
+      return denyNotAdmin(caller)
     }
 
     if (!sellerId || !period) {

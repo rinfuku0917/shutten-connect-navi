@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, denyNotAdmin } from '../../../lib/apiAuth'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 import { SITE_URL } from '../../../lib/seo'
 import { NO_SHOP_NAME } from '../../../lib/sellerNames'
@@ -38,14 +38,6 @@ const MAX_BODY = 2000
 const SEND_INTERVAL_MS = 600
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getAdmin(): any {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
 // 日本時間の今日（YYYY-MM-DD）。出店日は日本の日付で入っている
 function todayJst(): string {
   const jst = new Date(Date.now() + 9 * 60 * 60 * 1000)
@@ -59,19 +51,16 @@ const RESEND_WINDOW_MS = 60 * 1000
 
 export async function POST(req: Request) {
   try {
-    const db = getAdmin()
-    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
-    // 呼び出し元をアクセストークンで確かめる
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-    const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-    const isAdmin = me?.role === 'admin'
+    // 呼び出し元をアクセストークンで確かめる。
+    // 「その案件の募集者か運営か」で分かれるので requireAdmin では足切りできない。
+    // 403 の条件は案件を読んでからしか決まらないので、足切りは下に残す。
+    // isAdmin は 403 の判定だけでなく、屋号が空のときに運営にだけ
+    // 本名を見せる出し分け（下の方）でも使うので最後まで引き回す
+    const ctx = await requireCaller(req, undefined, 'ログインが必要です')
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    const uid = caller.uid
+    const isAdmin = caller.isAdmin
 
     const { placeId, body, target, scope, preview } = await req.json()
     const text = String(body ?? '').trim()
@@ -96,7 +85,9 @@ export async function POST(req: Request) {
     }
     if (!place) return NextResponse.json({ error: '案件が見つかりません' }, { status: 404 })
     if (!isAdmin && place.host_id !== uid) {
-      return NextResponse.json({ error: 'この案件の募集者だけが送れます' }, { status: 403 })
+      // 募集者なら役割を見ずに通る。運営でないと通らないと決まった今だけ、
+      // 役割が読めていたかを確かめる（読めていなければ 403 ではなく 503）
+      return denyNotAdmin(caller, 'この案件の募集者だけが送れます')
     }
 
     // 送り先。

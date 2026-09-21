@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, roleCheckFailedResponse } from '../../../lib/apiAuth'
 
 // 送信したメッセージを取り消す（打ち間違いの取り消し用）。
 // 取り消せるのは自分が送ったメッセージのみ。相手のメッセージは消せない。
@@ -21,28 +21,20 @@ const RETRACT_LIMIT_MINUTES = 60
 
 export async function POST(req: Request) {
   try {
+    // 押した本人をアクセストークンで確かめる。body のIDは信用しない。
+    // 「送信者本人か運営か」で分かれるので requireAdmin では足切りできない。
+    // 引数の検査より先に見る（名乗っていない相手に「パラメータ不足」と
+    // 返すと、メッセージIDの当たり外れを教えることになる）
+    const ctx = await requireCaller(req, undefined, 'ログインが必要です')
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db: admin } = ctx
+    const requesterId = caller.uid
+    // 運営は取り消しの時間制限を受けない（下で使う）
+    const isAdmin = caller.isAdmin
+
     const { messageId } = await req.json()
     if (!messageId) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
-    }
-
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-    const admin = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    // 押した本人をアクセストークンで確かめる。body のIDは信用しない
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await admin.auth.getUser(token)
-    const requesterId = userData?.user?.id
-    if (uErr || !requesterId) {
-      return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
     }
 
     const { data: msg, error: mErr } = await admin
@@ -60,14 +52,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '自分が送信したメッセージのみ取り消せます' }, { status: 403 })
     }
 
-    // 押した人が運営かどうか。運営は時間の制限を受けない
-    const { data: me } = await admin
-      .from('profiles').select('role').eq('id', requesterId).maybeSingle()
-    const isAdmin = me?.role === 'admin'
-
     const sentAt = msg.sent_at ? new Date(msg.sent_at).getTime() : 0
     const passedMinutes = (Date.now() - sentAt) / 60000
     if (!isAdmin && sentAt && passedMinutes > RETRACT_LIMIT_MINUTES) {
+      // 時間を過ぎたあとは運営だけが通る枝。役割が読めていなければ、
+      // 「運営ではない」と決めつけずに 503 を返す
+      if (caller.roleError) return roleCheckFailedResponse()
       return NextResponse.json(
         { error: `送信から${RETRACT_LIMIT_MINUTES}分を過ぎたメッセージは取り消せません` },
         { status: 400 },

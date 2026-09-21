@@ -72,8 +72,10 @@ export async function GET(req: Request) {
       .limit(limit)
     if (kind === 'application' || kind === 'invoice') q = q.eq('kind', kind)
     if (sellerId) q = q.eq('seller_id', sellerId)
-    // 案件名や理由で探せるようにする。summary は自由文なので前後一致で見る
-    if (kw) q = q.ilike('summary', '%' + kw.replace(/[%_]/g, '') + '%')
+    // 案件名や理由で探せるようにする。summary は自由文なので前後一致で見る。
+    // パターンとして効く記号は落とす。% _ のほかに、PostgREST が % に読み替える *
+    // と、逃がし記号の \ も落とす（末尾が \ だと逃がす相手がなく問い合わせが 500 になる）
+    if (kw) q = q.ilike('summary', '%' + kw.replace(/[%_*\\]/g, '') + '%')
 
     const { data, error } = await q
     if (error) {

@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, denyNotAdmin, roleCheckFailedResponse } from '../../../lib/apiAuth'
 
 // メッセージを1通送る。
 //
@@ -17,30 +17,22 @@ import { NextResponse } from 'next/server'
 //   ・運営
 //   それ以外は 403。相手から先に送られているかどうかは問わない。
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getAdmin(): any {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
 // まとめて連絡（broadcast）と同じ上限にそろえる。
 // 画面側にも同じ数字を出しているので、片方だけ変えないこと
 const MAX_BODY = 2000
 
 export async function POST(req: Request) {
   try {
-    const db = getAdmin()
-    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
-    // 送信者をアクセストークンで確かめる。body のIDは信用しない
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
+    // 送信者をアクセストークンで確かめる。body のIDは信用しない。
+    // 「やり取りの当事者（出店者・募集者）か運営か」で分かれるので
+    // requireAdmin では足切りできない。403 の条件は申込を読んでからしか
+    // 決まらないので、足切りは下に残す。
+    // isAdmin は 403 のほか「取り消された申込でも運営だけは書ける」でも使う
+    const ctx = await requireCaller(req, undefined, 'ログインが必要です')
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    const uid = caller.uid
+    const isAdmin = caller.isAdmin
 
     const { applicationId, body, fileUrl } = await req.json()
     const text = String(body ?? '').trim()
@@ -77,12 +69,12 @@ export async function POST(req: Request) {
     }
     if (!app) return NextResponse.json({ error: '送り先が見つかりません' }, { status: 404 })
 
-    const hostId = (app as { places?: { host_id?: string } }).places?.host_id || null
-    const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-    const isAdmin = me?.role === 'admin'
+    const hostId = (app as unknown as { places?: { host_id?: string } }).places?.host_id || null
     const canSend = isAdmin || uid === app.seller_id || (hostId && uid === hostId)
     if (!canSend) {
-      return NextResponse.json({ error: 'このやり取りに書き込む権限がありません' }, { status: 403 })
+      // 当事者なら役割を見ずに通る。運営でないと通らないと決まった今だけ、
+      // 役割が読めていたかを確かめる（読めていなければ 403 ではなく 503）
+      return denyNotAdmin(caller, 'このやり取りに書き込む権限がありません')
     }
 
     // 取り消した出店は、取り消したその場で行ごと消える
@@ -94,6 +86,9 @@ export async function POST(req: Request) {
     // 当事者どうしで続けると、あとから運営が確認できないまま消えるので止める。
     // 運営は続けられる（キャンセル料の話などを残す必要がある）
     if (app.status === 'cancelled' && !isAdmin) {
+      // ここから先は運営だけが通る枝。役割が読めていなければ、
+      // 「運営ではない」と決めつけずに 503 を返す
+      if (caller.roleError) return roleCheckFailedResponse()
       return NextResponse.json(
         { error: 'この出店は取り消されています。お手数ですが運営（info@connect-navi.com）へご連絡ください' },
         { status: 409 },

@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getAdminClient, serverConfigResponse } from '../../../lib/apiAuth'
 import { verifyCronCaller } from '../../../lib/cronAuth'
 import { isMissingColumn } from '../../../lib/optionalColumn'
 
@@ -28,13 +28,14 @@ type Item = {
 
 export async function POST(req: Request) {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
+    // 名乗りを先に見る。鍵の有無（サーバーの設定状態）を先に返すと、
+    // トークンも鍵も持たない相手に 500 を教えることになる
+    // （AGENTS.md「APIの権限判定ルール」の見る順）
     const auth = await verifyCronCaller(req)
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
+    const db = getAdminClient()
+    if (!db) return serverConfigResponse()
 
     const body = await req.json()
     const items: Item[] = Array.isArray(body.items) ? body.items : []

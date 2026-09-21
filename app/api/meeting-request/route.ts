@@ -1,6 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { CONTACT_SOURCES, CONTACT_HISTORIES, asksRepName } from '../../lib/signupSource'
+import { getAdminClient, requireAdmin, serverConfigResponse } from '../../lib/apiAuth'
+import { notifyNewSeller } from '../../lib/notifyNewSeller'
+import { callerIp, createRateLimiter } from '../../lib/rateLimit'
 
 // 募集者からの打ち合わせ希望。
 //   action 未指定 … 申し込みの登録（募集者が使う）
@@ -10,47 +12,46 @@ import { CONTACT_SOURCES, CONTACT_HISTORIES, asksRepName } from '../../lib/signu
 
 const METHODS = ['zoom', 'in_person', 'both']
 
-// 呼び出し元が本当に運営としてログインしているかを、アクセストークンで確かめる。
+// 運営の操作（一覧・対応状況の更新・削除）は app/lib/apiAuth.ts の requireAdmin を通す。
 //
 // 以前は body に入ったIDを profiles で引くだけだったが、それだと
 // 管理者のUUIDを知っているだけで、ログインしていない誰でも
 // 打ち合わせ希望の一覧（ご担当者名・会社名・メール・電話・ご相談内容）を読めた。
 // 管理者のUUIDは出店者が自分の売上行（sales.accepted_by）から拾える。
 //
-// app/api/admin/sales-accept/route.ts と同じやり方に揃える。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function requireAdmin(req: Request, admin: any): Promise<true | NextResponse> {
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+// 関門は action の分岐の中で呼ぶ。この入口は募集者からの申し込み（認証なし）と
+// 運営の操作が同じ POST に同居しているため、先頭に置くと申し込みが通らなくなる。
+// サービスロールのクライアントも分岐の中で作る。先に作って 500 を返すと、
+// 名乗っていない相手にサーバーの設定状態を教えることになる
 
-  const { data: userData, error: uErr } = await admin.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await admin.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return true
-}
-
-function getAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
+// 申し込みの登録は認証なしで受ける（募集者はまだ会員ではない）。
+// 認証で止められないので、発信元ごとの回数で止める。
+// 止めないと、URLを知った相手に meeting_requests へ偽の行を積まれ、
+// 運営の受信箱も埋められる（/api/notify/new-seller と同じ害）。
+//
+// 上限は new-seller より緩めでよい。相談は1社1回で、
+// 書くことも多いので、手で操作していて当たることはない。
+// 記憶は関門ごとに別なので、ここの連打で登録の通知やお問い合わせは止まらない。
+//
+// ★上限に当たったら相談そのものを受け付けない（429）。
+//   new-seller の上限と違って、ここは「記録が正本」なので、
+//   落とすなら記録も作らないほうが一貫する
+//   携帯キャリアや会社の共有IPからまとまって送られても当たらない値にしてある
+//   （1件ずつ手で書いて送る限り、1分5件・1時間30件には当たらない）
+const isTooManyRequests = createRateLimiter([
+  { ms: 60 * 1000, max: 5 },
+  { ms: 60 * 60 * 1000, max: 30 },
+])
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const admin = getAdmin()
-    if (!admin) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
 
     // ===== 管理者：一覧 =====
     if (body.action === 'list') {
-      const auth = await requireAdmin(req, admin)
+      const auth = await requireAdmin(req)
       if (auth instanceof NextResponse) return auth
+      const admin = auth.db
       const { data, error } = await admin
         .from('meeting_requests').select('*').order('created_at', { ascending: false })
       if (error) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })
@@ -59,8 +60,9 @@ export async function POST(req: Request) {
 
     // ===== 管理者：対応状況の更新 =====
     if (body.action === 'status') {
-      const auth = await requireAdmin(req, admin)
+      const auth = await requireAdmin(req)
       if (auth instanceof NextResponse) return auth
+      const admin = auth.db
       const { id, status, memo } = body
       if (!id || !['new', 'in_progress', 'done'].includes(status)) {
         return NextResponse.json({ error: 'パラメータが不正です' }, { status: 400 })
@@ -78,8 +80,9 @@ export async function POST(req: Request) {
     // ヒアリングが済んだ相談が溜まっていくため、不要になったものを消せるようにする。
     // 誤操作を防ぐため、対応が終わっていないものは削除できないようにしている。
     if (body.action === 'delete') {
-      const auth = await requireAdmin(req, admin)
+      const auth = await requireAdmin(req)
       if (auth instanceof NextResponse) return auth
+      const admin = auth.db
       const ids: string[] = Array.isArray(body.ids) ? body.ids : (body.id ? [body.id] : [])
       if (ids.length === 0) return NextResponse.json({ error: '削除する対象がありません' }, { status: 400 })
 
@@ -101,6 +104,18 @@ export async function POST(req: Request) {
     }
 
     // ===== 募集者：申し込みの登録 =====
+    // 運営の分岐より後、記録より前に回数で切る
+    if (isTooManyRequests(callerIp(req))) {
+      console.warn('打ち合わせ希望が連打の上限に当たりました', callerIp(req))
+      return NextResponse.json(
+        { error: '送信が続いています。少し時間をおいてからお試しください' },
+        { status: 429 },
+      )
+    }
+
+    const admin = getAdminClient()
+    if (!admin) return serverConfigResponse()
+
     const { hostId, name, company, email, phone, method, preferredDates, message, foundVia, foundNote, contactHistory, repName } = body
     if (!name || !String(name).trim()) {
       return NextResponse.json({ error: 'ご担当者名を入力してください' }, { status: 400 })
@@ -156,20 +171,22 @@ export async function POST(req: Request) {
       }
     }
 
-    // 運営へ通知（失敗しても申し込みは成功扱い）
+    // 運営へ通知（失敗しても申し込みは成功扱い）。
+    //
+    // 以前は /api/notify/new-seller を HTTP で呼んでいた。サーバー内からの
+    // fetch は発信元が実行環境のIPになるため、あちらの連打の上限を
+    // 打ち合わせ希望のぶんが全部で1枠だけ共有し、相談が立て込むと
+    // 6件目以降の通知が黙って落ちていた。関数を直に呼べばその筋は消える
     try {
-      await fetch(new URL('/api/notify/new-seller', req.url).toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          role: 'host', name: String(name).trim(),
-          shop_name: company || null, email: String(email).trim(), phone: phone || null,
-          // どこ経由で来たか・すでに関係がある方かを通知にも載せる。
-          // 折り返す前に分かっているほうが、話の入り方が変わる
-          found_via: via, found_note: note || null,
-          contact_history: hist, rep_name: rep || null,
-        }),
+      const res = await notifyNewSeller({
+        role: 'host', name: String(name).trim(),
+        shop_name: company || null, email: String(email).trim(), phone: phone || null,
+        // どこ経由で来たか・すでに関係がある方かを通知にも載せる。
+        // 折り返す前に分かっているほうが、話の入り方が変わる
+        found_via: via, found_note: note || null,
+        contact_history: hist, rep_name: rep || null,
       })
+      if (!res.ok) console.error('打ち合わせ希望の通知に失敗しました', res.error)
     } catch (e) {
       console.error('打ち合わせ希望の通知に失敗しました', e)
     }

@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, denyNotAdmin } from '../../lib/apiAuth'
 import { resendSheetForInvoice } from '../../lib/sheetSend'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../lib/mailTemplates'
 import { sendAdminMail } from '../../lib/notifyRecipients'
@@ -33,21 +33,14 @@ const jpDate = (iso: string) => {
 
 export async function POST(req: Request) {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
-    // 呼び出し元をアクセストークンで確かめる（bodyのIDは信用しない）
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-    const { data: me } = await db.from('profiles').select('role, name, shop_name, email').eq('id', uid).maybeSingle()
-    const isAdmin = me?.role === 'admin'
+    // 呼び出し元をアクセストークンで確かめる（bodyのIDは信用しない）。
+    // 「本人なら自分の請求書、運営なら全件」なので requireAdmin では足切りできない。
+    // 役割が読めなかったときに 403 ではなく 503 が返るのも、共通の関門に寄せる利点
+    const ctx = await requireCaller(req, undefined, 'ログインが必要です')
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    const uid = caller.uid
+    const isAdmin = caller.isAdmin
 
     const body = await req.json()
     const action = body.action
@@ -106,6 +99,11 @@ export async function POST(req: Request) {
       const apiKey = process.env.RESEND_API_KEY
       if (apiKey && !skipMail) {
         try {
+          // 差出人の名前は、メールを実際に送るときだけ引く。
+          // 共通の関門（requireCaller）が返すのは uid と役割だけなので、
+          // 屋号・お名前はここで読む（ほかの action では要らない）
+          const { data: me } = await db
+            .from('profiles').select('name, shop_name').eq('id', uid).maybeSingle()
           const shop = me?.shop_name || me?.name || '(出店者)'
           // 文面は管理画面（メール文面タブ）で書き換えられる
           const def = MAIL_DEF_BY_KEY['payment-reported']
@@ -134,7 +132,7 @@ export async function POST(req: Request) {
 
     // ===== ここから管理者のみ =====
     // 文面は共通の関門（app/lib/apiAuth.ts の requireAdmin）に合わせる
-    if (!isAdmin) return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
+    if (!isAdmin) return denyNotAdmin(caller)
 
     // ===== 管理者：入金状況の一覧 =====
     if (action === 'list') {

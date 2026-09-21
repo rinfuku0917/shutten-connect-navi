@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
-import { requireCaller, serverConfigResponse } from '../../../lib/apiAuth'
+import { requireCaller, serverConfigResponse, denyNotAdmin } from '../../../lib/apiAuth'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
@@ -23,7 +23,8 @@ export async function POST(req: Request) {
     //
     // 判定は app/lib/apiAuth.ts の関門に寄せる（各入口に書き写すと食い違う。
     // 見る順もそのまま：トークン無し→401、鍵無し→500、検証失敗→401、
-    // 役割が読めない→503。役割を読めなかったのを「運営ではない」＝403 にしない）
+    // 検証失敗→401）。役割を読めなかったのを「運営ではない」＝403 にしないため、
+    // 下の 403 は denyNotAdmin を通す）
     const ctx = await requireCaller(req)
     if (ctx instanceof NextResponse) return ctx
     const { caller, db } = ctx
@@ -48,9 +49,10 @@ export async function POST(req: Request) {
     const placeTitle = placeRes.data?.title || '案件'
 
     // 運営か、その案件の募集者だけ。出店者本人には出させない（受け取る側なので）。
-    // 役割は関門が読んでいる（読めなかったときは、ここへ来る前に 503 で止まる）
+    // 募集者なら役割を見ずに通る。運営でないと通らないと決まった今だけ、
+    // 役割が読めていたかを確かめる（読めていなければ 403 ではなく 503）
     if (uid !== placeRes.data?.host_id && !caller.isAdmin) {
-      return NextResponse.json({ error: 'この申込の通知は送れません' }, { status: 403 })
+      return denyNotAdmin(caller, 'この申込の通知は送れません')
     }
 
     const { data: seller, error: sErr } = await db

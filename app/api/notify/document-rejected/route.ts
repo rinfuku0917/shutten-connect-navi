@@ -1,28 +1,12 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
 export async function POST(req: Request) {
   try {
-    const { documentId } = await req.json()
-    if (!documentId) {
-      return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
-    }
-
-    const apiKey = process.env.RESEND_API_KEY
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!apiKey || !url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-
-    const db = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
     // 呼び出し元を確かめる。
     //
     // 以前はここに認証が無く、書類のIDを当てられれば誰でも
@@ -31,15 +15,20 @@ export async function POST(req: Request) {
     // 出店者に身に覚えのない通知が届くのは避ける。
     //
     // 書類の審査は運営の仕事なので、運営だけが呼べるようにする。
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-    const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-    if (me?.role !== 'admin') {
-      return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
+    // 判定は引数の検査より先に行う。名乗っていない相手に
+    // 「パラメータ不足」と返すと、入力の当たり外れを教えることになる
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const db = auth.db
+
+    const { documentId } = await req.json()
+    if (!documentId) {
+      return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
+    }
+
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
     }
 
     const { data: doc, error: dErr } = await db

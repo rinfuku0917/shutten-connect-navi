@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
-import { requireCaller, serverConfigResponse } from '../../../lib/apiAuth'
+import { requireCaller, serverConfigResponse, denyNotAdmin } from '../../../lib/apiAuth'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 import { SITE_URL } from '../../../lib/seo'
 
@@ -26,8 +26,8 @@ export async function POST(req: Request) {
 
     // 送信者はトークンの持ち主。DBを読む前に決めるので、
     // body の値で「誰として送ったか」を差し替えられない。
-    // 見る順は requireCaller のまま（トークン無し→401、鍵無し→500、
-    // 検証失敗→401、役割が読めない→503）
+    // 見る順は requireCaller のまま（トークン無し→401、鍵無し→500、検証失敗→401）。
+    // 役割が読めなかったかどうかは、下の 403 の判定で denyNotAdmin が見る
     const ctx = await requireCaller(req)
     if (ctx instanceof NextResponse) return ctx
     const { caller, db } = ctx
@@ -50,9 +50,10 @@ export async function POST(req: Request) {
 
     // このやり取りの当事者か。運営は代わりに返すことがあるので通す。
     // 当事者でない相手には、宛先も件名も作らせない。
-    // 役割は関門が読んでいる（読めなかったときは、ここへ来る前に 503 で止まる）
+    // 当事者なら役割を見ずに通る。運営でないと通らないと決まった今だけ、
+    // 役割が読めていたかを確かめる（読めていなければ 403 ではなく 503）
     if (senderId !== app.seller_id && senderId !== hostId && !caller.isAdmin) {
-      return NextResponse.json({ error: 'このやり取りの通知は送れません' }, { status: 403 })
+      return denyNotAdmin(caller, 'このやり取りの通知は送れません')
     }
 
     // 送信者から受信者を決定（運営が送ったときは出店者あて。これまでと同じ）

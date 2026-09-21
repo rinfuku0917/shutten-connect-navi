@@ -86,5 +86,33 @@ This version has breaking changes — APIs, conventions, and file structure may 
   順を逆にすると、鍵の生の値がアクセストークンとして Supabase の認証ログに残る
 - 役割（profiles.role）の読み取り自体が失敗したときは 403 ではなく 503 を返す。
   「権限が無い」と「いま確かめられない」を混ぜない
+- `requireCaller` を使う入口では `if (!caller.isAdmin) return 403` と書かない。
+  403 は `denyNotAdmin(caller, 文面)` を通す（`app/lib/apiAuth.ts`）。
+  `caller.isAdmin` が false でも「運営ではない」証拠にならず、上の 503 の書き分けはここに入っている。
+  逆に、所有で通る枝（自分の出店・自分の請求書・自分が送ったメッセージ）では役割を見ない。
+  役割が読めなくても答えが変わらないので、`profiles` の一瞬の不調で操作を止めない
+- 権限判定に使うクライアント（サービスロール）は、名乗りを確かめたあとで作る。
+  先に作って「サーバー設定エラー」500 を返すと、トークンも鍵も持たない相手に
+  サーバーの設定状態を教えることになる
 - 利用者の入力を `ilike` のパターンに直接渡さない（`%` `_` `*` がワイルドカードとして効く）。
   一致で判定するなら `eq`、`ilike` を使うなら `%` `*` `\` を弾いて `_` を逃がす
+  （`app/lib/likeSearch.ts`）。`.or()` の中の `ilike` も同じ
+  （`.ilike(` を grep しても見つからないので見落としやすい）。
+  `.or()` に埋めるときは `,` `(` `)` `"` も弾く（項の区切り・囲みとして読まれ、問い合わせが壊れる）
+- 認証を付けられない公開の入口（登録前・会員でない人が使うもの）には、
+  発信元ごとの回数の上限を付ける（`app/lib/rateLimit.ts`）。上限に当たったら
+  `console.warn` を1行残す。呼び出し側が応答を見ない作りだと、落ちた事実がどこにも残らない
+- 公開の入口を、サーバー内から HTTP（fetch）で呼ばない。
+  発信元が実行環境のIPになり、回数の上限の枠を共有して、正規の呼び出しを食い潰す。
+  中身を `app/lib` の関数に出して直に呼ぶ
+
+# Supabase の権限（移行ファイルを書くとき）
+
+- `public` に作る表・ビューを、ログイン後の画面（authenticated）から書くときは、
+  その移行ファイルの中で `grant insert, update, delete on public.表名 to authenticated;` を明示する。
+  RLS のポリシーだけ書いて grant を省くと、ポリシーは正しいのに 42501 permission denied で
+  黙って落ちる（2026-09-21 の `20260921_public_default_privileges.sql` で既定権限を締めたため。
+  それ以前は既定権限が黙って付けていた）
+- `anon` / `authenticated` の権限で評価される関数には `grant execute` を明示する。
+  RPC だけでなく、RLS のポリシー・ビューの定義・CHECK の式の中で呼ぶ関数も対象
+  （`public.is_admin()` が該当。`create or replace` は既存の権限を保つが `drop` は消す）

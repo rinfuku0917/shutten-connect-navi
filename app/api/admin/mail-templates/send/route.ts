@@ -1,7 +1,8 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { MAIL_DEF_BY_KEY, fillVars } from '../../../../lib/mailTemplates'
+import { requireAdmin } from '../../../../lib/apiAuth'
+import { hasLikeWildcard, likePattern } from '../../../../lib/likeSearch'
 
 // メール文面の画面から、1通だけ手で送る。
 //
@@ -22,31 +23,33 @@ import { MAIL_DEF_BY_KEY, fillVars } from '../../../../lib/mailTemplates'
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 const REPLY_TO = 'info@connect-navi.com'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Ctx = { db: any; uid: string }
+// 呼び出し元は app/lib/apiAuth.ts の requireAdmin で確かめる。
+// 戻り値の uid は、送った人（mail_send_log.sent_by）として残すのに使う
 
-async function requireAdmin(req: Request): Promise<Ctx | NextResponse> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+// 送り先の形。% * \ を通さないのは下の ilike のため（この3つは
+// メールアドレスに本来現れない）。
+// 素の /^[^\s@]+@[^\s@]+\.[^\s@]+$/ だと `%@%.com` が形として通ってしまい、
+// mail_send_log.seller_id によその会員のIDが入る
+const looksLikeEmail = (v: string) => /^[^\s@%*\\]+@[^\s@%*\\]+\.[^\s@%*\\]+$/.test(v)
 
-  const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return { db, uid }
-}
-
-const looksLikeEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+// ilike に渡す前に、パターンとして効く記号を無効にする。
+// app/api/auth/check-email/route.ts と同じ考え方。
+//
+// 運営しか呼べない入口だが、アドレスは運営が画面に手で打つ値なので、
+// 貼り付け事故で `%` が混じるだけで、よその会員の行に当たってしまう。
+// GET は差し込みの初期値に別人の屋号が入り、POST は「誰に送ったか」の
+// 記録が別人を指す。一致で判定したいだけなので、パターンとして効かせない。
+//
+//   %  … 何文字にでも合う
+//   *  … PostgREST が % に読み替える
+//   \  … Postgres の逃がし記号
+// この3つは弾き、_（任意の1文字）は正規のアドレスに現れるので逃がす
+// （逃がさないと taro_yamada@… が taroxyamada@… にも合う）。
+//
+// 大文字小文字を無視したいので eq には変えない（登録時の表記が揃っていない）。
+//
+// 逃がし方そのものは app/lib/likeSearch.ts にある（check-email と
+// 管理画面の取り込み名簿の検索と共通）
 
 // 送り先のアドレスから、その人が誰かを調べる。
 // 会員なら、屋号やお名前を差し込みの初期値として画面へ返す。
@@ -58,11 +61,15 @@ export async function GET(req: Request) {
 
   const email = (new URL(req.url).searchParams.get('email') || '').trim()
   if (!email) return NextResponse.json({ error: 'アドレスが指定されていません' }, { status: 400 })
+  if (hasLikeWildcard(email)) {
+    return NextResponse.json({ error: 'メールアドレスの形が正しくありません' }, { status: 400 })
+  }
+  const emailPattern = likePattern(email)
 
   const { data } = await db
     .from('profiles')
     .select('id, role, name, shop_name, email')
-    .ilike('email', email)
+    .ilike('email', emailPattern)
     .limit(1)
   const p = data && data.length > 0 ? data[0] : null
 
@@ -74,7 +81,7 @@ export async function GET(req: Request) {
       .from('mail_send_log')
       .select('sent_at')
       .eq('template_key', key).eq('status', 'sent')
-      .ilike('email', email)
+      .ilike('email', emailPattern)
       .order('sent_at', { ascending: false })
       .limit(1)
     if (log && log.length > 0) lastSentAt = log[0].sent_at
@@ -120,9 +127,10 @@ export async function POST(req: Request) {
   const subject = fillVars(subjectSrc, use)
   const text = fillVars(bodySrc, use)
 
-  // 送り先が会員なら控えておく。誰に送ったかを後から追えるようにする
+  // 送り先が会員なら控えておく。誰に送ったかを後から追えるようにする。
+  // looksLikeEmail で % * \ は弾いてあるので、残りは _ を逃がすだけ
   const { data: pf } = await db
-    .from('profiles').select('id').ilike('email', to).limit(1)
+    .from('profiles').select('id').ilike('email', likePattern(to)).limit(1)
   const sellerId = pf && pf.length > 0 ? pf[0].id : null
 
   const resend = new Resend(apiKey)

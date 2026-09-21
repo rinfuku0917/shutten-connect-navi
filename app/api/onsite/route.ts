@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, denyNotAdmin } from '../../lib/apiAuth'
 
 // 当日の進行（前日確認・車両の搬入・営業準備中・営業開始・営業終了・撤収）を記録する。
 //
@@ -26,22 +26,20 @@ type SellerStep = keyof typeof SELLER_STEPS
 
 export async function POST(req: Request) {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-    const db = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    // 呼び出し元をアクセストークンで確かめる（body の id は信用しない）
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
+    // 呼び出し元をアクセストークンで確かめる（body の id は信用しない）。
+    //
+    // この入口は「本人の出店なら記録、運営なら受付完了」の2通りなので、
+    // requireAdmin では足切りできない。requireCaller で uid と役割を受け取り、
+    // 403 は下の枝それぞれで返す。
+    // もとは運営の枝に入ったときだけ profiles を読んでいたので、
+    // 出店者の記録でも役割の読み取りが1回増える（ごく小さい問い合わせ）。
+    // ただし読み取りに失敗しても出店者の記録は止めない。
+    // 現場のスマホから1出店で6回押される導線なので、役割を要らない枝まで
+    // profiles の一瞬の不調で止めてはいけない（403/503 の書き分けは下の seen の枝）
+    const ctx = await requireCaller(req)
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    const uid = caller.uid
 
     const { applicationId, step, undo } = await req.json()
     if (!applicationId || !step) {
@@ -59,9 +57,9 @@ export async function POST(req: Request) {
     // 出店者側の全工程がそろうまでは押せない（そろっていないのに完了にすると、
     // 撤収まで終わったのかどうかが分からなくなる）。
     if (step === 'seen') {
-      const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-      if (me?.role !== 'admin') {
-        return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 })
+      if (!caller.isAdmin) {
+        // 役割が読めなかったときは 403 ではなく 503（denyNotAdmin が書き分ける）
+        return denyNotAdmin(caller, '管理者権限が必要です')
       }
       const { data: prog } = await db
         .from('applications')

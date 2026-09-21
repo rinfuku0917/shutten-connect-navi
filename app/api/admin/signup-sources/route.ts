@@ -1,18 +1,16 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, denyNotAdmin } from '../../../lib/apiAuth'
 
 // 「何を見て知ったか」の回答を読む。
 //
 // signup_sources はお名前とメールアドレスが入るため RLS を有効にして
 // ポリシーは作っていない。運営の画面からの参照はここを通す。
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getAdmin(): any {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
+//
+// 関門は requireCaller を使う（requireAdmin ではない）。
+// 参照専用の入口なので 403 の文面を「運営のみが参照できます」にしてあり、
+// requireAdmin だと「運営のみが操作できます」に変わってしまう。
+// 足切りだけを自分で書き、見る順（トークン無し→401、鍵無し→500、
+// 検証失敗→401）は共通の関門に任せる。役割が読めなかったときの 503 は denyNotAdmin。
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isMissingTable(error: any) {
@@ -23,18 +21,12 @@ function isMissingTable(error: any) {
 
 export async function GET(req: Request) {
   try {
-    const db = getAdmin()
-    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
     // 呼び出し元をアクセストークンで確かめる
-    const authHeader = req.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-    const { data: userData, error: uErr } = await db.auth.getUser(token)
-    const uid = userData?.user?.id
-    if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-    const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-    if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが参照できます' }, { status: 403 })
+    const ctx = await requireCaller(req)
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    // 役割が読めなかったときは 403 ではなく 503（denyNotAdmin が書き分ける）
+    if (!caller.isAdmin) return denyNotAdmin(caller, '運営のみが参照できます')
 
     const { data, error } = await db
       .from('signup_sources')

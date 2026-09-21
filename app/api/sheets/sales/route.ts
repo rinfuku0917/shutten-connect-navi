@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, denyNotAdmin, roleCheckFailedResponse } from '../../../lib/apiAuth'
 import { sendSalesToSheet, sheetConfigured } from '../../../lib/sheetSend'
 
 // 売上報告を、経理用のGoogleスプレッドシートへ送る窓口（画面から呼ばれる）。
@@ -15,35 +15,22 @@ import { sendSalesToSheet, sheetConfigured } from '../../../lib/sheetSend'
 
 export const maxDuration = 60
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getAdmin(): any {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-// 呼び出し元をアクセストークンで確かめる。
-// 運営だけでなく、自分の売上を報告した出店者からも呼ばれる。
+// 呼び出し元は app/lib/apiAuth.ts の requireCaller で確かめる。
+// 運営だけでなく、自分の売上を報告した出店者からも呼ばれるので、
+// 役割での足切りはせず、403 はそれぞれの枝で返す。
 // 誰の売上かは saleId から引くので、body の出店者IDは信用しない。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function requireUser(req: Request, db: any): Promise<{ uid: string; isAdmin: boolean } | NextResponse> {
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  return { uid, isAdmin: me?.role === 'admin' }
-}
+//
+// もとは自前の requireUser があり、profiles の読み取りが失敗しても
+// isAdmin:false として先へ進めていた。DBが一瞬落ちただけで、本物の運営に
+// 403「運営のみが参照できます」が返る形だった。
+// いまは 403 を返す手前で denyNotAdmin / roleError を見て、読み取りに失敗していれば
+// 503 を返す（403 と混ぜない）。自分の売上を送るだけの枝は役割に左右されない
 
 export async function POST(req: Request) {
   try {
-    const db = getAdmin()
-    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    const auth = await requireUser(req, db)
-    if (auth instanceof NextResponse) return auth
+    const ctx = await requireCaller(req)
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
 
     const body = await req.json().catch(() => ({}))
     // retryPending … 未送信のものをまとめて送り直す（運営のみ）
@@ -57,7 +44,7 @@ export async function POST(req: Request) {
     }
 
     if (retryPending) {
-      if (!auth.isAdmin) return NextResponse.json({ error: '運営のみが実行できます' }, { status: 403 })
+      if (!caller.isAdmin) return denyNotAdmin(caller, '運営のみが実行できます')
       // 一度に送りすぎないよう上限を置く。残りは次の実行で送る
       const { data, error } = await db
         .from('sales').select('id').is('sheet_synced_at', null)
@@ -70,12 +57,15 @@ export async function POST(req: Request) {
 
     // 出店者は、自分の売上だけ送れる。
     // 他人のIDを混ぜて呼ばれても、ここで止める
-    if (!auth.isAdmin) {
+    if (!caller.isAdmin) {
       const { data: mine, error } = await db
-        .from('sales').select('id').in('id', ids).eq('seller_id', auth.uid)
+        .from('sales').select('id').in('id', ids).eq('seller_id', caller.uid)
       if (error) return NextResponse.json({ error: '売上の確認に失敗しました' }, { status: 500 })
       const allowed = new Set(((mine || []) as { id: string }[]).map(r => r.id))
       if (allowed.size !== ids.length) {
+        // 自分以外の売上を送れるのは運営だけ。ここへ来た時点で
+        // 「運営でないと通らない」ので、役割が読めていなかったのなら 503
+        if (caller.roleError) return roleCheckFailedResponse()
         return NextResponse.json({ error: '自分の売上以外は送れません' }, { status: 403 })
       }
     }
@@ -96,11 +86,10 @@ export async function POST(req: Request) {
 // 未送信の件数と直近の失敗を返す。管理画面の「送り直す」の横に出す
 export async function GET(req: Request) {
   try {
-    const db = getAdmin()
-    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    const auth = await requireUser(req, db)
-    if (auth instanceof NextResponse) return auth
-    if (!auth.isAdmin) return NextResponse.json({ error: '運営のみが参照できます' }, { status: 403 })
+    const ctx = await requireCaller(req)
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    if (!caller.isAdmin) return denyNotAdmin(caller, '運営のみが参照できます')
 
     const configured = sheetConfigured()
     const { count, error } = await db

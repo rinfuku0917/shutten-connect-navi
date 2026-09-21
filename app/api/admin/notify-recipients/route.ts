@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { ADMIN_EMAIL, isValidEmail } from '../../../lib/notifyRecipients'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 // 運営あて通知メールの宛先の管理。
 //
@@ -10,30 +10,7 @@ import { ADMIN_EMAIL, isValidEmail } from '../../../lib/notifyRecipients'
 //
 // notify_recipients は RLS 有効・ポリシー0のため、読み書きはすべてここを通す。
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getAdmin(): any {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-// 呼び出し元をアクセストークンで確かめる。body のIDは信用しない
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function requireAdmin(req: Request, db: any): Promise<true | NextResponse> {
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return true
-}
+// 呼び出し元は app/lib/apiAuth.ts の requireAdmin で確かめる。body のIDは信用しない
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isMissingTable(error: any) {
@@ -50,10 +27,9 @@ const FLAGS = ['on_contact', 'on_member', 'on_payment', 'on_cancel'] as const
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const db = getAdmin()
-    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    const auth = await requireAdmin(req, db)
+    const auth = await requireAdmin(req)
     if (auth instanceof NextResponse) return auth
+    const db = auth.db
 
     // ===== 一覧 =====
     if (body.action === 'list') {
