@@ -12,6 +12,11 @@ import { NextResponse } from 'next/server'
 // ログインしていなくても、届いた連絡を消せてしまう状態だった。
 
 // 送信から取り消せる時間（分）。やり取りの記録が後から書き換わりすぎないよう区切る。
+//
+// 運営（profiles.role = 'admin'）はこの制限を受けない。
+// 運営は出店者・募集者からの問い合わせを受けて文面を直すことがあり、
+// 60分を過ぎた連絡も消す必要がある（2026-09-21 に運営から要望）。
+// 出店者・募集者は60分のままにする（相手が読んだ後の記録が消えないようにするため）。
 const RETRACT_LIMIT_MINUTES = 60
 
 export async function POST(req: Request) {
@@ -55,9 +60,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '自分が送信したメッセージのみ取り消せます' }, { status: 403 })
     }
 
+    // 押した人が運営かどうか。運営は時間の制限を受けない
+    const { data: me } = await admin
+      .from('profiles').select('role').eq('id', requesterId).maybeSingle()
+    const isAdmin = me?.role === 'admin'
+
     const sentAt = msg.sent_at ? new Date(msg.sent_at).getTime() : 0
     const passedMinutes = (Date.now() - sentAt) / 60000
-    if (sentAt && passedMinutes > RETRACT_LIMIT_MINUTES) {
+    if (!isAdmin && sentAt && passedMinutes > RETRACT_LIMIT_MINUTES) {
       return NextResponse.json(
         { error: `送信から${RETRACT_LIMIT_MINUTES}分を過ぎたメッセージは取り消せません` },
         { status: 400 },

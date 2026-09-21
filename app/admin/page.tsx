@@ -718,7 +718,7 @@ export default function AdminPage() {
   const retractAdminMsg = async (messageId: string) => {
     if (!(await ask({
       title: 'このメッセージを取り消しますか？',
-      body: '相手の画面からも消えます。添付ファイルも一緒に消えます。\n送信から60分を過ぎたものは取り消せません。',
+      body: '相手の画面からも消えます。添付ファイルも一緒に消えます。\n運営は時間の制限なく取り消せます。',
       okLabel: '取り消す',
       danger: true,
     }))) return
@@ -3372,16 +3372,13 @@ const previewDoc = async (fileUrl: string) => {
                               {m.body && <div>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, true)}
                             </div>
-                            {/* 送信から60分までは取り消せる。過ぎたものはボタンを出さない
-                                （押しても断られるだけなので、出さないほうが分かりやすい） */}
-                            {(!m.sent_at || Date.now() - new Date(m.sent_at).getTime() <= 60 * 60 * 1000) && (
-                              <div style={{ textAlign: 'right', marginTop: '2px' }}>
-                                <button onClick={() => retractAdminMsg(m.id)}
-                                  style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline', fontFamily: 'inherit' }}>
-                                  送信を取り消す
-                                </button>
-                              </div>
-                            )}
+                            {/* 運営は時間の制限なく取り消せる（app/api/messages/retract/route.ts） */}
+                            <div style={{ textAlign: 'right', marginTop: '2px' }}>
+                              <button onClick={() => retractAdminMsg(m.id)}
+                                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline', fontFamily: 'inherit' }}>
+                                送信を取り消す
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
