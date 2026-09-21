@@ -48,6 +48,20 @@ function genreText(v: string[] | string | null): string {
   return t
 }
 
+/**
+ * DBの日時（UTC）を、記事フォームの datetime-local に入れる形に直す。
+ *
+ * input[type=datetime-local] は「YYYY-MM-DDTHH:mm」しか受け取らず、
+ * タイムゾーンを持たない。サイトの日付は日本時間で出しているので、
+ * ここも日本時間に直してから渡す（端末の時計に左右されないよう自分で計算する）。
+ */
+function toLocalInput(iso: string): string {
+  const t = new Date(iso)
+  if (isNaN(t.getTime())) return ''
+  const jst = new Date(t.getTime() + 9 * 60 * 60 * 1000)
+  return jst.toISOString().slice(0, 16)
+}
+
 const dummySellers = [
   { id: '1', name: '山田 花子', shop: 'Hana\'s Sweets', email: 'hanako@example.com', phone: '090-1234-5678', genre: '焼き菓子・スイーツ', area: '東京都', sns: '@hana_sweets', status: '承認済', docs: '提出済' },
   { id: '2', name: '田中 健太', shop: 'クラフト工房', email: 'kenta@example.com', phone: '080-2345-6789', genre: 'ハンドメイド雑貨', area: '大阪府', sns: '@craft_kenta', status: '承認済', docs: '提出済' },
@@ -337,6 +351,8 @@ export default function AdminPage() {
   const [pStatus, setPStatus] = useState('draft')
   // SEO用。docs/seo-keywords.md の設計に合わせて記事ごとに設定する
   const [pKeyword, setPKeyword] = useState('')
+  // 記事の公開日（datetime-local の「2026-09-21T14:30」。空欄なら保存した時刻）
+  const [pPublishedAt, setPPublishedAt] = useState('')
   const [pRelPref, setPRelPref] = useState('')
   const [pRelCat, setPRelCat] = useState('')
   const [pSaving, setPSaving] = useState(false)
@@ -392,7 +408,7 @@ export default function AdminPage() {
   const resetPostForm = () => {
     setEditingPost(null); setPTitle(''); setPSlug(''); setPCategory(''); setPEmoji('📝')
     setPExcerpt(''); setPMeta(''); setPContent(''); setPStatus('draft'); setPMsg('')
-    setPKeyword(''); setPRelPref(''); setPRelCat('')
+    setPKeyword(''); setPRelPref(''); setPRelCat(''); setPPublishedAt('')
   }
 
   const startEditPost = (p: BlogPost) => {
@@ -400,6 +416,8 @@ export default function AdminPage() {
     setPEmoji(p.cover_emoji || '📝'); setPExcerpt(p.excerpt || ''); setPMeta(p.meta_description || '')
     setPContent(p.content); setPStatus(p.status); setPMsg('')
     setPKeyword(p.target_keyword || ''); setPRelPref(p.related_prefecture || ''); setPRelCat(p.related_category || '')
+    // datetime-local は「YYYY-MM-DDTHH:mm」しか受け取らないので、日本時間に直して渡す
+    setPPublishedAt(p.published_at ? toLocalInput(p.published_at) : '')
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -426,6 +444,8 @@ export default function AdminPage() {
       target_keyword: pKeyword.trim() || null,
       related_prefecture: pRelPref || null,
       related_category: pRelCat || null,
+      // 空欄なら送らない（APIが保存した時刻を入れる）
+      published_at: pPublishedAt || null,
     }
     try {
       const res = await fetch('/api/posts', {
@@ -4191,6 +4211,16 @@ const previewDoc = async (fileUrl: string) => {
                         <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>狙う検索キーワード</label>
                         <input type="text" value={pKeyword} onChange={e => setPKeyword(e.target.value)} placeholder="キッチンカー スーパー 出店" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                         <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px' }}>1記事1キーワード。docs/seo-keywords.md の行と対応させます</div>
+                      </div>
+                      {/* 公開日を指定できるようにしてある。
+                          まとめて何本も書いた日に全部が同じ日付になると、記事一覧も
+                          検索結果も同日に並ぶ。1日1本ずつ公開しているように見せるため */}
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>公開日（日本時間）</label>
+                        <input type="datetime-local" value={pPublishedAt} onChange={e => setPPublishedAt(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                        <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px' }}>
+                          空欄なら保存した時刻。まとめて書いたときは1日ずつずらしてください（同じ日に何本も並ばないように）。未来の日付は入りません
+                        </div>
                       </div>
                       <div className='admin-newplace-grid' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         <div>

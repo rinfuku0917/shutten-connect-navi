@@ -1,6 +1,26 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, requireAdmin } from '../../lib/apiAuth'
 
+/**
+ * 運営が指定した公開日を、保存できる形に直す（受け取れない値は null）。
+ *
+ * 画面からは datetime-local の「2026-09-21T14:30」で来る（タイムゾーンなし）。
+ * サイトの日付は日本時間で出しているので、+09:00 として読む。
+ * 未来の日付は受けない（公開済みなのに、まだ先の日付で出てしまう）。
+ */
+function pickPublishedAt(input: unknown, nowIso: string): string | null {
+  if (typeof input !== 'string' || !input.trim()) return null
+  const s = input.trim()
+  // 日付だけ（2026-09-21）なら朝9時、分まであれば その時刻を日本時間として読む
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T09:00:00+09:00'
+    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s) ? s + '+09:00'
+    : s
+  const t = new Date(iso)
+  if (isNaN(t.getTime())) return null
+  if (t.getTime() > new Date(nowIso).getTime()) return null
+  return t.toISOString()
+}
+
 // ブログ記事の読み書き。書き込み（POST/PUT/DELETE）は運営だけ。
 //
 // 以前は body の requesterId を profiles.role='admin' と照合するだけで、
@@ -62,13 +82,20 @@ export async function POST(req: Request) {
     const admin = auth.db
 
     const body = await req.json()
-    const { slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category } = body
+    const { slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category, published_at } = body
 
     if (!slug || !title || !content) {
       return NextResponse.json({ error: 'slug・title・content は必須です' }, { status: 400 })
     }
 
     const now = new Date().toISOString()
+    // 公開日は運営が指定できる。
+    //
+    // まとめて何本も書いた日に全部が同じ日付になると、記事一覧も検索結果も
+    // 同日に並ぶ。1日1本ずつ公開しているように見せたいので、
+    // 管理画面から日付を指定できるようにしてある（指定が無ければ保存した時刻）。
+    // 未来の日付は受けない（公開済みなのに未公開に見えるため）
+    const wanted = pickPublishedAt(published_at, now)
     const { data, error } = await admin
       .from('posts')
       .insert({
@@ -82,7 +109,7 @@ export async function POST(req: Request) {
         related_prefecture: related_prefecture || null,
         related_category: related_category || null,
         status: status || 'draft',
-        published_at: status === 'published' ? now : null,
+        published_at: status === 'published' ? (wanted || now) : null,
       })
       .select()
       .single()
@@ -107,14 +134,22 @@ export async function PUT(req: Request) {
     const admin = auth.db
 
     const body = await req.json()
-    const { id, slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category } = body
+    const { id, slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category, published_at } = body
 
     if (!id) return NextResponse.json({ error: 'id がありません' }, { status: 400 })
 
-    const updates: Record<string, unknown> = { slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword: target_keyword || null, related_prefecture: related_prefecture || null, related_category: related_category || null, updated_at: new Date().toISOString() }
+    const now = new Date().toISOString()
+    const updates: Record<string, unknown> = { slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword: target_keyword || null, related_prefecture: related_prefecture || null, related_category: related_category || null, updated_at: now }
     if (status === 'published') {
-      const { data: cur } = await admin.from('posts').select('published_at').eq('id', id).maybeSingle()
-      if (cur && !cur.published_at) updates.published_at = new Date().toISOString()
+      // 運営が日付を指定していればそれに従う（1日1本ずつに見せるため）。
+      // 指定が無いときは、これまでどおり「まだ公開日が無い記事だけ」今の時刻を入れる
+      const wanted = pickPublishedAt(published_at, now)
+      if (wanted) {
+        updates.published_at = wanted
+      } else {
+        const { data: cur } = await admin.from('posts').select('published_at').eq('id', id).maybeSingle()
+        if (cur && !cur.published_at) updates.published_at = now
+      }
     }
 
     const { data, error } = await admin.from('posts').update(updates).eq('id', id).select().single()
