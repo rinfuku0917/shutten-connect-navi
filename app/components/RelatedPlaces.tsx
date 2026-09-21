@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { segmentForFilter } from '../places/segments'
 
 // 記事の下に出す「関連する出店場所」。
 //
@@ -72,12 +73,21 @@ export default function RelatedPlaces({
   places,
   heading = '関連する出店場所',
   lead,
+  prefecture = null,
 }: {
   places: RelatedPlace[]
   heading?: string
   lead?: string
+  /** 記事に設定した都道府県。その県の出店場所一覧へ1本つなぐ。
+   *  枠の中のカードは募集中のみという現仕様を維持する
+   *  （AGENTS.md：記事の「関連する出店場所」枠に終了案件は出さない）。 */
+  prefecture?: string | null
 }) {
   if (places.length === 0) return null
+
+  // 都道府県ごとの固有ページがある県はそちらへ。無い県は全国の一覧へ。
+  // どのページがあるかの判定は app/places/segments.ts が唯一の正
+  const areaSegment = prefecture ? segmentForFilter(prefecture, '') : undefined
 
   return (
     <section style={{ marginTop: '48px' }}>
@@ -119,9 +129,15 @@ export default function RelatedPlaces({
       </div>
 
       <div style={{ textAlign: 'center', marginTop: '18px' }}>
-        <Link href='/places' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>
-          出店場所をすべて見る →
-        </Link>
+        {areaSegment ? (
+          <Link href={areaSegment.path} style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>
+            {areaSegment.shortName}の出店場所をすべて見る →
+          </Link>
+        ) : (
+          <Link href='/places' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>
+            出店場所をすべて見る →
+          </Link>
+        )}
       </div>
     </section>
   )

@@ -9,6 +9,7 @@ import MeetingRequestForm from '../../../components/MeetingRequestForm'
 import JsonLd from '../../../components/JsonLd'
 import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd, organizationRef } from '../../../lib/seo'
 import { AREAS, findArea, type Area } from '../areas'
+import { segmentForFilter } from '../../../places/segments'
 
 // 「キッチンカー 呼びたい 費用 東京」のように、地名を足して調べる人向けのページ。
 //
@@ -98,6 +99,10 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
   } catch {
     // 数字が取れなくても、ページ自体は出す
   }
+
+  // 同じ県の「出店したい方向け」の一覧ページ（あれば）。
+  // どのページがあるかの判定は app/places/segments.ts が唯一の正
+  const placesAreaPath = segmentForFilter(area.dbPref, '')?.path
 
   const H2: React.CSSProperties = { fontSize: 'clamp(20px,5.6vw,25px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
   const LEAD: React.CSSProperties = { fontSize: '14px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '30px' }
@@ -290,8 +295,16 @@ export default async function AreaPage({ params }: { params: Promise<{ pref: str
                 </Link>
               ))}
             </div>
+            {/* 出店したい方向けの一覧へ1本だけ。相互リンクを増やすと
+                「呼びたい／出したい」の意図が混ざり、このページの評価を
+                新しい一覧ページが薄めるだけになる。
+                固有ページのある県だけリンク先を差し替え、無い県は全国の一覧のまま */}
             <div style={{ textAlign: 'center', marginTop: '20px' }}>
-              <Link href='/places' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>掲載中の出店場所をすべて見る →</Link>
+              {placesAreaPath ? (
+                <Link href={placesAreaPath} style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>{area.name}で出店したい方はこちら →</Link>
+              ) : (
+                <Link href='/places' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>掲載中の出店場所をすべて見る →</Link>
+              )}
             </div>
           </div>
         </div>

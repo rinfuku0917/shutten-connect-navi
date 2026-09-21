@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 import PlaceDetailClient, { type Place } from './PlaceDetailClient'
 import JsonLd from '../../components/JsonLd'
 import RelatedPlaces, { type RelatedPlace } from '../../components/RelatedPlaces'
+import PlaceSegmentLinks from '../PlaceSegmentLinks'
+import { segmentForFilter } from '../segments'
 import { SITE_URL, breadcrumbJsonLd } from '../../lib/seo'
 
 // 案件の詳細。
@@ -327,11 +329,20 @@ export default async function PlaceDetailPage({ params }: { params: Promise<{ id
           openNearby.length > 0 ? (
             <RelatedPlaces
               places={openNearby}
+              prefecture={place.prefecture}
               heading={`${place.prefecture}で募集中の出店場所`}
               lead={`この案件の募集は終了しましたが、${place.prefecture}ではほかにも出店者を募集している場所があります。`}
             />
           ) : null
         }
+        // この案件が属するエリア別・カテゴリ別ページへの導線。
+        // 募集終了の案件からも出す（終了案件は実績としてリンクしてよい）
+        segmentLinks={<PlaceSegmentLinks prefecture={place.prefecture} genres={place.genres} />}
+        // 「◯◯で募集中の案件を見る」の行き先。固有ページ（/places/area/{県}）が
+        // ある県はそちらへ。判定は segments.ts が唯一の正で、参照はここ（サーバー）で済ませる。
+        // PlaceDetailClient は 'use client' なので、あちらから import すると
+        // 11セグメントぶんの表が案件詳細のクライアントJSに載ってしまう
+        areaListHref={place.prefecture ? (segmentForFilter(place.prefecture, '')?.path ?? null) : null}
       />
     </>
   )

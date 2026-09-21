@@ -3,6 +3,23 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { C, maru } from './siteTheme'
 
+// フッターに出す都道府県ページ（出店したい方向け）。
+// 全部の県を並べるとフッターが重くなるので、掲載件数の多い4県だけにする。
+//
+// **app/places/segments.ts から import しないこと。**
+// このファイルは 'use client' なので、import すると11セグメントぶんの表
+// （h1・title・metaNoun など日本語の文字列）が、フッターを出す全公開ページの
+// クライアントJSに載る（AGENTS.md「公開ページに不要なクライアントJSを足さない」）。
+// 4本のURLとラベルを直書きし、segments.ts との食い違いは
+// npm run seo:segments の「SiteFooter のリンクと segments.ts の照合」が★で報告する。
+// 県のページを畳むときは、segments.ts の行と一緒にここも消す。
+const footerAreas: { href: string; label: string }[] = [
+  { href: '/places/area/tokyo', label: '東京都の出店場所を探す' },
+  { href: '/places/area/saitama', label: '埼玉県の出店場所を探す' },
+  { href: '/places/area/kanagawa', label: '神奈川県の出店場所を探す' },
+  { href: '/places/area/chiba', label: '千葉県の出店場所を探す' },
+]
+
 // トップページと同じ淡いパステルグリーンのフッター。全公開ページで共有する。
 // トップページのフッターと同じ構成（実績紹介・よくある質問はトップ内アンカー）
 //
@@ -28,6 +45,9 @@ const cols: { head: string; icon: string; items: { href: string; label: string }
   { head: 'キッチンカーで出店したい方', icon: '/ic-f-space.webp', items: [
     { href: '/space', label: '出店したい方へ' },
     { href: '/places', label: '出店場所を探す' },
+    // 呼びたい方の列にはエリア別の導線が4本あるのに、出したい方の列には無かった。
+    // その非対称を埋める（都道府県ごとの出店場所一覧）
+    ...footerAreas,
     { href: '/sell', label: '車両を売りたい' },
     { href: '/#works', label: '実績紹介' },
     { href: '/blog', label: 'ブログ' },

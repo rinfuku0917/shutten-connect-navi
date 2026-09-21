@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
+import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import PlacesBrowser, { type Place } from './PlacesBrowser'
+import SegmentLinks from './SegmentLinks'
+import { segmentForFilter } from './segments'
 import { PLACE_CATEGORIES } from '../lib/categories'
 import { selectWithOptionalColumn } from '../lib/optionalColumn'
 
@@ -49,22 +52,46 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
     ? `${where}の${what}キッチンカー出店場所を${count}件掲載しています。イベント、商業施設、スーパーの駐車場、オフィスなどの出店募集を条件で絞り込んで探せます。掲載・応募は無料です。`
     : '全国のキッチンカー出店募集を掲載しています。イベント、商業施設、スーパーの駐車場、オフィスなどの出店場所を都道府県・カテゴリーで絞り込んで探せます。'
 
-  // 正規URLは絞り込みの条件を含める（並び順とページ番号は含めない）
-  const qs = new URLSearchParams()
-  if (pref) qs.set('pref', pref)
-  if (genre) qs.set('genre', genre)
-  const canonical = qs.toString() ? `/places?${qs.toString()}` : '/places'
+  // 正規URL。
+  //
+  // 以前はクエリ付きの自ページ（/places?pref=東京都）を正規URLにしていた。
+  // これは AGENTS.md の「インデックスさせたいページは固有のURLパスを持たせる。
+  // クエリパラメータだけの出し分けは不可」に正面から当たっていた。
+  //
+  //   1. その絞り込みに対応する固有ページがある（app/places/segments.ts の11枚）
+  //      → その固有URLへ寄せる
+  //   2. 対応する固有ページが無い（兵庫県、マルシェ・マーケットなど、未作成の掛け合わせ）
+  //      → 素の /places にする。クエリ付き自ページを指すのをやめる
+  //   3. 絞り込みなしの /places は、これまでどおり /places
+  //
+  // 301 は使わない。permanentRedirect は streaming の文脈では meta タグに落ちる
+  // （node_modules/next/dist/docs/01-app/03-api-reference/04-functions/permanentRedirect.md）ため
+  // 308 が返る保証がなく、しかも PlacesBrowser が history.replaceState で書く
+  // ?pref= を 308 にすると、絞り込んだ状態で再読み込み・共有した利用者の
+  // 地図・キーワード検索・並び替え・ページ送りが消える。308 はブラウザが恒久
+  // キャッシュするので後戻りできない。noindex も足さない（AGENTS.md の禁止事項）。
+  //
+  // **noindex のときは固有ページへ寄せない。**
+  // noindex と「別URLを正規URLとする canonical」を同時に出すのは矛盾した指示で、
+  // noindex が canonical 先（＝サイトマップに入れている固有ページ）に
+  // 付け替えて解釈されうる。キーワード検索（q）と2ページ目以降は
+  // canonical を出さずに noindex だけを出す。
+  const segment = noindex ? undefined : segmentForFilter(pref, genre)
+  const canonical = noindex ? undefined : (segment ? segment.path : '/places')
 
   return {
     title: { absolute: `${title} - 出店コネクトナビ` },
     description,
-    alternates: { canonical },
+    // layout に canonical は置いていないので、ここで出さなければ canonical は付かない
+    ...(canonical ? { alternates: { canonical } } : {}),
     ...(noindex ? { robots: { index: false, follow: true } } : {}),
-    openGraph: { title, description, url: canonical, type: 'website' },
+    openGraph: { title, description, ...(canonical ? { url: canonical } : {}), type: 'website' },
   }
 }
 
-async function fetchPlaces(): Promise<Place[]> {
+// generateMetadata と本体の2か所から呼ぶので、React の cache() で包む。
+// 包まないと、1回の表示で公開案件の全件読みが2回走る
+const fetchPlaces = cache(async (): Promise<Place[]> => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return []
@@ -85,7 +112,7 @@ async function fetchPlaces(): Promise<Place[]> {
   } catch {
     return []
   }
-}
+})
 
 export default async function PlacesPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams
@@ -96,6 +123,12 @@ export default async function PlacesPage({ searchParams }: { searchParams: Promi
   // 絞り込みの初期値をサーバーから渡す。
   // これがないと、サーバーが返すHTMLは絞り込み前のままになり、
   // 「?pref=東京都」と「/places」の中身が完全に同じになってしまう。
+  //
+  // リンク帯（SegmentLinks）はサーバー部品のまま渡す。
+  // ここの絞り込みは select の onChange なのでクローラーがたどれる <a> が1本も無く、
+  // ページ送りも button で href が無い（しかも2ページ目以降は noindex）。
+  // 結果として13件目以降の案件は、サイトマップ経由以外に発見経路が無かった。
+  // 案件詳細が <RelatedPlaces> をサーバー描画して渡しているのと同じやり方。
   return (
     <PlacesBrowser
       initialPlaces={places}
@@ -104,6 +137,7 @@ export default async function PlacesPage({ searchParams }: { searchParams: Promi
       initialKw={kw}
       initialPage={page}
       initialSort={sort}
+      segmentLinks={<SegmentLinks />}
     />
   )
 }

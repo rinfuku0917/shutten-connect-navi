@@ -80,6 +80,7 @@ export default function PlacesBrowser({
   initialKw = '',
   initialPage = 1,
   initialSort = 'new',
+  segmentLinks,
 }: {
   initialPlaces: Place[]
   /** サーバー側で解釈した絞り込み。ここを初期値にすることで、
@@ -89,6 +90,10 @@ export default function PlacesBrowser({
   initialKw?: string
   initialPage?: number
   initialSort?: 'new' | 'name'
+  /** エリア別・カテゴリ別ページへのリンク帯。サーバー側で描いたものを受け取るだけ。
+   *  ここで組み立てるとクライアントJSが増える（AGENTS.md のパフォーマンス項）。
+   *  絞り込みの select・地図・ページ送りのロジックには触っていない。 */
+  segmentLinks?: ReactNode
 }) {
   const [places] = useState<Place[]>(initialPlaces)
   const loading = false
@@ -193,6 +198,9 @@ const [showMap, setShowMap] = useState(false)
         <p className='jp-text' style={{fontSize:'14px',lineHeight:1.7,color:'rgba(255,255,255,0.9)'}}><span className='u'>全国の出店スペースから</span><span className='u'>理想の場所を見つけよう</span></p>
       </div>
       <div style={{maxWidth:'900px',margin:'0 auto',padding:'32px 16px'}}>
+
+        {/* エリア・場所の種類へのリンク帯（サーバー描画） */}
+        {segmentLinks}
 
         {/* 検索フィルタ */}
         <div style={{ background:'#fff', border:'1px solid #e0e0e0', borderRadius:'12px', padding:'16px', marginBottom:'20px', display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center' }}>

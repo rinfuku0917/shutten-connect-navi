@@ -186,6 +186,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
         <RelatedPlaces
           places={related}
+          // 並んだ案件がすべてその県のときだけ、その県の出店場所一覧へ1本つなぐ。
+          // 枠の中身（募集中のみ）は変えていない
+          prefecture={allInPref ? (post.related_prefecture ?? null) : null}
           lead={
             // 募集者向けの記事に来た人は、出店する場所を探してはいない。
             // 枠は内部リンクとして残しつつ、

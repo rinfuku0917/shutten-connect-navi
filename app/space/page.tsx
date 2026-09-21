@@ -3,15 +3,23 @@ import Link from 'next/link'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
+import SegmentLinks from '../places/SegmentLinks'
 
 export const metadata: Metadata = {
-  title: 'キッチンカーの出店場所を探す｜出店したい方へ',
+  // ほかのページと同じ { absolute } の書き方にそろえている。
+  // 表示される title は layout の template（`%s｜出店コネクトナビ`）が付いていた
+  // これまでと同じ文字列にしてある（AGENTS.md：既存ページの title を改修時に上書きしない）
+  title: { absolute: 'キッチンカーの出店場所を探す｜出店したい方へ｜出店コネクトナビ' },
   description:
     '全国のイベント・商業施設・空きスペースの出店募集を掲載。キッチンカー・移動販売の出店場所を条件で探して応募できます。登録・利用は無料です。',
   alternates: { canonical: '/space' },
 }
 
-export default function SpacePage() {
+// リンク帯が案件の件数を読むようになったので、10分ごとに作り直す。
+// 付けないと毎回データベースを読むページになる
+export const revalidate = 600
+
+export default async function SpacePage() {
   // 見出しは、文字列ではなく意味の切れ目で区切った配列にしてある。
   // カードはスマホで2列になり、内側の幅が129px（画面幅390pxのとき）しか
   // 残らないため見出しは必ず2行になるが、区切りを渡しておかないと
@@ -36,6 +44,15 @@ export default function SpacePage() {
         <div style={{display:'flex',gap:'12px',justifyContent:'center',flexWrap:'wrap'}}>
           <Link href='/places' style={{background:'#fff',color:'#111',fontWeight:'900',fontSize:'16px',padding:'14px 36px',borderRadius:'999px',textDecoration:'none',boxShadow:'0 4px 15px rgba(245,166,35,0.4)'}}>出店場所を探す</Link>
           <Link href='/register' style={{background:'rgba(255,255,255,0.2)',color:'#111',fontWeight:'900',fontSize:'16px',border:'2px solid #fff',padding:'14px 36px',borderRadius:'999px',textDecoration:'none'}}>無料会員登録</Link>
+        </div>
+      </div>
+      {/* エリア・場所の種類から探す帯。
+          /space はLP、/places は絞り込みの道具、都道府県別・場所の種類別の
+          固有ページはその県・種類の答え、と役割を分けている。
+          ここに案件カードは足さない（サーバー部品なのでクライアントJSは増えない） */}
+      <div style={{background:'#fff',padding:'32px 24px 0'}}>
+        <div style={{maxWidth:'900px',margin:'0 auto'}}>
+          <SegmentLinks />
         </div>
       </div>
       <div style={{background:'#fff',padding:'48px 24px',textAlign:'center'}}>

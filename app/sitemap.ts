@@ -3,6 +3,8 @@ import { isExcludedShop } from './lib/excludedShops'
 import { createClient } from '@supabase/supabase-js'
 import { isMergedAway } from './lib/mergedPosts'
 import { SITE_URL } from './lib/seo'
+import { SEGMENTS } from './places/segments'
+import { loadSegmentStamps } from './places/segmentData'
 
 // Google に「このサイトにはどのページがあるか」を伝える一覧。
 //
@@ -88,6 +90,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const urls: MetadataRoute.Sitemap = []
 
   try {
+    // エリア別・カテゴリ別の出店場所一覧（app/places/segments.ts の11枚）。
+    //
+    // URLの一覧は直書きしない。ページ・内部リンク・サイトマップ・
+    // /places の canonical 対応表が同じ1ファイルを読むので、
+    // 「ページはあるのにサイトマップに無い」「canonical が404を指す」が構造的に起きない。
+    //
+    // lastModified は STATIC_UPDATED の固定値ではなく、その集合に属する案件の
+    // MAX(closed_at, posted_at, created_at)。取れなければ STATIC_UPDATED にする。
+    //
+    // 件数が取れなかったときは11URLを申告しない（件数もページ集合も分からない状態で
+    // 申告するより黙るほうが害が小さい）。segments.ts はチェックイン済みなので、
+    // ページ自体は 200 で見られる。
+    {
+      const stamps = await loadSegmentStamps(SEGMENTS)
+      if (stamps) {
+        for (const seg of SEGMENTS) {
+          const stamp = stamps.get(seg.slug)
+          // 掲載0件になった集合は申告しない（0件の一覧を申告すると doorway そのものになる）
+          if (!stamp || stamp.total === 0) continue
+          urls.push({
+            url: `${SITE_URL}${seg.path}`,
+            lastModified: stamp.lastModified ?? STATIC_UPDATED,
+            changeFrequency: seg.changeFrequency,
+            priority: seg.priority,
+          })
+        }
+      }
+    }
+
     // 公開中の案件（募集終了したものも含む）。
     //
     // 募集終了した案件も載せる（2026-09 に運営が決定）。

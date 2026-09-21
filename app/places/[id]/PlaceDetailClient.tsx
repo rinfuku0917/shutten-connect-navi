@@ -29,6 +29,9 @@ export type Place = {
   company_fixed_unit: string | null
   company_share_pct: number | null
   map_url: string | null
+  // 出店場所のカテゴリー（複数選択）。この画面では使わないが、
+  // サーバー側（page.tsx）がエリア別・カテゴリ別ページへのリンクを組み立てるのに読む
+  genres: string[] | null
   recruit: string | null
   schedule: { date: string, start: string, end: string }[] | null
   open_days: string[] | null
@@ -156,11 +159,21 @@ function feeNodes(p: Place): ReactNode {
 //
 // openNearby / openNearbyCount は、募集終了した案件のときだけサーバーから渡す、
 // 同じ都道府県で募集中の案件の一覧（描画済み）とその件数。
-export default function PlaceDetail({ id, initialPlace, openNearby = null, openNearbyCount = 0 }: {
+//
+// segmentLinks は、この案件が属するエリア別・カテゴリ別ページへのリンク（描画済み）。
+// 募集終了・募集中のどちらでも出す（AGENTS.md：終了案件は実績としてリンクしてよい）。
+//
+// areaListHref は「◯◯で募集中の案件を見る」の行き先。
+// サーバー（app/places/[id]/page.tsx）で app/places/segments.ts から組んで渡す。
+// ここで segments.ts を import すると、'use client' なので11セグメントぶんの表が
+// 案件詳細のクライアントJSに載る（AGENTS.md「公開ページに不要なクライアントJSを足さない」）。
+export default function PlaceDetail({ id, initialPlace, openNearby = null, openNearbyCount = 0, segmentLinks = null, areaListHref = null }: {
   id: string
   initialPlace: Place | null
   openNearby?: ReactNode
   openNearbyCount?: number
+  segmentLinks?: ReactNode
+  areaListHref?: string | null
 }) {
   const [place, setPlace] = useState<Place | null>(initialPlace)
   const [loading, setLoading] = useState(initialPlace === null)
@@ -330,8 +343,11 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
   const tag = place.place_type === 'event' ? 'イベント' : '常設'
   // 募集終了した案件から案内する先。同じ県に募集中の案件があれば、その県で絞った一覧へ。
   // 無ければ全国の一覧へ（0件の絞り込み一覧に送ると、そこでまた行き止まりになる）
+  // 固有ページ（/places/area/{県}）がある県はそちらへ。無い県は従来どおり絞り込んだ一覧へ。
+  // どのページがあるかの判定は app/places/segments.ts が唯一の正で、
+  // その参照はサーバー側（page.tsx）で済ませて areaListHref として受け取る
   const openListHref = place.closed && place.prefecture && openNearbyCount > 0
-    ? '/places?pref=' + encodeURIComponent(place.prefecture)
+    ? (areaListHref ?? '/places?pref=' + encodeURIComponent(place.prefecture))
     : '/places'
   // images に入っていない古い案件は、image_url の1枚だけを表示する
   const photos = (Array.isArray(place.images) ? place.images.filter(Boolean) : [])
@@ -768,6 +784,10 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
 
         {/* 募集終了した案件のときだけ、同じ県で募集中の案件を並べる（サーバーで描いたもの） */}
         {place.closed && openNearby}
+
+        {/* この案件が属するエリア別・カテゴリ別ページへ（サーバーで描いたもの）。
+            289件ある案件詳細から新しい一覧ページへの入り口になる */}
+        {segmentLinks}
       </div>
 
 
