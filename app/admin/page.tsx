@@ -2647,25 +2647,9 @@ const previewDoc = async (fileUrl: string) => {
                             })()}
                           </div>
                         ))}
-                        {/* 最低保証の配分が歩合の配分と違うと、出店者の合計が
-                            「歩合の合計」も「最低保証の合計」も上回る日が出る。
-                            取引先側と弊社側を別々に比べる作りなので、比をそろえてもらう */}
-                        {(() => {
-                          const mp = parseInt(minForm.wdPlace||'0',10)||0, mc = parseInt(minForm.wdCompany||'0',10)||0
-                          const sp = ff.price_share_pct||0, sc = ff.company_share_pct||0
-                          if (mp + mc === 0 || sp + sc === 0) return null
-                          // 比が1%以上ずれていたら知らせる
-                          const minRatio = mp / (mp + mc), pctRatio = sp / (sp + sc)
-                          if (Math.abs(minRatio - pctRatio) < 0.01) return null
-                          return (
-                            <div style={{ fontSize:'11.5px', color:'#DC2626', lineHeight:1.8, background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:'8px', padding:'8px 10px' }}>
-                              最低保証の配分（取引先{mp.toLocaleString()}円：弊社{mc.toLocaleString()}円）が、歩合の配分（{sp}%：{sc}%）と違います。
-                              取引先側と弊社側は別々に「高い方」を取るため、売上によっては出店者の合計が
-                              「売上の{sp+sc}%」も「最低保証{(mp+mc).toLocaleString()}円」も上回る日が出ます。
-                              歩合と同じ比で割ることをおすすめします。
-                            </div>
-                          )
-                        })()}
+                        {/* 最低保証の配分（取引先：弊社）が歩合の配分と違っても警告は出さない。
+                            金額も割り振りも自由入力にする方針（2026-09-21 の指示）。
+                            案件ごとの契約どおりに入れるものなので、サイト側で比を勧めない */}
                       </div>
                     )}
                     {/* 形態ごとの料金が入っている案件は、このモーダルの数字が実額ではない。

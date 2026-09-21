@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { FORMATS, hasFormatMin, dayFeeOf, minFeeOn, formatShare, type FormatFee, type FeeSource } from '../lib/placeFee'
+import { FORMATS, hasFormatMin, dayFeeOf, type FormatFee, type FeeSource } from '../lib/placeFee'
 import DowPresets from './DowPresets'
 
 // 形態（キッチンカー・物販・催事PR・テント・ブース）ごとの出店料と条件を入れる欄。
@@ -170,28 +170,10 @@ export default function FormatFeesEditor({
         const minEx = isMinOn
           ? { high: dayFeeOf(exSrc, f, EX_DATE, 30000), low: dayFeeOf(exSrc, f, EX_DATE, 5000) }
           : null
-        // 最低保証の配分が歩合の配分と違うと、出店者の合計が
-        // 「歩合の合計」も「最低保証の合計」も上回る日が出る。その日の例を出す。
-        // 最低保証も歩合も、形態に入れていなければ案件全体に落ちるので同じ落ち方で読む
-        const ratioWarn = (() => {
-          if (!isMinOn) return null
-          const exMin = minFeeOn(exSrc, f, EX_DATE)
-          const exShare = formatShare(exSrc.format_fees, f)
-          const mp = exMin.placeFee || 0, mc = exMin.companyFee || 0
-          const sp = exShare.sharePct ?? place?.price_share_pct ?? 0
-          const sc = exShare.companySharePct ?? place?.company_share_pct ?? 0
-          if (mp + mc === 0 || sp + sc === 0) return null
-          if (Math.abs(mp / (mp + mc) - sp / (sp + sc)) < 0.01) return null
-          // 片側だけ最低保証が効く売上を探す（両方の境目の間）
-          const bp = mp / (sp / 100 || Infinity), bc = mc / (sc / 100 || Infinity)
-          const rev = Math.round((Math.min(bp, bc) + Math.max(bp, bc)) / 2)
-          if (!isFinite(rev) || rev <= 0) return null
-          const r = dayFeeOf(exSrc, f, EX_DATE, rev)
-          const pctTotal = Math.floor(rev * sp / 100) + Math.floor(rev * sc / 100)
-          const minTotal = mp + mc
-          if (r.total <= Math.max(pctTotal, minTotal)) return null
-          return { rev, total: r.total, minTotal, pctTotal }
-        })()
+        // 最低保証の配分（施設：弊社）が歩合の配分と違っても警告は出さない。
+        // 金額も割り振りも自由入力にする方針（2026-09-21 の指示）。
+        // 案件ごとの契約どおりに入れるものなので、サイト側で比を勧めない。
+        // 実額は下の「この設定だと」の欄で確かめられる
         return (
           <div key={f} style={{ background: '#fff', border: '1px solid ' + (on(f) ? '#BFDBFE' : '#E2E8F0'), borderRadius: '9px', padding: '12px', marginBottom: '10px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -338,16 +320,6 @@ export default function FormatFeesEditor({
                           <div style={{ fontWeight: 800, color: '#16A34A' }}>この設定だと（平日の例）</div>
                           売上30,000円の日：<strong>{minEx.high.total.toLocaleString()}円</strong>{(minEx.high.placeMinApplied || minEx.high.companyMinApplied) ? '（最低保証）' : '（歩合と固定額で計算）'}<br />
                           売上5,000円の日：<strong>{minEx.low.total.toLocaleString()}円</strong>{(minEx.low.placeMinApplied || minEx.low.companyMinApplied) ? '（最低保証）' : '（歩合と固定額で計算）'}
-                        </div>
-                      )}
-                      {/* 取引先側と弊社側は別々に「高い方」を取るため、
-                          最低保証の比が歩合の比と違うと、出店者の合計が
-                          「歩合の合計」も「最低保証の合計」も上回る日が出る */}
-                      {ratioWarn && (
-                        <div style={{ fontSize: '11.5px', color: '#DC2626', marginTop: '8px', lineHeight: 1.8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 10px' }}>
-                          この配分だと、売上{ratioWarn.rev.toLocaleString()}円の日に出店者の合計が
-                          <strong>{ratioWarn.total.toLocaleString()}円</strong>（最低保証の合計 {ratioWarn.minTotal.toLocaleString()}円／歩合の合計 {ratioWarn.pctTotal.toLocaleString()}円）になります。
-                          最低保証は歩合と同じ比で割ることをおすすめします。
                         </div>
                       )}
                     </div>
