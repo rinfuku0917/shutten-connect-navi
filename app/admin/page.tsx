@@ -4342,6 +4342,11 @@ const previewDoc = async (fileUrl: string) => {
             setAppsFor(null)
             openSellerDocs(sellerId, sellerName)
           }}
+          onOpenMessages={(applicationId) => {
+            // 一覧を閉じてやり取りへ移る。戻るで案件管理へ帰れる（openMessageThread が履歴に積む）
+            setAppsFor(null)
+            openMessageThread(applicationId)
+          }}
         />
       )}
 

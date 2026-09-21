@@ -87,12 +87,20 @@ export default function PlaceApplicationsModal({
   placeTitle,
   onClose,
   onOpenDocs,
+  onOpenMessages,
 }: {
   placeId: string
   placeTitle: string
   onClose: () => void
   /** 書類の件数を押したときに、その出店者の書類審査へ移動する */
   onOpenDocs?: (sellerId: string, sellerName: string) => void
+  /**
+   * 申込ごとのやり取りを開く。
+   * 出店承認の画面にしか無かった動線を、いつも見るこの一覧にも置くため
+   * （2026-09-20 に運営から要望）。申込（日付）ごとにやり取りが分かれるので、
+   * 渡すのは申込のID
+   */
+  onOpenMessages?: (applicationId: string, sellerName: string) => void
 }) {
   const [loading, setLoading] = useState(true)
   const [sellers, setSellers] = useState<Seller[]>([])
@@ -809,6 +817,16 @@ export default function PlaceApplicationsModal({
                                       >
                                         申込を取り消す
                                       </button>
+                                      {onOpenMessages && (
+                                        <button
+                                          type='button'
+                                          onClick={() => onOpenMessages(r.id, s.shopName)}
+                                          title='この申込についてのやり取りを開きます'
+                                          style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                        >
+                                          メッセージ
+                                        </button>
+                                      )}
                                     </span>
                                   )}
                                   {r.status === 'approved' && (
@@ -829,6 +847,16 @@ export default function PlaceApplicationsModal({
                                       >
                                         出店取消し
                                       </button>
+                                      {onOpenMessages && (
+                                        <button
+                                          type='button'
+                                          onClick={() => onOpenMessages(r.id, s.shopName)}
+                                          title='この申込についてのやり取りを開きます'
+                                          style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                        >
+                                          メッセージ
+                                        </button>
+                                      )}
                                       <button
                                         type='button'
                                         onClick={() => {
