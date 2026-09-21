@@ -9,7 +9,8 @@ import { parseSns, snsHref, snsHandle, SNS_PLATFORMS, SNS_LABEL, SNS_PREFIX, SNS
 import { useRouter } from 'next/navigation'
 import DashboardFooter from '../../components/DashboardFooter'
 import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
-import { perDayFee, dayTypeFee, formatFee } from '../../lib/placeFee'
+import { dayFeeOf, hasMinGuarantee, hasFormatMin } from '../../lib/placeFee'
+import { selectWithOptionalColumn } from '../../lib/optionalColumn'
 import { showsToSeller } from '../../lib/cancelledVisibility'
 import { syncSalesToSheet } from '../../lib/sheetSync'
 import OnsiteSteps from './OnsiteSteps'
@@ -437,7 +438,7 @@ export default function SellerDashboard() {
   }
 
   // ===== 売上（出店者） =====
-  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string, schedule: unknown, day_type_fees: unknown, format: string | null, format_fees: unknown }
+  type SellerApp = { application_id: string, place_id: string, placeTitle: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, apply_date: string, schedule: unknown, day_type_fees: unknown, min_guarantee: unknown, format: string | null, format_fees: unknown }
   type SaleItem = { name: string, qty: string, price: string }
   type SellerSale = { id: string, application_id: string | null, sale_date: string, placeTitle: string, revenue: number, fee: number, acceptedAt: string | null, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
 
@@ -693,29 +694,21 @@ export default function SellerDashboard() {
   // 税率ごとに分けて入力した場合も、出店料は売上の合計額から計算する。
   // 分けた内訳は記録用に保存するだけで、金額は分けても分けなくても同じになる。
 
-  // date を渡すと、その日に金額が設定されていればそちらを使う
+  // date を渡すと、その日に金額が設定されていればそちらを使う。
+  //
+  // 計算そのものは app/lib/placeFee.ts の dayFeeOf だけが持つ。
+  // 以前はここに運営側（app/admin/page.tsx の calcFees）と同じ式を写していたが、
+  // 歩合を案件全体の列だけで見ており、形態ごとの歩合（format_fees の sharePct）を
+  // 見ていなかった。形態と案件で歩合が違う案件では、この画面の額と
+  // 請求額が食い違う状態だった。最低保証もここで一緒に効く。
+  //
+  // 売上を保存するときの税の扱い（tax_basis / tax_rate）は、これまでどおり
+  // 下の taxOf が決める（dayFeeOf は歩合の計算元にだけ使う）
   const calcFee = (revenue: number, a: SellerApp, ov: string = '', baseOverride: number | null = null, date: string | null = null) => {
-    const { basis, rate } = taxOf(a, ov)
-    const base = baseOverride != null ? baseOverride : (basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue)
-    // 金額の優先順位: 形態ごとの額 → 日程に入れたその日の額
-    //   → 案件の平日/土日祝の額 → 案件全体の固定額
-    // 運営側の計算（app/admin/page.tsx の calcFees）と必ず同じ順にすること。
-    // ずれると、出店者の画面と請求額が食い違う
     const on = date || a.apply_date
-    const fmt = formatFee(a.format_fees, a.format, on)
-    const day = perDayFee(a.schedule, on)
-    const dt = dayTypeFee(a.day_type_fees, on)
-    const placeFixed = fmt.placeFee != null ? fmt.placeFee
-      : day.placeFee != null ? day.placeFee
-      : dt.placeFee != null ? dt.placeFee
-      : (a.place_fixed_unit === 'per_event' ? 0 : (a.price_fixed || 0))
-    const companyFixed = fmt.companyFee != null ? fmt.companyFee
-      : day.companyFee != null ? day.companyFee
-      : dt.companyFee != null ? dt.companyFee
-      : (a.company_fixed_unit === 'per_event' ? 0 : (a.company_fixed_amount || 0))
-    const placeFee = Math.floor(placeFixed + base * (a.price_share_pct || 0) / 100)
-    const companyFee = Math.floor(companyFixed + base * (a.company_share_pct || 0) / 100)
-    return { placeFee, companyFee, total: placeFee + companyFee }
+    const r = dayFeeOf(a, a.format, on, revenue, ov, baseOverride)
+    return { placeFee: r.placeFee, companyFee: r.companyFee, total: r.total,
+      placeMinApplied: r.placeMinApplied, companyMinApplied: r.companyMinApplied }
   }
   const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
@@ -724,11 +717,13 @@ export default function SellerDashboard() {
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     if (!uid) return []
-    const { data } = await supabase
+    // min_guarantee（最低保証）は移行SQLを流すまで列が無い。
+    // 列が無い環境では、その列だけ落として読み直す（一覧が空になるのを防ぐ）
+    const { data } = await selectWithOptionalColumn(withMin => supabase
       .from('applications')
-      .select('id, place_id, apply_date, format, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees)')
+      .select('id, place_id, apply_date, format, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees' + (withMin ? ', min_guarantee' : '') + ')')
       .eq('seller_id', uid).eq('status', 'approved')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false }))
     const mapped: SellerApp[] = (data || []).map((a: any) => ({
       application_id: a.id, place_id: a.place_id,
       placeTitle: a.places?.title || '(案件名なし)',
@@ -739,6 +734,8 @@ export default function SellerDashboard() {
       apply_date: a.apply_date || '',
       schedule: a.places?.schedule ?? null,
       day_type_fees: a.places?.day_type_fees ?? null,
+      // 歩合が少ない日の最低保証（案件全体の設定）
+      min_guarantee: a.places?.min_guarantee ?? null,
       // 申込で選んだ形態と、案件の形態ごとの金額。
       // これが無いと、キッチンカー以外の形態で申し込んだ人の画面に
       // キッチンカーの金額が出てしまう
@@ -797,7 +794,13 @@ export default function SellerDashboard() {
     if (dupErr) { showNotice('通信に失敗しました。時間をおいてもう一度お試しください。'); return }
     if (dup && dup.length > 0) {
       const dates = dup.map(d => d.sale_date).join('、')
-      if (!(await ask({ title: 'すでに報告済みの出店です', body: '（' + dates + '）\nもう1件追加で登録すると、出店料も2件分の請求になります。\n続けますか？', okLabel: '追加で登録する' }))) return
+      // 最低保証は sales の1件ごとにかかるので、2件記録すると2日分になる。
+      // 気付かないまま倍額の請求になるのを防ぐため、その案件のときだけ一文を足す
+      const hasMin = hasMinGuarantee(app.min_guarantee) || hasFormatMin(app.format_fees, app.format)
+      const dupBody = '（' + dates + '）\nもう1件追加で登録すると、出店料も2件分の請求になります。'
+        + (hasMin ? '\nこの案件は最低保証があるため、最低保証も2件分かかります。' : '')
+        + '\n続けますか？'
+      if (!(await ask({ title: 'すでに報告済みの出店です', body: dupBody, okLabel: '追加で登録する' }))) return
     }
     setSaleSaving(true)
     const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv, null, saleDate)
@@ -1103,10 +1106,11 @@ export default function SellerDashboard() {
     }
     // 相手へ新着メッセージ通知（失敗しても送信は成功扱い）
     try {
+      // 送信者はトークンから決まるので senderId は送らない
       await fetch('/api/notify/new-message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: appId, senderId: myId }),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+        body: JSON.stringify({ applicationId: appId }),
       })
     } catch (e) {
       console.error('メッセージ通知に失敗しました', e)
@@ -2720,7 +2724,9 @@ export default function SellerDashboard() {
                   const r8 = parseInt(saleRev8 || '0', 10) || 0
                   const r10 = parseInt(saleRev10 || '0', 10) || 0
                   const rev = saleSplit ? r8 + r10 : (parseInt(saleRevenue || '0', 10) || 0)
-                  const fee = calcFee(rev, a, saleTaxOv, null, saleDate).total
+                  const calc = calcFee(rev, a, saleTaxOv, null, saleDate)
+                  const fee = calc.total
+                  const minApplied = calc.placeMinApplied || calc.companyMinApplied
                   // 出店料が何を元に計算されたかを明示する（計算自体は calcFee に任せる）
                   const { basis, rate } = taxOf(a, saleTaxOv)
                   const exTax = basis === 'tax_excluded'
@@ -2742,6 +2748,11 @@ export default function SellerDashboard() {
                         </>
                       )}
                       <div>出店料（税別）：<strong>{fee.toLocaleString()}円</strong></div>
+                      {/* 最低保証のある案件では、歩合で計算した額より高くなる日がある。
+                          ここで理由を出さないと「計算が間違っている」という問い合わせになる */}
+                      {minApplied && (
+                        <div style={{ color: '#B45309' }}>※ 歩合で計算した額が最低保証を下回るため、最低保証の額（この案件の下限）です</div>
+                      )}
                       <div>消費税（10%）：<strong>{Math.floor(fee * 0.1).toLocaleString()}円</strong></div>
                       <div>ご請求額（税込）：<strong>{(fee + Math.floor(fee * 0.1)).toLocaleString()}円</strong></div>
                       <div style={{ borderTop: '1px solid #E2E8F0', marginTop: '6px', paddingTop: '6px' }}>あなたの利益（手取り）：<strong style={{ color: '#16A34A', fontSize: '14px' }}>{(rev - fee).toLocaleString()}円</strong></div>
@@ -2888,7 +2899,9 @@ export default function SellerDashboard() {
         // 単価が入っていない品目があると合計は当てにならないので、
         // 全部そろっているときだけ金額の食い違いを知らせる
         const allPriced = filled.length > 0 && filled.every(it => (parseInt(it.price, 10) || 0) > 0)
-        const fee = app ? calcFee(rev, app, '', null, reportFor.apply_date).total : 0
+        const rpCalc = app ? calcFee(rev, app, '', null, reportFor.apply_date) : null
+        const fee = rpCalc ? rpCalc.total : 0
+        const rpMinApplied = !!rpCalc && (rpCalc.placeMinApplied || rpCalc.companyMinApplied)
         const [ry, rm, rd] = reportFor.apply_date.split('-')
         const label: React.CSSProperties = { fontSize: '12px', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }
         const box: React.CSSProperties = { border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }
@@ -3014,6 +3027,9 @@ export default function SellerDashboard() {
                   <div style={{ marginTop: '14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px', fontSize: '12px', color: '#475569', lineHeight: 1.9 }}>
                     <div>売上：<strong>{rev.toLocaleString()}円</strong></div>
                     <div>出店料（税別）：<strong>{fee.toLocaleString()}円</strong></div>
+                    {rpMinApplied && (
+                      <div style={{ color: '#B45309' }}>※ 歩合で計算した額が最低保証を下回るため、最低保証の額（この案件の下限）です</div>
+                    )}
                     <div style={{ borderTop: '1px solid #E2E8F0', marginTop: '6px', paddingTop: '6px' }}>
                       あなたの利益（手取り）：<strong style={{ color: '#16A34A', fontSize: '14px' }}>{(rev - fee).toLocaleString()}円</strong>
                     </div>

@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 // 出店者の本名（profiles.name）を、運営だけが引けるようにする入口。
 //
@@ -16,15 +16,12 @@ import { NextResponse } from 'next/server'
 //
 // 【守り方】
 //   ・アクセストークンで呼び出し元を確かめ、profiles.role='admin' でなければ 403。
-//     ほかの /api/admin/* と同じ requireAdmin の形。
-//   ・profiles を読むのはサービスロールキーなので、RLS ではなくこの関数が唯一の関門。
+//     ほかの /api/admin/* と共通の requireAdmin（app/lib/apiAuth.ts）を使う。
+//   ・profiles を読むのはサービスロールキーなので、RLS ではなくその関門が唯一の砦。
 //     呼び出し元の id を body で受け取る作りにはしない（詐称できるため）。
 //   ・渡された id の分だけ返す。総なめできないよう件数に上限を付け、
 //     id は UUID の形のものだけ通す。
 //   ・返すのは名前だけ。メール・電話・住所は返さない。
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Ctx = { db: any }
 
 // 1回に引ける人数の上限。
 // 施設へ出す提出用Excelがいちばん多くて、1案件あたり数十人。
@@ -32,27 +29,6 @@ type Ctx = { db: any }
 const MAX_IDS = 200
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-async function requireAdmin(req: Request): Promise<Ctx | NextResponse> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
-  const db = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return { db }
-}
 
 export async function POST(req: Request) {
   try {

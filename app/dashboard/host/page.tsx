@@ -150,17 +150,30 @@ export default function HostDashboard() {
   // notify=false のときは、状態だけ変えてメールは送らない
   const decide = async (id: string, status: 'approved' | 'rejected', notify = true) => {
     await supabase.from('applications').update({ status }).eq('id', id)
-    // 出店者へステータス通知（失敗しても処理は継続）
+    // 出店者へステータス通知（失敗しても処理は継続）。
+    // 通知の入口には名乗りが要る（申込IDだけで第三者に送らせないため）ので、
+    // アクセストークンを付ける。送れなかったときは画面で知らせる
+    // （黙って飲み込むと、メールが届いていないことに気づけず連絡漏れになる）
+    let notifyErr = ''
     if (notify) try {
-      await fetch('/api/notify/application-status', {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/notify/application-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({ applicationId: id, status }),
       })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        console.error('ステータス通知に失敗しました', j)
+        notifyErr = String(j.error || res.status)
+      }
     } catch (e) {
       console.error('ステータス通知に失敗しました', e)
+      notifyErr = '通信エラー'
     }
-    showToast(status === 'approved' ? '承認しました' : '不採用にしました')
+    showToast(notifyErr
+      ? '状態は変えましたが、通知メールを送れませんでした：' + notifyErr
+      : (status === 'approved' ? '承認しました' : '不採用にしました'))
     load()
   }
 

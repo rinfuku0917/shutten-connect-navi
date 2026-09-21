@@ -1,41 +1,27 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 // 出店者プロフィールの公開可否を管理者が更新する。
 // profiles には管理者用の UPDATE ポリシーが無くクライアントからの更新が
 // RLS で無言のうちに弾かれるため、サービスロールで実行する。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyAdmin(admin: any, requesterId: string) {
-  const { data, error } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', requesterId)
-    .maybeSingle()
-  if (error || !data || data.role !== 'admin') return false
-  return true
-}
+//
+// 呼び出し元の判定は body の requesterId をやめ、アクセストークンに変えた。
+// 承認は公開一覧（public_sellers）への掲載可否そのものなので、
+// 申告されたIDを信じると、審査を通していない出店者を無資格で公開できてしまう。
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, targetId, status } = await req.json()
-    if (!requesterId || !targetId || !status) {
+    // 引数の検査より先に、運営かどうかを見る
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const admin = auth.db
+
+    const { targetId, status } = await req.json()
+    if (!targetId || !status) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
     if (status !== 'approved' && status !== 'rejected') {
       return NextResponse.json({ error: 'status が不正です' }, { status: 400 })
-    }
-
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-    const admin = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
     }
 
     const patch: { approval_status: string; approved_at?: string | null } = { approval_status: status }

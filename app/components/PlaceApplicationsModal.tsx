@@ -9,6 +9,8 @@ import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionX
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { cancelResultMessage } from '../lib/purgeLog'
+import { dayFeeOf, type FeeSource } from '../lib/placeFee'
+import { selectWithOptionalColumn } from '../lib/optionalColumn'
 
 // 案件ごとの応募者一覧。
 //
@@ -137,6 +139,8 @@ export default function PlaceApplicationsModal({
   // 売上が無くても発行できる（まだ出店していないので当然無い）。
   const [advAsk, setAdvAsk] = useState<{
     id: string; sellerId: string; who: string; when: string; date: string | null
+    /** 申込で選んだ形態。形態ごとに額が違う案件があるため、初期額の計算に使う */
+    format?: string | null
     // この出店者の、同じ案件・同じ月の承認済みの出店日。2日間の催しなどを1枚にまとめるため。
     // 月をまたぐ日は別の請求書になる（月ごとの締めのため）ので、ここには入れない
     dates: { id: string; date: string | null; label: string }[]
@@ -153,6 +157,27 @@ export default function PlaceApplicationsModal({
   const [advDue, setAdvDue] = useState('')
   // 案件に固定額の設定があれば、金額の初期値に使う
   const [placeFixed, setPlaceFixed] = useState(0)
+  // 事前請求の初期額を出すための、案件の料金設定。
+  //
+  // 以前は price_fixed + company_fixed_amount だけを見ていたため、
+  // 平日/土日祝で額を分けている案件・形態ごとに額を入れている案件・
+  // 歩合と最低保証だけの案件（イオンモール与野など）では初期値が0になり、
+  // 手入力のまま0円で通ってしまう状態だった。
+  // 額の出し方は計算と同じ dayFeeOf に任せる（売上0円の日＝下限の額）
+  const [feeSrc, setFeeSrc] = useState<FeeSource | null>(null)
+  // その出店日・その形態で、売上が無くてもいただく額（固定額または最低保証）
+  const advanceBaseFor = (date: string | null | undefined, format: string | null | undefined) => {
+    if (!feeSrc) return placeFixed
+    const t = dayFeeOf(feeSrc, format ?? null, date ?? null, 0).total
+    return t > 0 ? t : placeFixed
+  }
+  // いま選んでいる出店日と、その日の設定額。
+  // 請求は「1日あたり×日数」なので、日によって額が違うとそのままでは合わない。
+  // 画面の案内も合計の警告も、この一覧から作る（1日目だけを見ないため）
+  const advSelDays = advAsk
+    ? advAsk.dates.filter(d => advSel.has(d.id))
+      .map(d => ({ label: d.label, yen: advanceBaseFor(d.date, advAsk.format) }))
+    : []
 
   // 同じ出店に事前請求が既にある場合、その番号を受け取ってここに入れる。
   // 「発行済みを開く」か「それでも出し直す」かを選べるようにするため
@@ -339,10 +364,13 @@ export default function PlaceApplicationsModal({
       }
     }
 
-    // 事前請求の金額の初期値に使う、案件の固定の出店料
-    const { data: pl } = await supabase
-      .from('places').select('price_fixed, company_fixed_amount, schedule').eq('id', placeId).maybeSingle()
+    // 事前請求の金額の初期値に使う、案件の出店料の設定。
+    // min_guarantee は移行SQLを流すまで列が無いので、その列だけ落として読み直す
+    const cols = 'price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees'
+    const { data: pl } = await selectWithOptionalColumn<FeeSource>(withMin => supabase
+      .from('places').select(cols + (withMin ? ', min_guarantee' : '')).eq('id', placeId).maybeSingle())
     setPlaceFixed((pl?.price_fixed || 0) + (pl?.company_fixed_amount || 0))
+    setFeeSrc((pl as FeeSource | null) ?? null)
     // 出店日の振り替えで選べる日。案件の日程に入っている、これから先の日だけ
     {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -431,14 +459,28 @@ export default function PlaceApplicationsModal({
       if (error) { setAskErr('変更できませんでした：' + error.message); return }
       // 出店者へのお知らせ。チェックを外した場合は送らない。
       // 送れなかった場合でも、状態の変更自体は成功として扱う。
+      // 通知の入口には名乗りが要る（申込IDだけで第三者に送らせないため）ので
+      // アクセストークンを付ける。送れなかったときは、確認の画面を閉じずに伝える
+      // （黙って飲み込むと、メールが届いていないことに気づけない）
       if (notify) {
         try {
-          await fetch('/api/notify/application-status', {
+          const { data: { session } } = await supabase.auth.getSession()
+          const res = await fetch('/api/notify/application-status', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
             body: JSON.stringify({ applicationId: ask.id, status: ask.status }),
           })
-        } catch { /* メールが送れないだけなので進める */ }
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}))
+            setAskErr('状態は変えましたが、通知メールを送れませんでした：' + (j.error || res.status))
+            await load()
+            return
+          }
+        } catch {
+          setAskErr('状態は変えましたが、通知メールを送れませんでした（通信エラー）')
+          await load()
+          return
+        }
       }
       setAsk(null)
       await load()
@@ -861,7 +903,11 @@ export default function PlaceApplicationsModal({
                                         type='button'
                                         onClick={() => {
                                           setAdvErr(null)
-                                          setAdvAmount(placeFixed > 0 ? String(placeFixed) : '')
+                                          {
+                                            // その日・その形態で売上が無くてもいただく額を初期値にする
+                                            const init = advanceBaseFor(r.apply_date, r.format)
+                                            setAdvAmount(init > 0 ? String(init) : '')
+                                          }
                                           setAdvDue('')
                                           setAdvSel(new Set([r.id]))
                                           setAdvDup(null); setAdvOverlap(null)
@@ -870,7 +916,7 @@ export default function PlaceApplicationsModal({
                                           const approved = s.rows.filter(x => x.status === 'approved')
                                           const same = approved.filter(x => String(x.apply_date || '').slice(0, 7) === month)
                                           setAdvAsk({
-                                            id: r.id, sellerId: s.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date,
+                                            id: r.id, sellerId: s.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date, format: r.format,
                                             dates: same.map(x => ({ id: x.id, date: x.apply_date, label: fmtDate(x.apply_date) })),
                                             otherMonths: approved.length - same.length,
                                           })
@@ -1129,8 +1175,31 @@ export default function PlaceApplicationsModal({
               <div>
                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
                   {advAsk.dates.length > 1 ? '1日あたりの金額（税抜）' : '金額（税抜）'}
-                  {placeFixed > 0 && <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{placeFixed.toLocaleString()}円／日</span>}
+                  {(() => {
+                    // いま選んでいる出店日の設定額を出す（平日/土日祝・形態・最低保証まで見る）。
+                    // 1日目だけを見ていたため、選び直しても表示が変わらなかった
+                    const each = advSelDays.map(d => d.yen).filter(y => y > 0)
+                    const uniq = Array.from(new Set(each))
+                    if (uniq.length !== 1) return null
+                    return <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{uniq[0].toLocaleString()}円／日</span>
+                  })()}
                 </div>
+                {/* 事前請求は「1日あたり×日数」で計算するため、平日と土日祝で
+                    金額が違う案件（最低保証が平日2,000円・土日祝7,500円など）で
+                    両方を1枚にまとめると、片方の額で全日を請求してしまう */}
+                {(() => {
+                  const each = advSelDays.map(d => d.yen).filter(y => y > 0)
+                  if (Array.from(new Set(each)).length < 2) return null
+                  const sum = each.reduce((t, y) => t + y, 0)
+                  return (
+                    <div style={{ fontSize: '11.5px', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px', lineHeight: 1.8 }}>
+                      選んだ日は、案件の設定では日によって金額が違います（
+                      {advSelDays.filter(d => d.yen > 0).map(d => d.label + ' ' + d.yen.toLocaleString() + '円').join('／')}
+                      ＝合計{sum.toLocaleString()}円）。
+                      この欄は「1日あたり×日数」で計算するので、<strong>金額が同じ日ごとに分けて発行してください</strong>。
+                    </div>
+                  )
+                })()}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <input
                     value={advAmount} disabled={advBusy} inputMode='numeric' aria-label='金額'

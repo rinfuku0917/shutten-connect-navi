@@ -133,7 +133,8 @@ export async function POST(req: Request) {
     }
 
     // ===== ここから管理者のみ =====
-    if (!isAdmin) return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
+    // 文面は共通の関門（app/lib/apiAuth.ts の requireAdmin）に合わせる
+    if (!isAdmin) return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
 
     // ===== 管理者：入金状況の一覧 =====
     if (action === 'list') {

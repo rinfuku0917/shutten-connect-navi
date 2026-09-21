@@ -1,42 +1,29 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../../lib/apiAuth'
+
+// 出店者のアカウントを、運営が完全に削除する。
+//
+// この入口はいちばん壊すものが大きい（auth.users ごと消え、profiles は CASCADE。
+// 取り消せない）。以前は body の requesterId を profiles.role='admin' と
+// 照合するだけで、運営のUUIDを知られていればログインせずに任意の会員を
+// 消せる状態だった。誰として呼んでいるかはアクセストークンだけで決める。
 
 export async function POST(req: Request) {
   try {
-    const { id, requesterId } = await req.json()
+    // 1) 呼び出し元がログイン中の運営かをサーバー側で確かめる
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const { uid, db: admin } = auth
+
+    const { id } = await req.json()
     if (!id) {
       return NextResponse.json({ error: 'id がありません' }, { status: 400 })
     }
-    if (!requesterId) {
-      return NextResponse.json({ error: '認証情報がありません' }, { status: 401 })
-    }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-
-    // service_role クライアント（RLSをバイパスできる管理者権限）
-    const admin = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    // 1) リクエスト者が本当に admin かをサーバー側で検証
-    const { data: requester, error: reqErr } = await admin
-      .from('profiles')
-      .select('role')
-      .eq('id', requesterId)
-      .maybeSingle()
-    if (reqErr) {
-      return NextResponse.json({ error: '権限確認に失敗しました' }, { status: 500 })
-    }
-    if (!requester || requester.role !== 'admin') {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-    }
-
-    // 2) 自分自身は削除させない（誤操作防止）
-    if (id === requesterId) {
+    // 2) 自分自身は削除させない（誤操作防止）。
+    //    比べる相手はトークンから取った uid。body の値と比べていたときは、
+    //    ここの守りも呼び出し側の申告次第だった
+    if (id === uid) {
       return NextResponse.json({ error: '自分自身は削除できません' }, { status: 400 })
     }
 

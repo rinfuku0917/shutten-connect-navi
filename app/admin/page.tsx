@@ -13,7 +13,8 @@ import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { compareByTitle } from '../lib/placeSort'
-import { perDayFee, dayTypeFee, hasDayTypeFee, formatFee, formatShare } from '../lib/placeFee'
+import { hasDayTypeFee, hasMinGuarantee, hasFormatFees, hasFormatMin, dayFeeOf, feeCondition, allowedFormats, buildMinGuaranteeJson, toYen, type FeeSource } from '../lib/placeFee'
+import { selectWithOptionalColumn, isMissingColumn } from '../lib/optionalColumn'
 import { cancelResultMessage } from '../lib/purgeLog'
 import { syncSalesToSheet } from '../lib/sheetSync'
 import PurgeLogPanel from './PurgeLogPanel'
@@ -59,6 +60,24 @@ const dummyPlaces = [
   { id: '3', title: 'イオンモール富谷（宮城）', host: 'イオンモール', area: '宮城', type: 'キッチンカー・物販', status: '公開中', applies: 12 },
   { id: '4', title: '町田美容専門学校', host: '町田美容専門学校', area: '東京', type: 'キッチンカー', status: '下書き', applies: 0 },
 ]
+
+// 管理系APIを叩くためのアクセストークンを取り出す。
+//
+// getSession は、トークンの更新に失敗したとき（オフライン・一時的な5xx）も
+// 例外を投げず { session: null, error } を返す。error を捨てると、
+// 通信が一瞬切れただけで「ログインの情報が切れています」と案内してしまい、
+// 記事の本文のようにフォームにしか無いものを捨てさせることになる。
+// 「通信の不調」と「ログインが切れた」を分けて返す
+// （offline=true は前者。文面を分けたい呼び出し側のため）。
+// 取れたときは error が空文字。呼び出し側は token の有無だけを見る
+type AdminToken = { token: string | null; error: string; offline: boolean }
+async function adminAccessToken(): Promise<AdminToken> {
+  const { data, error } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (token) return { token, error: '', offline: false }
+  if (error) return { token: null, offline: true, error: '通信が不安定なため確認できませんでした。もう一度お試しください' }
+  return { token: null, offline: false, error: 'ログインの情報が切れています。一度ログアウトして、入り直してください' }
+}
 
 export default function AdminPage() {
   const router = useRouter()
@@ -326,13 +345,24 @@ export default function AdminPage() {
   const blogImgInputRef = useRef<HTMLInputElement>(null)
 
   const uploadBlogImage = async (file: File) => {
-    if (!adminUid) { setPMsg('認証情報がありません。再ログインしてください'); setPMsgOk(false); return }
+    // 二重送信の見張りは await より先に立てる。
+    // トークンの取り出しは非同期（更新の往復が入ると数百ミリ秒かかる）なので、
+    // あとに回すとボタンが disabled になる前に2回目の押下が通る
     setImgUploading(true); setPMsg(''); setPMsgOk(false)
+    // 誰として呼ぶかはアクセストークンで伝える。
+    // 以前は自分のIDを本文に入れて名乗っていたが、それだと運営のIDを
+    // 知っている人なら、ログインせずに画像を置けてしまう
+    const { token, error: tokenErr } = await adminAccessToken()
+    if (!token) { setPMsg(tokenErr); setPMsgOk(false); setImgUploading(false); return }
     try {
       const fd = new FormData()
       fd.append('file', file)
-      fd.append('requesterId', adminUid)
-      const res = await fetch('/api/upload-image', { method: 'POST', body: fd })
+      // トークンはヘッダで渡す（本文に入れない）
+      const res = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: fd,
+      })
       const json = await res.json()
       if (!res.ok) { setPMsg('画像アップロード失敗: ' + (json.error || '')); setImgUploading(false); return }
       // 本文の末尾に画像記法を追加
@@ -346,11 +376,15 @@ export default function AdminPage() {
 
   const loadPosts = async () => {
     setPostsLoading(true)
+    // all=1 は下書きまで返す運営専用の読み出しなので、トークンを付けて名乗る
+    const { token, error: tokenErr } = await adminAccessToken()
+    if (!token) { setPMsg(tokenErr); setPMsgOk(false); setPostsLoading(false); return }
     try {
-      const res = await fetch('/api/posts?all=1')
-      const json = await res.json()
-      if (json.posts) setPosts(json.posts)
-    } catch { /* noop */ }
+      const res = await fetch('/api/posts?all=1', { headers: { Authorization: 'Bearer ' + token } })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setPMsg('記事の一覧を読めませんでした: ' + (json.error || res.status)); setPMsgOk(false) }
+      else if (json.posts) setPosts(json.posts)
+    } catch { setPMsg('記事の一覧の読み込みで通信エラーが発生しました'); setPMsgOk(false) }
     setPostsLoading(false)
   }
 
@@ -370,10 +404,21 @@ export default function AdminPage() {
 
   const savePost = async (asStatus: string) => {
     if (!pTitle.trim() || !pSlug.trim() || !pContent.trim()) { setPMsg('タイトル・URL・本文は必須です'); setPMsgOk(false); return }
-    if (!adminUid) { setPMsg('認証情報がありません。再ログインしてください'); setPMsgOk(false); return }
+    // 二重送信の見張りは await より先に立てる。
+    // トークンの取り出しは非同期なので、あとに回すと
+    // ボタンが disabled になる前に2回目の押下が通り、同じ記事が2件できる
     setPSaving(true); setPMsg(''); setPMsgOk(false)
+    const { token, offline } = await adminAccessToken()
+    if (!token) {
+      // 本文はこのフォームにしか無いので、「ログアウトして入り直す」とは案内しない。
+      // 別のタブで入り直せば、書いたものを捨てずに保存し直せる
+      setPMsg(offline
+        ? '通信が不安定なため保存できませんでした。書いた内容はこのまま残ります。もう一度お試しください'
+        : 'ログインの情報が切れているため保存できませんでした。書いた内容はこのまま残ります。別のタブでログインを確かめてから、もう一度保存してください')
+      setPMsgOk(false); setPSaving(false); return
+    }
     const payload = {
-      requesterId: adminUid, id: editingPost?.id,
+      id: editingPost?.id,
       slug: pSlug.trim(), title: pTitle.trim(), content: pContent,
       excerpt: pExcerpt.trim() || null, category: pCategory.trim() || null,
       cover_emoji: pEmoji || '📝', meta_description: pMeta.trim() || null, status: asStatus,
@@ -384,7 +429,7 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/posts', {
         method: editingPost ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify(payload),
       })
       const json = await res.json()
@@ -398,13 +443,14 @@ export default function AdminPage() {
   }
 
   const deletePost = async (p: BlogPost) => {
-    if (!adminUid) return
+    const { token, error: tokenErr } = await adminAccessToken()
+    if (!token) { showNotice(tokenErr); return }
     if (!confirm('「' + p.title + '」を削除しますか？この操作は取り消せません。')) return
     try {
       const res = await fetch('/api/posts', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requesterId: adminUid, id: p.id }),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ id: p.id }),
       })
       const json = await res.json()
       if (!res.ok) { showNotice('削除に失敗: ' + (json.error || '')); return }
@@ -494,7 +540,7 @@ export default function AdminPage() {
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
-  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, schedule: unknown, day_type_fees: unknown, format_fees: unknown, format: string | null }
+  type ApprovedApp = { application_id: string, place_id: string, seller_id: string, placeTitle: string, sellerName: string, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, schedule: unknown, day_type_fees: unknown, format_fees: unknown, min_guarantee: unknown, format: string | null }
   const [approvedApps, setApprovedApps] = useState<ApprovedApp[]>([])
   const [saleAppId, setSaleAppId] = useState('')
   const [saleDate, setSaleDate] = useState('')
@@ -510,50 +556,27 @@ export default function AdminPage() {
   const [saleMonth, setSaleMonth] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') })
 
   // 料金を計算（取引先分・弊社利益・お支払い総額を返す。per_event固定は日次では0扱い＝次フェーズ）
-  // date を渡すと、その日に金額が設定されていればそちらを使う
-  const calcFees = (revenue: number, a: { price_fixed: number; price_share_pct: number; place_fixed_unit: string; company_fixed_amount: number; company_share_pct: number; company_fixed_unit: string; share_tax_basis?: string; share_tax_rate?: number; schedule?: unknown; day_type_fees?: unknown; format_fees?: unknown; format?: string | null }, ov: string = '', date: string | null = null) => {
-    const rate = ov === 'ex8' ? 8 : ov === 'ex10' ? 10 : (a.share_tax_rate || 8)
-    const basis = ov === 'ex8' || ov === 'ex10' ? 'tax_excluded' : ov === 'as_entered' ? 'as_entered' : (a.share_tax_basis || 'as_entered')
-    const base = basis === 'tax_excluded' ? Math.floor(revenue / (1 + rate / 100)) : revenue
-    // 金額の優先順位:
-    //   形態（キッチンカー/物販/催事PR/テント・ブース）ごとの額
-    //   → 日程に入れたその日の額 → 案件の平日/土日祝の額 → 案件全体の固定額
-    //
-    // 形態をいちばん強くしている。以前は日程のその日を先に見ていたが、
-    // 「催事PRに18,000円を入れたのに、申込画面の各日は3,000円/4,500円のまま」
-    // という報告があった。日程の金額はキッチンカー向けに入れたものなので、
-    // 形態に金額を入れたらそちらが効くのが、入力した人の期待に合う。
-    // 特定の日だけ別の額にしたい場合は、形態の金額を空欄にして
-    // 日程のその日に入れる（空欄の項目はひとつ下に落ちる）。
-    //
-    // formatFee に date を渡すと、土日祝を分けている形態はその日に合う額を返す。
-    const fmt = formatFee(a.format_fees, a.format, date)
-    const day = perDayFee(a.schedule, date)
-    const dt = dayTypeFee(a.day_type_fees, date)
-    const placeFixed = fmt.placeFee != null ? fmt.placeFee
-      : day.placeFee != null ? day.placeFee
-      : dt.placeFee != null ? dt.placeFee
-      : (a.place_fixed_unit === "per_event" ? 0 : (a.price_fixed || 0))
-    const companyFixed = fmt.companyFee != null ? fmt.companyFee
-      : day.companyFee != null ? day.companyFee
-      : dt.companyFee != null ? dt.companyFee
-      : (a.company_fixed_unit === "per_event" ? 0 : (a.company_fixed_amount || 0))
-    // 歩合も形態で変えられる（物販は固定額のみ、キッチンカーは歩合ありなど）
-    const fs = formatShare(a.format_fees, a.format)
-    const placePct = fs.sharePct != null ? fs.sharePct : (a.price_share_pct || 0)
-    const companyPct = fs.companySharePct != null ? fs.companySharePct : (a.company_share_pct || 0)
-    const placeFee = Math.floor(placeFixed + base * placePct / 100)
-    const companyFee = Math.floor(companyFixed + base * companyPct / 100)
-    return { placeFee, companyFee, totalPay: placeFee + companyFee, basis, rate }
+  // date を渡すと、その日に金額が設定されていればそちらを使う。
+  //
+  // 計算そのものは app/lib/placeFee.ts の dayFeeOf だけが持つ。
+  // 以前はここと出店者の画面・案件詳細・請求件名に同じ式が写してあり、
+  // 出店者側だけ形態ごとの歩合を見ておらず、画面の額と請求額がずれていた。
+  // 返す形（placeFee / companyFee / totalPay / basis / rate）は変えていない。
+  const calcFees = (revenue: number, a: FeeSource & { format?: string | null }, ov: string = '', date: string | null = null) => {
+    const r = dayFeeOf(a, a.format, date, revenue, ov)
+    return { placeFee: r.placeFee, companyFee: r.companyFee, totalPay: r.total, basis: r.basis, rate: r.rate,
+      placeMinApplied: r.placeMinApplied, companyMinApplied: r.companyMinApplied }
   }
 
   // 承認済み申込を読み込む（売上を記録できる対象）
   const loadApprovedApps = async () => {
-    const { data } = await supabase
+    // min_guarantee（最低保証）は移行SQLを流すまで列が無い。
+    // 列が無い環境では、その列だけ落として読み直す（一覧が空になるのを防ぐ）
+    const { data } = await selectWithOptionalColumn(withMin => supabase
       .from('applications')
-      .select('id, place_id, seller_id, format, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees), profiles!applications_seller_id_fkey(name)')
+      .select('id, place_id, seller_id, format, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees' + (withMin ? ', min_guarantee' : '') + '), profiles!applications_seller_id_fkey(name)')
       .eq('status', 'approved')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false }))
     const mapped: ApprovedApp[] = (data || []).map((a: any) => ({
       application_id: a.id, place_id: a.place_id, seller_id: a.seller_id,
       placeTitle: a.places?.title || '(案件名なし)', sellerName: a.profiles?.name || '(出店者)',
@@ -566,6 +589,8 @@ export default function AdminPage() {
       // 形態（キッチンカー/物販/催事PR）ごとに金額が変わる案件があるため、
       // 申込の形態と案件の形態別の設定を一緒に持つ
       format_fees: a.places?.format_fees ?? null,
+      // 歩合が少ない日の最低保証（案件全体の設定）
+      min_guarantee: a.places?.min_guarantee ?? null,
       format: a.format ?? null
     }))
     setApprovedApps(mapped)
@@ -799,10 +824,11 @@ export default function AdminPage() {
     setAdminMsgUploading(false)
     // 相手へ新着メッセージ通知（失敗しても送信は成功扱い）
     try {
+      // 送信者はトークンから決まるので senderId は送らない
       await fetch('/api/notify/new-message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: activeThread, senderId: adminUid }),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+        body: JSON.stringify({ applicationId: activeThread }),
       })
     } catch (e) {
       console.error('メッセージ通知に失敗しました', e)
@@ -817,7 +843,7 @@ export default function AdminPage() {
   // ===== レビュー審査（管理者）=====
   type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
   // ===== 案件一覧（管理者・実データ） =====
-  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, closed: boolean, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, day_type_fees: unknown, fee: string, genres: string[] }
+  type AdminPlace = { id: string, title: string, host: string, area: string, type: string, applies: number, status: string, closed: boolean, price_fixed: number, price_share_pct: number, place_fixed_unit: string, company_fixed_amount: number, company_fixed_unit: string, company_share_pct: number, share_tax_basis: string, share_tax_rate: number, day_type_fees: unknown, min_guarantee: unknown, format_fees: unknown, fee: string, genres: string[] }
   const [placesList, setPlacesList] = useState<AdminPlace[]>([])
   const [placesLoading, setPlacesLoading] = useState(false)
   const [pKw, setPKw] = useState('')
@@ -829,12 +855,19 @@ export default function AdminPage() {
   const [placesPage, setPlacesPage] = useState(1)
   const loadPlacesList = async () => {
     setPlacesLoading(true)
-    const { data } = await supabase
+    // format_fees も読むのは、料金設定モーダルで
+    // 「この案件は形態ごとの料金が設定されています」を知らせるため。
+    // 日程（schedule）は載せない。289件を一度に読むので、
+    // 1件あたり数十日の日程が全件に乗ると一覧の読み込みが重くなる。
+    // min_guarantee（最低保証）は移行SQLを流すまで列が無いので、
+    // 列が無い環境ではその列だけ落として読み直す（一覧が空になるのを防ぐ）
+    const { data } = await selectWithOptionalColumn(withMin => supabase
       .from('places')
-      .select('id, title, prefecture, place_type, status, closed, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, day_type_fees, fee, genres, profiles(name), applications(count)')
+      .select('id, title, prefecture, place_type, status, closed, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, day_type_fees, format_fees, fee, genres, profiles(name), applications(count)'
+        + (withMin ? ', min_guarantee' : ''))
       // 取り消された申込は応募数に入れない
       .neq('applications.status', 'cancelled')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false }))
     const mapped: AdminPlace[] = (data || []).map((p: any) => ({
       id: p.id,
       title: p.title || '(無題)',
@@ -848,6 +881,8 @@ export default function AdminPage() {
       share_tax_basis: p.share_tax_basis || 'as_entered', share_tax_rate: p.share_tax_rate ?? 8,
       company_fixed_amount: p.company_fixed_amount ?? 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct ?? 0,
       day_type_fees: p.day_type_fees ?? null,
+      min_guarantee: p.min_guarantee ?? null,
+      format_fees: p.format_fees ?? null,
       fee: p.fee || '',
       genres: p.genres || [],
     }))
@@ -881,10 +916,25 @@ export default function AdminPage() {
   // 平日と土日祝で金額が変わる案件のための欄（空欄なら使わない）
   const [dtOn, setDtOn] = useState(false)
   const [dtForm, setDtForm] = useState({ wdPlace: '', wdCompany: '', wePlace: '', weCompany: '' })
+  // 最低保証（歩合が少ない日の下限）の欄。
+  // day_type_fees とは別の列（places.min_guarantee）に保存する。
+  // 同じ JSON に相乗りさせると、上の「平日と土日祝で金額を変える」の
+  // チェックを外した瞬間に、buildDayTypeFees の作り直しで最低保証も消える
+  const [minOn, setMinOn] = useState(false)
+  const [minForm, setMinForm] = useState({ wdPlace: '', wdCompany: '', wePlace: '', weCompany: '' })
   const [feeSaving, setFeeSaving] = useState(false)
   const [saleTaxOv, setSaleTaxOv] = useState('')
+  // 開いた案件の日程。固定額の優先順位には「日程に入れたその日の額」の段があり、
+  // これが無いと表示の落ち方が dayFeeOf と違ってしまう。
+  // 一覧の select には載せない（289件×数十日で読み込みが重くなるため）ので、
+  // モーダルを開いた1件だけをここで読む
+  // 案件を取り違えないよう、どの案件の日程かを一緒に持つ
+  const [feeSchedule, setFeeSchedule] = useState<{ id: string; schedule: unknown } | null>(null)
   const openFeeModal = (p: AdminPlace) => {
     setFeePlace(p)
+    setFeeSchedule(null)
+    supabase.from('places').select('schedule').eq('id', p.id).maybeSingle()
+      .then(({ data }) => setFeeSchedule({ id: p.id, schedule: data?.schedule ?? null }))
     setFeeForm({ price_fixed: p.price_fixed || 0, price_share_pct: p.price_share_pct || 0, place_fixed_unit: p.place_fixed_unit || 'per_day', company_fixed_amount: p.company_fixed_amount || 0, company_fixed_unit: p.company_fixed_unit || 'per_day', company_share_pct: p.company_share_pct || 0, share_tax_basis: p.share_tax_basis || 'as_entered', share_tax_rate: p.share_tax_rate || 8 })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dtf = (p.day_type_fees || null) as any
@@ -894,6 +944,15 @@ export default function AdminPage() {
     }
     setDtForm({ wdPlace: g('weekday', 'placeFee'), wdCompany: g('weekday', 'companyFee'), wePlace: g('weekend', 'placeFee'), weCompany: g('weekend', 'companyFee') })
     setDtOn(hasDayTypeFee(p.day_type_fees))
+    // 最低保証も同じ形（weekday / weekend）で入っている
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mg = (p.min_guarantee || null) as any
+    const gm = (side: string, key: string) => {
+      const v = mg?.[side]?.[key]
+      return typeof v === 'number' ? String(v) : ''
+    }
+    setMinForm({ wdPlace: gm('weekday', 'placeFee'), wdCompany: gm('weekday', 'companyFee'), wePlace: gm('weekend', 'placeFee'), weCompany: gm('weekend', 'companyFee') })
+    setMinOn(hasMinGuarantee(p.min_guarantee))
   }
   // 平日/土日祝の金額を保存用の形にする。使わない場合は null にして消す。
   const buildDayTypeFees = () => {
@@ -914,17 +973,38 @@ export default function AdminPage() {
     if (we) out.weekend = we
     return out
   }
+  // 最低保証を保存用の形にする。day_type_fees と同じ形（weekday / weekend）だが、
+  // 列は別（places.min_guarantee）。チェックを外したら null にして消す。
+  // 組み立ては app/lib/placeFee.ts の buildMinGuaranteeJson に集めてある
+  // （募集者の新規作成・編集画面と同じ形を作るため）
+  const buildMinGuarantee = () => {
+    if (!minOn) return null
+    return buildMinGuaranteeJson({
+      weekdayPlaceFee: toYen(minForm.wdPlace), weekdayCompanyFee: toYen(minForm.wdCompany),
+      weekendPlaceFee: toYen(minForm.wePlace), weekendCompanyFee: toYen(minForm.weCompany),
+    })
+  }
 
   const saveFee = async () => {
     if (!feePlace) return
     setFeeSaving(true)
-    // 権限で弾かれた場合、エラーは出ず0件更新になる。保存できたと誤解しないよう件数を確認する
-    const { data: updated, error } = await supabase.from('places').update({
+    const base = {
       price_fixed: feeForm.price_fixed, price_share_pct: feeForm.price_share_pct, place_fixed_unit: feeForm.place_fixed_unit,
       company_fixed_amount: feeForm.company_fixed_amount, company_fixed_unit: feeForm.company_fixed_unit, company_share_pct: feeForm.company_share_pct,
       share_tax_basis: feeForm.share_tax_basis, share_tax_rate: feeForm.share_tax_rate,
       day_type_fees: buildDayTypeFees(),
-    }).eq('id', feePlace.id).select('id')
+    }
+    const mg = buildMinGuarantee()
+    // 権限で弾かれた場合、エラーは出ず0件更新になる。保存できたと誤解しないよう件数を確認する。
+    // min_guarantee は移行SQLを流すまで列が無い。列が無い環境では
+    // ほかの料金だけ保存し、最低保証が入っていないことをその場で知らせる
+    let { data: updated, error } = await supabase.from('places')
+      .update({ ...base, min_guarantee: mg }).eq('id', feePlace.id).select('id')
+    if (isMissingColumn(error)) {
+      const retry = await supabase.from('places').update(base).eq('id', feePlace.id).select('id')
+      updated = retry.data; error = retry.error
+      if (!error) showNotice('最低保証はまだ保存できません（データベースの列が未作成です）。ほかの料金は保存しました。')
+    }
     if (error) { showNotice('保存失敗: ' + error.message); setFeeSaving(false); return }
     if (!updated || updated.length === 0) {
       showNotice('保存できませんでした（更新権限をご確認ください）。金額は反映されていません。')
@@ -943,14 +1023,15 @@ export default function AdminPage() {
   // 生成に30秒ほどかかるので、押している間はボタンを止める。
   const [coverBusy, setCoverBusy] = useState('')
   const makeCover = async (p: { slug: string; title: string }) => {
-    if (!adminUid) { showNotice('認証情報がありません。再ログインしてください'); return }
+    const { token, error: tokenErr } = await adminAccessToken()
+    if (!token) { showNotice(tokenErr); return }
     if (!(await ask({ title: '表紙をAIで作り直しますか？', body: `「${p.title}」の表紙を作り直します。\nいまの表紙は置き換わります。`, okLabel: '作り直す' }))) return
     setCoverBusy(p.slug)
     try {
       const res = await fetch('/api/blog-cover', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requesterId: adminUid, slug: p.slug }),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ slug: p.slug }),
       })
       const j = await res.json()
       if (!res.ok) showNotice('作れませんでした: ' + (j.error || '不明なエラー'))
@@ -1491,12 +1572,14 @@ export default function AdminPage() {
   // サービスロールのAPI経由で登録する。
   // 案件の公開／下書きを切り替える（RLS回避のためAPI経由）
   const setPlaceStatus = async (placeId: string, status: 'published' | 'draft') => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { showNotice('ログインが必要です'); return }
+    // 名乗るのはアクセストークン。自分のIDを本文に入れる形だと、
+    // それを知っている人ならログインせずに案件を非公開にできてしまう
+    const { token, error: tokenErr } = await adminAccessToken()
+    if (!token) { showNotice(tokenErr); return }
     const res = await fetch('/api/admin/set-place-status', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requesterId: user.id, placeId, status }),
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ placeId, status }),
     })
     const result = await res.json()
     if (!res.ok) { showNotice('変更に失敗しました: ' + (result.error || '不明なエラー')); return }
@@ -1527,9 +1610,9 @@ export default function AdminPage() {
 
   const saveNewPlace = async (status: 'published' | 'draft') => {
     if (!npForm.title.trim()) { showNotice('案件タイトルを入力してください'); return }
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { showNotice('ログインが必要です'); return }
     setNpSaving(true)
+    const { token, error: tokenErr } = await adminAccessToken()
+    if (!token) { showNotice(tokenErr); setNpSaving(false); return }
 
     // 画像は先にストレージへ上げてURLを作る
     let imageUrl: string | null = null
@@ -1553,9 +1636,8 @@ export default function AdminPage() {
 
     const res = await fetch('/api/admin/create-place', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({
-        requesterId: user.id,
         place: {
           ...npForm,
           host_id: npForm.host_id || null,
@@ -1574,12 +1656,12 @@ export default function AdminPage() {
   }
 
   const deleteSellerAdmin = async (id: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { showNotice('ログインが必要です'); return }
+    const { token, error: tokenErr } = await adminAccessToken()
+    if (!token) { showNotice(tokenErr); return }
     const res = await fetch('/api/admin/delete-seller', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, requesterId: user.id }),
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ id }),
     })
     const result = await res.json()
     if (!res.ok) { showNotice('削除失敗: ' + (result.error || '不明なエラー')); return }
@@ -1607,12 +1689,13 @@ export default function AdminPage() {
   // profiles には管理者用の UPDATE ポリシーが無く、クライアントから直接更新すると
   // RLS に無言で弾かれる（エラーも出ず0件更新になる）ため、サービスロールのAPI経由で更新する
   const setApproval = async (id: string, status: 'approved' | 'rejected') => {
-    if (!adminUid) { showNotice('認証情報がありません。再ログインしてください'); return }
+    const { token, error: tokenErr } = await adminAccessToken()
+    if (!token) { showNotice(tokenErr); return }
     try {
       const res = await fetch('/api/admin/set-approval', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requesterId: adminUid, targetId: id, status }),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ targetId: id, status }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { showNotice('更新失敗: ' + (json.error || res.status)); return }
@@ -1795,13 +1878,26 @@ export default function AdminPage() {
     const { error } = await supabase.from('applications').update({ status }).eq('id', id)
     if (error) { showNotice('更新失敗: ' + error.message); return }
     if (notify) {
+      // 通知の入口も名乗りが要る（申込IDだけで第三者に送らせないため）。
+      // 送れなかったときは黙って飲み込まず知らせる。状態は変わっているので、
+      // メールが届いていないことに気づけないと連絡漏れになる
       try {
-        await fetch('/api/notify/application-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ applicationId: id, status }),
-        })
-      } catch {}
+        const { token, error: tokenErr } = await adminAccessToken()
+        if (!token) showNotice('状態は変えましたが、通知メールを送れませんでした：' + tokenErr)
+        else {
+          const res = await fetch('/api/notify/application-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+            body: JSON.stringify({ applicationId: id, status }),
+          })
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}))
+            showNotice('状態は変えましたが、通知メールを送れませんでした：' + (j.error || res.status))
+          }
+        }
+      } catch {
+        showNotice('状態は変えましたが、通知メールを送れませんでした（通信エラー）')
+      }
     }
     loadPendingApps()
   }
@@ -2420,13 +2516,35 @@ const previewDoc = async (fileUrl: string) => {
 
               {feePlace && (() => {
                 const ff = feeForm
-                const dispFixed = (ff.price_fixed||0) + (ff.company_fixed_amount||0)
-                const dispPct = (ff.price_share_pct||0) + (ff.company_share_pct||0)
-                const unitLabel = (u: string) => u === 'per_event' ? '期間' : '日'
                 const ex = 50000
                 const exBase = ff.share_tax_basis === 'tax_excluded' ? Math.floor(ex / (1 + (ff.share_tax_rate||8)/100)) : ex
                 const pf = (ff.place_fixed_unit=== 'per_event' ?0:(ff.price_fixed||0)) + exBase*(ff.price_share_pct||0)/100
                 const cf = (ff.company_fixed_unit=== 'per_event' ?0:(ff.company_fixed_amount||0)) + exBase*(ff.company_share_pct||0)/100
+                // いま入力している内容（案件全体）で計算したときの例。
+                // 最低保証が効くかどうかは売上によって変わるので、
+                // 安い日の例（5,000円/日）も並べて、どちらの額になるのか分かるようにする。
+                // 計算は dayFeeOf に任せる（画面の例示と実際の請求を別式にしない）
+                // 平日/土日祝の額（day_type_fees）と日程の各日の額も入れる。
+                // 入れないと、この画面の例示と「出店者に見える表示」だけが
+                // 案件全体の列しか見ない別の計算になる（Olympic 三ノ輪店は
+                // 列が0円なので「出店料：0円/日」と出ていた）
+                const exPlace: FeeSource = {
+                  price_fixed: ff.price_fixed, price_share_pct: ff.price_share_pct, place_fixed_unit: ff.place_fixed_unit,
+                  company_fixed_amount: ff.company_fixed_amount, company_fixed_unit: ff.company_fixed_unit, company_share_pct: ff.company_share_pct,
+                  share_tax_basis: ff.share_tax_basis, share_tax_rate: ff.share_tax_rate,
+                  min_guarantee: buildMinGuarantee(),
+                  day_type_fees: buildDayTypeFees(),
+                  schedule: feeSchedule?.id === feePlace.id ? feeSchedule.schedule : null,
+                }
+                // 見本の日付（6月は祝日が無いので平日／日曜の判定が変わらない）
+                const lowRev = 5000
+                const exLowWd = dayFeeOf(exPlace, null, '2026-06-03', lowRev)
+                const exLowWe = dayFeeOf(exPlace, null, '2026-06-07', lowRev)
+                // 出店者に見える文字列。組み立ては feeCondition に任せる
+                // （出店者の画面・申込モーダル・請求件名と同じ言い方にするため）
+                const dispCond = feeCondition(exPlace, null)
+                // この案件に形態ごとの料金が入っているか（このモーダルからは編集できない）
+                const fmtNames = hasFormatFees(feePlace.format_fees) ? allowedFormats(feePlace.format_fees) : []
                 return (
                 <div onClick={()=>setFeePlace(null)} style={{ position: 'fixed', inset:0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex:1000, padding: '20px' }}>
                   <div onClick={e=>e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '24px', width: '560px', maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -2487,13 +2605,119 @@ const previewDoc = async (fileUrl: string) => {
                         ))}
                       </div>
                     )}
+                    {/* 最低保証（歩合が少ない日の下限）。
+                        上の「平日と土日祝で金額を変える」（固定額）とは別の設定なので、
+                        枠の色を変えて、チェックも別に持つ。
+                        保存先も別の列（places.min_guarantee）にしている。
+                        同じ JSON に入れると、固定額の分け方を変えただけで消えてしまう */}
+                    <label style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'8px', fontSize:'13px', color:'#1a1a1a', cursor:'pointer' }}>
+                      <input type='checkbox' checked={minOn} onChange={e=>setMinOn(e.target.checked)} style={{ accentColor:'#16A34A', cursor:'pointer' }} />
+                      <span style={{ fontWeight:700 }}>最低保証を使う（売上が少ない日の下限）</span>
+                    </label>
+                    {minOn && (
+                      <div style={{ border:'1.5px solid #BBF7D0', background:'#F0FDF4', borderRadius:'8px', padding:'12px', marginBottom:'18px' }}>
+                        <div style={{ fontSize:'11px', color:'#475569', lineHeight:1.8, marginBottom:'10px' }}>
+                          歩合で計算した額がこの額を下回った日は、<strong>この額</strong>になります（固定額との合算ではありません）。
+                          取引先へ渡す額と弊社の取り分は別々に比べます。<strong>税別</strong>で入れてください。<br />
+                          土日と<strong>祝日・振替休日</strong>は「土日祝」の額になります。
+                          土日祝を空欄にすると、平日に入れた額がそのまま土日祝の下限にもなります
+                          （平日だけ入れれば全日その額。土日祝だけ高い案件は両方入れてください）。<br />
+                          期間でまとめた最低保証（例：イベント1回で8万円）は、この欄では扱えません（これまでどおり手作業でご請求ください）。
+                        </div>
+                        {([
+                          ['平日（月〜金）', 'wdPlace', 'wdCompany'],
+                          ['土日祝', 'wePlace', 'weCompany'],
+                        ] as const).map(([label, pk, ck]) => (
+                          <div key={label} style={{ marginBottom:'10px' }}>
+                            <div style={{ fontSize:'12px', fontWeight:700, color:'#16A34A', marginBottom:'4px' }}>{label}の最低保証</div>
+                            <div className='form-grid-2' style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+                              <div>
+                                <label style={{fontSize:'12px',color:'#64748B'}}>取引先へ渡す額（円）</label>
+                                <input inputMode='numeric' value={minForm[pk]} onChange={e=>setMinForm({...minForm, [pk]: e.target.value.replace(/[^0-9]/g,'')})} placeholder='空欄可' style={{width:'100%',border:'1.5px solid #E2E8F0',borderRadius:'8px',padding:'8px',fontSize:'13px',boxSizing:'border-box'}} />
+                              </div>
+                              <div>
+                                <label style={{fontSize:'12px',color:'#64748B'}}>弊社の取り分（円）</label>
+                                <input inputMode='numeric' value={minForm[ck]} onChange={e=>setMinForm({...minForm, [ck]: e.target.value.replace(/[^0-9]/g,'')})} placeholder='空欄可' style={{width:'100%',border:'1.5px solid #E2E8F0',borderRadius:'8px',padding:'8px',fontSize:'13px',boxSizing:'border-box'}} />
+                              </div>
+                            </div>
+                            {(() => {
+                              const a = parseInt(minForm[pk]||'0',10)||0, b = parseInt(minForm[ck]||'0',10)||0
+                              if (a+b === 0) return null
+                              return <div style={{ fontSize:'11px', color:'#475569', marginTop:'4px' }}>出店者が払う最低額：<strong>{(a+b).toLocaleString()}円</strong></div>
+                            })()}
+                          </div>
+                        ))}
+                        {/* 最低保証の配分が歩合の配分と違うと、出店者の合計が
+                            「歩合の合計」も「最低保証の合計」も上回る日が出る。
+                            取引先側と弊社側を別々に比べる作りなので、比をそろえてもらう */}
+                        {(() => {
+                          const mp = parseInt(minForm.wdPlace||'0',10)||0, mc = parseInt(minForm.wdCompany||'0',10)||0
+                          const sp = ff.price_share_pct||0, sc = ff.company_share_pct||0
+                          if (mp + mc === 0 || sp + sc === 0) return null
+                          // 比が1%以上ずれていたら知らせる
+                          const minRatio = mp / (mp + mc), pctRatio = sp / (sp + sc)
+                          if (Math.abs(minRatio - pctRatio) < 0.01) return null
+                          return (
+                            <div style={{ fontSize:'11.5px', color:'#DC2626', lineHeight:1.8, background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:'8px', padding:'8px 10px' }}>
+                              最低保証の配分（取引先{mp.toLocaleString()}円：弊社{mc.toLocaleString()}円）が、歩合の配分（{sp}%：{sc}%）と違います。
+                              取引先側と弊社側は別々に「高い方」を取るため、売上によっては出店者の合計が
+                              「売上の{sp+sc}%」も「最低保証{(mp+mc).toLocaleString()}円」も上回る日が出ます。
+                              歩合と同じ比で割ることをおすすめします。
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
+                    {/* 形態ごとの料金が入っている案件は、このモーダルの数字が実額ではない。
+                        形態別はこの画面から編集できないため（募集者側の編集画面のみ）、
+                        入っていることだけは必ず見えるようにする */}
+                    {fmtNames.length > 0 && (
+                      <div style={{ border:'1.5px solid #BFDBFE', background:'#F8FBFF', borderRadius:'8px', padding:'12px', marginBottom:'18px', fontSize:'12px', color:'#334155', lineHeight:1.9 }}>
+                        <div style={{ fontWeight:800, color:'#1D4ED8', marginBottom:'4px' }}>この案件は形態ごとの料金が設定されています</div>
+                        {fmtNames.map(fname => {
+                          // 出店者の画面と同じ言い方で出す（feeCondition が唯一の正）。
+                          // 日程の各日の額は一覧の select に無いので、開いた1件だけ読んだものを足す
+                          const c = feeCondition(
+                            { ...feePlace, schedule: feeSchedule?.id === feePlace.id ? feeSchedule.schedule : null },
+                            fname,
+                          )
+                          return (
+                            <div key={fname}>
+                              {fname}：{c.empty ? '要相談' : c.parts.join(' ＋ ')}
+                              {c.minNote ? '（' + c.minNote + (hasFormatMin(feePlace.format_fees, fname) ? '' : '／案件全体の設定') + '）' : ''}
+                            </div>
+                          )
+                        })}
+                        <div style={{ color:'#64748B', marginTop:'4px' }}>
+                          形態ごとの金額・歩合・最低保証は、この画面ではなく
+                          <strong>案件の「編集」→「形態ごとの出店料と条件」</strong>で直してください。
+                          形態に入っている設定は、下の数字より優先されます。
+                        </div>
+                      </div>
+                    )}
                     <div style={{ fontWeight:700, fontSize: '13px', color: '#16A34A', marginBottom: '8px' }}>歩合の計算元（税の扱い）</div>
                     <div className='form-grid-2' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '18px' }}>
                       <div><label style={{fontSize: '12px',color: '#64748B'}}>計算元</label><select value={ff.share_tax_basis} onChange={e=>setFeeForm({...ff, share_tax_basis: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value='as_entered'>入力金額そのまま</option><option value='tax_excluded'>税抜に換算してから</option></select></div>
                       {ff.share_tax_basis === 'tax_excluded' && (<div><label style={{fontSize: '12px',color: '#64748B'}}>税率</label><select value={ff.share_tax_rate} onChange={e=>setFeeForm({...ff, share_tax_rate: parseInt(e.target.value)||10})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value={8}>8%（軽減税率）</option><option value={10}>10%</option></select></div>)}
                     </div>
-                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '13px' }}><div style={{fontWeight:700,color: '#16A34A',marginBottom: '4px'}}>出店者に見える表示</div>出店料：{dispFixed.toLocaleString()}円/{unitLabel(ff.place_fixed_unit)}{dispPct>0? ' ＋ 売上の'+dispPct+ '%' : ''}</div>
-                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '18px', fontSize: '12px', color: '#64748B', lineHeight:1.8 }}><div style={{fontWeight:700,color: '#1a1a1a',marginBottom: '4px'}}>管理側の内訳（売上{ex.toLocaleString()}円/日の例）</div>取引先分：{Math.round(pf).toLocaleString()}円 ／ 弊社の利益：<strong style={{color: '#3A9BD5'}}>{Math.round(cf).toLocaleString()}円</strong> ／ 総額：<strong style={{color: '#16A34A'}}>{Math.round(pf+cf).toLocaleString()}円</strong></div>
+                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '13px' }}><div style={{fontWeight:700,color: '#16A34A',marginBottom: '4px'}}>出店者に見える表示</div>出店料：{dispCond.empty ? (feePlace.fee || '要相談') : dispCond.parts.join(' ＋ ') + (dispCond.minNote ? '（' + dispCond.minNote + '）' : '')}</div>
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '18px', fontSize: '12px', color: '#64748B', lineHeight:1.8 }}>
+                      <div style={{fontWeight:700,color: '#1a1a1a',marginBottom: '4px'}}>管理側の内訳（売上{ex.toLocaleString()}円/日の例）</div>
+                      取引先分：{Math.round(pf).toLocaleString()}円 ／ 弊社の利益：<strong style={{color: '#3A9BD5'}}>{Math.round(cf).toLocaleString()}円</strong> ／ 総額：<strong style={{color: '#16A34A'}}>{Math.round(pf+cf).toLocaleString()}円</strong>
+                      {/* 最低保証を入れても上の例示（売上5万円）はほとんど変わらないため、
+                          最低保証が効く安い日の例も出す。効いた側には印を付ける */}
+                      {minOn && (
+                        <div style={{ marginTop:'6px', paddingTop:'6px', borderTop:'1px solid #E2E8F0' }}>
+                          売上{lowRev.toLocaleString()}円/日の例（平日）：取引先分 {exLowWd.placeFee.toLocaleString()}円{exLowWd.placeMinApplied ? '（最低保証）' : ''} ／ 弊社 <strong style={{color:'#3A9BD5'}}>{exLowWd.companyFee.toLocaleString()}円</strong>{exLowWd.companyMinApplied ? '（最低保証）' : ''} ／ 総額 <strong style={{color:'#16A34A'}}>{exLowWd.total.toLocaleString()}円</strong><br />
+                          同じ売上の土日祝：総額 <strong style={{color:'#16A34A'}}>{exLowWe.total.toLocaleString()}円</strong>{(exLowWe.placeMinApplied || exLowWe.companyMinApplied) ? '（最低保証が適用）' : ''}
+                        </div>
+                      )}
+                      {fmtNames.length > 0 && (
+                        <div style={{ marginTop:'6px', color:'#B45309' }}>
+                          ※ この案件は形態ごとの料金が設定されているため、上の例示は実際の請求額と違います。
+                        </div>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                       <button onClick={()=>setFeePlace(null)} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', cursor: 'pointer' }}>キャンセル</button>
                       <button onClick={saveFee} disabled={feeSaving} style={{ background: feeSaving? '#ccc' : '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 22px', fontSize: '13px', fontWeight:700, cursor:feeSaving? 'not-allowed' : 'pointer' }}>{feeSaving? '保存中...' : '保存する'}</button>
@@ -3211,11 +3435,16 @@ const previewDoc = async (fileUrl: string) => {
                     </div>
                   </div>
                 </div>
-                {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const { placeFee, companyFee, totalPay } = calcFees(rev, a, saleTaxOv, saleDate); return (
+                {saleAppId && (() => { const a = approvedApps.find(x => x.application_id === saleAppId); if (!a) return null; const rev = parseInt(saleRevenue || '0', 10) || 0; const { placeFee, companyFee, totalPay, placeMinApplied, companyMinApplied } = calcFees(rev, a, saleTaxOv, saleDate); return (
                   <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B', lineHeight: 1.9 }}>
-                    <div>取引先分（税別）：<strong style={{ color: '#1a1a1a' }}>{placeFee.toLocaleString()}円</strong></div>
-                    <div>弊社の利益（税別）：<strong style={{ color: '#3A9BD5' }}>{companyFee.toLocaleString()}円</strong></div>
+                    <div>取引先分（税別）：<strong style={{ color: '#1a1a1a' }}>{placeFee.toLocaleString()}円</strong>{placeMinApplied && <span style={{ color: '#B45309' }}>（最低保証）</span>}</div>
+                    <div>弊社の利益（税別）：<strong style={{ color: '#3A9BD5' }}>{companyFee.toLocaleString()}円</strong>{companyMinApplied && <span style={{ color: '#B45309' }}>（最低保証）</span>}</div>
                     <div>お支払い総額（税別）：<strong style={{ color: '#16A34A' }}>{totalPay.toLocaleString()}円</strong> ／ 税込 <strong style={{ color: '#16A34A' }}>{Math.round(totalPay * 1.1).toLocaleString()}円</strong></div>
+                    {/* 歩合で計算した額が最低保証を下回った日は、最低保証の額になる。
+                        ここに出さないと「計算が間違っている」という問い合わせになる */}
+                    {(placeMinApplied || companyMinApplied) && (
+                      <div style={{ color: '#B45309' }}>※ 歩合で計算した額が最低保証を下回るため、最低保証の額です</div>
+                    )}
                   </div>
                 ) })()}
               </div>

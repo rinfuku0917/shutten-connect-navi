@@ -1,41 +1,26 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../../lib/apiAuth'
 
 // 案件の公開／下書きを管理者が切り替える。
 // places の UPDATE も RLS で無言のうちに弾かれるおそれがあるため、
 // 登録・承認と同じくサービスロールで実行する。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyAdmin(admin: any, requesterId: string) {
-  const { data, error } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', requesterId)
-    .maybeSingle()
-  if (error || !data || data.role !== 'admin') return false
-  return true
-}
+//
+// 呼び出し元の判定は body の requesterId をやめ、アクセストークンに変えた。
+// 公開中の案件を下書きに落とせる入口なので、申告されたIDを信じると
+// 応募導線を止める（サービス妨害）ことができてしまう。
 
 export async function POST(req: Request) {
   try {
-    const { requesterId, placeId, status } = await req.json()
-    if (!requesterId || !placeId || !status) {
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const admin = auth.db
+
+    const { placeId, status } = await req.json()
+    if (!placeId || !status) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
     if (status !== 'published' && status !== 'draft') {
       return NextResponse.json({ error: '公開状態が不正です' }, { status: 400 })
-    }
-
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-    const admin = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
     }
 
     const patch: { status: string; posted_at?: string } = { status }

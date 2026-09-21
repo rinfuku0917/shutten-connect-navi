@@ -1,25 +1,12 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getAdminClient, requireAdmin } from '../../lib/apiAuth'
 
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyAdmin(admin: any, requesterId: string) {
-  const { data, error } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', requesterId)
-    .maybeSingle()
-  if (error || !data || data.role !== 'admin') return false
-  return true
-}
+// ブログ記事の読み書き。書き込み（POST/PUT/DELETE）は運営だけ。
+//
+// 以前は body の requesterId を profiles.role='admin' と照合するだけで、
+// Authorization ヘッダを見ていなかった。運営のUUIDを知られていれば、
+// ログインせずに公開記事の投稿・差し替え・削除ができる状態だった。
+// 誰として呼んでいるかはアクセストークンだけで決める（app/lib/apiAuth.ts）。
 
 export async function GET(req: Request) {
   const admin = getAdminClient()
@@ -41,6 +28,13 @@ export async function GET(req: Request) {
   }
 
   if (all) {
+    // 下書き（status≠published）まで含めて返す分岐なので、運営だけに通す。
+    // 書き込みだけ塞いでも、ここが空いていれば未公開の記事の本文・
+    // meta_description・target_keyword が誰にでも読めてしまう
+    // （運営のUUIDさえ要らないので、塞いだ経路より条件がゆるい）
+    const auth = await requireAdmin(req, admin)
+    if (auth instanceof NextResponse) return auth
+
     const { data, error } = await admin
       .from('posts')
       .select('*')
@@ -61,16 +55,15 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const admin = getAdminClient()
-    if (!admin) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    // 入力の検査より先に運営かどうかを見る。
+    // 運営でない相手に「slug は必須です」などと返すと、当たり外れを教えることになる
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const admin = auth.db
 
     const body = await req.json()
-    const { requesterId, slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category } = body
+    const { slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category } = body
 
-    if (!requesterId) return NextResponse.json({ error: '認証情報がありません' }, { status: 401 })
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-    }
     if (!slug || !title || !content) {
       return NextResponse.json({ error: 'slug・title・content は必須です' }, { status: 400 })
     }
@@ -109,16 +102,13 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const admin = getAdminClient()
-    if (!admin) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const admin = auth.db
 
     const body = await req.json()
-    const { requesterId, id, slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category } = body
+    const { id, slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword, related_prefecture, related_category } = body
 
-    if (!requesterId) return NextResponse.json({ error: '認証情報がありません' }, { status: 401 })
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-    }
     if (!id) return NextResponse.json({ error: 'id がありません' }, { status: 400 })
 
     const updates: Record<string, unknown> = { slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword: target_keyword || null, related_prefecture: related_prefecture || null, related_category: related_category || null, updated_at: new Date().toISOString() }
@@ -138,16 +128,13 @@ export async function PUT(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const admin = getAdminClient()
-    if (!admin) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const admin = auth.db
 
     const body = await req.json()
-    const { requesterId, id } = body
+    const { id } = body
 
-    if (!requesterId) return NextResponse.json({ error: '認証情報がありません' }, { status: 401 })
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-    }
     if (!id) return NextResponse.json({ error: 'id がありません' }, { status: 400 })
 
     const { error } = await admin.from('posts').delete().eq('id', id)

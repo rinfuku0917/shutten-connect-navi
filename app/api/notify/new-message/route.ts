@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, serverConfigResponse } from '../../../lib/apiAuth'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 import { SITE_URL } from '../../../lib/seo'
 
@@ -8,23 +8,34 @@ const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
 const recentSends = new Map();
 
+// 新着メッセージのお知らせメールを相手へ出す。
+//
+// 送信者は body で受け取らない。アクセストークンの uid をそのまま送信者とする。
+// 以前は body の senderId で宛先（出店者か募集者か）を振り分けていたため、
+// 申込のIDを知っている者（自分の申込を持つ出店者など）なら、senderId を
+// 差し替えて相手側にだけ「新しいメッセージ」通知を出させられた。
+// 誰として呼んでいるかはトークンだけで決める（notify/new-application と同じ形）。
+// 判定は app/lib/apiAuth.ts の関門に寄せる（各入口に書き写すと食い違うため。
+// 役割が読めなかったときに 403 ではなく 503 を返すのも、そこに揃える）。
 export async function POST(req: Request) {
   try {
-    const { applicationId, senderId } = await req.json()
-    if (!applicationId || !senderId) {
+    const { applicationId } = await req.json()
+    if (!applicationId) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
 
-    const apiKey = process.env.RESEND_API_KEY
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!apiKey || !url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
+    // 送信者はトークンの持ち主。DBを読む前に決めるので、
+    // body の値で「誰として送ったか」を差し替えられない。
+    // 見る順は requireCaller のまま（トークン無し→401、鍵無し→500、
+    // 検証失敗→401、役割が読めない→503）
+    const ctx = await requireCaller(req)
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    const senderId = caller.uid
 
-    const db = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
+    // メールの鍵は、名乗った相手だと分かってから見る
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) return serverConfigResponse()
 
     // 申込 → 出店者・案件・ホストを解決
     const { data: app, error: aErr } = await db
@@ -37,7 +48,14 @@ export async function POST(req: Request) {
     const hostId = place?.host_id || null
     const placeTitle = place?.title || '案件'
 
-    // 送信者から受信者を決定
+    // このやり取りの当事者か。運営は代わりに返すことがあるので通す。
+    // 当事者でない相手には、宛先も件名も作らせない。
+    // 役割は関門が読んでいる（読めなかったときは、ここへ来る前に 503 で止まる）
+    if (senderId !== app.seller_id && senderId !== hostId && !caller.isAdmin) {
+      return NextResponse.json({ error: 'このやり取りの通知は送れません' }, { status: 403 })
+    }
+
+    // 送信者から受信者を決定（運営が送ったときは出店者あて。これまでと同じ）
     let recipientId: string | null
     let recipientIsHost = false
     if (senderId === app.seller_id) {

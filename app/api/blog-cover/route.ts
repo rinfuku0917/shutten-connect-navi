@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../lib/apiAuth'
 
 // 記事の表紙を、AIに実写風の絵で作り直させる。
 //
@@ -12,23 +12,14 @@ import { NextResponse } from 'next/server'
 //
 // 差し替えるのは本文の1枚目の画像。ここが記事一覧のサムネイルと、
 // SNSで共有したときの絵（og:image）になる。
+//
+// 呼び出し元は body の requesterId ではなくアクセストークンで確かめる。
+// 生成には課金が発生し（OPENAI_API_KEY）、公開記事の本文も書き換わるため、
+// 申告されたIDを信じると、繰り返し叩かれて費用が増え、記事も改ざんされる。
 
 export const maxDuration = 300
 
 const SIZE = '1536x1024'
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyAdmin(admin: any, requesterId: string) {
-  const { data, error } = await admin.from('profiles').select('role').eq('id', requesterId).maybeSingle()
-  return !error && data?.role === 'admin'
-}
 
 // 記事ごとに、絵にしたい場面を決めておく。
 // タイトルをそのまま渡すと「出店料」「書類」のような抽象語が絵にならないため。
@@ -66,14 +57,12 @@ function buildPrompt(slug: string, title: string): string {
 
 export async function POST(req: Request) {
   try {
-    const admin = getAdminClient()
-    if (!admin) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    // 課金の伴う生成に入る前に、運営かどうかを見る
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const admin = auth.db
 
-    const { requesterId, slug } = await req.json()
-    if (!requesterId) return NextResponse.json({ error: '認証情報がありません' }, { status: 401 })
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-    }
+    const { slug } = await req.json()
     if (!slug) return NextResponse.json({ error: '記事が指定されていません' }, { status: 400 })
 
     const key = process.env.OPENAI_API_KEY

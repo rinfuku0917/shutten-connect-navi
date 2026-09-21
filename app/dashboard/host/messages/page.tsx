@@ -263,10 +263,11 @@ export default function HostMessages() {
     }
     // 相手へ新着メッセージ通知（失敗しても送信は成功扱い）
     try {
+      // 送信者はトークンから決まるので senderId は送らない
       await fetch('/api/notify/new-message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: appId, senderId: myId }),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+        body: JSON.stringify({ applicationId: appId }),
       })
     } catch (e) {
       console.error('メッセージ通知に失敗しました', e)

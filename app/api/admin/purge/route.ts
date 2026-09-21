@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../../lib/apiAuth'
 import { writePurgeLog, purgeSummary } from '../../../lib/purgeLog'
 
 // 取り消し済みの記録を、運営が完全に消す。
@@ -20,30 +20,8 @@ import { writePurgeLog, purgeSummary } from '../../../lib/purgeLog'
 // 出店ぶんは、案件名・出店日・出店者の屋号とID・取り消した理由。
 // 行が無くなってもキャンセル料を請求できるようにするため（/cancel-policy）。
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getAdmin(): any {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-// 呼び出し元をアクセストークンで確かめる。body のIDは信用しない
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function requireAdmin(req: Request, db: any): Promise<{ uid: string } | NextResponse> {
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
-
-  const { data: userData, error: uErr } = await db.auth.getUser(token)
-  const uid = userData?.user?.id
-  if (uErr || !uid) return NextResponse.json({ error: '認証に失敗しました' }, { status: 401 })
-
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  if (me?.role !== 'admin') return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
-
-  return { uid }
-}
+// 呼び出し元はアクセストークンで確かめる（app/lib/apiAuth.ts の requireAdmin）。
+// body のIDは信用しない。
 
 
 // ===== 消した記録の控えを読む =====
@@ -61,10 +39,9 @@ async function requireAdmin(req: Request, db: any): Promise<{ uid: string } | Ne
 // 1件だけ id を指定したときに全部返す。
 export async function GET(req: Request) {
   try {
-    const db = getAdmin()
-    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    const auth = await requireAdmin(req, db)
+    const auth = await requireAdmin(req)
     if (auth instanceof NextResponse) return auth
+    const db = auth.db
 
     const u = new URL(req.url)
     const id = (u.searchParams.get('id') || '').trim()
@@ -163,12 +140,11 @@ function needsSetup() {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
-    const db = getAdmin()
-    if (!db) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    const auth = await requireAdmin(req, db)
+    const auth = await requireAdmin(req)
     if (auth instanceof NextResponse) return auth
-    const uid = auth.uid
+    const { uid, db } = auth
+
+    const body = await req.json()
 
     // ===== 取り消し済みの出店を消す =====
     if (body.action === 'application') {

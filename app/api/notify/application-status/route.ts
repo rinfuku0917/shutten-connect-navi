@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireCaller, serverConfigResponse } from '../../../lib/apiAuth'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
@@ -14,16 +14,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
 
-    const apiKey = process.env.RESEND_API_KEY
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!apiKey || !url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
+    // 誰からの呼び出しかを確かめる。
+    //
+    // 承認・不採用のメールを出す入口で、DBの状態と一致するときだけ送るので
+    // 偽の通知は作れないが、以前は認証が無く、申込のIDを知っていれば
+    // 第三者が本物の承認・不採用メールを出店者に何度でも出させられた。
+    // 状態を決めるのは運営か、その案件の募集者だけなので、そこまでに絞る。
+    //
+    // 判定は app/lib/apiAuth.ts の関門に寄せる（各入口に書き写すと食い違う。
+    // 見る順もそのまま：トークン無し→401、鍵無し→500、検証失敗→401、
+    // 役割が読めない→503。役割を読めなかったのを「運営ではない」＝403 にしない）
+    const ctx = await requireCaller(req)
+    if (ctx instanceof NextResponse) return ctx
+    const { caller, db } = ctx
+    const uid = caller.uid
 
-    const db = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
+    // メールの鍵は、名乗った相手だと分かってから見る
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) return serverConfigResponse()
 
     // 申込 → 出店者・案件を解決
     const { data: app, error: aErr } = await db
@@ -36,13 +44,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '申込の状態と一致しません' }, { status: 409 })
     }
 
+    const placeRes = await db.from('places').select('title, host_id').eq('id', app.place_id).single()
+    const placeTitle = placeRes.data?.title || '案件'
+
+    // 運営か、その案件の募集者だけ。出店者本人には出させない（受け取る側なので）。
+    // 役割は関門が読んでいる（読めなかったときは、ここへ来る前に 503 で止まる）
+    if (uid !== placeRes.data?.host_id && !caller.isAdmin) {
+      return NextResponse.json({ error: 'この申込の通知は送れません' }, { status: 403 })
+    }
+
     const { data: seller, error: sErr } = await db
       .from('profiles').select('name, email').eq('id', app.seller_id).single()
     if (sErr || !seller || !seller.email) {
       return NextResponse.json({ error: '出店者取得失敗' }, { status: 500 })
     }
-    const placeRes = await db.from('places').select('title').eq('id', app.place_id).single()
-    const placeTitle = placeRes.data?.title || '案件'
     const sellerName = seller.name || '出店者'
     const approved = status === 'approved'
 

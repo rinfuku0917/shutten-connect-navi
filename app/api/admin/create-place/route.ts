@@ -1,26 +1,45 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { verifyCronCaller } from '../../../lib/cronAuth'
+import { getAdminClient, requireAdmin, serverConfigResponse, type AdminClient } from '../../../lib/apiAuth'
+import { verifyCronCaller, looksLikeCronKeyCall } from '../../../lib/cronAuth'
 
 // 管理者が案件を新規登録する。
 // places に管理者向けの INSERT ポリシーがあるとは限らず、クライアントから
 // 直接入れると RLS で無言のうちに弾かれるおそれがあるため、
 // 承認処理と同じくサービスロールで実行する。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyAdmin(admin: any, requesterId: string) {
-  const { data, error } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', requesterId)
-    .maybeSingle()
-  if (error || !data || data.role !== 'admin') return false
-  return true
-}
+//
+// 通す相手は2つ。
+//   1. ログイン中の運営（Authorization: Bearer のアクセストークン）
+//   2. 移行作業などのスクリプト（運用の鍵 CRON_SECRET）
+// 以前は「body に requesterId があれば運営として扱う」判定だったが、
+// requesterId は呼び出し側が自由に書ける値で、持ち主である証明が無い。
+// status='published' の公開ページを作れる入口なので、
+// 運営のUUIDを知られただけでSEOスパムを量産できる状態だった。
 
 export async function POST(req: Request) {
   try {
+    // 鍵での呼び出しかどうかを先に見分ける。
+    //
+    // 鍵の突き合わせはサーバー内の文字列比較で終わる。先に requireAdmin を
+    // 通すと、Authorization に載った CRON_SECRET がアクセストークンとして
+    // Supabase の /auth/v1/user へ送られ、鍵の生の値が認証ログに残ってしまう。
+    // でたらめな Authorization で叩かれたときに GoTrue を2回呼ぶことにもなる。
+    let admin: AdminClient | null
+    if (looksLikeCronKeyCall(req)) {
+      const cron = await verifyCronCaller(req)
+      // 鍵で呼んでいる相手には鍵側の理由を返す。
+      // 運営側の 401 だけを返すと、移行スクリプトから
+      // 「鍵が未設定」「鍵が違う」の区別が付かない
+      if (!cron.ok) return NextResponse.json({ error: cron.error }, { status: cron.status })
+      admin = getAdminClient()
+    } else {
+      const auth = await requireAdmin(req)
+      if (auth instanceof NextResponse) return auth
+      admin = auth.db
+    }
+    if (!admin) return serverConfigResponse()
+
     const body = await req.json()
-    const { requesterId, place } = body
+    const { place } = body
     if (!place) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
@@ -29,25 +48,6 @@ export async function POST(req: Request) {
     }
     if (place.status !== 'published' && place.status !== 'draft') {
       return NextResponse.json({ error: '公開状態が不正です' }, { status: 400 })
-    }
-
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-    const admin = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    // 管理画面からは requesterId で、移行作業などでは運用の鍵で判定する
-    if (requesterId) {
-      if (!(await verifyAdmin(admin, requesterId))) {
-        return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-      }
-    } else {
-      const auth = await verifyCronCaller(req)
-      if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
     }
 
     const num = (v: unknown) => {

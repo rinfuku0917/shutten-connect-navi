@@ -1,6 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { perDayFee } from '../../../lib/placeFee'
+import { requireCaller } from '../../../lib/apiAuth'
+import { feeCondition, dayFeeOf, minTotalOn } from '../../../lib/placeFee'
+import { selectWithOptionalColumn } from '../../../lib/optionalColumn'
 import { sendSalesToSheet } from '../../../lib/sheetSend'
 
 // 出店者への請求書を組み立てる。
@@ -54,7 +55,8 @@ function mdLabel(isoDate: string | null | undefined): string {
 
 const NUMBER_START: Record<string, number> = { '2026': 42 }
 
-// 呼び出し元を、アクセストークンから確かめる。
+// 呼び出し元は app/lib/apiAuth.ts の requireCaller で、
+// アクセストークンから確かめる。
 //
 // 【なぜ body の requesterId をやめたか】
 //   以前はこの入口だけ「誰として呼んでいるか」を body の requesterId で決めており、
@@ -67,58 +69,65 @@ const NUMBER_START: Record<string, number> = { '2026': 42 }
 //   公開用ビューから本名の列を外しても（20260919_public_sellers_no_name.sql）、
 //   この経路は閉じないので、ここで塞ぐ。
 //
-//   ほかの /api/admin/*（purge・seller-names）と同じ形に揃えた。
-//   profiles を読むのはサービスロールキーなので、RLS ではなくここが唯一の関門。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function resolveCaller(req: Request, db: any): Promise<{ uid: string; isAdmin: boolean } | null> {
-  const authHeader = req.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) return null
-  const { data, error } = await db.auth.getUser(token)
-  const uid = data?.user?.id
-  if (error || !uid) return null
-  const { data: me } = await db.from('profiles').select('role').eq('id', uid).maybeSingle()
-  return { uid, isAdmin: me?.role === 'admin' }
-}
+//   この入口は「運営なら全件、出店者なら自分の分だけ」なので、
+//   403 を即返す requireAdmin ではなく、uid と役割を返す requireCaller を使う。
 
 // 案件の料金設定から、請求件名に載せる条件（「10%」「5,000円/日」など）を作る。
-// 日ごとに金額を決めている案件は、その日の金額を出す。
+//
+// 読み出しは出店者の画面と同じ（app/lib/placeFee.ts）。
+// 以前はこの関数だけ places の列しか見ておらず、形態ごとに歩合を分けている案件
+// （イオンモール与野など）では、件名の条件が実際の請求額と合わなかった。
+// 申込の形態（applications.format）を引いて渡す。
+//
+// 最低保証がある案件は条件に「（最低◯円）」を付け、
+// その日が最低保証で決まっていたときは「（最低保証◯円）」にする。
+//
+// amount（明細に載せる額＝記録時の sales.total_pay）を渡すのは、
+// 最低保証を後からSQLで入れる運用のため。件名だけを「いまの」設定から
+// 引き直すと、「最低保証2,000円」と書いてあるのに金額が1,000円という
+// 矛盾した請求書が出店者に届く。記録済みの額が下限に届いていない行では
+// 最低保証の注記そのものを出さない。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function feeLabel(place: any, saleDate?: string | null): string {
-  const pct = (place?.company_share_pct || 0) + (place?.price_share_pct || 0)
-  const parts: string[] = []
-  if (pct > 0) parts.push(pct + '%')
-
-  const day = perDayFee(place?.schedule, saleDate)
-  if (day.placeFee != null || day.companyFee != null) {
-    const total = (day.placeFee ?? 0) + (day.companyFee ?? 0)
-    if (total > 0) parts.push(total.toLocaleString() + '円')
-    return parts.join(' ＋ ')
+function feeLabel(place: any, saleDate?: string | null, format?: string | null, sale?: { revenue?: number | null; tax_basis?: string | null; tax_rate?: number | null }, amount?: number | null): string {
+  if (!place) return ''
+  // 件名は1行＝1日なので、その日の額だけを出す（日付を渡す）
+  const cond = feeCondition(place, format, saleDate)
+  // 「10%」「5,000円/日」の形はこれまでどおり（「売上の」は件名では省く）
+  const parts = cond.parts.map(part => part.startsWith('売上の') ? part.slice('売上の'.length) : part)
+  let label = parts.join(' ＋ ')
+  // 記録済みの額が、いまの設定の下限に届いていない行（＝売上を記録したあとに
+  // 最低保証を入れた案件）は、最低保証を告知しない。金額と食い違うため
+  const minTotal = minTotalOn(place, format, saleDate ?? null)
+  const belowMin = minTotal != null && typeof amount === 'number' && amount > 0 && amount < minTotal
+  if (cond.minNote && !belowMin) {
+    // その日が最低保証で決まったかは、記録済みの売上から引き直して見る。
+    // 金額は sales.total_pay をそのまま使い、ここでは件名の言い方にしか使わない
+    // （過去の請求額を後から動かさないため）。
+    // 税の扱いは、売上を記録したときの値（sales.tax_basis / tax_rate）に合わせる
+    const ov = sale?.tax_basis === 'tax_excluded' ? (sale?.tax_rate === 10 ? 'ex10' : 'ex8')
+      : sale?.tax_basis === 'as_entered' ? 'as_entered' : ''
+    const applied = typeof sale?.revenue === 'number'
+      ? (() => { const r = dayFeeOf(place, format, saleDate, sale.revenue as number, ov); return r.placeMinApplied || r.companyMinApplied })()
+      : false
+    const note = applied ? cond.minNote.replace('最低', '最低保証') : cond.minNote
+    label = label ? label + '（' + note + '）' : note
   }
-
-  const fixed = (place?.company_fixed_amount || 0) + (place?.price_fixed || 0)
-  const perEvent = place?.company_fixed_unit === 'per_event' || place?.place_fixed_unit === 'per_event'
-  if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + (perEvent ? '期間' : '日'))
-  return parts.join(' ＋ ')
+  return label
 }
 
 export async function POST(req: Request) {
   try {
     // requesterId は受け取らない。誰として呼んでいるかは
-    // Authorization: Bearer のアクセストークンだけで決める（resolveCaller）
+    // Authorization: Bearer のアクセストークンだけで決める（requireCaller）。
+    //
+    // クライアントを先に作らないのは、鍵の無い環境（手元）で
+    // 名乗っていない相手にまで 500 を返さないため。判定の順は requireCaller が持つ
     const { sellerId, period, action, dueOn, edited, amount, label, applicationId, applicationIds, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
 
-    const url0 = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key0 = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url0 || !key0) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-    }
-
-    const adminO = createClient(url0, key0, { auth: { autoRefreshToken: false, persistSession: false } })
-    const caller = await resolveCaller(req, adminO)
-    if (!caller) {
-      return NextResponse.json({ error: 'ログインしなおしてからお試しください' }, { status: 401 })
-    }
+    const ctx = await requireCaller(req, undefined, 'ログインしなおしてからお試しください')
+    if (ctx instanceof NextResponse) return ctx
+    const caller = ctx.caller
+    const adminO = ctx.db
 
     // ===== 発行済みの請求書を、番号だけで開き直す =====
     //
@@ -213,7 +222,9 @@ export async function POST(req: Request) {
     // 引数の検査より先に見る。運営でない相手に「対象月の形式が不正です」などと
     // 返すと、入力の当たり外れを教えることになるため
     if (!caller.isAdmin) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
+      // 文面は共通の関門（app/lib/apiAuth.ts の requireAdmin）に合わせる。
+      // ここを写して新しい入口を作る人が出るので、言い方を分岐させない
+      return NextResponse.json({ error: '運営のみが操作できます' }, { status: 403 })
     }
 
     if (!sellerId || !period) {
@@ -402,7 +413,7 @@ export async function POST(req: Request) {
 
     const { data: sales, error: sErr } = await admin
       .from('sales')
-      .select('id, sale_date, revenue, total_pay, fee, place_id')
+      .select('id, sale_date, revenue, total_pay, fee, place_id, application_id, tax_basis, tax_rate')
       .eq('seller_id', sellerId)
       .gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: true })
@@ -412,11 +423,26 @@ export async function POST(req: Request) {
     }
 
     const placeIds = Array.from(new Set(sales.map(s => s.place_id).filter(Boolean)))
-    const { data: places } = await admin
+    // 件名の条件は、出店者の画面と同じ読み出し（app/lib/placeFee.ts）で作る。
+    // そのため形態ごとの設定（format_fees）と平日/土日祝の額（day_type_fees）、
+    // 最低保証（min_guarantee）も一緒に読む。
+    // min_guarantee は移行SQLを流すまで列が無いので、その列だけ落として読み直す
+    const placeCols = 'id, title, company_share_pct, price_share_pct, company_fixed_amount, price_fixed, company_fixed_unit, place_fixed_unit, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees, fee'
+    const { data: places } = await selectWithOptionalColumn(withMin => admin
       .from('places')
-      .select('id, title, company_share_pct, price_share_pct, company_fixed_amount, price_fixed, company_fixed_unit, place_fixed_unit, schedule')
-      .in('id', placeIds)
-    const placeOf = new Map((places || []).map(p => [p.id, p]))
+      .select(placeCols + (withMin ? ', min_guarantee' : ''))
+      .in('id', placeIds))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const placeOf = new Map(((places || []) as any[]).map(p => [p.id, p]))
+
+    // 申込で選んだ形態。形態ごとに歩合や最低保証が違う案件があるため、
+    // 件名の条件は「その売上がどの形態で出た出店か」まで見ないと合わない
+    const appIds = Array.from(new Set(sales.map(s => s.application_id).filter(Boolean)))
+    const formatOf = new Map<string, string | null>()
+    if (appIds.length > 0) {
+      const { data: apps } = await admin.from('applications').select('id, format').in('id', appIds)
+      for (const a of (apps || []) as { id: string; format: string | null }[]) formatOf.set(a.id, a.format ?? null)
+    }
 
     // 出店料が0円の売上は明細に載せない（案件の料金設定が未入力のケース）。
     // ただし件数は返して、管理画面で気づけるようにする。
@@ -431,7 +457,7 @@ export async function POST(req: Request) {
     const items = billable.map((s, i) => {
       const p = placeOf.get(s.place_id)
       const amount = s.total_pay ?? s.fee ?? 0
-      const cond = feeLabel(p, s.sale_date)
+      const cond = feeLabel(p, s.sale_date, s.application_id ? formatOf.get(s.application_id) ?? null : null, s, amount)
       // 「9/5（金）」の形にする（曜日まで出す）
       const md = mdLabel(s.sale_date)
       return {

@@ -1,35 +1,26 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../lib/apiAuth'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyAdmin(admin: any, requesterId: string) {
-  const { data, error } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', requesterId)
-    .maybeSingle()
-  if (error || !data || data.role !== 'admin') return false
-  return true
-}
+// ブログ記事の本文に挿す画像を、公開バケット（blog-images）へ上げる。
+//
+// 呼び出し元は formData の requesterId ではなく、Authorization ヘッダの
+// アクセストークンで確かめる。requesterId は呼び出し側が自由に書ける値で、
+// 運営のUUIDを知られていれば、当サイトのドメイン上に誰でも任意の
+// ファイルを置ける状態だった（ストレージ濫用・不適切画像の配信）。
+// トークンはヘッダで渡す（本文に入れると、multipart の組み立て次第で
+// ログや中継に残りやすい）。
 
 export async function POST(req: Request) {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
-
-    const admin = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
+    // ファイルを読む前に運営かどうかを見る。
+    // 10MBの読み込みを、権限の無い相手のために行わない
+    const auth = await requireAdmin(req)
+    if (auth instanceof NextResponse) return auth
+    const admin = auth.db
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
-    const requesterId = formData.get('requesterId') as string | null
 
-    if (!requesterId) return NextResponse.json({ error: '認証情報がありません' }, { status: 401 })
-    if (!(await verifyAdmin(admin, requesterId))) {
-      return NextResponse.json({ error: '管理者権限がありません' }, { status: 403 })
-    }
     if (!file) return NextResponse.json({ error: '画像が選択されていません' }, { status: 400 })
 
     // ファイルサイズ制限（10MB）
