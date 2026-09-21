@@ -69,6 +69,11 @@ export default function RegisterPage() {
 
     // Supabase の signUp は既存アドレスでもエラーを返さないため、先に重複を確認する。
     // （確認できなかった場合は登録処理をそのまま続行する）
+    //
+    // 確認できない場合には、連打の抑制で 429 が返るときも含まれる。
+    // どの場合も exists は付かないので下の signUp までそのまま進む。
+    // 「判定できなかった」を理由に登録を止めないこと
+    // （止めると、確認のための入口の不調で登録そのものが詰まる）
     try {
       const res = await fetch('/api/auth/check-email', {
         method: 'POST',

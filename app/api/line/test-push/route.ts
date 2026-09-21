@@ -1,7 +1,19 @@
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '../../../lib/apiAuth'
 
-export async function POST() {
+// LINE連携の確認用に、運営の LINE へテスト配信を1通出す。
+//
+// 宛先も文面も環境変数と固定文字列なので他人へは送れないが、
+// 認証が無いままだと、URLを知った相手が回数の制限なく運営あてに
+// テスト配信を送りつけられ、チャネルの送信数（無料枠）も減っていく。
+// 運営しか使わない入口なので、2026-09-21 の関門（app/lib/apiAuth.ts）で運営に絞る。
+// 手で叩くときは、運営でログインしたときのアクセストークンを
+// Authorization: Bearer で付けること
+export async function POST(req: Request) {
   try {
+    const ctx = await requireAdmin(req)
+    if (ctx instanceof NextResponse) return ctx
+
     const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
     const userId = process.env.LINE_TEST_USER_ID
     if (!token || !userId) {

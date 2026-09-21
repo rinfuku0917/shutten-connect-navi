@@ -18,6 +18,8 @@ export default function ResetPasswordPage() {
 
     // Supabase は未登録のアドレスでもエラーを返さないため、届かないメールを
     // 待たせてしまう。先に登録の有無を確認して伝える。
+    // checked が false のとき（設定不備、または連打の抑制での 429）は
+    // 判定できていないので、未登録と決めつけず、そのまま送信へ進む。
     try {
       const res = await fetch('/api/auth/check-email', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -32,6 +34,13 @@ export default function ResetPasswordPage() {
     } catch (e) {
       console.error('登録の確認に失敗しました', e)
     }
+
+    // 判定できなかったときは、前の「登録されていません」を消してから送信へ進む。
+    // 消さないと、1度目で赤い案内が出たあと、アドレスを直さずに押し続けて
+    // 連打の抑制（429）に当たった場合に、「登録されていません」と
+    // 「メールをお送りしました」が同時に画面に出てしまう
+    // （notFound を false に戻すのは入力欄の onChange だけなので）
+    setNotFound(false)
 
     // リンクの行き先は SITE_URL（正規のドメイン）。window.location.origin にしない理由と、
     // Supabase の Redirect URLs との関係は app/register/page.tsx の signUp の所に書いた。
