@@ -102,6 +102,13 @@
 --      入っているのが原因。「作る役割」は②の for role に使い、
 --      「スキーマ」が『(全スキーマ)』の行があれば上の手順3に従う。
 --      ★「既定の権限」列の生の値を控えておくこと（⑤の復元元）。
+--      ★2026-09-22 に本番で流した結果：6行。
+--        postgres / public / 表・ビュー … anon=arwdDxtm（＝全権。これが原因）
+--        postgres / public / 連番 … anon=rwU
+--        postgres / public / 関数 … anon=X
+--        supabase_admin / public / 上と同じ3行
+--        「(全スキーマ)」の行は無し → ②は in schema public のままでよい
+--        役割が2つ出たので、②のあとに②'（supabase_admin ぶん）も流す
 --      行が1つも出ないなら、表の2文（②の前半）は空振りになる。
 --      ただし関数の2文（②の後半）は、pg_default_acl に行が無くても効く
 --      （Postgres は素の状態でも関数の EXECUTE を PUBLIC に渡している。
@@ -291,6 +298,39 @@ commit;
 
 
 -- ============================================================
+-- ②' 同じことを supabase_admin にも流す
+--    （この段落だけを選択して実行。権限エラーなら、そこで止めてよい）
+-- ============================================================
+--
+-- 2026-09-22 に本番で ①-1 を流した結果、public の既定権限を持つ役割は
+-- postgres と supabase_admin の2つだった（どちらも anon=arwdDxtm ＝全権）。
+-- 「(全スキーマ)」の行は無かったので、in schema public のままでよい。
+--
+-- 移行ファイルと SQL Editor は postgres として動くので、ふだん作る表は②で覆える。
+-- supabase_admin のぶんは、ダッシュボードのテーブルエディタなど
+-- Supabase 側の仕組みが作った表に効く。
+--
+-- ★SQL Editor は postgres として動くため、postgres が supabase_admin の
+--   メンバーでなければ `must be member of role "supabase_admin"` で失敗する。
+--   失敗してもトランザクションごと巻き戻るだけで、何も変わらない。
+--   そのときは「ダッシュボードから表を作ったときだけ anon の書き込みが付く」
+--   という穴が残る。塞ぐなら、表を作ったあとに③と同じ revoke を流すこと。
+
+begin;
+
+alter default privileges for role supabase_admin in schema public
+  revoke insert, update, delete, truncate on tables from PUBLIC;
+alter default privileges for role supabase_admin in schema public
+  revoke insert, update, delete, truncate on tables from anon, authenticated;
+alter default privileges for role supabase_admin in schema public
+  revoke execute on functions from PUBLIC;
+alter default privileges for role supabase_admin in schema public
+  revoke execute on functions from anon, authenticated;
+
+commit;
+
+
+-- ============================================================
 -- ③-1 すでに付いている分を落とす：サーバー側のAPIだけが書く表
 --      （この段落だけを選択して実行）
 -- ============================================================
@@ -472,6 +512,45 @@ revoke update, delete, truncate on public.reviews from anon;
 
 
 -- ============================================================
+-- ③-4 コードから使われていない4表から落とす
+--      （この段落だけを選択して実行）
+-- ============================================================
+--
+-- 2026-09-22 に本番で「anon が insert できるのに、③-1・③-2 のどちらの一覧にも
+-- 無い表」を数えたところ、次の4つが出た。いずれも RLS は有効。
+--
+--   case_files        ポリシー0本
+--   file_attachments  ポリシー3本
+--   notification_logs ポリシー0本
+--   referrer_rates    ポリシー0本
+--
+-- 4つとも app / components / scripts / supabase / docs のどこからも参照されていない
+-- （2026-09-22 に grep で確認。参照0件）。使っていないので落としても画面は変わらない。
+--
+-- ポリシーが0本の3つは、RLS が有効なので実際には書けない（RLS は既定で全部拒否）。
+-- 実害は無いが、権限が付いたままだと「RLS を外した瞬間に書ける」状態が残る。
+-- file_attachments はポリシーが3本あるので、RLS を通れば書ける可能性がある。
+--
+-- 将来この表を使うときは、その移行ファイルの中で必要な権限を明示すること
+-- （冒頭の手順5と同じ）。
+
+begin;
+
+revoke insert, update, delete, truncate on public.case_files        from PUBLIC, anon, authenticated;
+revoke insert, update, delete, truncate on public.file_attachments  from PUBLIC, anon, authenticated;
+revoke insert, update, delete, truncate on public.notification_logs from PUBLIC, anon, authenticated;
+revoke insert, update, delete, truncate on public.referrer_rates    from PUBLIC, anon, authenticated;
+
+-- PUBLIC 経由だった分を付け直す（③-1 と同じ理由）
+grant insert, update, delete on public.case_files        to service_role;
+grant insert, update, delete on public.file_attachments  to service_role;
+grant insert, update, delete on public.notification_logs to service_role;
+grant insert, update, delete on public.referrer_rates    to service_role;
+
+commit;
+
+
+-- ============================================================
 -- ④ 流したあとの確認（この段落だけを選択して実行。1文なのでまとめて出る）
 -- ============================================================
 --
@@ -485,6 +564,13 @@ revoke update, delete, truncate on public.reviews from anon;
 --   anon_reviews投稿 … true（公開ページからのレビュー投稿が通ること）
 --   anon_reviews更新 … false（③-2 で落とした分）
 --   anon_公開一覧読取 … true（/sellers・トップの出店者枠が出ること）
+--   ③-4 の4表（case_files / file_attachments / notification_logs / referrer_rates）は
+--   「サーバー専用の表に残る書き込み」には数えていない。下の1文で別に確かめる:
+--     select c.relname, has_table_privilege('anon', c.oid, 'insert') as anon追加
+--       from pg_class c join pg_namespace n on n.oid = c.relnamespace
+--      where n.nspname = 'public'
+--        and c.relname in ('case_files','file_attachments','notification_logs','referrer_rates');
+--   → 4行すべて false になっていること
 select
   (select count(*)
      from pg_default_acl a,
