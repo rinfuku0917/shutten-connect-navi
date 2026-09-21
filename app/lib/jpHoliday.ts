@@ -5,7 +5,8 @@
 // 毎年カレンダーを更新しなくて済むよう、計算で求めている。
 //
 // 春分・秋分は近似式（1980〜2099年で正しい値になる）を使う。
-// 振替休日（祝日が日曜のとき翌平日が休み）にも対応する。
+// 振替休日（祝日が日曜のとき翌平日が休み）と
+// 国民の休日（前日と翌日がどちらも祝日の平日）にも対応する。
 
 const HAPPY_MONDAY = [
   { m: 1, n: 2 },   // 成人の日（1月第2月曜）
@@ -41,7 +42,12 @@ function isHolidayBase(y: number, m: number, d: number, dow: number): boolean {
   return false
 }
 
-// 「YYYY-MM-DD」がその年の祝日か（振替休日を含む）
+// その日単体が祝日か（Date から見る版。国民の休日の前後日の判定に使う）
+function isHolidayBaseAt(dt: Date): boolean {
+  return isHolidayBase(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), dt.getUTCDay())
+}
+
+// 「YYYY-MM-DD」がその年の祝日か（振替休日・国民の休日を含む）
 export function isJapaneseHoliday(iso: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return false
   const [y, m, d] = iso.split('-').map(Number)
@@ -50,6 +56,16 @@ export function isJapaneseHoliday(iso: string): boolean {
   const dow = dt.getUTCDay()
 
   if (isHolidayBase(y, m, d, dow)) return true
+
+  // 国民の休日：前日と翌日の両方が祝日なら、挟まれた平日も休み。
+  // 例）2026-09-22（火）は敬老の日（21日）と秋分の日（23日）に挟まれる。
+  // 年ごとの一覧ではなく規則で入れているのは、9月のシルバーウィークが
+  // 2026・2032・2037 …と繰り返し発生するため。
+  // 最低保証は平日2,000円・土日祝7,500円のように3倍以上ちがう案件があり、
+  // この1日を平日と判定すると1日あたり5,500円取りこぼす
+  if (dow !== 0 && dow !== 6
+    && isHolidayBaseAt(new Date(dt.getTime() - 86400000))
+    && isHolidayBaseAt(new Date(dt.getTime() + 86400000))) return true
 
   // 振替休日：さかのぼって日曜の祝日があり、その間がすべて祝日なら休み
   if (dow !== 0) {

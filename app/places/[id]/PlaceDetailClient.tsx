@@ -9,7 +9,7 @@ import SiteHeader from '../../components/SiteHeader'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
-import { perDayFeeRange, perDayFee, dayTypeFee, allowedFormats, formatFeeOf, formatFee, formatAllowsDate, sortedDows, type FormatFees } from '../../lib/placeFee'
+import { perDayFee, dayTypeFee, allowedFormats, hasFormatFees, formatFeeOf, formatFee, formatAllowsDate, sortedDows, feeCondition, minNoteOf, type FormatFees } from '../../lib/placeFee'
 import { showsToSeller } from '../../lib/cancelledVisibility'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
@@ -44,6 +44,9 @@ export type Place = {
   apply_within_months: number | null
   // 平日／土日祝で決めた金額（案件全体）
   day_type_fees: unknown
+  // 歩合が少ない日の最低保証（案件全体）。
+  // 移行SQLを流すまで列が無いので、undefined でも壊れない作りにしている
+  min_guarantee?: unknown
   // 形態（キッチンカー・物販・催事PR・テント・ブース）ごとの出店料と条件。
   // 未設定なら、これまでどおり全部の形態を選べて金額も案件全体の設定を使う。
   // 形は app/lib/placeFee.ts の FormatFees が唯一の正（二重に書かない）
@@ -92,32 +95,56 @@ function fromApplyWindow(message: string): boolean {
 // 日本語はどの文字の間でも改行できる扱いのため、スマホでは
 // 「2,000円〜3,000円/」「日」のように金額と単位が離れて読めなくなる。
 // そこで金額のまとまりごとに .nowrap-unit（display:inline-block）で包み、
-// 折り返る場所を「＋」の前後だけに絞っている。
+// 折り返る場所を「＋」の前後と「（」の前だけに絞っている。
+//
+// 何をいくらと出すかは app/lib/placeFee.ts の feeCondition が決める。
+// 以前はここで price_share_pct などを直接足しており、
+// 平日/土日祝の額（day_type_fees）と形態ごとの額（format_fees）を
+// 見ていなかったため、実際に請求される額と違う表示になっていた。
+// 最低保証も同じ理由で、ここでは組み立てない。
 function feeNodes(p: Place): ReactNode {
-  const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
-  const parts: string[] = []
-  // 日ごとに金額が決まっている案件は、その幅を出す（例：2,000円〜3,000円/日）
-  const range = perDayFeeRange(p.schedule)
-  if (range) {
-    parts.push(range.min === range.max
-      ? range.min.toLocaleString() + '円/日'
-      : range.min.toLocaleString() + '円〜' + range.max.toLocaleString() + '円/日')
-    if (pct > 0) parts.push('売上の' + pct + '%')
-  } else {
-    const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
-    // 金額を登録していない案件は、募集者が書いた文言をそのまま出す。
-    // 長さも書き方も決まっていないため、まとまりでは包まない
-    if (fixed === 0 && pct === 0) return p.fee || '要相談'
-    const unit = p.place_fixed_unit === 'per_event' ? '期間' : '日'
-    if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + unit)
-    if (pct > 0) parts.push('売上の' + pct + '%')
-  }
-  return parts.map((part, i) => (
-    <Fragment key={part}>
-      {i > 0 ? ' ＋ ' : ''}
-      <span className='nowrap-unit'>{part}</span>
-    </Fragment>
-  ))
+  // 形態ごとの料金が1種類だけの案件（イオンモール与野など）は、
+  // その形態の条件を出す。案件全体の列だけを見ると、
+  // 形態側に入れた歩合や最低保証が画面に出ないままになる。
+  const fmts = hasFormatFees(p.format_fees) ? allowedFormats(p.format_fees) : []
+  const solo = fmts.length === 1 ? fmts[0] : null
+  const { parts, minNote, empty } = feeCondition(p, solo)
+  // 金額を登録していない案件は、募集者が書いた文言をそのまま出す。
+  // 長さも書き方も決まっていないため、まとまりでは包まない
+  if (empty) return p.fee || '要相談'
+  // 形態ごとの料金（format_fees）を入れていない案件は、物販・催事PRなどの額が
+  // 自由文（places.fee）にしか無い。計算値はキッチンカー相当の1種類しか出せないため、
+  // 自由文があれば併記する。
+  // 計算値は day_type_fees も見るようになったので、これを出さないと
+  // Olympic 各店（11件）のように「平日3,000円/日」だけが出て、
+  // 実際は4,500円の物販大型や18,000円の催事PRで申し込む人に別の額を告げてしまう。
+  // 自動で作った文言（「10,000円/日 ＋ 売上の10%」）は計算値と同じなので出さない
+  const free = (p.fee || '').trim()
+  const showFree = !hasFormatFees(p.format_fees) && free !== '' && free !== parts.join(' ＋ ')
+  return (
+    <>
+      {parts.map((part, i) => (
+        <Fragment key={part}>
+          {i > 0 ? ' ＋ ' : ''}
+          <span className='nowrap-unit'>{part}</span>
+        </Fragment>
+      ))}
+      {minNote && (
+        <>
+          {parts.length > 0 ? ' ' : ''}
+          <span className='nowrap-unit'>（{minNote}）</span>
+        </>
+      )}
+      {/* 形態によって金額が違う案件は、ここに出した額が
+          すべての形態に当てはまるわけではない。申込の画面で形態ごとに出している */}
+      {fmts.length > 1 && <span className='nowrap-unit'>（形態によって異なります）</span>}
+      {showFree && (
+        <span className='jp-text' style={{ display: 'block', marginTop: '6px', fontSize: '13px', color: '#475569', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
+          {free}
+        </span>
+      )}
+    </>
+  )
 }
 
 // 公開中の案件はサーバー側（page.tsx）で取得して渡す。
@@ -620,6 +647,9 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                           : null
                         const splitFee = weFixed != null && weFixed !== fixed
                         const dows = sortedDows(ff?.dows)
+                        // 最低保証（形態ごと → 案件全体）。文の作りは
+                        // app/lib/placeFee.ts に集めてある（画面ごとに言い方を変えない）
+                        const minNote = minNoteOf(place, opt)
                         return (
                           <label key={opt} style={{ display: 'block', cursor: 'pointer', border: format === opt ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '12px 14px', fontSize: '14px', color: '#1a1a1a', background: format === opt ? '#FFFBEB' : '#fff' }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -630,7 +660,7 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                             {ff && (
                               <span style={{ display: 'block', marginTop: '6px', paddingLeft: '26px', fontSize: '12.5px', color: '#475569', lineHeight: 1.8 }}>
                                 出店料：
-                                {fixed === 0 && pct === 0 && !splitFee
+                                {fixed === 0 && pct === 0 && !splitFee && !minNote
                                   ? <span style={{ color: '#B45309' }}>要相談</span>
                                   : <>
                                       {splitFee
@@ -639,6 +669,9 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                                       {(splitFee || fixed > 0) && pct > 0 && ' ＋ '}
                                       {pct > 0 && <strong>売上の{pct}%</strong>}
                                     </>}
+                                {/* 最低保証。歩合しか無い形態（売上が少ない日でもこの額）は、
+                                    これが出ないと当日の負担が分からない */}
+                                {minNote && <><br /><strong style={{ color: '#B45309' }}>{minNote}</strong>（売上が少ない日は、この額をいただきます）</>}
                                 {ff.note && <><br />区画：{ff.note}</>}
                                 {dows.length > 0 && <><br />出店できる曜日：{dows.map(d => ['日','月','火','水','木','金','土'][d]).join('・')}</>}
                               </span>
@@ -679,7 +712,16 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                                 const dtF = dayTypeFee(place.day_type_fees, d.date)
                                 const pf = fmtF.placeFee ?? dayF.placeFee ?? dtF.placeFee
                                 const cf = fmtF.companyFee ?? dayF.companyFee ?? dtF.companyFee
-                                if (pf == null && cf == null) return null
+                                // 固定額が無く「歩合＋最低保証」の案件は、この場では額が確定しない
+                                // （売上が決まっていないため）。それでも下限は分かるので出す。
+                                // 何も出さないと、当日いくら払うのか見当が付かない。
+                                // 日付を渡して、その日の額だけを出す（平日と土日祝を並べない）
+                                if (pf == null && cf == null) {
+                                  const minOnly = minNoteOf(place, format, '最低', d.date)
+                                  if (!minOnly) return null
+                                  const pctPart = feeCondition(place, format, d.date).parts.find(x => x.startsWith('売上の'))
+                                  return <span className='nowrap-unit' style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {minOnly}{pctPart ? '（' + pctPart + '）' : ''}</span>
+                                }
                                 const total = (pf ?? 0) + (cf ?? 0)
                                 return <span className='nowrap-unit' style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {total.toLocaleString()}円</span>
                               })()}

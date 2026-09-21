@@ -5,6 +5,7 @@ import { writePurgeLog, purgeSummary } from '../../../lib/purgeLog'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 import { NO_SHOP_NAME } from '../../../lib/sellerNames'
+import { selectWithOptionalColumn } from '../../../lib/optionalColumn'
 
 // 承認済みの出店を、運営が取り消す。
 //
@@ -281,10 +282,14 @@ export async function POST(req: Request) {
       // 下の通知の処理でも places と profiles を読んでいるが、あちらは
       // 「通知なし（silent）」や RESEND_API_KEY が無い環境では通らない。
       // 控えは必ず残さなければならないので、ここで別に読む。
-      // format_fees も取るのは、キャンセル料をあとから計算できるようにするため
+      // format_fees も取るのは、キャンセル料をあとから計算できるようにするため。
+      // 最低保証（min_guarantee）も同じ理由で写す。控えに無いと、
+      // 案件を消したあとにキャンセル料の下限を引き直せない。
+      // 列がまだ無い環境（移行SQL未実行）では、その列だけ落として読み直す
       const [{ data: place0 }, { data: seller0 }, { data: msgs }] = await Promise.all([
-        db.from('places').select('title, format_fees, price_fixed, company_fixed_amount')
-          .eq('id', app.place_id).maybeSingle(),
+        selectWithOptionalColumn(withMin => db.from('places')
+          .select('title, format_fees, price_fixed, company_fixed_amount' + (withMin ? ', min_guarantee' : ''))
+          .eq('id', app.place_id).maybeSingle()),
         db.from('profiles').select('name, shop_name').eq('id', app.seller_id).maybeSingle(),
         // やり取りは消える前に写す。/cancel-policy が連絡を
         // 「必ずメッセージ機能を通じて」と定めているので、
@@ -295,7 +300,7 @@ export async function POST(req: Request) {
           .order('created_at', { ascending: true }),
       ])
       const s0 = seller0 as { name?: string; shop_name?: string } | null
-      const p0 = place0 as { title?: string; format_fees?: unknown; price_fixed?: number; company_fixed_amount?: number } | null
+      const p0 = place0 as { title?: string; format_fees?: unknown; price_fixed?: number; company_fixed_amount?: number; min_guarantee?: unknown } | null
       const thread = (msgs || []) as { id: string; sender_id: string; body: string | null; file_url: string | null; created_at: string }[]
 
       purgeLogged = await writePurgeLog(db, {
@@ -325,6 +330,8 @@ export async function POST(req: Request) {
             formatFees: p0?.format_fees ?? null,
             priceFixed: p0?.price_fixed ?? null,
             companyFixedAmount: p0?.company_fixed_amount ?? null,
+            // 歩合が少ない日の下限。形態ごとの最低保証は formatFees の中に入っている
+            minGuarantee: p0?.min_guarantee ?? null,
           },
           // 当日どこまで進んでいたか（force で消す前の値）
           onsite: {

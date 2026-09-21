@@ -9,6 +9,7 @@ import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
 import { compareByTitle } from '../lib/placeSort'
+import { hasMinGuarantee, hasFormatMin, hasFormatFees, allowedFormats } from '../lib/placeFee'
 import ClosedRibbon from '../components/ClosedRibbon'
 
 // 地図はSSRでLeafletを読むと壊れるのでクライアントのみで読み込む
@@ -29,6 +30,11 @@ export type Place = {
   company_fixed_amount: number | null
   company_fixed_unit: string | null
   company_share_pct: number | null
+  // 形態ごとの料金と、歩合が少ない日の最低保証。
+  // 一覧では額を並べず「最低保証あり」だけを出す（額は詳細ページで出す）。
+  // min_guarantee は移行SQLを流すまで列が無いので、undefined でも壊れない作りにしている
+  format_fees: unknown
+  min_guarantee?: unknown
   place_type: string | null
   closed: boolean | null
   genres: string[] | null
@@ -45,14 +51,24 @@ export type Place = {
 function feeText(p: Place): ReactNode {
   const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
   const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
-  if (fixed === 0 && pct === 0) return p.fee || '要相談'
+  // 最低保証があるかどうかだけを出す（額は詳細ページ）。
+  // 一覧は289件を1回で読むので、カードに額まで並べると
+  // 平日と土日祝で2種類・形態ごとにも別、と長くなって表が崩れる
+  const hasMin = hasMinGuarantee(p.min_guarantee)
+    || (hasFormatFees(p.format_fees) && allowedFormats(p.format_fees).some(f => hasFormatMin(p.format_fees, f)))
+  if (fixed === 0 && pct === 0 && !hasMin) return p.fee || '要相談'
   const unit = p.place_fixed_unit === 'per_event' ? '期間' : '日'
   const parts: string[] = []
   if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + unit)
   if (pct > 0) parts.push('売上の' + pct + '%')
-  return parts.map((part, i) => (
-    <span key={part}>{i > 0 ? ' ＋ ' : null}<span className='nowrap-unit'>{part}</span></span>
-  ))
+  return (
+    <>
+      {parts.map((part, i) => (
+        <span key={part}>{i > 0 ? ' ＋ ' : null}<span className='nowrap-unit'>{part}</span></span>
+      ))}
+      {hasMin && <span className='nowrap-unit'>（最低保証あり）</span>}
+    </>
+  )
 }
 
 // 案件の一覧はサーバー側（page.tsx）で取得して渡す。

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import PlacesBrowser, { type Place } from './PlacesBrowser'
 import { PLACE_CATEGORIES } from '../lib/categories'
+import { selectWithOptionalColumn } from '../lib/optionalColumn'
 
 // 出店場所（案件）の一覧。
 //
@@ -69,13 +70,18 @@ async function fetchPlaces(): Promise<Place[]> {
   if (!url || !key) return []
   try {
     const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-    const { data } = await db
+    // format_fees と min_guarantee も読むのは、一覧のカードに
+    // 「最低保証あり」を出すため（額は詳細ページで出す）。
+    // min_guarantee は移行SQLを流すまで列が無いので、
+    // 列が無い環境ではその列だけ落として読み直す（一覧が空になるのを防ぐ）
+    const cols = 'id, title, prefecture, address, fee, place_type, closed, genres, image_url, latitude, longitude, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, format_fees'
+    const { data } = await selectWithOptionalColumn(withMin => db
       .from('places')
-      .select('id, title, prefecture, address, fee, place_type, closed, genres, image_url, latitude, longitude, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct')
+      .select(cols + (withMin ? ', min_guarantee' : ''))
       .eq('status', 'published')
       .order('pinned', { ascending: false })
-      .order('posted_at', { ascending: false })
-    return (data as Place[]) ?? []
+      .order('posted_at', { ascending: false }))
+    return (data as Place[] | null) ?? []
   } catch {
     return []
   }

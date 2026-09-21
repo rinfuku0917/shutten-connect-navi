@@ -8,7 +8,8 @@ import FormatFeesEditor, { type FormatFeesValue } from '../../../components/Form
 import DowPresets from '../../../components/DowPresets'
 import { geocodeAddress } from '../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../lib/categories'
-import { toYen } from '../../../lib/placeFee'
+import { toYen, buildMinGuaranteeJson, type FeeSource } from '../../../lib/placeFee'
+import { isMissingColumn } from '../../../lib/optionalColumn'
 import PlaceImagePicker from '../../../components/PlaceImagePicker'
 
 
@@ -56,7 +57,7 @@ function NewPlacePageInner() {
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
-    fee:'', feeFixed:'', feePct:'10', feeUnit:'per_day', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
+    fee:'', feeFixed:'', feePct:'10', feeUnit:'per_day', feeMinWeekday:'', feeMinWeekend:'', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
     menuWant:'', menuNG:'', menuOther:'', power:'yes', gas:'yes', water:'yes',
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
@@ -138,6 +139,25 @@ function NewPlacePageInner() {
   // 形態（キッチンカー・物販・催事PR）ごとの出店料と条件。
   // 以前はキッチンカーの金額しか入れられず、物販・催事PRは概要欄に文章で書いていた
   const [formatFees, setFormatFees] = useState<FormatFeesValue>({})
+
+  // 形態ごとの欄に出す「実額の例」を、案件全体の設定まで含めて計算するための値。
+  // 形態に入れていない固定額・歩合・最低保証は案件全体に落ちるので、
+  // これを渡さないと例示だけが別の計算になる（歩合を案件全体にだけ入れた案件で、
+  // 売上が増えても最低保証のままの額が出ていた）。
+  // 取引先へ渡す分（price_*）は運営が /admin で入れるので、ここには無い
+  const placeFeeSrc: FeeSource = (() => {
+    const fee = buildFeeColumns(form)
+    return {
+      company_fixed_amount: fee.company_fixed_amount,
+      company_share_pct: fee.company_share_pct,
+      company_fixed_unit: fee.company_fixed_unit,
+      schedule,
+      min_guarantee: buildMinGuaranteeJson({
+        weekdayCompanyFee: toYen(form.feeMinWeekday),
+        weekendCompanyFee: toYen(form.feeMinWeekend),
+      }),
+    }
+  })()
 
   // その条件で入る日付。押す前に件数を出すため、画面からも使う
   const bulkDates = (() => {
@@ -228,7 +248,13 @@ function NewPlacePageInner() {
     }
 
     const geo = await geocodeAddress((form.prefecture || '') + (form.address || ''))
-    const { error: insErr } = await supabase.from('places').insert({
+    // 最低保証（歩合が少ない日の下限）。募集者が入れるのは弊社の取り分側。
+    // 施設へ渡す分の内訳は、これまでの歩合と同じで運営が別途設定する
+    const minGuarantee = buildMinGuaranteeJson({
+      weekdayCompanyFee: toYen(form.feeMinWeekday),
+      weekendCompanyFee: toYen(form.feeMinWeekend),
+    })
+    const row = {
       host_id: user.id,
       title: form.title,
       description: form.summary,
@@ -257,7 +283,15 @@ function NewPlacePageInner() {
       longitude: geo?.lon ?? null,
       status: 'published',
       details: pickDetails(form),
-    })
+    }
+    // min_guarantee は移行SQLを流すまで列が無い。
+    // 列が無い環境では最低保証だけ落として登録し、その場で知らせる
+    // （登録そのものが失敗するのを防ぐ）
+    let insErr = (await supabase.from('places').insert({ ...row, min_guarantee: minGuarantee })).error
+    if (isMissingColumn(insErr)) {
+      insErr = (await supabase.from('places').insert(row)).error
+      if (!insErr && minGuarantee) setErrMsg('最低保証はまだ保存できません（データベースの列が未作成です）。ほかの内容は登録しました。')
+    }
     if(insErr) { setErrMsg('登録失敗: ' + insErr.message); setSaving(false); return }
     await refreshPublicPages()
     router.push(backTo)
@@ -519,7 +553,7 @@ async function refreshPublicPages(placeId?: string) {
                   概要欄に文章で書いていた。文章だと出店者が見落とし、
                   売上の計算にも入らなかった */}
               <div style={{marginTop:'10px'}}>
-                <FormatFeesEditor value={formatFees} onChange={setFormatFees} />
+                <FormatFeesEditor value={formatFees} onChange={setFormatFees} place={placeFeeSrc} />
               </div>
 
               {/* 毎月おなじ条件で翌月の日程を足す。
@@ -677,6 +711,35 @@ async function refreshPublicPages(placeId?: string) {
                 <input type='checkbox' checked={form.feeUnit==='per_event'} onChange={e=>set('feeUnit', e.target.checked ? 'per_event' : 'per_day')} style={{accentColor:'#F5A623'}}/>
                 固定額は1日ごとではなく、期間で1回のみ
               </label>
+            </div>
+            {/* 最低保証（歩合が少ない日の下限）。
+                「売上の20%。ただし売上が悪くても平日2,000円はいただく」という案件のための欄。
+                歩合で計算した額がこの額を下回った日は、この額になる（固定額との合算ではない） */}
+            <div style={{border:'1.5px solid #BBF7D0',background:'#F0FDF4',borderRadius:'8px',padding:'12px 14px',marginBottom:'12px'}}>
+              <div style={{fontWeight:700,fontSize:'14px',color:'#16A34A',marginBottom:'2px'}}>最低保証（売上が少ない日の下限・任意）</div>
+              <div style={{fontSize:'12px',color:'#475569',lineHeight:1.8,marginBottom:'8px'}}>
+                歩合で計算した額がこの額を下回った日は、この額をいただきます（<strong>合算ではありません</strong>）。<strong>税別</strong>・1日あたりで入れてください。空欄なら下限なしです。
+              </div>
+              <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px'}}>
+                <div>
+                  <label style={{fontWeight:700,fontSize:'13px',color:'#1a1a1a'}}>平日（月〜金）</label>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <input type='number' value={form.feeMinWeekday} onChange={e=>set('feeMinWeekday',e.target.value)} placeholder='例：2000' style={inputStyle}/>
+                    <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>円</span>
+                  </div>
+                </div>
+                <div>
+                  <label style={{fontWeight:700,fontSize:'13px',color:'#1a1a1a'}}>土日祝</label>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <input type='number' value={form.feeMinWeekend} onChange={e=>set('feeMinWeekend',e.target.value)} placeholder='例：7500' style={inputStyle}/>
+                    <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>円</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{fontSize:'11.5px',color:'#64748B',marginTop:'6px',lineHeight:1.7}}>
+                土日祝が平日と同じ場合は、平日だけ入れてください（土日祝が空欄なら平日の額が使われます）。
+                形態（キッチンカー・物販など）で最低保証が違う場合は、下の「形態ごとの出店料と条件」に入れてください（そちらが優先されます）。
+              </div>
             </div>
             <div style={{background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:'8px',padding:'10px 14px',fontSize:'12px',color:'#B45309',lineHeight:1.8,marginBottom:'20px'}}>
               ここで入力した金額が、出店者の売上報告の計算にそのまま使われます。<br/>
