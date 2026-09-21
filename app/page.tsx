@@ -188,7 +188,11 @@ async function loadTop(): Promise<{ newPlaces: NewPlace[]; works: WorkPlace[]; p
 export default async function Home() {
   const [{ newPlaces, works, posts }, stats] = await Promise.all([loadTop(), getSiteStats()])
 
-  const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ja-JP').replaceAll('/', '.') : ''
+  // 記事ページ（app/blog/[slug]/page.tsx）と同じ日本時間で出す。
+  // timeZone を省くと見る人の端末の時計で日付が変わり、
+  // 夜に公開した記事が海外からは前日に見える（記事ページは Asia/Tokyo 指定済み）
+  const fmtDate = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }).replaceAll('/', '.') : ''
 
   return (
     <div className={kaku.className} style={{ background: '#fff', color: C.ink, lineHeight: 1.7, overflowX: 'hidden', minHeight: '100vh' }}>
