@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 import { isExcludedShop } from './lib/excludedShops'
 import { createClient } from '@supabase/supabase-js'
 import { isMergedAway } from './lib/mergedPosts'
+import { visiblePostsFilter } from './lib/postSchedule'
 import { SITE_URL } from './lib/seo'
 import { SEGMENTS } from './places/segments'
 import { loadSegmentStamps } from './places/segmentData'
@@ -164,13 +165,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .from('posts')
         .select('slug, updated_at, published_at')
         .eq('status', 'published')
+        // 公開日が未来の記事（予約中）は、公開日が来るまで申告しない（app/lib/postSchedule.ts）
+        .or(visiblePostsFilter(now.toISOString()))
       for (const p of data || []) {
         if (!p.slug) continue
         // 別の記事に統合したものは、公開に戻っていても申告しない
         if (isMergedAway(p.slug)) continue
         urls.push({
           url: `${SITE_URL}/blog/${p.slug}`,
-          lastModified: when(p.updated_at, p.published_at) ?? now,
+          // 新しいほうを使う。予約公開の記事は公開日より前に保存するので、
+          // updated_at を先に取ると、公開日より前の日付を申告してしまう。
+          // 上で公開日が今以前のものに絞っているので、未来の日付にはならない
+          lastModified: latest(p.updated_at, p.published_at) ?? now,
           changeFrequency: 'monthly',
           priority: 0.6,
         })

@@ -1,25 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, requireAdmin } from '../../lib/apiAuth'
-
-/**
- * 運営が指定した公開日を、保存できる形に直す（受け取れない値は null）。
- *
- * 画面からは datetime-local の「2026-09-21T14:30」で来る（タイムゾーンなし）。
- * サイトの日付は日本時間で出しているので、+09:00 として読む。
- * 未来の日付は受けない（公開済みなのに、まだ先の日付で出てしまう）。
- */
-function pickPublishedAt(input: unknown, nowIso: string): string | null {
-  if (typeof input !== 'string' || !input.trim()) return null
-  const s = input.trim()
-  // 日付だけ（2026-09-21）なら朝9時、分まであれば その時刻を日本時間として読む
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T09:00:00+09:00'
-    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s) ? s + '+09:00'
-    : s
-  const t = new Date(iso)
-  if (isNaN(t.getTime())) return null
-  if (t.getTime() > new Date(nowIso).getTime()) return null
-  return t.toISOString()
-}
+import { pickPublishedAt, visiblePostsFilter } from '../../lib/postSchedule'
 
 // ブログ記事の読み書き。書き込み（POST/PUT/DELETE）は運営だけ。
 //
@@ -42,6 +23,8 @@ export async function GET(req: Request) {
       .select('*')
       .eq('slug', slug)
       .eq('status', 'published')
+      // 公開日が未来の記事（予約中）は、公開日が来るまで返さない（app/lib/postSchedule.ts）
+      .or(visiblePostsFilter(new Date().toISOString()))
       .maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ post: data })
@@ -67,6 +50,8 @@ export async function GET(req: Request) {
     .from('posts')
     .select('*')
     .eq('status', 'published')
+    // 予約中の記事は出さない
+    .or(visiblePostsFilter(new Date().toISOString()))
     .order('published_at', { ascending: false })
     .order('slug', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -94,8 +79,11 @@ export async function POST(req: Request) {
     // まとめて何本も書いた日に全部が同じ日付になると、記事一覧も検索結果も
     // 同日に並ぶ。1日1本ずつ公開しているように見せたいので、
     // 管理画面から日付を指定できるようにしてある（指定が無ければ保存した時刻）。
-    // 未来の日付は受けない（公開済みなのに未公開に見えるため）
-    const wanted = pickPublishedAt(published_at, now)
+    // 未来の日付なら予約公開になる（公開日まで公開側に出ない。app/lib/postSchedule.ts）。
+    // 読めない日付・上限を超えた日付は、黙って「今」にせず断る（今すぐ公開されてしまうため）
+    const picked = pickPublishedAt(published_at, now)
+    if (!picked.ok) return NextResponse.json({ error: picked.error }, { status: 400 })
+    const wanted = picked.iso
     const { data, error } = await admin
       .from('posts')
       .insert({
@@ -142,8 +130,11 @@ export async function PUT(req: Request) {
     const updates: Record<string, unknown> = { slug, title, content, excerpt, category, cover_emoji, meta_description, status, target_keyword: target_keyword || null, related_prefecture: related_prefecture || null, related_category: related_category || null, updated_at: now }
     if (status === 'published') {
       // 運営が日付を指定していればそれに従う（1日1本ずつに見せるため）。
-      // 指定が無いときは、これまでどおり「まだ公開日が無い記事だけ」今の時刻を入れる
-      const wanted = pickPublishedAt(published_at, now)
+      // 指定が無いときは、これまでどおり「まだ公開日が無い記事だけ」今の時刻を入れる。
+      // 未来の日付なら予約公開になる
+      const picked = pickPublishedAt(published_at, now)
+      if (!picked.ok) return NextResponse.json({ error: picked.error }, { status: 400 })
+      const wanted = picked.iso
       if (wanted) {
         updates.published_at = wanted
       } else {

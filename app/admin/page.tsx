@@ -30,6 +30,7 @@ import ClosedToggle from '../components/ClosedToggle'
 import PlaceApplicationsModal from '../components/PlaceApplicationsModal'
 import TodayCheckins from './TodayCheckins'
 import { MERGED_POSTS } from '../lib/mergedPosts'
+import { isScheduledPost, fmtScheduleJst } from '../lib/postSchedule'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Notice from '../components/Notice'
 import NotifyChoice from '../components/NotifyChoice'
@@ -4219,7 +4220,8 @@ const previewDoc = async (fileUrl: string) => {
                         <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>公開日（日本時間）</label>
                         <input type="datetime-local" value={pPublishedAt} onChange={e => setPPublishedAt(e.target.value)} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                         <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px' }}>
-                          空欄なら保存した時刻。まとめて書いたときは1日ずつずらしてください（同じ日に何本も並ばないように）。未来の日付は入りません
+                          空欄なら保存した時刻。まとめて書いたときは1日ずつずらしてください（同じ日に何本も並ばないように）。
+                          未来の日時にすると、その日時まで公開されません（予約公開。1年先まで）
                         </div>
                       </div>
                       <div className='admin-newplace-grid' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -4274,7 +4276,16 @@ const previewDoc = async (fileUrl: string) => {
                     <div style={{ fontSize: '32px', flexShrink: 0 }}>{p.cover_emoji || '📝'}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '999px', background: p.status === 'published' ? '#DCFCE7' : '#FEF3C7', color: p.status === 'published' ? '#16A34A' : '#B45309' }}>{p.status === 'published' ? '公開中' : '下書き'}</span>
+                        {/* 公開日が未来の記事は「公開中」ではなく「予約」。
+                            status は published のままなので、見分けないと
+                            まだ出ていない記事を出ているものと思い込む（app/lib/postSchedule.ts） */}
+                        {isScheduledPost(p.status, p.published_at, new Date().toISOString()) ? (
+                          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '999px', background: '#DBEAFE', color: '#1D4ED8' }}>
+                            予約：{fmtScheduleJst(p.published_at as string, new Date().toISOString())}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '999px', background: p.status === 'published' ? '#DCFCE7' : '#FEF3C7', color: p.status === 'published' ? '#16A34A' : '#B45309' }}>{p.status === 'published' ? '公開中' : '下書き'}</span>
+                        )}
                         {p.category && <span style={{ fontSize: '11px', color: '#64748B' }}>{p.category}</span>}
                         {/* 別の記事にまとめた記事。公開に戻しても一覧・サイトマップには出ない
                             （app/lib/mergedPosts.ts）。過去に2度、気づかないうちに

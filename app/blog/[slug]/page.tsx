@@ -13,6 +13,7 @@ import { firstImage } from '../../lib/postImage'
 import { preparePostBody, extractFaq, boldForJapanese } from '../../lib/postBody'
 import { POST_IMAGE_SIZES } from '../../lib/postImageSizes'
 import RelatedPlaces, { fetchRelatedPlaces } from '../../components/RelatedPlaces'
+import { visiblePostsFilter } from '../../lib/postSchedule'
 
 export const revalidate = 60
 
@@ -40,8 +41,28 @@ async function getPost(slug: string): Promise<Post | null> {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return null
   const sb = createClient(url, key)
-  const { data } = await sb.from('posts').select('*').eq('slug', slug).eq('status', 'published').maybeSingle()
+  const { data } = await sb.from('posts').select('*').eq('slug', slug).eq('status', 'published')
+    // 公開日が未来の記事（予約中）は、URLを直接開かれても 404 にする。
+    // 公開日前に本文を先に読まれないため（app/lib/postSchedule.ts）
+    .or(visiblePostsFilter(new Date().toISOString()))
+    .maybeSingle()
   return data as Post | null
+}
+
+/**
+ * 「更新日」として扱う日時。
+ *
+ * 予約公開の記事は、公開日より前に編集して保存するので updated_at が公開日より古くなる。
+ * そのまま使うと「公開 9/25・更新 9/22」や、datePublished より前の dateModified になる。
+ * 公開日より後の更新だけを更新日とし、それ以外は公開日を返す
+ * （公開済みの既存記事は updated_at ≧ published_at なので、出方は変わらない）。
+ */
+function modifiedAt(post: Post): string | null {
+  const u = post.updated_at ? new Date(post.updated_at).getTime() : NaN
+  const p = post.published_at ? new Date(post.published_at).getTime() : NaN
+  if (isNaN(u)) return post.published_at
+  if (!isNaN(p) && u < p) return post.published_at
+  return post.updated_at
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -63,7 +84,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       type: 'article',
       url: `/blog/${post.slug}`,
       publishedTime: post.published_at || undefined,
-      modifiedTime: post.updated_at || undefined,
+      modifiedTime: modifiedAt(post) || undefined,
       images: [image ?? OG_DEFAULT_IMAGE],
     },
     twitter: { card: 'summary_large_image', title: post.title, description: desc, images: [image ?? OG_DEFAULT_IMAGE] },
@@ -87,7 +108,8 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const dateStr = post.published_at ? fmtDate(post.published_at) : ''
   // 書き直した記事は、公開日だけだと古い情報に見える。
   // 構造化データの dateModified と画面の表示を揃えるため、日付が違うときは更新日も出す
-  const updatedStr = post.updated_at ? fmtDate(post.updated_at) : ''
+  const modified = modifiedAt(post)
+  const updatedStr = modified ? fmtDate(modified) : ''
   const showUpdated = !!updatedStr && updatedStr !== dateStr
   const image = firstImage(post.content)
 
@@ -105,7 +127,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     headline: post.title,
     description: post.meta_description || post.excerpt || '',
     datePublished: post.published_at || undefined,
-    dateModified: post.updated_at || post.published_at || undefined,
+    dateModified: modified || undefined,
     image: image ? [image] : undefined,
     mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE_URL}/blog/${post.slug}` },
     // 運営会社の本体はトップに出し、ここは同じ @id で指す（AGENTS.md の構造化データの項）

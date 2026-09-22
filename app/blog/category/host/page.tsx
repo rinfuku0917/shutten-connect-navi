@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MERGED_SLUGS_FILTER } from '../../../lib/mergedPosts'
+import { visiblePostsFilter } from '../../../lib/postSchedule'
 import { createClient } from '@supabase/supabase-js'
 import SiteHeader from '../../../components/SiteHeader'
 import SiteFooter from '../../../components/SiteFooter'
@@ -38,8 +39,10 @@ export const metadata: Metadata = {
   },
 }
 
-// 1時間ごとに作り直す。記事の公開はそう頻繁ではない
-export const revalidate = 3600
+// 10分ごとに作り直す（トップの記事枠と同じ）。
+// 以前は1時間だったが、予約公開（app/lib/postSchedule.ts）の記事は
+// 公開日が来ても作り直すまで一覧に出ないので、遅れを短くした
+export const revalidate = 600
 
 async function getPosts(): Promise<PostCardData[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -51,6 +54,8 @@ async function getPosts(): Promise<PostCardData[]> {
     .select('id, slug, title, excerpt, category, cover_emoji, published_at, content')
     .eq('status', 'published')
     .eq('category', CATEGORY)
+    // 公開日が未来の記事（予約中）は、公開日が来るまで出さない（app/lib/postSchedule.ts）
+    .or(visiblePostsFilter(new Date().toISOString()))
     // 別の記事に統合したものは出さない（app/lib/mergedPosts.ts）。
     // /blog と トップでは除外していたのに、この一覧だけ漏れていた
     .not('slug', 'in', MERGED_SLUGS_FILTER)

@@ -6,6 +6,7 @@ import SiteFooter from './components/SiteFooter'
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from 'next/font/google'
 import { firstImage, thumbnailUrl } from './lib/postImage'
 import { MERGED_SLUGS_FILTER } from './lib/mergedPosts'
+import { visiblePostsFilter } from './lib/postSchedule'
 import JsonLd from './components/JsonLd'
 import { SITE_URL, SITE_NAME, ORG, ORG_ID, organizationRef } from './lib/seo'
 import { faqJsonLd } from './lib/faq'
@@ -131,6 +132,8 @@ function badgeOf(p: NewPlace): { label: string; bg: string } | null {
 // ブラウザ側で読み込んでいたころは、読み込み後にページが伸びるため
 // 「実績紹介」「よくある質問」へのリンクが目的の場所からずれていた。
 // あわせて、検索エンジンにも案件や記事が見えるようになる。
+// 予約公開の記事（app/lib/postSchedule.ts）は、公開日からおおむねこの秒数以内に記事枠に出る
+// （期限切れ後の最初の1回は古い版を返し、裏で作り直す。ISR の仕様）
 export const revalidate = 600
 
 function db() {
@@ -167,6 +170,8 @@ async function loadTop(): Promise<{ newPlaces: NewPlace[]; works: WorkPlace[]; p
       client.from('posts')
         .select('id,slug,title,category,cover_emoji,published_at,content')
         .eq('status', 'published')
+        // 公開日が未来の記事（予約中）は、公開日が来るまで出さない（app/lib/postSchedule.ts）
+        .or(visiblePostsFilter(new Date().toISOString()))
         // 別の記事に統合したものは出さない（app/lib/mergedPosts.ts）
         .not('slug', 'in', MERGED_SLUGS_FILTER)
         .order('published_at', { ascending: false })

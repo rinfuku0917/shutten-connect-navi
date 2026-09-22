@@ -7,6 +7,7 @@ import SiteFooter from '../components/SiteFooter'
 import PostCard from '../components/PostCard'
 import { POST_CATEGORIES } from '../lib/postCategories'
 import { MERGED_SLUGS_FILTER } from '../lib/mergedPosts'
+import { visiblePostsFilter } from '../lib/postSchedule'
 
 export const revalidate = 60
 
@@ -69,6 +70,8 @@ async function getPosts(page: number, category: string | null): Promise<{ posts:
   const end = start + PER_PAGE - 1
   let q = sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content', { count: 'exact' })
     .eq('status', 'published')
+    // 公開日が未来の記事（予約中）は、公開日が来るまで出さない（app/lib/postSchedule.ts）
+    .or(visiblePostsFilter(new Date().toISOString()))
     // 別の記事に統合したものは出さない。公開に戻っていても一覧には並べない
     .not('slug', 'in', MERGED_SLUGS_FILTER)
   // 絞り込みはサーバー側で行う（クライアントで絞ると、その分もHTMLに出ないため）
