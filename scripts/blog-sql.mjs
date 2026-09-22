@@ -3,8 +3,10 @@
 //   npm run blog:sql -- docs/blog/kitchen-car-fee-market-rate.md
 //
 // 出力されたSQLを Supabase の SQL Editor に貼って実行する。
-// 記事は「下書き（draft）」として入るので、管理画面で見た目を確かめてから
-// 公開ボタンを押すこと。ここから直接公開はしない。
+// front matter に publish_at が無ければ「下書き（draft）」として入るので、
+// 管理画面で見た目を確かめてから公開ボタンを押すこと。
+// publish_at があれば「公開・予約」として入り、その日時まではサイトに出ない
+// （まとめて書いた記事を1日1本ずつ出すため。app/lib/postSchedule.ts）。
 //
 // 同じ slug で2回流すと、本文だけが上書きされる（公開状態は変えない）。
 // 書き直したときも同じ手順でよい。
@@ -52,6 +54,24 @@ if (content.length < 1500) console.error(`※ 本文が ${content.length} 文字
 // SQLの文字列に入れる。' は '' にする
 const q = v => (v === undefined || v === '' ? 'null' : `'${String(v).split("'").join("''")}'`)
 
+// 予約公開（app/lib/postSchedule.ts）。
+// front matter に publish_at（日本時間。例 2026-09-23T10:20）があれば、
+// 下書きではなく「公開・公開日つき」で入れる。公開日が来るまでサイトには出ない。
+// 無ければ、これまでどおり下書きで入る（管理画面で見てから公開ボタンを押す）。
+// 形式は管理画面の公開日の欄と同じ。日付だけなら朝9時として扱う
+let publishAt = null
+if (meta.publish_at) {
+  const s = meta.publish_at.replace(/^['"]|['"]$/g, '')
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T09:00:00+09:00'
+    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s) ? s + '+09:00'
+    : null
+  if (!iso || isNaN(new Date(iso).getTime())) {
+    console.error(`publish_at（${meta.publish_at}）が読めません。2026-09-23T10:20 の形にしてください。`)
+    process.exit(1)
+  }
+  publishAt = new Date(iso).toISOString()
+}
+
 const cols = {
   slug: meta.slug,
   title: meta.title,
@@ -76,17 +96,20 @@ const sql = `-- ${meta.title}
 --   → 差し替え前の本文は docs/blog/${meta.slug}.previous.md に控えてある（あれば）。
 -- なければ「下書き」として入る。管理画面（/admin の記事）で見てから公開すること。
 
+${publishAt ? `-- ★予約公開：${meta.publish_at}（日本時間）まで、サイトのどこにも出ない。
+--   その日時を過ぎると人の操作なしで出る（app/lib/postSchedule.ts）。
+` : ''}
 update posts set
 ${names.filter(n => n !== 'slug').map(n => `  ${n} = ${q(cols[n])}`).join(',\n')},
-  updated_at = now()
+${publishAt ? `  status = 'published',\n  published_at = ${q(publishAt)},\n` : ''}  updated_at = ${publishAt ? q(publishAt) : 'now()'}
 where slug = ${q(meta.slug)};
 
-insert into posts (${names.join(', ')}, status)
-select ${names.map(n => q(cols[n])).join(', ')}, 'draft'
+insert into posts (${names.join(', ')}, status${publishAt ? ', published_at, updated_at' : ''})
+select ${names.map(n => q(cols[n])).join(', ')}, ${publishAt ? `'published', ${q(publishAt)}, ${q(publishAt)}` : `'draft'`}
 where not exists (select 1 from posts where slug = ${q(meta.slug)});
 
 -- 結果の確認
-select slug, title, status, length(content) as 本文の文字数, updated_at
+select slug, title, status, published_at, length(content) as 本文の文字数, updated_at
 from posts where slug = ${q(meta.slug)};
 `
 
