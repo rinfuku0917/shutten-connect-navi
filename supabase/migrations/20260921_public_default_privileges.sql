@@ -2,6 +2,27 @@
 -- 書き込みを外す。すでに付いてしまっている分も、対象を絞って落とす。
 --
 -- ============================================================
+-- ★本番で流した結果（2026-09-22）
+-- ============================================================
+--   ② … 成功（postgres ぶん）
+--   ②' … 失敗「42501 permission denied to change default privileges」。
+--        SQL Editor は postgres として動き、supabase_admin のメンバーではないため。
+--        巻き戻っただけで何も変わっていない
+--   ③-1・③-2・③-4 … 成功
+--   ④ … 既定権限に残る書き込み 8（すべて supabase_admin の anon×4・authenticated×4）
+--        サーバー専用の表に残る書き込み 0 / service_role が書ける表 14 /
+--        関数を実行できる組 12（流す前と同じ）/ anon の places 追加 false /
+--        ログイン中の places 追加 true / anon の reviews 投稿 true / 更新 false /
+--        anon の公開一覧の読み取り true
+--   実証：anon キーで signup_sources・contacts・posts・line_debug・case_files へ
+--        POST すると、すべて 42501 permission denied for table になった。
+--        公開の読み取り（public_sellers・places・posts・reviews）は 200 のまま
+--
+--   残る穴：supabase_admin が作る表（ダッシュボードの Table Editor など）には、
+--   今も anon の全権が付く。表は SQL Editor か移行ファイルで作ること
+--   （AGENTS.md「Supabase の権限」に決まりとして書いた）。
+--
+-- ============================================================
 -- 何が起きていたか
 -- ============================================================
 --   2026-09-19、公開用ビュー public_sellers に対して

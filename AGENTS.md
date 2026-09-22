@@ -116,3 +116,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `anon` / `authenticated` の権限で評価される関数には `grant execute` を明示する。
   RPC だけでなく、RLS のポリシー・ビューの定義・CHECK の式の中で呼ぶ関数も対象
   （`public.is_admin()` が該当。`create or replace` は既存の権限を保つが `drop` は消す）
+- **表・ビューは SQL Editor か移行ファイルで作る。ダッシュボードの Table Editor で作らない。**
+  既定権限を締めたのは `postgres` が作るものだけで、`supabase_admin` が作るもの
+  （Table Editor など Supabase 側の仕組み）には今も anon の全権が付く。
+  `supabase_admin` の既定権限は SQL Editor から変えられない（2026-09-22 に試して 42501）。
+  やむを得ず Table Editor で作ったら、直後に
+  `revoke insert, update, delete, truncate on public.表名 from PUBLIC, anon, authenticated;` を流す
