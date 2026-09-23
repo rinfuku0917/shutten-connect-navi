@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import type { ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
@@ -9,7 +9,8 @@ import SiteHeader from '../../components/SiteHeader'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
-import { perDayFee, dayTypeFee, allowedFormats, hasFormatFees, formatFeeOf, formatFee, formatAllowsDate, sortedDows, feeCondition, minNoteOf, type FormatFees } from '../../lib/placeFee'
+import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, minNoteOf, dayFeeLabelOn, type FormatFees } from '../../lib/placeFee'
+import ApplyDateCalendar, { type CalendarDay } from '../../components/ApplyDateCalendar'
 import { showsToSeller } from '../../lib/cancelledVisibility'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
@@ -184,7 +185,13 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
   const [photoIndex, setPhotoIndex] = useState(0)
   const router = useRouter()
   const [showEntry, setShowEntry] = useState(false)
-  const [format, setFormat] = useState('')
+  // 出店形式。受け入れる形式が1つだけの案件（イオン系など）は最初から選んでおく。
+  // 未選択のままだと、カレンダーの金額が案件全体の設定（歩合だけ）で出てしまい、
+  // 形式を選ぶまで「歩合」と表示されて額が分からない。選択肢が1つなら選ぶ意味も無い
+  const [format, setFormat] = useState(() => {
+    const fs = initialPlace ? allowedFormats(initialPlace.format_fees) : []
+    return fs.length === 1 ? fs[0] : ''
+  })
   const [selectedDates, setSelectedDates] = useState<string[]>([])
   const [entryDate, setEntryDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -224,8 +231,16 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
     setSelectedDates(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
   }
 
-  // 今日（YYYY-MM-DD）。自由入力日程の下限・過去日付チェックに使う
-  const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
+  // 今日（YYYY-MM-DD）。自由入力日程の下限・過去日付チェックに使う。
+  //
+  // 端末の時計ではなく日本時間で出す。案件の日程は日本の日付で入っているので、
+  // 端末が海外時間・時計がずれていると、日本ではもう過ぎた日が
+  // 「今日より前ではない」と判定され、過去日の申込が通ってしまう
+  // （データベース側のトリガー check_apply_window は過去日を見ていない）。
+  const todayStr = () => {
+    const jst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000)
+    return jst.getUTCFullYear() + '-' + String(jst.getUTCMonth() + 1).padStart(2, '0') + '-' + String(jst.getUTCDate()).padStart(2, '0')
+  }
 
   // 何ヶ月先まで申し込めるかの上限（places.apply_within_months）。
   // 施設が先の予定に答えられないため、イオン系は1ヶ月、Olympic・ドンキ系は4ヶ月に絞っている
@@ -246,6 +261,58 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
   })()
 
+  // 出店希望日のカレンダーに渡す、日ごとの状態。
+  //
+  // 選べる日は「案件の日程（places.schedule）に入っている日」だけ。
+  // カレンダーは月全体を並べるが、日程に無い日は押せないマスにする。
+  // 申込は画面から直接 applications に insert する作りで、
+  // データベース側のトリガー（check_apply_window）は日程に入っている日かを見ていないため、
+  // ここで集合を守らないと、募集していない日の申込がそのまま入ってしまう。
+  //
+  // 金額は app/lib/placeFee.ts の dayFeeLabelOn（＝請求の初期額と同じ dayFeeOf）で作る。
+  const todayForCal = todayStr()
+  const { calendarDays, wrongDowCount } = useMemo(() => {
+    if (!place) return { calendarDays: [] as CalendarDay[], wrongDowCount: 0 }
+    const applied = new Set(myEntries.map(e => e.apply_date).filter((d): d is string => !!d))
+    // 曜日で選べない日の件数は、日付の集合で数える。
+    // 日程は同じ日付が2行あることがある（時間帯が2枠）ので、要素の数で数えると二重になる
+    const wrongDates = new Set<string>()
+    const days: CalendarDay[] = (place.schedule || []).filter(d => d.date).map(d => {
+      // 過ぎた日は選べない。以前のリストでは押せたままで、
+      // 「当月を全選択」を足すとまとめて選ばれてしまう（トリガーも過去日は弾かない）
+      const past = d.date < todayForCal
+      // 申込の上限より先の日は選べない（places.apply_within_months）
+      const over = !!applyLimitStr && d.date > applyLimitStr
+      // 選んだ形式で出られない曜日の日は選べない
+      const wrongDow = !!format && !formatAllowsDate(place.format_fees, format, d.date)
+      // 申込済みの日は「済」と出ていて × にならないので、曜日の件数には入れない
+      if (wrongDow && !past && !over && !applied.has(d.date)) wrongDates.add(d.date)
+      const label = dayFeeLabelOn(place, format || null, d.date)
+      return {
+        date: d.date,
+        times: d.start && d.end ? [`${d.start}〜${d.end}`] : [],
+        amount: label.amount,
+        amountNote: label.short,
+        amountMark: label.mark,
+        amountText: label.text,
+        disabled: past || over || wrongDow,
+        disabledReason: past ? '過ぎた日'
+          : over ? `${applyLimitStr?.replaceAll('-', '/')} までのお申し込みです`
+          : wrongDow ? `この曜日は${format}では出店できません` : '',
+        applied: applied.has(d.date),
+      }
+    })
+    return { calendarDays: days, wrongDowCount: wrongDates.size }
+  }, [place, format, applyLimitStr, myEntries, todayForCal])
+
+  // 出店形式を選び直したときは、その形式で出られない曜日の日を選択から外す。
+  // 残したままにすると、画面では選べない色なのに送信され、
+  // データベース側のトリガーも曜日を見ないのでそのまま入ってしまう
+  const chooseFormat = (opt: string) => {
+    setFormat(opt)
+    if (place) setSelectedDates(prev => prev.filter(d => formatAllowsDate(place.format_fees, opt, d)))
+  }
+
   const submitEntry = async () => {
     setEntryErr('')
     if (!format) { setEntryErr('出店形式を選択してください'); return }
@@ -263,6 +330,32 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
     // ここで止めておくと、データベース側のトリガーの文言が出店者に出ずに済む
     if (applyLimitStr && dates.some(d => d > applyLimitStr)) {
       setEntryErr(`この案件は ${applyLimitStr.replaceAll('-', '/')} までのお申し込みとなります`)
+      return
+    }
+    // 過ぎた日を送らない。カレンダーでは押せないようにしてあるが、
+    // 画面を開いたまま日をまたいだ場合に通ってしまう
+    // （データベース側のトリガーは過去日を弾かない）
+    if (dates.some(d => d < todayStr())) { setEntryErr('過ぎた日は選択できません'); return }
+    // 選んだ形式で出られない曜日を送らない。
+    // 形式を選び直したときに選択から外しているが、送信前にも見る
+    if (place && dates.some(d => !formatAllowsDate(place.format_fees, format, d))) {
+      setEntryErr(`選んだ日に、${format}では出店できない曜日が含まれています`)
+      return
+    }
+    // 日程のある案件は、案件の日程に無い日を送らない。
+    // 運営の出店日振替（app/api/applications/change-date）も
+    // 「案件の日程に入っていない日へは振り替えられない」を強制している
+    if (hasSchedule) {
+      const known = new Set((place?.schedule || []).map(d => d.date))
+      if (dates.some(d => !known.has(d))) { setEntryErr('この案件の日程にない日は選択できません'); return }
+    }
+    // すでに申し込んでいる日を送らない。
+    // 申込は選んだ日ぜんぶを1回の insert で入れるので、1日でも重複すると
+    // その回の全部が落ちる（applications_active_unique_idx）。
+    // 何が重複したのか分かるように、日付を出してから止める
+    const already = dates.filter(d => myEntries.some(e => e.apply_date === d))
+    if (already.length > 0) {
+      setEntryErr(`${already.map(d => d.replaceAll('-', '/')).join('、')} はすでに申込済みです。選択から外してください`)
       return
     }
     setSubmitting(true)
@@ -287,6 +380,10 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
     }
     setSubmitting(false)
     setEntryDone(true)
+    // 送った日は選択から外す。「別の日程を追加でエントリーする」で開き直したときに
+    // 前回選んだ日が残っていると、申込済みの日をもう一度送ることになり、
+    // 部分一意インデックス（place_id・seller_id・apply_date）で今回の全行が落ちる
+    setSelectedDates([])
     await loadMyEntries()
     // ホストへ申込通知（失敗しても応募は成功させる）。
     // 通知の入口は body の sellerId を信じないので、アクセストークンを添える
@@ -583,6 +680,20 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                     <div style={{ fontSize: '15px', fontWeight: '900', color: '#16A34A', marginBottom: '8px' }}>エントリーが完了しました</div>
                     <div style={{ fontSize: '13px', color: '#666', marginBottom: '16px', lineHeight: 1.7 }}>申込内容はマイページでご確認いただけます。</div>
                     <Link href="/dashboard/seller" style={{ display: 'block', background: '#F5A623', color: '#fff', textAlign: 'center', padding: '14px', borderRadius: '8px', fontWeight: '900', fontSize: '15px', textDecoration: 'none' }}>マイページへ</Link>
+                    {/* 完了の画面から申込フォームへ戻れる道を作る。
+                        以前は entryDone を false に戻す場所がどこにも無く、
+                        続けて別の日を申し込むには再読み込みが必要だった。
+                        申し込んだ日は選択から外してあり（submitEntry）、
+                        マスにも「済」が付くので、同じ日をもう一度送ることはない */}
+                    {calendarDays.length > 0 && (
+                      <button
+                        type='button'
+                        onClick={() => { setEntryErr(''); setEntryDone(false); setShowEntry(true) }}
+                        style={{ width: '100%', marginTop: '10px', background: 'transparent', border: '2px solid #F5A623', color: '#E08A00', textAlign: 'center', padding: '12px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                      >
+                        続けて別の日をエントリーする
+                      </button>
+                    )}
                   </div>
                 ) : (!showEntry && myEntries.length > 0) ? (
                   /* すでに申し込んでいる場合は、その状態を出す。
@@ -669,7 +780,7 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                         return (
                           <label key={opt} style={{ display: 'block', cursor: 'pointer', border: format === opt ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '12px 14px', fontSize: '14px', color: '#1a1a1a', background: format === opt ? '#FFFBEB' : '#fff' }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <input type="radio" name="format" checked={format === opt} onChange={() => setFormat(opt)} style={{ accentColor: '#F5A623' }} />
+                              <input type="radio" name="format" checked={format === opt} onChange={() => chooseFormat(opt)} style={{ accentColor: '#F5A623' }} />
                               <span style={{ fontWeight: 700 }}>{opt}</span>
                             </span>
                             {/* 形態ごとの金額と条件。以前は概要欄に文章で書いていたので見落とされていた */}
@@ -697,62 +808,28 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                       })}
                     </div>
                     <div style={{ fontSize: '14px', fontWeight: '900', color: '#1a1a1a', marginBottom: '8px' }}>出店希望日</div>
-                    {place.schedule && place.schedule.filter(d => d.date).length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                        <div style={{ fontSize: '12px', color: '#888' }}>出店したい日にチェックを入れてください（複数選択可）</div>
-                        {place.schedule.filter(d => d.date).map(d => {
-                          // 申込の上限より先の日は選べない。日程そのものは案件の情報なので消さず、
-                          // チェックだけできない形にして残す
-                          const over = !!applyLimitStr && d.date > applyLimitStr
-                          // 選んだ形態で出られない曜日の日は選べない。
-                          // 日程そのものは案件の情報なので消さず、チェックだけできない形にする
-                          const wrongDow = !!format && !formatAllowsDate(place.format_fees, format, d.date)
-                          const off = over || wrongDow
-                          return (
-                          <label key={d.date} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: off ? 'default' : 'pointer', border: selectedDates.includes(d.date) ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: off ? '#AAA' : '#1a1a1a', background: off ? '#FAFAFA' : (selectedDates.includes(d.date) ? '#FFFBEB' : '#fff') }}>
-                            <input type="checkbox" disabled={off} checked={selectedDates.includes(d.date)} onChange={() => toggleDate(d.date)} style={{ accentColor: '#F5A623' }} />
-                            <span>
-                              {/* どの日がいくらなのかを選ぶ場面なので、日付と時刻、項目名と金額が
-                                  それぞれ別の行に分かれないよう、まとまりごとに包んでいる */}
-                              <span className='nowrap-unit'>{d.date}（{d.start}〜{d.end}）</span>
-                              {/* その日にいくら払うのかを、日付の横に出す。
-                                  優先順位は運営の計算（app/admin/page.tsx の calcFees）と同じ:
-                                    選んだ形態の額（土日祝を分けていればその額）
-                                    → 日程に入れたその日の額
-                                    → 案件の平日/土日祝の額
-                                  形態をいちばん強くしているのは、形態を選び直したときに
-                                  ここの金額も変わらないと、形態の金額が反映されていないように見えるため */}
-                              {canSeeFee && (() => {
-                                const fmtF = formatFee(place.format_fees, format, d.date)
-                                const dayF = perDayFee(place.schedule, d.date)
-                                const dtF = dayTypeFee(place.day_type_fees, d.date)
-                                const pf = fmtF.placeFee ?? dayF.placeFee ?? dtF.placeFee
-                                const cf = fmtF.companyFee ?? dayF.companyFee ?? dtF.companyFee
-                                // 固定額が無く「歩合＋最低保証」の案件は、この場では額が確定しない
-                                // （売上が決まっていないため）。それでも下限は分かるので出す。
-                                // 何も出さないと、当日いくら払うのか見当が付かない。
-                                // 日付を渡して、その日の額だけを出す（平日と土日祝を並べない）
-                                if (pf == null && cf == null) {
-                                  const minOnly = minNoteOf(place, format, '最低', d.date)
-                                  if (!minOnly) return null
-                                  const pctPart = feeCondition(place, format, d.date).parts.find(x => x.startsWith('売上の'))
-                                  return <span className='nowrap-unit' style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {minOnly}{pctPart ? '（' + pctPart + '）' : ''}</span>
-                                }
-                                const total = (pf ?? 0) + (cf ?? 0)
-                                return <span className='nowrap-unit' style={{ marginLeft: '6px', color: '#B45309', fontWeight: 700 }}>出店料 {total.toLocaleString()}円</span>
-                              })()}
-                              {/* なぜ選べないのかを、その日の横に出す。
-                                  灰色になっているだけでは理由が分からない */}
-                              {wrongDow && (
-                                <span style={{ marginLeft: '6px', fontSize: '11.5px', color: '#DC2626' }}>
-                                  この曜日は{format}では出店できません
-                                </span>
-                              )}
-                            </span>
-                          </label>
-                          )
-                        })}
-                      </div>
+                    {calendarDays.length > 0 ? (
+                      <>
+                        <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>出店したい日をカレンダーから選んでください（複数選択可）</div>
+                        {/* 以前は1日1枚のカードを縦に並べていた。日程が最長31日ある案件では
+                            申込枠が極端に縦長になり、選ぶ途中でやめてしまう人がいた（2026-09-23 の依頼）。
+                            選べる日・その日の額・選べない理由は calendarDays で作って渡す */}
+                        <ApplyDateCalendar
+                          days={calendarDays}
+                          selected={selectedDates}
+                          onToggle={toggleDate}
+                          onSelectMany={dates => setSelectedDates(prev => Array.from(new Set([...prev, ...dates])))}
+                          onClearMonth={dates => setSelectedDates(prev => prev.filter(d => !dates.includes(d)))}
+                          feeState={!canSeeFee ? 'login' : !format ? 'format' : 'ok'}
+                        />
+                        {/* 選んだ形式で出店できない曜日があるときは、理由を文でも出す。
+                            マスが灰色になっているだけでは、なぜ選べないのか分からない */}
+                        {wrongDowCount > 0 && (
+                          <div style={{ fontSize: '11.5px', color: '#DC2626', marginBottom: '10px' }}>
+                            {wrongDowCount}日は{format}では出店できない曜日のため選べません
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div style={{ marginBottom: '16px' }}>
                         <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>この案件は出店日が未設定です。ご希望の日付を入力してください（過去の日付は選べません）。</div>

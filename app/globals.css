@@ -762,3 +762,29 @@ img[width='1'][height='1'] { display: inline !important; }
    スマホでは入力欄が iOS の拡大防止で 16px になるので、接頭辞も同じ大きさにそろえる */
 .sns-prefix { font-size: 13px; }
 @media (max-width: 768px) { .sns-prefix { font-size: 16px; } }
+
+/* 出店希望日のカレンダー（app/components/ApplyDateCalendar.tsx）。
+   置き場所は案件詳細の申込枠で、パソコンでは幅340pxの右カラム（内側300px）、
+   スマホでは画面いっぱい。7列を横スクロールなしで収めるため、
+   マスの幅は minmax(0, 1fr) で割り、文字だけを画面幅に応じて詰める。
+   （幅を px で決めると300pxに収まらず、カレンダーだけ横に溢れる） */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.cal-dow { font-size: 10.5px; font-weight: 700; text-align: center; padding: 2px 0 4px; }
+.cal-cell {
+  min-height: 46px; border-radius: 7px; padding: 3px 1px 2px; font: inherit;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  box-sizing: border-box; width: 100%; overflow: hidden;
+}
+.cal-num { font-size: 12.5px; font-weight: 700; line-height: 1.1; }
+.cal-amt { font-size: 9.5px; font-weight: 700; line-height: 1.1; white-space: nowrap; }
+.cal-mark { font-size: 10px; line-height: 1.1; }
+/* 「18,000最」のように長い額は、マス（約40px）に9.5pxでは収まらず左右が切れる。
+   文字数が多いときだけ一段小さくする（全文はカレンダー下の札と吹き出しに出る） */
+.cal-amt-sm { font-size: 8.5px; letter-spacing: -0.2px; }
+/* 幅の狭い端末では、マスは約40pxしか取れない。金額だけを一段小さくする
+   （マスを縮めると日付が読めなくなり、はみ出すと横スクロールが出る） */
+@media (max-width: 380px) {
+  .cal-cell { min-height: 44px; }
+  .cal-amt { font-size: 9px; }
+  .cal-amt-sm { font-size: 8px; }
+}

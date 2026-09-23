@@ -628,6 +628,49 @@ export function minNoteOf(p: FeeSource, format?: string | null, prefix = '最低
   return one == null ? '' : prefix + yen(one) + '/日'
 }
 
+/** カレンダーの1マスに出す、その日1日分の出店料 */
+export type DayFeeLabel = {
+  /** その日に払う額（円）。売上に応じて決まる日・「期間で1回」の案件は null */
+  amount: number | null
+  /** amount が null のときにマスへ出す短い語（「歩合」「期間」「相談」） */
+  short: string
+  /** amount のうしろに付ける印。'＋' は歩合も加わる日、'最' は最低保証で決まる日 */
+  mark: string
+  /** 全文（「4,500円/日 ＋ 売上の20%（最低2,000円）」）。選んだ日の一覧に出す */
+  text: string
+}
+
+/**
+ * その日1日分の出店料を、売上が決まる前（申込の時点）に画面へ出すための値。
+ *
+ * 額は dayFeeOf に売上0を渡して作る＝「売上が立たなくてもこの額」。
+ * 事前請求の初期額（app/components/PlaceApplicationsModal.tsx）と同じ関数なので、
+ * カレンダーで見た額と、あとから届く請求の額が食い違わない。
+ *
+ * 以前は案件詳細が独自の短い式（形態 → 日程の各日 → 平日/土日祝）で出しており、
+ * 案件全体の固定額（price_fixed）だけを入れた案件では1日ごとの額が出なかった。
+ */
+export function dayFeeLabelOn(p: FeeSource, format: string | null | undefined, date: string): DayFeeLabel {
+  const { parts, minNote, empty } = feeCondition(p, format, date)
+  const text = empty ? '要相談' : parts.join(' ＋ ') + (minNote ? '（' + minNote + '）' : '')
+
+  const day = dayFeeOf(p, format, date, 0)
+  const { placePct, companyPct } = sharePctOn(p, format)
+  const pct = placePct + companyPct
+  // 「期間で1回」の固定額は日ごとの計算では0。日数分を足すと請求額と食い違うので、
+  // 額としては出さず「期間」と出す（合計にも入れない）
+  const perEvent = (p.place_fixed_unit === 'per_event' && (p.price_fixed || 0) > 0)
+    || (p.company_fixed_unit === 'per_event' && (p.company_fixed_amount || 0) > 0)
+  const amount = day.total > 0 ? day.total : null
+  const minApplied = day.placeMinApplied || day.companyMinApplied
+  return {
+    amount,
+    short: amount != null ? '' : (pct > 0 ? '歩合' : perEvent ? '期間' : '相談'),
+    mark: amount == null ? '' : minApplied ? '最' : pct > 0 ? '＋' : '',
+    text,
+  }
+}
+
 export type FeeCondition = {
   /** 「3,000円/日」「売上の20%」など。画面では ＋ でつないで出す */
   parts: string[]
