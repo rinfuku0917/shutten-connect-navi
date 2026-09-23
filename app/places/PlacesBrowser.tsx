@@ -112,11 +112,42 @@ const [showMap, setShowMap] = useState(false)
   // 持たせないと、再読み込みや戻る操作のたびに1ページ目に戻ってしまう。
   const [ready, setReady] = useState(false)
 
-  // 絞り込みはサーバー側で解釈して props で渡ってくるので、
-  // ここでURLを読み直す必要はない。
-  // 以前はここで読んでいたため、サーバーが返すHTMLは絞り込み前のままで、
-  // 「?pref=東京都」と「/places」の中身が完全に同じだった。
-  useEffect(() => { setReady(true) }, [])
+  // キーワードは入力を少し待ってから絞り込む。
+  //
+  // 1文字ごとに絞り込むと、12枚のカードの画像が毎回入れ替わり、
+  // 10文字打つ間に100枚以上を読み込みにいく。
+  // LINEアプリ内のブラウザのように使えるメモリが小さい環境では、
+  // これでページごと落ちる（2026-09-23 に「埼玉県立高等看護学院」で報告あり）。
+  // 入力欄の反応は kw のまま即時で、重い絞り込みだけを遅らせる
+  const [kwDebounced, setKwDebounced] = useState(kw)
+  useEffect(() => {
+    const t = setTimeout(() => setKwDebounced(kw), 300)
+    return () => clearTimeout(t)
+  }, [kw])
+
+  // URLの ?pref= 等から絞り込みを復元する。
+  //
+  // サーバー側で読まないのは、searchParams を読むと /places が動的描画になり、
+  // ISR も CDN キャッシュも効かなくなるため（app/places/page.tsx の★）。
+  // 検索に出したい絞り込みは固有ページ（/places/area/tokyo など）が持っているので、
+  // ここで効かせるのは「利用者が絞り込んだ状態で再読み込み・共有したとき」向け。
+  //
+  // 受け取る値は選択肢にあるものだけに限る。何でも入れると、
+  // 選択肢に無い値が select に入って絞り込みが空振りする。
+  // setReady と同じ回で入れるので、下のURL書き戻しは復元後の値を見る。
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const p = q.get('pref') ?? ''
+    if (p && initialPlaces.some(x => x.prefecture === p)) setPref(p)
+    const g = q.get('genre') ?? ''
+    if (g && (PLACE_CATEGORIES as readonly string[]).includes(g)) setGenre(g)
+    const k = (q.get('q') ?? '').trim().slice(0, 60)
+    if (k) { setKw(k); setKwDebounced(k) }
+    const n = parseInt(q.get('page') ?? '1', 10)
+    if (Number.isFinite(n) && n > 1) setPage(n)
+    if (q.get('sort') === 'name') setSortBy('name')
+    setReady(true)
+  }, [initialPlaces])
 
   // ログインしているかだけを確かめる（料金の表示可否に使う）
   useEffect(() => {
@@ -131,19 +162,6 @@ const [showMap, setShowMap] = useState(false)
 
   // 都道府県・ジャンルの選択肢を物件から自動生成
   const prefList = useMemo(() => Array.from(new Set(places.map(p => p.prefecture).filter(Boolean))) as string[], [places])
-
-  // キーワードは入力を少し待ってから絞り込む。
-  //
-  // 1文字ごとに絞り込むと、12枚のカードの画像が毎回入れ替わり、
-  // 10文字打つ間に100枚以上を読み込みにいく。
-  // LINEアプリ内のブラウザのように使えるメモリが小さい環境では、
-  // これでページごと落ちる（2026-09-23 に「埼玉県立高等看護学院」で報告あり）。
-  // 入力欄の反応は kw のまま即時で、重い絞り込みだけを遅らせる
-  const [kwDebounced, setKwDebounced] = useState(kw)
-  useEffect(() => {
-    const t = setTimeout(() => setKwDebounced(kw), 300)
-    return () => clearTimeout(t)
-  }, [kw])
 
   // 検索フィルタ適用
   const filtered = useMemo(() => places.filter(p => {

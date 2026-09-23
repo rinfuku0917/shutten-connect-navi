@@ -11,47 +11,38 @@ import { visiblePostsFilter } from '../lib/postSchedule'
 
 export const revalidate = 60
 
-// ページ送りと分類の絞り込みは、それぞれ中身の違うページになる。
-// 正規URLを /blog に固定していたため、2ページ目の記事が
-// どのページの一部なのかをGoogleに伝えられていなかった
-// （本番で /blog と /blog?page=2 は中身が違うのに、
-// どちらも canonical が /blog を指していた）。
+// ★このページは searchParams（?page= / ?category=）を読まない。
 //
-// AGENTS.md の「canonical は必ず自ページを指定する」に合わせて、
-// ページごと・分類ごとに自分を指す。
+// 読むと Next はこのページを「動的描画」に切り替え、revalidate を宣言しても
+// ISR も CDN キャッシュも効かなくなる。実測（2026-09-23）では TTFB 0.95〜1.0秒・
+// x-vercel-cache が毎回 MISS だった（固有ページの /blog/category/host は 0.38秒・HIT）。
 //
-// 2ページ目以降を検索対象から外す（noindex）のは採らない。
-// 公開ページへの noindex 追加は禁止している。
-export async function generateMetadata(
-  { searchParams }: { searchParams: Promise<{ page?: string; category?: string }> },
-): Promise<Metadata> {
-  const sp = await searchParams
-  const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
-  const category = POST_CATEGORIES.includes((sp.category ?? '') as (typeof POST_CATEGORIES)[number]) ? sp.category! : null
+// そこでページ送りと分類の絞り込みをやめ、公開済みの記事を1枚のページに
+// 分類ごとに並べる。記事は26本（予約分を含めて33本）なので1ページで足りる。
+//   ・分類のボタンはページ内の見出しへの移動にした（クエリのURLを増やさない）
+//   ・すべての記事が /blog から1クリックで見える（以前は11本目以降が
+//     ?page=2 の奥にあり、クローラーの発見経路が細かった）
+//   ・?page=2 や ?category=◯◯ を開いても200で同じ一覧が出る。
+//     canonical は /blog を指すので、重複としてまとめられる
+//     （AGENTS.md「クエリパラメータだけの出し分けは不可」）
+const description = 'キッチンカー・屋台の開業や出店に役立つ情報をお届けします。開業費用、営業許可、出店場所の探し方、収益アップのコツなど、出店者と募集者のための実践ガイド。'
 
-  // 表示しているものと同じ組み合わせで自ページを作る。
-  // 画面のページ送り（qs）と同じ形にすること。食い違うと、
-  // リンク先と正規URLが別のURLになる
-  const q = new URLSearchParams()
-  if (category) q.set('category', category)
-  if (page > 1) q.set('page', String(page))
-  const qsStr = q.toString()
-  const self = qsStr ? `/blog?${qsStr}` : '/blog'
-
-  // 2ページ目以降と分類つきは、題も分ける。
-  // 同じ題のページが並ぶと、どれを出すかGoogleが決められない
-  const name = category ? `${category}の記事` : 'お役立ち情報'
-  const withPage = page > 1 ? `${name}（${page}ページ目）` : name
-
-  return {
-    // layout の template が二重に付かないよう absolute で指定する
-    title: { absolute: `${withPage} - 出店コネクトナビ` },
-    description: category
-      ? `${category}に関する記事の一覧です。キッチンカー・屋台の出店と募集に役立つ情報をまとめています。`
-      : 'キッチンカー・屋台の開業や出店に役立つ情報をお届けします。開業費用、営業許可、出店場所の探し方、収益アップのコツなど、出店者と募集者のための実践ガイド。',
-    alternates: { canonical: self },
-  }
+export const metadata: Metadata = {
+  // layout の template が二重に付かないよう absolute で指定する
+  title: { absolute: 'お役立ち情報 - 出店コネクトナビ' },
+  description,
+  alternates: { canonical: '/blog' },
 }
+
+// 分類ごとの見出しに付けるid（ページ内リンク先）。日本語のidは使わない
+const CATEGORY_ANCHOR: Record<string, string> = {
+  '出店場所の探し方': 'find',
+  '開業・許可': 'start',
+  '書類・保険': 'docs',
+  '募集者向け': 'host',
+}
+
+const PILL = { padding: '9px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 800, textDecoration: 'none', border: '1px solid #E7DCC8', background: '#fff', color: '#64748B' } as const
 
 type Post = {
   id: string; slug: string; title: string
@@ -59,45 +50,36 @@ type Post = {
   published_at: string | null
 }
 
-const PER_PAGE = 10
-
-async function getPosts(page: number, category: string | null): Promise<{ posts: Post[]; total: number }> {
+async function getPosts(): Promise<Post[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) return { posts: [], total: 0 }
+  if (!url || !key) return []
   const sb = createClient(url, key)
-  const start = (page - 1) * PER_PAGE
-  const end = start + PER_PAGE - 1
-  let q = sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content', { count: 'exact' })
+  const { data } = await sb.from('posts').select('id, slug, title, excerpt, category, cover_emoji, published_at, content')
     .eq('status', 'published')
     // 公開日が未来の記事（予約中）は、公開日が来るまで出さない（app/lib/postSchedule.ts）
     .or(visiblePostsFilter(new Date().toISOString()))
     // 別の記事に統合したものは出さない。公開に戻っていても一覧には並べない
     .not('slug', 'in', MERGED_SLUGS_FILTER)
-  // 絞り込みはサーバー側で行う（クライアントで絞ると、その分もHTMLに出ないため）
-  if (category) q = q.eq('category', category)
-  const { data, count } = await q.order('published_at', { ascending: false })
-    // 同じ日時に公開した記事がページをまたいで重複・欠落しないよう、並びを固定する
-    .order('slug', { ascending: true }).range(start, end)
-  return { posts: (data as Post[]) || [], total: count || 0 }
+    .order('published_at', { ascending: false })
+    // 同じ日時に公開した記事の並びを固定する（毎回順が変わるとキャッシュが無駄に変わる）
+    .order('slug', { ascending: true })
+  return (data as Post[]) || []
 }
 
-export default async function BlogPage({ searchParams }: { searchParams: Promise<{ page?: string; category?: string }> }) {
-  const sp = await searchParams
-  const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
-  // 決めた4カテゴリ以外が来ても無視する
-  const category = POST_CATEGORIES.includes((sp.category ?? '') as (typeof POST_CATEGORIES)[number]) ? sp.category! : null
-  const { posts, total } = await getPosts(page, category)
-  const totalPages = Math.ceil(total / PER_PAGE)
-  const qs = (over: Record<string, string | number | null>) => {
-    const q = new URLSearchParams()
-    const c = 'category' in over ? over.category : category
-    const pg = 'page' in over ? over.page : page
-    if (c) q.set('category', String(c))
-    if (pg && Number(pg) > 1) q.set('page', String(pg))
-    const t = q.toString()
-    return t ? `/blog?${t}` : '/blog'
-  }
+export default async function BlogPage() {
+  const posts = await getPosts()
+
+  // 分類ごとに分ける。決めた4カテゴリ以外（未設定・古い分類）は「そのほか」に入れる。
+  // 記事が1本も無い分類は節ごと出さない
+  const groups = POST_CATEGORIES
+    .map(c => ({ name: c as string, anchor: CATEGORY_ANCHOR[c], posts: posts.filter(p => p.category === c) }))
+    .concat([{
+      name: 'そのほか',
+      anchor: 'other',
+      posts: posts.filter(p => !POST_CATEGORIES.includes((p.category ?? '') as (typeof POST_CATEGORIES)[number])),
+    }])
+    .filter(g => g.posts.length > 0)
 
   return (
     <div style={{ background: '#FFF8F0', minHeight: '100vh' }}>
@@ -110,45 +92,35 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
         <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)' }}>出店に役立つ記事・ガイドをお届けします</p>
       </div>
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 16px' }}>
+        {/* 分類のボタンは、同じページの見出しへ移動する（クエリのURLを増やさない）。
+            「募集者向け」だけは固有のURLを持つページがあるので、そちらへ送る */}
         <nav aria-label='記事のカテゴリー' style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '22px' }}>
-          <Link
-            href={qs({ category: null, page: 1 })}
-            style={{ padding: '9px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 800, textDecoration: 'none', border: '1px solid ' + (category ? '#E7DCC8' : '#F5A623'), background: category ? '#fff' : '#F5A623', color: category ? '#64748B' : '#fff' }}
-          >
-            すべて
-          </Link>
-          {POST_CATEGORIES.map(c => (
-            <Link
-              key={c}
-              // 「募集者向け」は固有のURLを持つページがあるので、そちらへ送る。
-              // クエリだけの出し分けは検索の対象にしない決まり（AGENTS.md）
-              href={c === '募集者向け' ? '/blog/category/host' : qs({ category: c, page: 1 })}
-              style={{ padding: '9px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 800, textDecoration: 'none', border: '1px solid ' + (category === c ? '#F5A623' : '#E7DCC8'), background: category === c ? '#F5A623' : '#fff', color: category === c ? '#fff' : '#64748B' }}
-            >
-              {c}
-            </Link>
+          {groups.map(g => (
+            g.anchor === 'host'
+              ? <Link key={g.anchor} href='/blog/category/host' style={PILL}>{g.name}</Link>
+              : <a key={g.anchor} href={`#${g.anchor}`} style={PILL}>{g.name}</a>
           ))}
         </nav>
 
         {posts.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#999', fontSize: '14px' }}>{category ? `「${category}」の記事はまだありません。` : '記事を準備中です。もうしばらくお待ちください。'}</div>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#999', fontSize: '14px' }}>記事を準備中です。もうしばらくお待ちください。</div>
         ) : (
-          <div style={{ display: 'grid', gap: '16px' }}>
-            {posts.map(post => <PostCard key={post.id} post={post} />)}
-          </div>
-        )}
-        {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' }}>
-            {page > 1 && (
-              <a href={qs({ page: page - 1 })} style={{ padding: '8px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', background: '#fff', color: '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>← 前へ</a>
-            )}
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-              <a key={n} href={qs({ page: n })} style={{ padding: '8px 14px', border: n === page ? '1px solid #F5A623' : '1px solid #e0e0e0', borderRadius: '8px', background: n === page ? '#F5A623' : '#fff', color: n === page ? '#fff' : '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700, minWidth: '20px', textAlign: 'center' }}>{n}</a>
-            ))}
-            {page < totalPages && (
-              <a href={qs({ page: page + 1 })} style={{ padding: '8px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', background: '#fff', color: '#1a1a1a', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>次へ →</a>
-            )}
-          </div>
+          groups.map(g => (
+            <section key={g.anchor} id={g.anchor} style={{ marginBottom: '36px', scrollMarginTop: '16px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 900, color: '#1a1a1a', margin: '0 0 14px' }}>
+                {g.name}
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#94A3B8', marginLeft: '8px' }}>{g.posts.length}本</span>
+              </h2>
+              <div style={{ display: 'grid', gap: '16px' }}>
+                {g.posts.map(post => <PostCard key={post.id} post={post} />)}
+              </div>
+              {g.anchor === 'host' && (
+                <p style={{ margin: '14px 0 0', fontSize: '13px' }}>
+                  <Link href='/blog/category/host' style={{ color: '#B45309', fontWeight: 700 }}>募集者向けの記事まとめを見る →</Link>
+                </p>
+              )}
+            </section>
+          ))
         )}
       </div>
       <SiteFooter />
