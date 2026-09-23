@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 import SiteHeader from '../components/SiteHeader'
 import BackButton from '../components/BackButton'
 import SiteFooter from '../components/SiteFooter'
@@ -131,13 +132,26 @@ const [showMap, setShowMap] = useState(false)
   // 都道府県・ジャンルの選択肢を物件から自動生成
   const prefList = useMemo(() => Array.from(new Set(places.map(p => p.prefecture).filter(Boolean))) as string[], [places])
 
+  // キーワードは入力を少し待ってから絞り込む。
+  //
+  // 1文字ごとに絞り込むと、12枚のカードの画像が毎回入れ替わり、
+  // 10文字打つ間に100枚以上を読み込みにいく。
+  // LINEアプリ内のブラウザのように使えるメモリが小さい環境では、
+  // これでページごと落ちる（2026-09-23 に「埼玉県立高等看護学院」で報告あり）。
+  // 入力欄の反応は kw のまま即時で、重い絞り込みだけを遅らせる
+  const [kwDebounced, setKwDebounced] = useState(kw)
+  useEffect(() => {
+    const t = setTimeout(() => setKwDebounced(kw), 300)
+    return () => clearTimeout(t)
+  }, [kw])
+
   // 検索フィルタ適用
   const filtered = useMemo(() => places.filter(p => {
     if (pref && p.prefecture !== pref) return false
     if (genre && !(p.genres || []).includes(genre)) return false
-    if (kw) {
+    if (kwDebounced) {
       const hay = ((p.title || '') + (p.prefecture || '') + (p.address || '') + (p.fee || '')).toLowerCase()
-      if (!hay.includes(kw.toLowerCase())) return false
+      if (!hay.includes(kwDebounced.toLowerCase())) return false
     }
     return true
   }).slice().sort((a, b) => {
@@ -147,7 +161,7 @@ const [showMap, setShowMap] = useState(false)
     // 新着順は読み込み時の順序（ピン留め→掲載日の降順）をそのまま使う
     if (sortBy === 'new') return 0
     return compareByTitle(a.title, b.title)
-  }), [places, pref, genre, kw, sortBy])
+  }), [places, pref, genre, kwDebounced, sortBy])
   // 絞り込みを変えたら1ページ目に戻す（そのままだと空のページが出る）。
   // ただしURLから絞り込みを復元したときは戻さない。
   const filterFirst = useRef(true)
@@ -155,7 +169,7 @@ const [showMap, setShowMap] = useState(false)
     if (!ready) return
     if (filterFirst.current) { filterFirst.current = false; return }
     setPage(1)
-  }, [ready, pref, genre, kw])
+  }, [ready, pref, genre, kwDebounced])
 
   const PER_PAGE = 12
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
@@ -249,8 +263,15 @@ const [showMap, setShowMap] = useState(false)
           {paged.map(place => (
             <Link key={place.id} href={'/places/' + place.id} style={{textDecoration:'none',display:'block',background:'#fff',border:'1px solid #e0e0e0',borderRadius:'12px',overflow:'hidden',color:'inherit',position:'relative'}}>
               {place.closed && <ClosedRibbon />}
-              <div style={{height:'170px',background:'#F5A623',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',backgroundImage:place.image_url?`url(${place.image_url})`:undefined,backgroundSize:'cover',backgroundPosition:'center',filter:place.closed?'grayscale(1) opacity(0.55)':undefined}}>
-                {!place.image_url && (place.place_type==='event'?'🎪':'🏪')}
+              {/* 画像は next/image で出す（AGENTS.md のパフォーマンス項）。
+                  以前は背景画像（background-image）で原寸のJPEGをそのまま読んでいて、
+                  1枚66〜105KB × 12枚＝約1MB。検索の入力で表示が入れ替わるたびに
+                  読み直すため、LINEアプリ内のブラウザではページごと落ちていた
+                  （2026-09-23 報告）。sizes を渡すと、カードの幅に合った小さい画像が届く */}
+              <div style={{position:'relative',height:'170px',background:'#F5A623',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'48px',overflow:'hidden',filter:place.closed?'grayscale(1) opacity(0.55)':undefined}}>
+                {place.image_url
+                  ? <Image src={place.image_url} alt={place.title} fill sizes='(max-width: 640px) 100vw, 300px' style={{objectFit:'cover'}} />
+                  : (place.place_type==='event'?'🎪':'🏪')}
               </div>
               <div style={{padding:'20px'}}>
                 {/* 案件名はスマホのカード幅（約316px）だと2行以上になるのが普通なので、
