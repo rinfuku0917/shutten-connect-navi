@@ -286,20 +286,27 @@ export function findCrossSegment(areaSlug: string, tagSlug: string): Segment | u
 }
 
 /** /places の絞り込みに対応する固有ページ。canonical の寄せ先を決めるのに使う。
- *  無ければ undefined（呼び側は素の /places を canonical にする）。 */
+ *  無ければ undefined（呼び側は素の /places を canonical にする）。
+ *
+ *  ★段の外のページは返さない（WAVE でゲートした一覧から引く）。
+ *    素の CROSS / CATEGORY から引いていたため、WAVE=1 の間も
+ *    未公開のカテゴリページ・県×カテゴリページを返していた。
+ *    その結果、案件詳細の「同じ県の一覧へ」から404へのリンクが51本出て、
+ *    /places?pref=&genre= の canonical も404を指していた（2026-09-23 の実測）。 */
 export function segmentForFilter(pref: string, genre: string): Segment | undefined {
-  if (pref && genre) return CROSS.find(s => s.pref === pref && s.genre === genre)
-  if (pref) return AREA.find(s => s.pref === pref)
-  if (genre) return CATEGORY.find(s => s.genre === genre)
+  if (pref && genre) return CROSS_SEGMENTS.find(s => s.pref === pref && s.genre === genre)
+  if (pref) return AREA_SEGMENTS.find(s => s.pref === pref)
+  if (genre) return CATEGORY_SEGMENTS.find(s => s.genre === genre)
   return undefined
 }
 
-/** その案件（県・ジャンル）から辿れる固有ページ。案件詳細の「同じ県の一覧へ」に使う */
+/** その案件（県・ジャンル）から辿れる固有ページ。案件詳細の「同じ県の一覧へ」に使う。
+ *  段の外のページは返さない（未公開のページへリンクすると404になる）。 */
 export function segmentsForPlace(pref: string | null, genres: string[] | null): Segment[] {
   const out: Segment[] = []
-  const area = pref ? AREA.find(s => s.pref === pref) : undefined
+  const area = pref ? AREA_SEGMENTS.find(s => s.pref === pref) : undefined
   if (area) out.push(area)
-  for (const cross of CROSS) {
+  for (const cross of CROSS_SEGMENTS) {
     if (cross.pref === pref && cross.genre && (genres ?? []).includes(cross.genre)) out.push(cross)
   }
   return out
@@ -323,10 +330,14 @@ export function segmentBreadcrumb(seg: Segment): { name: string; path: string }[
   return items
 }
 
-/** ページを作っていないカテゴリ。リンク帯で「なぜ作らないか」を画面に書くために使う。
- *  将来の担当者が同じ検討を繰り返さないようにするのが目的。 */
+/** 固有ページがまだ無いカテゴリ。リンク帯で「なぜ作らないか」を画面に書くために使う。
+ *  将来の担当者が同じ検討を繰り返さないようにするのが目的。
+ *
+ *  ★こちらも WAVE でゲートした一覧から引く。素の CATEGORY から引くと、
+ *    WAVE=1 の間は「場所の種類から探す」の枠（CATEGORY_SEGMENTS が空なので非表示）にも
+ *    この枠にも出ないカテゴリができ、公園・商業施設などへの導線が帯から消える。 */
 export const CATEGORIES_WITHOUT_PAGE: readonly string[] =
-  PLACE_CATEGORIES.filter(g => !CATEGORY.some(s => s.genre === g))
+  PLACE_CATEGORIES.filter(g => !CATEGORY_SEGMENTS.some(s => s.genre === g))
 
 /** 「飲食向け」「物販向け」は会場の種類ではなく、どんな出店者に向く募集かという適性フラグ。
  *  件数が増えてもページは作らない（県ページとほぼ同じ集合になる）。 */
