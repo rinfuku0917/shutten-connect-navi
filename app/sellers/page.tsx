@@ -8,6 +8,7 @@ import Link from 'next/link'
 import SellersBrowser, { type Seller } from './SellersBrowser'
 import { sortForListing } from './sellerName'
 import { sellerHasContent } from '../lib/sellerListing'
+import { corporateNameOrEmpty } from '../lib/sellerNames'
 
 // 隠す屋号は app/lib/excludedShops.ts が唯一の正
 
@@ -51,6 +52,38 @@ async function fetchSellers(): Promise<Seller[]> {
     if (data.length < CHUNK) break
   }
   return all
+}
+
+// 屋号（shop_name）が空の出店者の「氏名の欄に入っている会社名」を引く。
+//
+// 公開ビュー public_sellers は本名の列を持たない（2026-09-19 に外した）。
+// そこでサーバー側でだけ profiles を読み、会社名と判断できるものだけを返す。
+// 本名はここから外へ出さない（返すのは corporateNameOrEmpty を通した値だけ）。
+// サービスロールキーが無い環境（手元）では空の Map を返し、これまでどおり
+// 「（店名未登録）」と出る。
+async function fetchCorpNames(ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key || ids.length === 0) return out
+  try {
+    const db = createClient(url, key, { auth: { persistSession: false } })
+    const CHUNK = 500
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const { data, error } = await db
+        .from('profiles')
+        .select('id, name')
+        .in('id', ids.slice(i, i + CHUNK))
+      if (error) return out
+      for (const p of data ?? []) {
+        const corp = corporateNameOrEmpty(p.name as string | null)
+        if (corp) out.set(String(p.id), corp)
+      }
+    }
+    return out
+  } catch {
+    return out
+  }
 }
 
 // 「すべての出店者」を活動エリアごとにまとめる。
@@ -109,7 +142,13 @@ export default async function SellersPage() {
   let directory: { id: string; shopName: string; areas: string[] }[] = []
 
   try {
-    const [all, menuIds] = await Promise.all([fetchSellers(), fetchMenuSellerIds()])
+    const [allRaw, menuIds] = await Promise.all([fetchSellers(), fetchMenuSellerIds()])
+    // 屋号が空の人だけ、氏名の欄に入っている会社名を引いて足す
+    const noShop = allRaw.filter(s => !String(s.shop_name ?? '').trim()).map(s => String(s.id))
+    const corpNames = await fetchCorpNames(noShop)
+    const all = allRaw.map(s => (corpNames.has(String(s.id))
+      ? { ...s, corpName: corpNames.get(String(s.id)) as string }
+      : s))
     // 写真と店名がそろっているものを前に、どちらも無いものを後ろに並べる。
     // 一覧は画像の並びなので、絵も名前も無いカードが混ざると空いて見える。
     sellers = sortForListing(
@@ -122,7 +161,8 @@ export default async function SellersPage() {
     // 一覧の下に、条件を満たす出店者すべてへのリンクを置く
     directory = sellers
       .filter((s) => sellerHasContent({
-        shopName: s.shop_name,
+        // 屋号が空でも会社名が出せる人は「名前がある」として扱う
+        shopName: String(s.shop_name ?? '').trim() || (s as { corpName?: string }).corpName || '',
         photos: s.photos,
         bio: (s as { bio?: string | null }).bio,
         hasMenu: menuIds ? menuIds.has(String(s.id)) : false,
@@ -130,7 +170,7 @@ export default async function SellersPage() {
       }))
       .map((s) => ({
         id: String(s.id),
-        shopName: String(s.shop_name ?? '').trim(),
+        shopName: String(s.shop_name ?? '').trim() || String((s as { corpName?: string }).corpName ?? '').trim(),
         areas: Array.isArray(s.areas) ? s.areas.filter(Boolean).map(String) : [],
       }))
   } catch (e) {

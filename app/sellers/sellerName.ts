@@ -7,6 +7,9 @@
 export type SellerLike = {
   shop_name: string | null
   photos: string[] | null
+  /** 氏名の欄に入っていた会社名（app/lib/sellerNames.ts の corporateNameOrEmpty で選んだもの）。
+   *  屋号が空のときだけ使う。個人名は入らない */
+  corpName?: string | null
 }
 
 // 法人名（株式会社◯◯など）も一覧に出す。
@@ -27,10 +30,14 @@ export function isCorporateName(name: string): boolean {
   return CORPORATE_MARKERS.some((m) => name.includes(m))
 }
 
-/** 一覧に出す店名。空のときだけ null（カードは「（店名未登録）」になる） */
+/** 一覧に出す店名。
+ *  屋号 → 氏名の欄に入っていた会社名 の順に見る。どちらも無ければ null
+ *  （カードは「（店名未登録）」になる） */
 export function displayShopName(s: SellerLike): string | null {
   const name = (s.shop_name ?? '').trim()
-  return name || null
+  if (name) return name
+  const corp = (s.corpName ?? '').trim()
+  return corp || null
 }
 
 export function hasPhoto(s: SellerLike): boolean {

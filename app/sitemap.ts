@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { isMergedAway } from './lib/mergedPosts'
 import { visiblePostsFilter } from './lib/postSchedule'
 import { sellerHasContent } from './lib/sellerListing'
+import { corporateNameOrEmpty } from './lib/sellerNames'
 import { SITE_URL } from './lib/seo'
 import { SEGMENTS } from './places/segments'
 import { loadSegmentStamps } from './places/segmentData'
@@ -222,7 +223,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (let from = 0; ; from += CHUNK) {
       const { data, error } = await db
         .from('profiles')
-        .select('id, created_at, shop_name, photos, bio')
+        // name は「氏名の欄の会社名」を屋号の代わりに使うため（個人名は使わない。
+        // 判定は app/lib/sellerNames.ts の corporateNameOrEmpty）
+        .select('id, created_at, name, shop_name, photos, bio')
         .eq('role', 'seller')
         .eq('approval_status', 'approved')
         .range(from, from + CHUNK - 1)
@@ -235,7 +238,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         // 判定は app/lib/sellerListing.ts（出店者一覧の「すべての出店者」と同じものを読む。
         // 食い違うと、リンクした先がサイトマップに無い状態ができる）
         const worth = sellerHasContent({
-          shopName: s.shop_name,
+          shopName: String(s.shop_name ?? '').trim() || corporateNameOrEmpty(s.name as string | null),
           photos: s.photos,
           bio: s.bio,
           hasMenu: hasMenu.has(String(s.id)),

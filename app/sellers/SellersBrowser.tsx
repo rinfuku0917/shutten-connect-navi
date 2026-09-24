@@ -11,6 +11,11 @@ export type Seller = {
   genre: string[] | string | null
   areas: string[] | string | null
   photos: string[] | null
+  /** 屋号が空のときに使う、氏名の欄に入っていた会社名。
+   *  サーバー側（app/sellers/page.tsx）で会社名と判断できたものだけが入る */
+  corpName?: string | null
+  /** 紹介文。一覧には出さないが、「すべての出店者」に入れるかの判定に使う */
+  bio?: string | null
 }
 
 const PER_PAGE = 30

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { corporateNameOrEmpty } from '../../lib/sellerNames'
 import { isExcludedShop } from '../../lib/excludedShops'
 import { createClient } from '@supabase/supabase-js'
 import JsonLd from '../../components/JsonLd'
@@ -38,7 +39,9 @@ async function fetchSeller(id: string): Promise<Seller | null> {
   if (!db) return null
   const { data } = await db
     .from('profiles')
-    .select('id, shop_name, genre, areas, photos, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods')
+    // name は「氏名の欄に入っている会社名」を出すためだけに読む。
+    // 個人名はページに出さない（下の displayName が corporateNameOrEmpty を通す）
+    .select('id, name, shop_name, genre, areas, photos, bio, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, takeout_bag, payment_methods')
     .eq('id', id)
     .eq('role', 'seller')
     .eq('approval_status', 'approved')
@@ -96,19 +99,36 @@ function toArray(v: string[] | string | null): string[] {
 
 // 公開ページに出す名前。
 //
-// **本名（profiles.name）は絶対に使わない。**
-// 以前は屋号が空のときに本名で埋めていたため、屋号を入れていない出店者
-// 304人の本名が、ページのタイトル・見出し・説明文・構造化データに出ていた
+// **本名（個人名）は出さない。**
+// 以前は屋号が空のときに profiles.name で埋めていたため、屋号を入れていない
+// 出店者304人の本名が、ページのタイトル・見出し・説明文・構造化データに出ていた
 // （2026-09-19 に出店者ご本人から申し出があった）。
-// 屋号が無い場合は一般的な言い方にし、あわせて検索には出さない（下の noindex）。
+//
+// 2026-09-24 に運営の判断で、氏名の欄に入っている「会社名」だけは出すことにした
+// （会社名は個人情報ではない。一覧が「（店名未登録）」ばかりになるのを減らす）。
+// 会社名かどうかの判定は app/lib/sellerNames.ts の corporateNameOrEmpty が唯一の正で、
+// 一覧（app/sellers/page.tsx）とサイトマップも同じ関数を読む。
+// どちらも無い場合は一般的な言い方にし、あわせて検索には出さない（下の noindex）。
 const NO_SHOP_NAME = 'キッチンカー出店者'
 
 function shopNameOf(s: Seller): string {
-  return (s.shop_name ?? '').trim()
+  return (s.shop_name ?? '').trim() || corporateNameOrEmpty((s as { name?: string | null }).name)
 }
 
 function displayName(s: Seller): string {
   return shopNameOf(s) || NO_SHOP_NAME
+}
+
+/** ブラウザへ渡す形に直す。
+ *
+ *  fetchSeller は氏名（profiles.name）も読む（会社名を出すため）。
+ *  そのまま渡すと、ページのHTMLに氏名が載ってしまう（個人名も含めて）。
+ *  shop_name に「出してよい名前」を入れ、氏名の列は落としてから渡す。
+ *  こうするとブラウザ側の部品は今までどおり shop_name を見るだけでよい。 */
+function sellerForBrowser(s: Seller): Seller {
+  const { name: _dropped, ...rest } = s as Seller & { name?: string | null }
+  void _dropped
+  return { ...rest, shop_name: shopNameOf(s) || null } as Seller
 }
 
 // 検索結果に出す説明文。120字前後に収める。
@@ -217,7 +237,18 @@ export default async function SellerDetailPage({ params }: { params: Promise<{ i
         </>
       )}
 
-      <SellerDetailClient id={id} initialSeller={seller} initialMenus={menus} initialReviews={reviews} initialSns={sns} />
+      {/* ブラウザへ渡す前に、名前を「出してよい名前」に置き換える。
+          fetchSeller は氏名（profiles.name）も読むが、それをそのまま渡すと
+          ページのHTMLに全員ぶんの氏名が載ってしまう（個人名も含めて）。
+          shop_name に表示名（屋号 → 氏名の欄の会社名）を入れ、name は渡さない。
+          こうするとブラウザ側の部品は今までどおり shop_name を見るだけでよい */}
+      <SellerDetailClient
+        id={id}
+        initialSeller={seller ? sellerForBrowser(seller) : null}
+        initialMenus={menus}
+        initialReviews={reviews}
+        initialSns={sns}
+      />
     </>
   )
 }
