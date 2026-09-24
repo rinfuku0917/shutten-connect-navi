@@ -7,6 +7,7 @@ import SiteFooter from '../components/SiteFooter'
 import Link from 'next/link'
 import SellersBrowser, { type Seller } from './SellersBrowser'
 import { sortForListing } from './sellerName'
+import { sellerHasContent } from '../lib/sellerListing'
 
 // 隠す屋号は app/lib/excludedShops.ts が唯一の正
 
@@ -38,7 +39,7 @@ async function fetchSellers(): Promise<Seller[]> {
   for (let from = 0; ; from += CHUNK) {
     const { data, error } = await supabase
       .from('public_sellers')
-      .select('id, shop_name, genre, areas, photos')
+      .select('id, shop_name, genre, areas, photos, bio')
       .eq('role', 'seller')
       .eq('approval_status', 'approved')
       .order('shop_name', { ascending: true, nullsFirst: false })
@@ -52,17 +53,86 @@ async function fetchSellers(): Promise<Seller[]> {
   return all
 }
 
+// 「すべての出店者」を活動エリアごとにまとめる。
+//
+// areas は複数の都道府県が入ることがあるので、先頭のエリアで1回だけ並べる
+// （同じ出店者を県ごとに何度も出すと、同じページへのリンクが重複する）。
+// エリアが空の人は最後の「エリア未設定」に入れる。
+// 並びは店舗数の多いエリアから（東京・神奈川のように多い順に見せる）
+function groupByArea(
+  list: { id: string; shopName: string; areas: string[] }[],
+): { area: string; items: { id: string; shopName: string }[] }[] {
+  const byArea = new Map<string, { id: string; shopName: string }[]>()
+  for (const s of list) {
+    const area = s.areas[0] || 'エリア未設定'
+    const arr = byArea.get(area)
+    if (arr) arr.push({ id: s.id, shopName: s.shopName })
+    else byArea.set(area, [{ id: s.id, shopName: s.shopName }])
+  }
+  return Array.from(byArea.entries())
+    .map(([area, items]) => ({ area, items }))
+    .sort((a, b) => (
+      // 「エリア未設定」は最後に置く
+      a.area === 'エリア未設定' ? 1 : b.area === 'エリア未設定' ? -1 : b.items.length - a.items.length
+    ))
+}
+
+// メニューを1件でも登録している出店者。
+// 「すべての出店者」に入れるかの判定（app/lib/sellerListing.ts）に使う。
+// 読めなかったら null を返し、絞り込みをやめる（サイトマップと同じ扱い）
+async function fetchMenuSellerIds(): Promise<Set<string> | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) return null
+  try {
+    const db = createClient(url, key, { auth: { persistSession: false } })
+    const out = new Set<string>()
+    const CHUNK = 1000
+    for (let from = 0; ; from += CHUNK) {
+      const { data, error } = await db.from('menus').select('seller_id').range(from, from + CHUNK - 1)
+      if (error) return null
+      if (!data || data.length === 0) break
+      for (const m of data) if (m.seller_id) out.add(String(m.seller_id))
+      if (data.length < CHUNK) break
+    }
+    return out
+  } catch {
+    return null
+  }
+}
+
 export default async function SellersPage() {
   let sellers: Seller[] = []
   let errorMessage: string | null = null
 
+  // 「すべての出店者」に並べる人（サイトマップに入れている人と同じ条件）
+  let directory: { id: string; shopName: string; areas: string[] }[] = []
+
   try {
-    const all = await fetchSellers()
+    const [all, menuIds] = await Promise.all([fetchSellers(), fetchMenuSellerIds()])
     // 写真と店名がそろっているものを前に、どちらも無いものを後ろに並べる。
     // 一覧は画像の並びなので、絵も名前も無いカードが混ざると空いて見える。
     sellers = sortForListing(
       all.filter((s) => !isExcludedShop(s.shop_name)),
     )
+    // ページ送りが button（クローラーがたどれない）なので、
+    // HTMLには先頭30店舗ぶんしかリンクが出ていなかった。
+    // サイトマップには583店舗が入っており、残りは内部リンクの無い孤立ページだった
+    // （AGENTS.md「サイトマップにしか無い孤立ページにしない」）。
+    // 一覧の下に、条件を満たす出店者すべてへのリンクを置く
+    directory = sellers
+      .filter((s) => sellerHasContent({
+        shopName: s.shop_name,
+        photos: s.photos,
+        bio: (s as { bio?: string | null }).bio,
+        hasMenu: menuIds ? menuIds.has(String(s.id)) : false,
+        menusOk: menuIds !== null,
+      }))
+      .map((s) => ({
+        id: String(s.id),
+        shopName: String(s.shop_name ?? '').trim(),
+        areas: Array.isArray(s.areas) ? s.areas.filter(Boolean).map(String) : [],
+      }))
   } catch (e) {
     errorMessage = e instanceof Error ? e.message : '不明なエラーが発生しました'
   }
@@ -99,7 +169,42 @@ export default async function SellersPage() {
             <p className="mt-1 text-sm">{errorMessage}</p>
           </div>
         ) : (
-          <SellersBrowser initialSellers={sellers} />
+          <>
+            <SellersBrowser initialSellers={sellers} />
+
+            {/* すべての出店者への入り口。
+                ページ送りは button なのでクローラーがたどれず、HTMLには先頭30店舗しか
+                リンクが出ていなかった。サイトマップには583店舗が入っているので、
+                残りは内部リンクの無い孤立ページになっていた（2026-09-24 に発見）。
+                ここは素のHTMLだけで作る（開閉は details の標準の動きで、JSを足さない）。
+                並びは都道府県ごと。屋号だけの一覧なので、1,000店舗でも数十KBに収まる */}
+            {directory.length > 0 && (
+              <details className="mt-10 rounded-2xl border border-stone-200 bg-white p-5">
+                <summary className="cursor-pointer text-sm font-semibold text-stone-800">
+                  すべての出店者を見る（{directory.length.toLocaleString()}店舗）
+                </summary>
+                <p className="mt-2 text-xs text-stone-500">
+                  写真・メニュー・紹介文のいずれかを登録している出店者を、活動エリアごとに並べています。
+                </p>
+                <nav aria-label="すべての出店者" className="mt-4 flex flex-col gap-5">
+                  {groupByArea(directory).map((g) => (
+                    <div key={g.area}>
+                      <h2 className="text-sm font-bold text-stone-900">{g.area}<span className="ml-2 text-xs font-medium text-stone-500">{g.items.length}店舗</span></h2>
+                      <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                        {g.items.map((s) => (
+                          <li key={s.id} className="text-[13px] leading-6">
+                            <Link href={`/sellers/${s.id}`} className="text-stone-700 underline-offset-2 hover:text-amber-700 hover:underline">
+                              {s.shopName}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </nav>
+              </details>
+            )}
+          </>
         )}
       </div>
 

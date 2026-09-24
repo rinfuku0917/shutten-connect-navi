@@ -3,6 +3,7 @@ import { isExcludedShop } from './lib/excludedShops'
 import { createClient } from '@supabase/supabase-js'
 import { isMergedAway } from './lib/mergedPosts'
 import { visiblePostsFilter } from './lib/postSchedule'
+import { sellerHasContent } from './lib/sellerListing'
 import { SITE_URL } from './lib/seo'
 import { SEGMENTS } from './places/segments'
 import { loadSegmentStamps } from './places/segmentData'
@@ -230,17 +231,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         if (!s.id) continue
         // 運営用のアカウントは、一覧と同じく申告しない
         if (isExcludedShop(s.shop_name)) continue
-        // 屋号を登録していない出店者は申告しない。
-        // 公開ページは本名を出さない作りにしたので（app/sellers/[id]/page.tsx）、
-        // 屋号が無いページは誰の紹介か分からない。ページ側も noindex にしてある
-        if (!String(s.shop_name ?? '').trim()) continue
         // 写真1枚以上・メニュー1件以上・紹介文30字以上のいずれかを満たすもの。
-        // 30字は「名前と都道府県だけ」との差が出る目安
-        const photos = Array.isArray(s.photos) ? s.photos.filter(Boolean) : []
-        const bio = typeof s.bio === 'string' ? s.bio.trim() : ''
-        // menus が読めなかったときは絞らない（上のコメントの理由）
-        const worth = !menusOk
-          || photos.length > 0 || hasMenu.has(String(s.id)) || bio.length >= 30
+        // 判定は app/lib/sellerListing.ts（出店者一覧の「すべての出店者」と同じものを読む。
+        // 食い違うと、リンクした先がサイトマップに無い状態ができる）
+        const worth = sellerHasContent({
+          shopName: s.shop_name,
+          photos: s.photos,
+          bio: s.bio,
+          hasMenu: hasMenu.has(String(s.id)),
+          menusOk,
+        })
         sellerUrls.push({ id: String(s.id), created_at: s.created_at ?? null, worth })
       }
       if (data.length < CHUNK) break
