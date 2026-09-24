@@ -128,7 +128,8 @@ export default function AdminPage() {
   const showNotice = (message: string, kind: 'error' | 'ok' | 'info' = 'error') => setNotice({ message, kind })
 
   const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings' | 'contacts' | 'mail'>('dashboard')
-  type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string }
+  // 車両の4項目は書き出し（CSV）で使う。CSV取り込みの経路では入らないので任意
+  type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string, salesType?: string, vehicleType?: string, vehicleSize?: string, equipment?: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [sellersLoading, setSellersLoading] = useState(false)
   const [sellerKw, setSellerKw] = useState('')
@@ -136,7 +137,7 @@ export default function AdminPage() {
     setSellersLoading(true)
     const { data } = await supabase
       .from('profiles')
-      .select('id, name, shop_name, email, phone, genre, areas')
+      .select('id, name, shop_name, email, phone, genre, areas, sales_type, vehicle_type, size_length, size_width, size_height, equipment')
       .eq('role', 'seller')
       .order('name', { ascending: true })
     const mapped: AdminSeller[] = (data || []).map((p: any) => ({
@@ -150,6 +151,11 @@ export default function AdminPage() {
       sns: '',
       status: '登録済',
       docs: '—',
+      // 車両情報。書き方をそろえるため、表示と同じ formatVehicleSize を通す
+      salesType: p.sales_type || '',
+      vehicleType: p.vehicle_type || '',
+      vehicleSize: formatVehicleSize(p.size_length, p.size_width, p.size_height),
+      equipment: p.equipment || '',
     }))
     setSellers(mapped)
     setSellersLoading(false)
@@ -4397,8 +4403,10 @@ const previewDoc = async (fileUrl: string) => {
                       if (!s || /["',\r\n=]/.test(s)) return esc(s)
                       return '="' + s + '"'
                     }
-                    const header = ['出店者名', '店舗名', 'メール', '電話番号', 'ジャンル', 'エリア'].join(',')
-                    const rows = sellers.map(s => [esc(s.name), esc(s.shop), esc(s.email), escTel(s.phone), esc(s.genre), esc(s.area)].join(','))
+                    // 車両の4項目も出す（2026-09-24 に追加）。
+                    // 施設へ渡す資料に要る項目で、これまで書き出しに入っていなかった
+                    const header = ['出店者名', '店舗名', 'メール', '電話番号', 'ジャンル', 'エリア', '販売形態', '車種', '車両サイズ', '設備'].join(',')
+                    const rows = sellers.map(s => [esc(s.name), esc(s.shop), esc(s.email), escTel(s.phone), esc(s.genre), esc(s.area), esc(s.salesType || ''), esc(s.vehicleType || ''), esc(s.vehicleSize || ''), esc(s.equipment || '')].join(','))
                     const csv = [header, ...rows].join('\n')
                     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
                     const url = URL.createObjectURL(blob)

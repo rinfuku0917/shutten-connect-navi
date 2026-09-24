@@ -3,8 +3,10 @@
 // これまで運営が手作業で作っていた提出用Excelと同じ様式で出力する。
 //   ・開催日ごとに1シート（シート名は「９月１日（火）」の形）
 //   ・1シートの中に、その日の出店者を「出店者情報⑴⑵⑶…」と縦に並べる
-//   ・各出店者: 店舗名 / Instagram / ジャンル / テイクアウト時／袋 /
-//     利用可能決済 → 販売メニュー（メニュー名・詳細・価格）
+//   ・各出店者: 店舗名 / Instagram / ジャンル / 販売形態 / 車種 / 車両サイズ / 設備 /
+//     テイクアウト時／袋 / 利用可能決済 → 販売メニュー（メニュー名・詳細・価格）
+//     （車両の4項目は 2026-09-24 に追加。施設が置き場所を決めるのに必要で、
+//       これまで運営が別途伝えていた）
 //
 // 見た目（フォント・色・罫線・列幅）は実際に提出しているファイルから
 // 読み取った値に合わせている。変えるときは元のExcelと見比べること。
@@ -19,6 +21,7 @@
 //   メニュー表ヘッダ = EDF2F9（同じ色みの薄い方。見出しとの段差を残すため）
 
 import { snsHref } from './sns'
+import { formatVehicleSize } from './vehicleSize'
 import { submissionShopName, type SellerNameResolver } from './sellerNames'
 
 export type SubmissionMenuItem = { name: string; detail: string; price: string }
@@ -26,6 +29,12 @@ export type SubmissionSeller = {
   shopName: string
   instagram: string
   genre: string
+  /** 販売形態（キッチンカー／テント・ブースなど）。施設が場所の広さを決めるのに使う */
+  salesType: string
+  vehicleType: string
+  /** 「全長 3,440mm、全幅 1,520mm、高さ 2,460mm」。formatVehicleSize で作る */
+  vehicleSize: string
+  equipment: string
   takeoutBag: string
   payments: string
   menus: SubmissionMenuItem[]
@@ -144,7 +153,12 @@ export async function exportPlaceSubmission(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sellerIds = Array.from(new Set(rows.map((a: any) => a.seller_id)))
   const [{ data: sellerRows }, { data: sns }, { data: menuRows }, { data: subRows }] = await Promise.all([
-    supabase.from('public_sellers').select('id, shop_name, genre, takeout_bag, payment_methods').in('id', sellerIds),
+    // 車両の4項目（販売形態・車種・サイズ・設備）も引く。
+    // application_submissions（案件ごとの入力）には車両の欄が無く、
+    // 車両は現場ごとに変わらないので、常にプロフィールの値を出す
+    supabase.from('public_sellers')
+      .select('id, shop_name, genre, takeout_bag, payment_methods, sales_type, vehicle_type, size_length, size_width, size_height, equipment')
+      .in('id', sellerIds),
     supabase.from('sns_links').select('seller_id, url').eq('platform', 'instagram').in('seller_id', sellerIds),
     supabase.from('menus').select('seller_id, name, detail, price, sort_order, created_at')
       .in('seller_id', sellerIds)
@@ -230,11 +244,19 @@ export async function exportPlaceSubmission(
   const sellerBase = (a: any, yen: boolean): SubmissionSeller => {
     const p = sellerById.get(a.seller_id) || {}
     const sub = subBySeller.get(a.seller_id)
+    // 車両の4項目は案件ごとの入力欄が無いので、どちらの枝でもプロフィールから出す
+    const vehicle = {
+      salesType: p.sales_type || '',
+      vehicleType: p.vehicle_type || '',
+      vehicleSize: formatVehicleSize(p.size_length, p.size_width, p.size_height),
+      equipment: p.equipment || '',
+    }
     if (sub) {
       return {
         shopName: submissionShopName(sub.shop_name || p.shop_name, realNameById.get(a.seller_id)),
         instagram: snsHref('instagram', sub.instagram) || sub.instagram || '',
         genre: genreLabel(sub.genre),
+        ...vehicle,
         takeoutBag: sub.takeout_bag || '',
         payments: paymentsLabel(sub.payment_methods),
         menus: menusFor(a.seller_id, yen),
@@ -244,6 +266,7 @@ export async function exportPlaceSubmission(
       shopName: submissionShopName(p.shop_name, realNameById.get(a.seller_id)),
       instagram: snsHref('instagram', instaBySeller.get(a.seller_id)) || instaBySeller.get(a.seller_id) || '',
       genre: genreLabel(p.genre),
+      ...vehicle,
       takeoutBag: p.takeout_bag || '',
       payments: paymentsLabel(p.payment_methods),
       menus: menusFor(a.seller_id, yen),
@@ -347,6 +370,11 @@ export async function buildSubmissionWorkbook(sheets: SubmissionSheet[]) {
       setRow(['店舗名', s.shopName, ''], { mergeBC: true })
       setRow(['Instagram', s.instagram, ''], { mergeBC: true })
       setRow(['ジャンル', s.genre, ''], { mergeBC: true })
+      // 車両の4項目。施設が置き場所（間口・高さ制限）を決めるのに使う
+      setRow(['販売形態', s.salesType, ''], { mergeBC: true })
+      setRow(['車種', s.vehicleType, ''], { mergeBC: true })
+      setRow(['車両サイズ', s.vehicleSize, ''], { mergeBC: true })
+      setRow(['設備', s.equipment, ''], { mergeBC: true })
       setRow(['テイクアウト時／袋', s.takeoutBag, ''], { mergeBC: true })
       setRow(['利用可能決済', s.payments, ''], { mergeBC: true })
       setRow(['販売メニュー', '', ''], { bold: true, fill: FILL_HEAD, mergeAll: true })
@@ -364,7 +392,8 @@ export async function buildSubmissionWorkbook(sheets: SubmissionSheet[]) {
 //   ・月ごとに1シート（シート名は「８月」の形）
 //   ・1シートの中に、その月の出店者を「出店者情報⑴⑵⑶…」と縦に並べる
 //   ・各出店者: 施設名 / 店舗名 / Instagram / 希望日程 / ジャンル /
-//     テイクアウトの袋 / 決済方法 → メニュー名・詳細・価格
+//     販売形態 / 車種 / 車両サイズ / 設備 / テイクアウトの袋 / 決済方法
+//     → メニュー名・詳細・価格
 //   見出しまわり: Hiragino Mincho ProN 12pt、塗りなし
 //   メニュー行: 游ゴシック 10pt、価格は右寄せで「¥600」
 //   【クレープ】のように括った行は区切りとして太字＋D9E1F2で塗る
@@ -415,6 +444,10 @@ export async function buildAeonWorkbook(sheets: SubmissionSheet[], facilityName:
       put(['Instagram', s.instagram, ''])
       put(['希望日程', s.wishDates ?? '', ''])
       put(['ジャンル', s.genre, ''])
+      put(['販売形態', s.salesType, ''])
+      put(['車種', s.vehicleType, ''])
+      put(['車両サイズ', s.vehicleSize, ''])
+      put(['設備', s.equipment, ''])
       put(['テイクアウトの袋', s.takeoutBag, ''])
       put(['決済方法', s.payments, ''])
       put(['メニュー名', '詳細', '価格'])
