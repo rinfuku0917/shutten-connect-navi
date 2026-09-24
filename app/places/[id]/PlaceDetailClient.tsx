@@ -12,6 +12,7 @@ import SiteFooter from '../../components/SiteFooter'
 import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, minNoteOf, dayFeeLabelOn, type FormatFees } from '../../lib/placeFee'
 import ApplyDateCalendar, { type CalendarDay } from '../../components/ApplyDateCalendar'
 import { showsToSeller } from '../../lib/cancelledVisibility'
+import { missingSellerFields, SELLER_PROFILE_COLUMNS } from '../../lib/sellerProfile'
 const PlacesMap = dynamic(() => import('../../components/PlacesMap'), { ssr: false, loading: () => <div style={{height:'320px',background:'#F1F5F9',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:'13px'}}>地図を読み込み中...</div> })
 
 export type Place = {
@@ -201,6 +202,8 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
   // 「エントリーする」と出ていると、済んでいないように見えてしまう。
   type MyEntry = { id: string, apply_date: string | null, status: string }
   const [myEntries, setMyEntries] = useState<MyEntry[]>([])
+  // プロフィールの未入力項目。1件以上あるあいだは申し込めない（2026-09-24）
+  const [profileMissing, setProfileMissing] = useState<{ key: string, label: string }[]>([])
 
   const loadMyEntries = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -218,12 +221,31 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
     setMyEntries(((data || []) as MyEntry[]).filter(e => showsToSeller(e)))
   }
 
+  // プロフィールの未入力項目を数える。
+  //
+  // 施設へ出す資料と公開ページの中身はプロフィールで決まるのに、
+  // 出店者1,386人のうち全部そろっていたのは7人だけだった（2026-09-24 実測）。
+  // 運営が申込のたびに個別に催促していたため、申込の入口で入れてもらう形にした。
+  // 必須の定義は app/lib/sellerProfile.ts（出店者ダッシュボードと同じものを読む）
+  const checkProfile = async (uid: string): Promise<{ key: string, label: string }[]> => {
+    const [{ data: prof }, { count }] = await Promise.all([
+      supabase.from('profiles').select(SELLER_PROFILE_COLUMNS).eq('id', uid).single(),
+      supabase.from('menus').select('id', { count: 'exact', head: true }).eq('seller_id', uid),
+    ])
+    if (!prof) return []
+    return missingSellerFields({ ...prof, menuCount: count ?? 0 })
+  }
+
   const handleEntryClick = async () => {
     setEntryErr('')
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     if (profile?.role !== 'seller') { router.push('/login'); return }
+    // プロフィールが未完成なら、申込フォームを開かずに不足項目を出す
+    const miss = await checkProfile(user.id)
+    setProfileMissing(miss)
+    if (miss.length > 0) return
     setShowEntry(true)
   }
 
@@ -361,6 +383,17 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
     setSubmitting(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setEntryErr('ログインが必要です'); setSubmitting(false); return }
+    // 送信の直前にもう一度確かめる。別のタブでプロフィールを空に戻した場合や、
+    // 画面を開いたままにしていた場合に、未完成のまま申込が入るのを防ぐ
+    const missNow = await checkProfile(user.id)
+    if (missNow.length > 0) {
+      setProfileMissing(missNow)
+      // フォームは閉じない。閉じると選んだ日付が見えなくなり、
+      // 何が起きたのか分からないまま画面が変わってしまう
+      setEntryErr('プロフィールに未入力の項目があります：' + missNow.map(m => m.label).join('、'))
+      setSubmitting(false)
+      return
+    }
     // 選んだ日ごとに1行ずつ申込を作成（日付が無い案件は1件だけ作成）
     const rows: { place_id: string; seller_id: string; format: string; apply_date: string | null; status: string }[] =
       dates.length > 0
@@ -662,6 +695,27 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                 </div>
               </div>
               <div style={{ padding: '20px' }}>
+                {/* プロフィールが未完成のときの案内。
+                    分岐（募集終了／完了／エントリー済み／未開封／フォーム）より手前に1回だけ置く。
+                    以前は「未開封」の枝の中にだけ置いていたため、同じ案件に申込履歴がある人が
+                    「別の日程を追加でエントリーする」を押すと画面が何も変わらず、
+                    ボタンが壊れているように見えた（2026-09-24 の反映前チェックで判明）。
+                    送信直前の確認で止まったときも、ここに出る */}
+                {profileMissing.length > 0 && !place.closed && (
+                  <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 900, color: '#DC2626', marginBottom: '6px' }}>
+                      プロフィールの入力が必要です（未入力 {profileMissing.length}件）
+                    </div>
+                    <div className='jp-text' style={{ fontSize: '12px', color: '#7F1D1D', lineHeight: 1.8, marginBottom: '10px' }}>
+                      出店が決まると、ここに入れた内容がそのまま施設へ提出されます。
+                      すべて入力すると、この案件に申し込めます。
+                      <br /><strong>未入力：{profileMissing.map(m => m.label).join('、')}</strong>
+                    </div>
+                    <Link href='/dashboard/seller' style={{ display: 'block', background: '#DC2626', color: '#fff', textAlign: 'center', padding: '11px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', textDecoration: 'none' }}>
+                      プロフィールを入力する
+                    </Link>
+                  </div>
+                )}
                 {/* 募集が終わった案件は、掲載は残したままエントリーだけ止める */}
                 {place.closed ? (
                   <div style={{ textAlign: 'center' }}>
@@ -688,7 +742,10 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                     {calendarDays.length > 0 && (
                       <button
                         type='button'
-                        onClick={() => { setEntryErr(''); setEntryDone(false); setShowEntry(true) }}
+                        // ここも handleEntryClick と同じ確認を通す。
+                        // 素通しにすると、未入力の人がフォームを開いてから
+                        // 送信の直前で止められることになる
+                        onClick={async () => { setEntryErr(''); setEntryDone(false); await handleEntryClick() }}
                         style={{ width: '100%', marginTop: '10px', background: 'transparent', border: '2px solid #F5A623', color: '#E08A00', textAlign: 'center', padding: '12px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
                       >
                         続けて別の日をエントリーする

@@ -12,6 +12,7 @@ import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
 import { dayFeeOf, hasMinGuarantee, hasFormatMin } from '../../lib/placeFee'
 import { selectWithOptionalColumn } from '../../lib/optionalColumn'
 import { showsToSeller } from '../../lib/cancelledVisibility'
+import { missingSellerFields, usesVehicle, PROFILE_REQUIRED_NOTE, PROFILE_PRIVACY_NOTE } from '../../lib/sellerProfile'
 import { syncSalesToSheet } from '../../lib/sheetSync'
 import OnsiteSteps from './OnsiteSteps'
 import SiteSubmissionForm from './SiteSubmissionForm'
@@ -168,6 +169,36 @@ export default function SellerDashboard() {
   const [menuPhotoUrl, setMenuPhotoUrl] = useState("")
   const [menuPhotoUploading, setMenuPhotoUploading] = useState(false)
   const [menuSaving, setMenuSaving] = useState(false)
+
+  // 必須項目の不足。保存前の検査・「必須」の印・上部の呼びかけで同じものを使う
+  // （定義は app/lib/sellerProfile.ts。案件への申込の入口も同じものを読む）。
+  // 入力中の値で数えるので、埋めた項目の印はその場で「入力済み」に変わる
+  const areasNow = areasInput.split(/[・,、]/).map(x => x.trim()).filter(Boolean)
+  // 決済は自由記述（payOther）も入力として数える（保存する値と同じ式）
+  const paymentsNow = Array.from(new Set([
+    ...profileForm.payment_methods.filter(x => PAY_OPTIONS.includes(x)),
+    ...payOther.split(/[・、,]/).map(x => x.trim()).filter(Boolean),
+  ]))
+  const missingNow = missingSellerFields({ ...profileForm, areas: areasNow, payment_methods: paymentsNow, photos, menuCount: menus.length })
+  const missNow = (key: string) => missingNow.some(m => m.key === key)
+  // 必須の印。空欄なら赤で「必須」、埋まっていれば緑で「入力済み」。
+  // 車種・車両サイズは、車両を使わない販売形態（テント・店頭出店）では「任意」と出す。
+  // ここで「入力済み」と出すと、空欄なのに埋まっているように見えてしまう
+  const reqMark = (key: string) => {
+    const vehicleOff = (key === 'vehicle_type' || key === 'size') && !usesVehicle(profileForm.sales_type)
+    if (vehicleOff) {
+      return <span style={{ fontSize: '10px', fontWeight: 700, marginLeft: '6px', borderRadius: '3px', padding: '1px 5px', color: '#64748B', background: '#F1F5F9' }}>任意</span>
+    }
+    const bad = missNow(key)
+    return (
+      <span style={{ fontSize: '10px', fontWeight: 900, marginLeft: '6px', borderRadius: '3px', padding: '1px 5px', color: bad ? '#DC2626' : '#16A34A', background: bad ? '#FEE2E2' : '#ECFDF5' }}>
+        {bad ? '必須' : '入力済み'}
+      </span>
+    )
+  }
+
+  // 保存済みの内容での不足。どのタブでも出す呼びかけに使う
+  const missingSaved = missingSellerFields({ ...profile, photos, menuCount: menus.length })
 
   // 自分のプロフィールとSNSを読み込む
   const loadProfile = async () => {
@@ -328,6 +359,13 @@ export default function SellerDashboard() {
 
   // 公開を申請する（unsubmitted/rejected -> pending）
   const requestPublish = async () => {
+    // 未入力のまま公開申請できると、中身の無い出店者ページが公開される
+    // （運営が承認してから気付いても、直すのは出店者しかできない）
+    if (missingSaved.length > 0) {
+      showNotice('公開の申請には、プロフィールの入力が必要です：' + missingSaved.map(m => m.label).join('、'))
+      setTab('profile')
+      return
+    }
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
     if (!uid) return
@@ -376,6 +414,18 @@ export default function SellerDashboard() {
     // SNSは押せば開く完全なURLにして保存する。表示名だけのときは、ここで止めて直してもらう。
     // プロフィール本体を保存する前に確かめる。あとで止めると、本体だけ保存されて
     // SNSは古いまま、という中途半端な状態になる
+    // 未入力があっても保存は通す（2026-09-24 の反映前チェックで方針を決め直した）。
+    //
+    // 止めると、既存の出店者1,379人が「途中まで入れて保存」できず、
+    // 1件も残らないまま毎回やり直しになる（5項目以上足りない人が1,374人）。
+    // 電話番号の訂正やSNSのURL変更もできなくなり、運営が代行する手段も無い
+    // （profiles に管理者用のUPDATE権限が無く、サービスロールの入口は
+    // CSVの一括上書きだけなので「電話だけ直す」ができない）。
+    //
+    // 必須（app/lib/sellerProfile.ts の15項目）は、
+    //   ・画面の赤い案内と各欄の「必須」バッジで伝える
+    //   ・公開申請（requestPublish）と案件への申込（app/places/[id]）で止める
+    // の2つで効かせる。入力してもらう目的はそこで達成できる
     const normalized: Record<string, string> = {}
     for (const pf of platforms) {
       const r = parseSns(pf.key, snsForm[pf.key])
@@ -1269,6 +1319,21 @@ export default function SellerDashboard() {
 
         <div style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
 
+          {/* プロフィールが未完成なら、どのタブでも気付けるように出す。
+              未完成のあいだは案件に申し込めないので、ここで気付けないと
+              申込の画面で初めて止められることになる */}
+          {missingSaved.length > 0 && tab !== 'profile' && (
+            <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#DC2626', marginBottom: '4px' }}>プロフィールに未入力の項目が{missingSaved.length}件あります</div>
+                <div style={{ fontSize: '12px', color: '#7F1D1D', lineHeight: 1.7 }}>
+                  すべて入力すると案件に申し込めます。未入力：{missingSaved.map(m => m.label).join('、')}
+                </div>
+              </div>
+              <button onClick={() => setTab('profile')} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>プロフィールを入力する</button>
+            </div>
+          )}
+
           {/* 売上報告がまだの出店があれば、どのタブでも気付けるように出す */}
           {unreported.length > 0 && tab !== 'sales' && (
             <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px' }}>
@@ -2123,7 +2188,20 @@ export default function SellerDashboard() {
             })()}
             <div className='admin-two-col' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px' }}>
-                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '16px' }}>基本情報</div>
+                <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>基本情報</div>
+                {/* 記載率が低いので呼びかけを出す。1,386人のうち全部そろっていたのは7人だけで、
+                    車両種別・車両サイズ・紹介文は99%が空だった（2026-09-24 実測）。
+                    運営が申込のたびに個別に催促していたため、入口で伝える */}
+                <div style={{ background: missingSaved.length > 0 ? '#FEF2F2' : '#ECFDF5', border: '1px solid ' + (missingSaved.length > 0 ? '#FECACA' : '#BBF7D0'), borderRadius: '8px', padding: '10px 12px', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 900, color: missingSaved.length > 0 ? '#DC2626' : '#16A34A', marginBottom: '4px' }}>
+                    {missingSaved.length > 0 ? `未入力の項目が${missingSaved.length}件あります` : 'すべての項目が入力されています'}
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.7 }}>
+                    {PROFILE_REQUIRED_NOTE}
+                    <br />{PROFILE_PRIVACY_NOTE}
+                    {missingSaved.length > 0 && <><br /><strong style={{ color: '#DC2626' }}>未入力：{missingSaved.map(m => m.label).join('、')}</strong></>}
+                  </div>
+                </div>
                 {!profileEdit ? (
                   <>
                     {[
@@ -2185,13 +2263,13 @@ export default function SellerDashboard() {
                       { label: '電話番号', key: 'phone', ph: '例：090-1234-5678' },
                     ].map(fld => (
                       <div key={fld.key} style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{fld.label}</div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{fld.label}{reqMark(fld.key)}</div>
                         <input value={(profileForm as any)[fld.key]} onChange={e => setProfileForm({ ...profileForm, [fld.key]: e.target.value })} placeholder={fld.ph} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                       </div>
                     ))}
                     {/* 店舗・商品写真（最大8枚） */}
                     <div style={{ marginBottom: '16px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>店舗・商品写真（最大8枚）</div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>店舗・商品写真（最大8枚）{reqMark('photos')}</div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                         {photos.map((url, i) => (
                           <div key={i} style={{ position: 'relative', paddingTop: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
@@ -2216,7 +2294,7 @@ export default function SellerDashboard() {
 
                     {/* 提供メニュー */}
                     <div style={{ marginBottom: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>提供メニュー</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>提供メニュー{reqMark('menus')}</div>
 
                       {/* 登録済みメニュー一覧 */}
                       {menus.length > 0 && (
@@ -2272,13 +2350,13 @@ export default function SellerDashboard() {
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>紹介文・特徴</div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>紹介文・特徴{reqMark('bio')}</div>
                       <textarea value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder='お店や商品の魅力、こだわりなどを自由にご記入ください' rows={3} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>販売形態</div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>販売形態{reqMark('sales_type')}</div>
                         <select value={profileForm.sales_type} onChange={e => setProfileForm({ ...profileForm, sales_type: e.target.value })} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box', background: '#fff' }}>
                           <option value=''>選択してください</option>
                           {/* 選択肢に無い既存の値は消えないように先頭に残す */}
@@ -2287,7 +2365,7 @@ export default function SellerDashboard() {
                         </select>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>車種</div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>車種{reqMark('vehicle_type')}</div>
                         <input value={profileForm.vehicle_type} onChange={e => setProfileForm({ ...profileForm, vehicle_type: e.target.value })} placeholder='例：軽トラック' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                       </div>
                     </div>
@@ -2295,7 +2373,7 @@ export default function SellerDashboard() {
                     <div style={{ marginBottom: '12px' }}>
                       {/* サイズは書き方がばらばらだと募集者が見比べられないため、
                           mm の数字だけを受け取り、下に確定する表記を出す */}
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>車両サイズ（単位：mm）</div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>車両サイズ（単位：mm）{reqMark('size')}</div>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         {([
                           ['size_length', '全長', '3440'],
@@ -2322,7 +2400,7 @@ export default function SellerDashboard() {
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>設備</div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>設備{reqMark('equipment')}</div>
                       <input value={profileForm.equipment} onChange={e => setProfileForm({ ...profileForm, equipment: e.target.value })} placeholder='例：給排水タンク、発電機、冷蔵庫' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                     </div>
 
@@ -2337,7 +2415,7 @@ export default function SellerDashboard() {
                       </div>
 
                       <div style={{ marginBottom: '10px' }}>
-                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>テイクアウトの袋</div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>テイクアウトの袋{reqMark('takeout_bag')}</div>
                         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                           {(['無料', '有料'] as const).map(v => {
                             const isPaid = profileForm.takeout_bag.startsWith('有料')
@@ -2363,7 +2441,7 @@ export default function SellerDashboard() {
                       </div>
 
                       <div>
-                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>利用できる決済（複数選択できます）</div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>利用できる決済（複数選択できます）{reqMark('payment_methods')}</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
                           {PAY_OPTIONS.map(v => {
                             const on = profileForm.payment_methods.includes(v)
@@ -2399,7 +2477,7 @@ export default function SellerDashboard() {
                         列（profiles.menu）は消していないので、過去の内容は管理画面から見られる。 */}
 
                     <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>ジャンル（複数選択できます）</div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>ジャンル（複数選択できます）{reqMark('genre')}</div>
                       {(() => {
                         const selected = parseGenres(profileForm.genre)
                         const toggle = (v: string) => {
@@ -2423,7 +2501,7 @@ export default function SellerDashboard() {
                       })()}
                     </div>
                     <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>活動エリア（「・」や「,」区切りで複数可）</div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>活動エリア（「・」や「,」区切りで複数可）{reqMark('areas')}</div>
                       <input value={areasInput} onChange={e => setAreasInput(e.target.value)} placeholder='例：東京都・神奈川県' style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', boxSizing: 'border-box' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
