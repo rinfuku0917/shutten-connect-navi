@@ -299,6 +299,14 @@ img[width='1'][height='1'] { display: inline !important; }
 .sellers-hero-icon { height: 84px; width: auto; }
 @media (max-width: 640px) { .sellers-hero-icon { height: 52px; } }
 
+/* 出店者一覧のカードの写真（app/sellers/SellersBrowser.tsx）。
+   25行目の img{height:auto} は型セレクタなので Tailwind の h-full より弱いが、
+   Tailwind のユーティリティは @layer の中にあり、レイヤー外のこの指定に負ける。
+   そのため高さはクラスで指定する（.sellers-hero-icon と同じ理由）。
+   object-fit: contain なのは、出店者の写真の4枚に1枚が縦長で、
+   cover だと上下が切られて何の車か分からなくなるため（2026-09-24 の指摘）。 */
+.seller-card-photo { height: 100%; width: 100%; object-fit: contain; }
+
 /* ===== 請求書の印刷 =====
    用紙の余白は @page 側で持たせ、紙面は幅100%で流し込む。
    固定幅(596pt)＋余白0だと環境によって印刷領域から外れ、

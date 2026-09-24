@@ -9,19 +9,28 @@ export type SellerLike = {
   photos: string[] | null
 }
 
-// 法人名は屋号ではないので、一覧では店名として出さない。
-// 「株式会社◯◯」と並んでも、どんな車か分からないため。
+// 法人名（株式会社◯◯など）も一覧に出す。
+//
+// 以前は「法人名は屋号ではないので出さない」としていたが、
+// 詳細ページは shop_name をそのまま出しているため、
+// 一覧では「（店名未登録）」なのに開くと「モバコン株式会社」と出る食い違いがあった
+// （2026-09-24 に指摘。168件が該当）。運営の判断で、会社名も屋号も出すことにした。
+//
+// 本名（profiles.name）は出さない。これは公開用ビュー public_sellers に
+// 本名の列が無いことで担保している（supabase/migrations/20260919_public_sellers_no_name.sql）。
+// ここで扱う shop_name は出店者が「店舗名」として自分で入れた値。
 const CORPORATE_MARKERS = ['株式会社', '合同会社', '有限会社', '合資会社', '合名会社', '(株)', '（株）', '(有)', '（有）']
 
+/** 法人名かどうか。並び順や表示の出し分けには使っていないが、
+ *  「会社名か屋号か」を見分けたい場面のために残している */
 export function isCorporateName(name: string): boolean {
   return CORPORATE_MARKERS.some((m) => name.includes(m))
 }
 
-/** 一覧に出す店名。出せるものが無ければ null（カードは「（店名未登録）」になる） */
+/** 一覧に出す店名。空のときだけ null（カードは「（店名未登録）」になる） */
 export function displayShopName(s: SellerLike): string | null {
   const name = (s.shop_name ?? '').trim()
-  if (!name || isCorporateName(name)) return null
-  return name
+  return name || null
 }
 
 export function hasPhoto(s: SellerLike): boolean {

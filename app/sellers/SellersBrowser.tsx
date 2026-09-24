@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { thumbnailUrl } from '../lib/postImage'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { displayShopName } from './sellerName'
 
@@ -232,8 +233,27 @@ export default function SellersBrowser({ initialSellers }: { initialSellers: Sel
             return (
               <li key={s.id}>
                 <Link href={`/sellers/${s.id}`} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
-                  <div className="aspect-[16/10] w-full overflow-hidden bg-amber-50" style={s.photos && s.photos.length > 0 ? { backgroundImage: `url(${s.photos[0]})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
-                    {(!s.photos || s.photos.length === 0) && (
+                  {/* 写真の見せ方（2026-09-24 に変更）。
+                      以前は CSS の背景画像（background-size: cover）で、枠は16:10の横長だった。
+                      出店者の写真の4枚に1枚は縦長（実測：25枚中6枚）で、
+                      横長の枠に cover で入れると上下が切られ、何の車か分からなくなっていた。
+                      ・枠を正方形にし、object-contain で写真を切らずに全体を出す
+                        （縦長・横長のどちらでも大きく見え、カードの高さもそろう）
+                      ・背景画像ではなく img にする（縦横の情報を持つ写真の向きが正しく出る。
+                        背景画像はEXIFの向きを見ない）
+                      ・thumbnailUrl で縮小して配信する。元は1枚1〜3MBで、
+                        30枚並ぶ一覧では数十MBを読み込んでいた */}
+                  <div className="flex aspect-square w-full items-center justify-center overflow-hidden bg-amber-50">
+                    {s.photos && s.photos.length > 0 ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumbnailUrl(s.photos[0], 640)}
+                        alt={displayShopName(s) ?? '出店者の写真'}
+                        loading="lazy"
+                        decoding="async"
+                        className="seller-card-photo"
+                      />
+                    ) : (
                       <div className="flex h-full w-full items-center justify-center text-4xl font-bold text-amber-300">
                         {(displayShopName(s) || '店').trim().charAt(0)}
                       </div>
