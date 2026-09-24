@@ -6,7 +6,7 @@
 //
 // 本文はマークダウンで、画像は ![説明](https://...) の形で入っている。
 
-import { OWN_HOSTS } from './seo'
+import { OWN_HOSTS, SITE_URL } from './seo'
 
 // 一覧のサムネイル用に、小さく変換したURLを返す。
 //
@@ -43,11 +43,41 @@ export function isOptimizableImage(src: string): boolean {
   return src.includes('.supabase.co/storage/v1/object/public/') || isOwnCover(src)
 }
 
+// 自サイトの表紙画像のURLを、いまの正規ドメインにそろえる。
+//
+// なぜ要るか（2026-09-24）:
+//   DB の記事本文には、ドメインを移す前に書いた記事の表紙が
+//   https://app.connect-navi.com/covers/... の絶対URLで残っている。
+//   そのまま出すと、公開ページのHTMLに旧ドメインが並び（記事15本＋一覧＋トップ）、
+//   画像も旧ドメインの308を1回はさんでから届く。
+//   /covers/ の中身はどちらのドメインでも同じファイルなので、付け替えて問題ない。
+//   DB を書き換えないのは、記事の本文に触らずに済むため（元の記事の記録も残る）。
+export function coverOnSiteUrl(src: string): string {
+  if (!isOwnCover(src)) return src
+  try {
+    const u = new URL(src)
+    if (u.origin === SITE_URL) return src
+    return SITE_URL + u.pathname
+  } catch {
+    return src
+  }
+}
+
+// 記事本文の中の表紙画像のURLも、いまの正規ドメインにそろえる。
+// 本文をマークダウンから組み立てる前に通す
+export function coverHostsOnSiteUrl(content: string): string {
+  return content.replace(
+    /https:\/\/([a-z0-9.-]+)\/covers\//g,
+    (whole, host: string) => (OWN_HOSTS.includes(host) ? `${SITE_URL}/covers/` : whole),
+  )
+}
+
 export function firstImage(content: string | null | undefined): string | null {
   if (!content) return null
   const md = content.match(/!\[[^\]]*\]\((https:\/\/[^)\s]+)\)/)
-  if (md) return md[1]
+  // 旧ドメインのままの表紙は、いまの正規ドメインにそろえて返す
+  if (md) return coverOnSiteUrl(md[1])
   // 念のため、HTMLの img タグで書かれている場合も拾う
   const html = content.match(/<img[^>]+src=["'](https:\/\/[^"']+)["']/)
-  return html ? html[1] : null
+  return html ? coverOnSiteUrl(html[1]) : null
 }

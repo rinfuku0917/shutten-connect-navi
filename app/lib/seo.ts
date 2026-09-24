@@ -6,18 +6,19 @@
 
 // サイトの正規URL（末尾スラッシュなし）。
 //
-// 本番は今 app.connect-navi.com だが、旧 WordPress の connect-navi.com（ルート）へ
-// 移る予定がある。canonical・サイトマップ・メール本文のリンクなどが
-// ドメインを直書きしていると、切り替え当日に何十か所も書き換えることになり、
-// 漏れた所が古いドメインを指したまま残る。
+// 本番は connect-navi.com（2026-09 にルートへ移行済み。app.connect-navi.com は
+// Vercel に残したまま、同じパスへ308で転送している）。
+// canonical・サイトマップ・メール本文のリンクなどがドメインを直書きしていると、
+// 切り替えのたびに何十か所も書き換えることになり、漏れた所が古いドメインを指したまま残る。
 // そこで Vercel の環境変数 NEXT_PUBLIC_SITE_URL の1か所から読む。
-// 未設定なら今の本番の値にしておき、切り替えの日まで見た目も canonical も変えない。
+// 未設定のときの値も、移行が済んだので新ドメインにしてある
+// （旧ドメインのままだと、環境変数が外れた拍子に全ページの canonical が旧ドメインに戻る）。
 //
 // NEXT_PUBLIC_ を付けているのは、会員登録画面などブラウザ側のコードでも
 // 同じ値を使うため。この値はビルド時に埋め込まれるので、変えたら再デプロイが要る。
 // process.env.NEXT_PUBLIC_SITE_URL は変数に入れずにこの形で書く
 // （別の書き方にすると Next がブラウザ向けに値を埋め込まない）。
-const DEFAULT_SITE_URL = 'https://app.connect-navi.com'
+const DEFAULT_SITE_URL = 'https://connect-navi.com'
 
 function resolveSiteUrl(raw: string | undefined): string {
   const value = (raw ?? '').trim()

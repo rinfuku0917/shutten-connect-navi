@@ -9,7 +9,7 @@ import SiteFooter from '../../components/SiteFooter'
 import PostCta from '../../components/PostCta'
 import JsonLd from '../../components/JsonLd'
 import { SITE_URL, OG_DEFAULT_IMAGE, breadcrumbJsonLd, organizationRef } from '../../lib/seo'
-import { firstImage } from '../../lib/postImage'
+import { firstImage, coverHostsOnSiteUrl } from '../../lib/postImage'
 import { preparePostBody, extractFaq, boldForJapanese } from '../../lib/postBody'
 import { POST_IMAGE_SIZES } from '../../lib/postImageSizes'
 import RelatedPlaces, { fetchRelatedPlaces } from '../../components/RelatedPlaces'
@@ -97,7 +97,8 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   if (!post) notFound()
 
   // 日本語の太字が崩れないよう、先に <strong> にしてから変換する（postBody.ts）
-  let raw = await marked.parse(boldForJapanese(post.content))
+  // 本文に残っている旧ドメインの表紙URLを、いまの正規ドメインにそろえる
+  let raw = await marked.parse(boldForJapanese(coverHostsOnSiteUrl(post.content)))
   raw = raw.split('<table>').join('<div class="table-wrap"><table>')
   raw = raw.split('</table>').join('</table></div>')
   // 本文中の h1 を h2 に落とし、h2 に id を振って目次を作る
