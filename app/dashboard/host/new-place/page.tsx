@@ -8,7 +8,7 @@ import FormatFeesEditor, { type FormatFeesValue } from '../../../components/Form
 import DowPresets from '../../../components/DowPresets'
 import { geocodeAddress } from '../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../lib/categories'
-import { toYen, buildMinGuaranteeJson, type FeeSource } from '../../../lib/placeFee'
+import { toYen, buildMinGuaranteeJson, type FeeSource, perEventConflict } from '../../../lib/placeFee'
 import { isMissingColumn } from '../../../lib/optionalColumn'
 import PlaceImagePicker from '../../../components/PlaceImagePicker'
 
@@ -765,6 +765,35 @@ async function refreshPublicPages(placeId?: string) {
                 固定額は1日ごとではなく、期間で1回のみ
               </label>
             </div>
+            {/* 「期間で1回」と「日ごとの金額」の同時入力を知らせる。
+                単位を持てるのは上の固定額だけで、形態ごと・日程ごとの金額は
+                必ず1日あたりとして計算されるため、混ざると日数分が請求される
+                （2026-09-25：3日間で8万円の案件が24万円になっていた）。
+                保存は止めない。判定は app/lib/placeFee.ts の perEventConflict */}
+            {(() => {
+              const conflict = perEventConflict({ ...placeFeeSrc, format_fees: formatFees })
+              if (!conflict) return null
+              return (
+                <div style={{background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:'8px',padding:'12px 14px',marginBottom:'12px'}}>
+                  <div style={{fontSize:'13px',fontWeight:900,color:'#DC2626',marginBottom:'6px'}}>
+                    「期間で1回」と「日ごとの金額」が混ざっています
+                  </div>
+                  <div className='jp-text' style={{fontSize:'12px',color:'#7F1D1D',lineHeight:1.9}}>
+                    「期間で1回のみ」にチェックが入っていますが、{conflict.where.join('・')}が入っています。
+                    計算はそちらを先に見るため、<strong>1日あたり {conflict.dayTotal.toLocaleString()}円</strong>として扱われます。
+                    {conflict.days > 1 && (
+                      <>
+                        <br />
+                        日程が{conflict.days}日あるので、全日申し込まれると
+                        <strong style={{color:'#DC2626'}}> {conflict.wouldCharge.toLocaleString()}円</strong>の請求になります。
+                      </>
+                    )}
+                    <br />
+                    期間で1回の金額にするなら、{conflict.where.join('・')}を空にしてください。
+                  </div>
+                </div>
+              )
+            })()}
             {/* 最低保証（歩合が少ない日の下限）。
                 「売上の20%。ただし売上が悪くても平日2,000円はいただく」という案件のための欄。
                 歩合で計算した額がこの額を下回った日は、この額になる（固定額との合算ではない） */}

@@ -628,6 +628,84 @@ export function minNoteOf(p: FeeSource, format?: string | null, prefix = '最低
   return one == null ? '' : prefix + yen(one) + '/日'
 }
 
+/** 「期間で1回」の単位と「日ごとの金額」が同時に入っている状態。
+ *  入っていると日ごとの金額が優先され、日数分が請求される */
+export type PerEventConflict = {
+  /** 1日あたりとして計算される額（施設＋弊社） */
+  dayTotal: number
+  /** 日程に入っている日数 */
+  days: number
+  /** そのまま全日申し込まれたときの請求額 */
+  wouldCharge: number
+  /** どこに日額が入っているか（画面の案内に使う） */
+  where: string[]
+}
+
+/**
+ * 「期間で1回」と「日ごとの金額」の同時入力を見つける。
+ *
+ * なぜ要るか（2026-09-25 の事故）:
+ *   美食EXPO in三重（3日間で80,000円）で、案件全体は「期間で1回 80,000円」と
+ *   正しく設定されていたのに、形態ごとと日程ごとにも 60,000＋20,000 が入っていた。
+ *   計算（dayFeeOf）は 形態 → 日程 → 平日/土日祝 → 案件全体 の順に見るので、
+ *   形態の額が勝ち、3日申し込むと 80,000×3＝240,000円（本来の3倍）になっていた。
+ *   単位（per_event）を持てるのは案件全体だけで、形態と日程の金額は必ず
+ *   「1日あたり」として扱われる。この食い違いは画面からは見えないため、
+ *   入力した時点で気づけるようにする。
+ *
+ * 見つけても保存は止めない（料金の欄は自由入力のまま、という決めごとに合わせる）。
+ * 気づくための案内だけを出す。
+ */
+export function perEventConflict(p: FeeSource): PerEventConflict | null {
+  const perEvent = p.place_fixed_unit === 'per_event' || p.company_fixed_unit === 'per_event'
+  if (!perEvent) return null
+
+  const where: string[] = []
+  // 形態ごとの金額（平日・土日祝のどちらでも）
+  const ff = p.format_fees
+  if (ff && typeof ff === 'object') {
+    for (const [name, v] of Object.entries(ff as Record<string, FormatFee>)) {
+      const has = (x: unknown) => typeof x === 'number' && x > 0
+      const w = v?.weekend
+      if (has(v?.placeFee) || has(v?.companyFee) || has(w?.placeFee) || has(w?.companyFee)) {
+        where.push(`形態「${name}」の金額`)
+      }
+    }
+  }
+  // 日程ごとの金額
+  const sch = Array.isArray(p.schedule) ? (p.schedule as ScheduleDay[]) : []
+  if (sch.some(d => (typeof d?.placeFee === 'number' && d.placeFee > 0) || (typeof d?.companyFee === 'number' && d.companyFee > 0))) {
+    where.push('日程ごとの金額')
+  }
+  // 平日／土日祝の金額
+  if (hasDayTypeFee(p.day_type_fees)) where.push('平日・土日祝の金額')
+
+  if (where.length === 0) return null
+
+  // 実際にいくら請求されるか。1日目の額を代表に取る（日ごとに違えば合計で見る）
+  const days = sch.filter(d => d?.date).length
+  const dayOf = (date: string | null) => {
+    const fmt = formatFee(p.format_fees, firstFormatName(p.format_fees), date)
+    const day = perDayFee(p.schedule, date)
+    const dt = dayTypeFee(p.day_type_fees, date)
+    const place = fmt.placeFee ?? day.placeFee ?? dt.placeFee ?? 0
+    const company = fmt.companyFee ?? day.companyFee ?? dt.companyFee ?? 0
+    return place + company
+  }
+  const totals = sch.filter(d => d?.date).map(d => dayOf(d.date))
+  const wouldCharge = totals.reduce((a, b) => a + b, 0)
+  const dayTotal = totals.length > 0 ? Math.max(...totals) : dayOf(null)
+  if (dayTotal <= 0) return null
+  return { dayTotal, days, wouldCharge, where }
+}
+
+/** 形態ごとの設定の先頭の名前。同時入力の検査で「代表の額」を見るのに使う */
+function firstFormatName(ff: unknown): string | null {
+  if (!ff || typeof ff !== 'object') return null
+  const keys = Object.keys(ff as Record<string, unknown>)
+  return keys.length > 0 ? keys[0] : null
+}
+
 /** カレンダーの1マスに出す、その日1日分の出店料 */
 export type DayFeeLabel = {
   /** その日に払う額（円）。売上に応じて決まる日・「期間で1回」の案件は null */

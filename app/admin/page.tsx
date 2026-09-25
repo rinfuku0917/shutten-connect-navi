@@ -13,7 +13,7 @@ import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { compareByTitle } from '../lib/placeSort'
-import { hasDayTypeFee, hasMinGuarantee, hasFormatFees, hasFormatMin, dayFeeOf, feeCondition, allowedFormats, buildMinGuaranteeJson, toYen, type FeeSource } from '../lib/placeFee'
+import { hasDayTypeFee, hasMinGuarantee, hasFormatFees, hasFormatMin, dayFeeOf, feeCondition, allowedFormats, buildMinGuaranteeJson, toYen, type FeeSource, perEventConflict } from '../lib/placeFee'
 import { selectWithOptionalColumn, isMissingColumn } from '../lib/optionalColumn'
 import { cancelResultMessage } from '../lib/purgeLog'
 import { hasLikeWildcard, hasOrReservedChar, likePattern, LIKE_SEARCH_NG_MESSAGE } from '../lib/likeSearch'
@@ -2617,6 +2617,46 @@ const previewDoc = async (fileUrl: string) => {
                       <div><label style={{fontSize: '12px',color: '#64748B'}}>単位</label><select value={ff.company_fixed_unit} onChange={e=>setFeeForm({...ff, company_fixed_unit: e.target.value})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px'}}><option value= 'per_day'>1日あたり</option><option value= 'per_event'>期間で1回</option></select></div>
                       <div><label style={{fontSize: '12px',color: '#64748B'}}>歩合（%）</label><input type= 'number' value={ff.company_share_pct === 0 ? '' : ff.company_share_pct} onChange={e=>setFeeForm({...ff, company_share_pct: parseInt(e.target.value)||0})} style={{width: '100%',border: '1.5px solid #E2E8F0',borderRadius: '8px',padding: '8px',fontSize: '13px',boxSizing: 'border-box'}} /></div>
                     </div>
+                    {/* 「期間で1回」と「日ごとの金額」の同時入力を知らせる。
+                        単位を持てるのは案件全体だけで、形態ごと・日程ごとの金額は
+                        必ず1日あたりとして計算される。混ざっていると日数分が請求される
+                        （2026-09-25：美食EXPO in三重が 80,000円×3日＝240,000円になっていた）。
+                        保存は止めない（料金の欄は自由入力のままにする決めごと）。
+                        判定は app/lib/placeFee.ts の perEventConflict が唯一の正 */}
+                    {(() => {
+                      // 入力中の値で見る（保存前に気づけるように）。
+                      // 組み立て方は、この画面の「例示」で使っている exPlace と同じ
+                      const conflict = perEventConflict({
+                        price_fixed: ff.price_fixed, place_fixed_unit: ff.place_fixed_unit,
+                        company_fixed_amount: ff.company_fixed_amount, company_fixed_unit: ff.company_fixed_unit,
+                        price_share_pct: ff.price_share_pct, company_share_pct: ff.company_share_pct,
+                        day_type_fees: buildDayTypeFees(),
+                        format_fees: feePlace.format_fees,
+                        schedule: feeSchedule?.id === feePlace.id ? feeSchedule.schedule : null,
+                      })
+                      if (!conflict) return null
+                      return (
+                        <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 900, color: '#DC2626', marginBottom: '6px' }}>
+                            「期間で1回」と「日ごとの金額」が混ざっています
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#7F1D1D', lineHeight: 1.9 }}>
+                            単位に「期間で1回」を選んでいますが、{conflict.where.join('・')}が入っています。
+                            計算はそちらを先に見るため、<strong>1日あたり {conflict.dayTotal.toLocaleString()}円</strong>として扱われます。
+                            {conflict.days > 1 && (
+                              <>
+                                <br />
+                                この案件は日程が{conflict.days}日あるので、全日申し込まれると
+                                <strong style={{ color: '#DC2626' }}> {conflict.wouldCharge.toLocaleString()}円</strong>の請求になります。
+                              </>
+                            )}
+                            <br />
+                            期間で1回の金額にするなら、{conflict.where.join('・')}を空にしてください。
+                          </div>
+                        </div>
+                      )
+                    })()}
+
                     {/* 平日と土日祝で金額が変わる案件のための欄。
                         入れた場合は、上の固定額の代わりにこちらを使う。
                         祝日は土日と同じ扱いにする。 */}
