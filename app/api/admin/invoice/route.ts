@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireCaller, denyNotAdmin, roleCheckFailedResponse } from '../../../lib/apiAuth'
-import { feeCondition, dayFeeOf, minTotalOn } from '../../../lib/placeFee'
+import { feeCondition, dayFeeOf, minTotalOn, perEventFeeOf, perEventConflict, type FeeSource } from '../../../lib/placeFee'
 import { selectWithOptionalColumn } from '../../../lib/optionalColumn'
 import { sendSalesToSheet } from '../../../lib/sheetSend'
 
@@ -369,12 +369,51 @@ export async function POST(req: Request) {
       const title = (typeof label === 'string' && label.trim())
         ? label.trim()
         : `${placeTitle || '出店'} 出店料（事前）`
-      // 出店日ごとに1行。日付が無い申込（旧データ）でも1行は出す
+
+      // 「期間で1回のみ」の案件は、選んだ日数を掛けない。
+      //
+      // なぜ（2026-09-25 の運営からの指摘）:
+      //   3日間で税抜8万円の美食EXPO in三重で3日をまとめると、
+      //   80,000×3＝240,000円（税込264,000円）で発行される作りだった。
+      //   運営は「1日だけチェックする」という覚え方で回避していたが、
+      //   それだと残りの2日に請求済みの印が付かず、二重請求の入口が残る。
+      //
+      // 単位は画面から受け取らず、案件の設定から読む（画面の言い値で請求額を変えない）。
+      //
+      // 1回だけにするのは「案件の額がまるごと期間ぶん」のときに限る。
+      // 施設分だけ期間で1回・弊社分は日ごと、のように混ざっている案件を1回にすると
+      // 今度は少なく請求してしまう。形態ごと・日程ごと・平日土日に日額が
+      // 残っている案件（perEventConflict が見つけるもの）も同じなので、
+      // 迷いがあるときはこれまでどおり「1日あたり×日数」に任せる。
+      const advPlaceId = apps[0]?.place_id || null
+      let once = false
+      let perEventOnce = 0
+      if (advPlaceId) {
+        const advCols = 'price_fixed, place_fixed_unit, company_fixed_amount, company_fixed_unit, price_share_pct, company_share_pct, schedule, day_type_fees, format_fees'
+        const { data: advPlace } = await selectWithOptionalColumn<FeeSource>(withMin => admin
+          .from('places')
+          .select(advCols + (withMin ? ', min_guarantee' : ''))
+          .eq('id', advPlaceId).maybeSingle())
+        if (advPlace) {
+          perEventOnce = perEventFeeOf(advPlace)
+          const wholeAmount = (advPlace.price_fixed || 0) + (advPlace.company_fixed_amount || 0)
+          once = perEventOnce > 0
+            && perEventOnce === wholeAmount
+            && perEventConflict(advPlace) === null
+        }
+      }
+
+      // 出店日ごとに1行。日付が無い申込（旧データ）でも1行は出す。
+      // 期間で1回の案件も日ごとに行を残す。どの出店日が請求済みかは
+      // items[].applicationId で見ているので（上の重複の警告）、行を1本にまとめると
+      // 残りの日があとから二重に請求できてしまう
       const advItems = (apps.length > 0 ? apps : [null]).map((a, i) => ({
         no: i + 1, saleId: null, applicationId: a?.id ?? null,
-        date: mdLabel(a?.apply_date), title, amount: yen,
+        date: mdLabel(a?.apply_date),
+        title: once && i > 0 ? `${title}（期間ぶんに含む）` : title,
+        amount: once && i > 0 ? 0 : yen,
       }))
-      const advSubtotal = yen * advItems.length
+      const advSubtotal = once ? yen : yen * advItems.length
       const advTax = Math.floor(advSubtotal * 0.1)
       // 対象月は出店日の月（同じ月しか混ざらないことは上で確かめている）。
       // 日付の無い申込だけのときは、画面から来た period を使う

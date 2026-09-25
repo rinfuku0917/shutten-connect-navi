@@ -9,7 +9,7 @@ import SiteHeader from '../../components/SiteHeader'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
-import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, minNoteOf, dayFeeLabelOn, type FormatFees } from '../../lib/placeFee'
+import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, dayFeeLabelOn, perEventFeeOf, type FormatFees } from '../../lib/placeFee'
 import ApplyDateCalendar, { type CalendarDay } from '../../components/ApplyDateCalendar'
 import { showsToSeller } from '../../lib/cancelledVisibility'
 import { missingSellerFields, SELLER_PROFILE_COLUMNS } from '../../lib/sellerProfile'
@@ -820,20 +820,14 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                           設定していない案件は、これまでどおり全部出す */}
                       {allowedFormats(place.format_fees).map(opt => {
                         const ff = formatFeeOf(place.format_fees, opt)
-                        // その形態の金額。空欄の項目は案件全体の設定を使う
-                        const fixed = (ff?.placeFee ?? place.price_fixed ?? 0) + (ff?.companyFee ?? place.company_fixed_amount ?? 0)
-                        const pct = (ff?.sharePct ?? place.price_share_pct ?? 0) + (ff?.companySharePct ?? place.company_share_pct ?? 0)
-                        // 土日祝だけ金額が違う形態は、両方を出す。
-                        // 1つしか出さないと、実際に請求される額と食い違って見える
-                        const we = ff?.weekend
-                        const weFixed = (we && (typeof we.placeFee === 'number' || typeof we.companyFee === 'number'))
-                          ? (we.placeFee ?? ff?.placeFee ?? place.price_fixed ?? 0) + (we.companyFee ?? ff?.companyFee ?? place.company_fixed_amount ?? 0)
-                          : null
-                        const splitFee = weFixed != null && weFixed !== fixed
                         const dows = sortedDows(ff?.dows)
-                        // 最低保証（形態ごと → 案件全体）。文の作りは
-                        // app/lib/placeFee.ts に集めてある（画面ごとに言い方を変えない）
-                        const minNote = minNoteOf(place, opt)
+                        // 金額の文は app/lib/placeFee.ts の feeCondition で作る。
+                        // 以前はここで price_fixed と company_fixed_amount を手で足し、
+                        // 単位を見ずに「円/日」と直書きしていた。そのため
+                        // 「期間で1回のみ」の案件が「80,000円/日」と出て、3日間で8万円の案件が
+                        // 1日8万円に見えていた（2026-09-25 の運営からの指摘）。
+                        // 平日/土日祝の出し分け・歩合・最低保証も feeCondition が同じ言い方で作る
+                        const { parts: feeParts, minNote, empty: feeEmpty } = feeCondition(place, opt)
                         return (
                           <label key={opt} style={{ display: 'block', cursor: 'pointer', border: format === opt ? '2px solid #F5A623' : '1px solid #E5E7EB', borderRadius: '8px', padding: '12px 14px', fontSize: '14px', color: '#1a1a1a', background: format === opt ? '#FFFBEB' : '#fff' }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -844,15 +838,14 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                             {ff && (
                               <span style={{ display: 'block', marginTop: '6px', paddingLeft: '26px', fontSize: '12.5px', color: '#475569', lineHeight: 1.8 }}>
                                 出店料：
-                                {fixed === 0 && pct === 0 && !splitFee && !minNote
+                                {feeEmpty
                                   ? <span style={{ color: '#B45309' }}>要相談</span>
-                                  : <>
-                                      {splitFee
-                                        ? <><strong>平日 {fixed.toLocaleString()}円/日</strong>{' ／ '}<strong>土日祝 {weFixed!.toLocaleString()}円/日</strong></>
-                                        : fixed > 0 && <strong>{fixed.toLocaleString()}円/日</strong>}
-                                      {(splitFee || fixed > 0) && pct > 0 && ' ＋ '}
-                                      {pct > 0 && <strong>売上の{pct}%</strong>}
-                                    </>}
+                                  : feeParts.map((part, i) => (
+                                      <Fragment key={part}>
+                                        {i > 0 ? ' ＋ ' : ''}
+                                        <strong className='nowrap-unit'>{part}</strong>
+                                      </Fragment>
+                                    ))}
                                 {/* 最低保証。歩合しか無い形態（売上が少ない日でもこの額）は、
                                     これが出ないと当日の負担が分からない */}
                                 {minNote && <><br /><strong style={{ color: '#B45309' }}>{minNote}</strong>（売上が少ない日は、この額をいただきます）</>}
@@ -878,6 +871,7 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                           onSelectMany={dates => setSelectedDates(prev => Array.from(new Set([...prev, ...dates])))}
                           onClearMonth={dates => setSelectedDates(prev => prev.filter(d => !dates.includes(d)))}
                           feeState={!canSeeFee ? 'login' : !format ? 'format' : 'ok'}
+                          periodFee={perEventFeeOf(place)}
                         />
                         {/* 選んだ形式で出店できない曜日があるときは、理由を文でも出す。
                             マスが灰色になっているだけでは、なぜ選べないのか分からない */}

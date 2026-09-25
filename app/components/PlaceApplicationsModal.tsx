@@ -9,7 +9,7 @@ import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionX
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { cancelResultMessage } from '../lib/purgeLog'
-import { dayFeeOf, type FeeSource } from '../lib/placeFee'
+import { dayFeeOf, perEventFeeOf, perEventConflict, type FeeSource } from '../lib/placeFee'
 import { selectWithOptionalColumn } from '../lib/optionalColumn'
 
 // 案件ごとの応募者一覧。
@@ -174,6 +174,14 @@ export default function PlaceApplicationsModal({
   // いま選んでいる出店日と、その日の設定額。
   // 請求は「1日あたり×日数」なので、日によって額が違うとそのままでは合わない。
   // 画面の案内も合計の警告も、この一覧から作る（1日目だけを見ないため）
+  // 「期間で1回のみ」の案件かどうか。判定は app/api/admin/invoice/route.ts の once と同じ条件で、
+  // 案件の額がまるごと期間ぶんのときだけ true にする。
+  // 混ざっている案件（施設分だけ期間で1回など）を1回にすると少なく請求してしまう
+  const advPeriodFee = feeSrc ? perEventFeeOf(feeSrc) : 0
+  const advOnce = advPeriodFee > 0
+    && advPeriodFee === ((feeSrc?.price_fixed || 0) + (feeSrc?.company_fixed_amount || 0))
+    && feeSrc != null && perEventConflict(feeSrc) === null
+  // いま選んでいる出店日と、その日の設定額。
   const advSelDays = advAsk
     ? advAsk.dates.filter(d => advSel.has(d.id))
       .map(d => ({ label: d.label, yen: advanceBaseFor(d.date, advAsk.format) }))
@@ -1174,20 +1182,30 @@ export default function PlaceApplicationsModal({
               )}
               <div>
                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  {advAsk.dates.length > 1 ? '1日あたりの金額（税抜）' : '金額（税抜）'}
-                  {(() => {
-                    // いま選んでいる出店日の設定額を出す（平日/土日祝・形態・最低保証まで見る）。
-                    // 1日目だけを見ていたため、選び直しても表示が変わらなかった
-                    const each = advSelDays.map(d => d.yen).filter(y => y > 0)
-                    const uniq = Array.from(new Set(each))
-                    if (uniq.length !== 1) return null
-                    return <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{uniq[0].toLocaleString()}円／日</span>
-                  })()}
+                  {advOnce ? '金額（税抜・期間ぶん）' : advAsk.dates.length > 1 ? '1日あたりの金額（税抜）' : '金額（税抜）'}
+                  {advOnce
+                    ? <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{advPeriodFee.toLocaleString()}円／期間</span>
+                    : (() => {
+                        // いま選んでいる出店日の設定額を出す（平日/土日祝・形態・最低保証まで見る）。
+                        // 1日目だけを見ていたため、選び直しても表示が変わらなかった
+                        const each = advSelDays.map(d => d.yen).filter(y => y > 0)
+                        const uniq = Array.from(new Set(each))
+                        if (uniq.length !== 1) return null
+                        return <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{uniq[0].toLocaleString()}円／日</span>
+                      })()}
                 </div>
                 {/* 事前請求は「1日あたり×日数」で計算するため、平日と土日祝で
                     金額が違う案件（最低保証が平日2,000円・土日祝7,500円など）で
                     両方を1枚にまとめると、片方の額で全日を請求してしまう */}
+                {advOnce && advSel.size > 1 && (
+                  <div style={{ fontSize: '11.5px', color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px', lineHeight: 1.8 }}>
+                    この案件の出店料は<strong>期間で1回</strong>です。{advSel.size}日を選んでいますが、
+                    <strong>日数は掛けません</strong>。明細は出店日ごとに{advSel.size}行並び、金額は先頭の1行に入ります
+                    （残りの日も請求済みとして記録されるので、あとから二重に請求されません）。
+                  </div>
+                )}
                 {(() => {
+                  if (advOnce) return null
                   const each = advSelDays.map(d => d.yen).filter(y => y > 0)
                   if (Array.from(new Set(each)).length < 2) return null
                   const sum = each.reduce((t, y) => t + y, 0)
@@ -1211,10 +1229,13 @@ export default function PlaceApplicationsModal({
                   {advAmount && (() => {
                     const per = parseInt(advAmount, 10) || 0
                     const n = Math.max(1, advSel.size)
-                    const sub = per * n
+                    // 期間で1回の案件は日数を掛けない（API 側の once と同じ判定）
+                    const sub = advOnce ? per : per * n
                     return (
                       <span style={{ fontSize: '12px', color: '#94A3B8' }}>
-                        {n > 1 && <>{n}日分で {sub.toLocaleString()}円、</>}
+                        {n > 1 && (advOnce
+                          ? <>{n}日分まとめて {sub.toLocaleString()}円、</>
+                          : <>{n}日分で {sub.toLocaleString()}円、</>)}
                         消費税10%を足して <strong style={{ color: '#B45309' }}>
                           {(sub + Math.floor(sub * 0.1)).toLocaleString()}円
                         </strong>

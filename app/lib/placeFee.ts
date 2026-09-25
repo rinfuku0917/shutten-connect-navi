@@ -642,6 +642,18 @@ export type PerEventConflict = {
 }
 
 /**
+ * 「期間で1回のみ」として入れてある額の合計（施設分＋弊社分）。
+ *
+ * 日ごとの計算（dayFeeOf）はこの額を0として捨てるので、日数ぶん増えない。
+ * 申込のカレンダーの合計と請求は、この額を日数によらず1回だけ足す。
+ * 画面側で price_fixed と company_fixed_amount を手で足さないよう、ここに置く。
+ */
+export function perEventFeeOf(p: FeeSource): number {
+  return (p.place_fixed_unit === 'per_event' ? (p.price_fixed || 0) : 0)
+    + (p.company_fixed_unit === 'per_event' ? (p.company_fixed_amount || 0) : 0)
+}
+
+/**
  * 「期間で1回」と「日ごとの金額」の同時入力を見つける。
  *
  * なぜ要るか（2026-09-25 の事故）:
@@ -769,7 +781,6 @@ export type FeeCondition = {
  */
 export function feeCondition(p: FeeSource, format?: string | null, date?: string | null): FeeCondition {
   const parts: string[] = []
-  const unit = p.place_fixed_unit === 'per_event' || p.company_fixed_unit === 'per_event' ? '期間' : '日'
 
   // 固定額。優先順位は dayFeeOf と同じ（形態 → 日程の各日 → 案件の平日土日 → 案件全体）
   const fmtWd = formatFee(p.format_fees, format, SAMPLE_WEEKDAY)
@@ -781,11 +792,22 @@ export function feeCondition(p: FeeSource, format?: string | null, date?: string
   const fmtWeT = sideTotal(fmtWe)
   const dtWdT = sideTotal(dtWd)
   const dtWeT = sideTotal(dtWe)
+  // 案件全体の固定額。施設分と弊社分は単位を別々に持てるので、1つの数字にまとめない。
+  //
+  // まとめていたときに何が起きたか（2026-09-25 の運営からの指摘）:
+  //   施設60,000円/日 ＋ 弊社20,000円/期間 と入れた案件が「60,000円/期間」と表示され、
+  //   弊社分が消えたうえ、日額に「/期間」の単位が付いていた。
+  //   逆の組み合わせでは「20,000円/期間」と、日額のほうだけが出ていた。
+  //   片方だけ「期間で1回のみ」にした案件は、どの組み合わせでも嘘の額になっていた。
   const placesFixed = (p.place_fixed_unit === 'per_event' ? 0 : (p.price_fixed || 0))
     + (p.company_fixed_unit === 'per_event' ? 0 : (p.company_fixed_amount || 0))
-  const placesFixedRaw = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
+  const placesPerEvent = (p.place_fixed_unit === 'per_event' ? (p.price_fixed || 0) : 0)
+    + (p.company_fixed_unit === 'per_event' ? (p.company_fixed_amount || 0) : 0)
 
   const perDay = (t: number) => yen(t) + '/日'
+  // 「期間で1回のみ」の額。日ごとの計算には入らない（dayFeeOf が0を返す）ので、
+  // 日額とは別の項として添える
+  const perEventText = placesPerEvent > 0 ? yen(placesPerEvent) + '/期間' : ''
   const twoSided = (wd: string, we: string) => '平日' + wd + ' ／ 土日祝' + we
   const rangeText = range
     ? (range.min === range.max ? perDay(range.min) : yen(range.min) + '〜' + yen(range.max) + '/日')
@@ -802,8 +824,8 @@ export function feeCondition(p: FeeSource, format?: string | null, date?: string
     const fmtD = sideTotal(formatFee(p.format_fees, format, date))
     const dayD = sideTotal(perDayFee(p.schedule, date))
     const dtD = sideTotal(dayTypeFee(p.day_type_fees, date))
-    const one = fmtD != null ? fmtD : dayD != null ? dayD : dtD != null ? dtD : (placesFixedRaw > 0 ? placesFixed || placesFixedRaw : null)
-    if (one != null && one > 0) parts.push(yen(one) + '/' + (fmtD != null || dayD != null || dtD != null ? '日' : unit))
+    const one = fmtD != null ? fmtD : dayD != null ? dayD : dtD != null ? dtD : (placesFixed > 0 ? placesFixed : null)
+    if (one != null && one > 0) parts.push(perDay(one))
   } else if (fmtWdT != null || fmtWeT != null) {
     const wd = fmtWdT != null ? perDay(fmtWdT) : belowFormat(dtWdT)
     const we = fmtWeT != null ? perDay(fmtWeT) : belowFormat(dtWeT)
@@ -816,10 +838,13 @@ export function feeCondition(p: FeeSource, format?: string | null, date?: string
     const we = dtWeT != null ? perDay(dtWeT) : colText
     if (wd !== we) parts.push(twoSided(wd || perDay(0), we || perDay(0)))
     else if (wd && wd !== perDay(0)) parts.push(wd)
-  } else if (placesFixedRaw > 0) {
-    // 「期間で1回」の固定額は日ごとの計算では0だが、表示では条件として出す
-    parts.push(yen(placesFixed > 0 ? placesFixed : placesFixedRaw) + '/' + unit)
+  } else if (placesFixed > 0) {
+    parts.push(perDay(placesFixed))
   }
+
+  // 「期間で1回のみ」の額は、上のどの枝を通っても日額とは別に添える。
+  // 形態ごとの日額と併用している案件もあるため、枝の中に入れない
+  if (perEventText) parts.push(perEventText)
 
   // 歩合（計算と同じ読み出し。値域の外は設定ミスとして捨てる）
   const { placePct, companyPct } = sharePctOn(p, format)

@@ -69,6 +69,7 @@ export default function ApplyDateCalendar({
   onSelectMany,
   onClearMonth,
   feeState,
+  periodFee = 0,
 }: {
   days: CalendarDay[]
   selected: string[]
@@ -77,6 +78,16 @@ export default function ApplyDateCalendar({
   onSelectMany: (dates: string[]) => void
   /** 当月の選択を解除 */
   onClearMonth: (dates: string[]) => void
+  /**
+   * 「期間で1回のみ」の出店料（app/lib/placeFee.ts の perEventFeeOf）。
+   * 日数によらず1回だけ合計に足す。
+   *
+   * なぜ要るか（2026-09-25 の運営からの指摘）:
+   *   3日間で8万円のイベントで3日選んでも、合計が0円のまま
+   *   「期間で1回の出店料のため、合計には入れていません」と出るだけだった。
+   *   申し込む人は自分が幾ら払うのか分からない。
+   */
+  periodFee?: number | null
   /** 金額を出せるか。
    *   'ok'     … 出す
    *   'login'  … 未ログイン（案件詳細のほかの金額と同じく鍵を出す）
@@ -152,14 +163,19 @@ export default function ApplyDateCalendar({
   // 入れると払う額を多く見せてしまう
   const stuck = chosen.filter(d => d.disabled || d.applied)
   const usable = chosen.filter(d => !d.disabled && !d.applied)
+  // 「期間で1回のみ」の額は、1日でも選んだら1回だけ足す。日数を掛けない
+  const period = usable.length > 0 && (periodFee ?? 0) > 0 ? (periodFee as number) : 0
   // 選んだ日の合計。歩合だけの日は額が決まらないので、件数を添えて別に伝える
-  const sum = usable.reduce((a, d) => a + (d.amount ?? 0), 0)
+  const sum = usable.reduce((a, d) => a + (d.amount ?? 0), 0) + period
   // 額が決まらない日は理由が3通りある（歩合・期間で1回・要相談）。
   // まとめて「売上に応じて決まる」と書くと、期間で1回の案件や
-  // 金額が未設定の案件に事実と違う説明が出る
+  // 金額が未設定の案件に事実と違う説明が出る。
+  // 「期間」の日は、期間ぶんの額を合計に入れられたなら理由を出さない
+  // （「合計に入れていません」と書きながら合計に入っていることになる）
   const openByNote = ['歩合', '期間', '相談'].map(n => ({
     note: n,
-    count: usable.filter(d => d.amount == null && d.amountNote === n).length,
+    count: n === '期間' && period > 0 ? 0
+      : usable.filter(d => d.amount == null && d.amountNote === n).length,
   })).filter(x => x.count > 0)
   const OPEN_TEXT: Record<string, string> = {
     '歩合': '売上に応じて決まるため',
@@ -339,6 +355,13 @@ export default function ApplyDateCalendar({
         {feeState === 'format' && (
           <div style={{ fontSize: '11.5px', color: BROWN, marginBottom: '6px' }}>
             上で出店形式を選ぶと、1日ごとの出店料と合計が出ます
+          </div>
+        )}
+        {/* 期間ぶんの額は日数を掛けないので、そのことを合計のそばで言う。
+            言わないと「3日選んだのに1日分しか足されていない」と読まれる */}
+        {canSeeFee && period > 0 && (
+          <div style={{ fontSize: '11.5px', color: BROWN, marginBottom: '6px' }}>
+            うち {period.toLocaleString()}円 は期間ぶんの出店料です（何日選んでも1回だけ）
           </div>
         )}
         {chosen.length === 0
