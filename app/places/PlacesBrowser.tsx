@@ -10,7 +10,7 @@ import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACE_CATEGORIES } from '../lib/categories'
 import { compareByTitle } from '../lib/placeSort'
-import { hasMinGuarantee, hasFormatMin, hasFormatFees, allowedFormats } from '../lib/placeFee'
+import { hasFormatFees, allowedFormats, feeCondition } from '../lib/placeFee'
 import ClosedRibbon from '../components/ClosedRibbon'
 
 // 地図はSSRでLeafletを読むと壊れるのでクライアントのみで読み込む
@@ -50,24 +50,32 @@ export type Place = {
 // 管理画面で自由に入力した文言（fee）は長さも区切りも決まっていないので、
 // まとまりを作れない。こちらは文字列のまま返し、表示側の .jp-text に折り返しを任せる。
 function feeText(p: Place): ReactNode {
-  const fixed = (p.price_fixed || 0) + (p.company_fixed_amount || 0)
-  const pct = (p.price_share_pct || 0) + (p.company_share_pct || 0)
-  // 最低保証があるかどうかだけを出す（額は詳細ページ）。
-  // 一覧は289件を1回で読むので、カードに額まで並べると
-  // 平日と土日祝で2種類・形態ごとにも別、と長くなって表が崩れる
-  const hasMin = hasMinGuarantee(p.min_guarantee)
-    || (hasFormatFees(p.format_fees) && allowedFormats(p.format_fees).some(f => hasFormatMin(p.format_fees, f)))
-  if (fixed === 0 && pct === 0 && !hasMin) return p.fee || '要相談'
-  const unit = p.place_fixed_unit === 'per_event' ? '期間' : '日'
-  const parts: string[] = []
-  if (fixed > 0) parts.push(fixed.toLocaleString() + '円/' + unit)
-  if (pct > 0) parts.push('売上の' + pct + '%')
+  // 金額の組み立ては app/lib/placeFee.ts の feeCondition に任せる。
+  //
+  // 以前はここで自前に足していた（(price_fixed||0)+(company_fixed_amount||0) など）。
+  // そのため案件全体の列しか見ておらず、形態ごとに金額を入れた案件では
+  // 一覧と詳細ページで違う額が出ていた
+  //   例）晴海ふ頭公園：一覧「売上の10%」／詳細「売上の15%」
+  //       （案件全体は弊社10%、形態は施設10%＋弊社5%）
+  //   2026-09-25 に運営から報告。公開中290件のうち2件が該当。
+  // 詳細ページ（app/places/[id]/PlaceDetailClient.tsx の feeNodes）と同じ読み方にそろえる。
+  const fmts = hasFormatFees(p.format_fees) ? allowedFormats(p.format_fees) : []
+  const solo = fmts.length === 1 ? fmts[0] : null
+  const { parts, minNote, empty } = feeCondition(p, solo)
+  // 金額を登録していない案件は、募集者が書いた文言をそのまま出す
+  if (empty) return p.fee || '要相談'
   return (
     <>
       {parts.map((part, i) => (
         <span key={part}>{i > 0 ? ' ＋ ' : null}<span className='nowrap-unit'>{part}</span></span>
       ))}
-      {hasMin && <span className='nowrap-unit'>（最低保証あり）</span>}
+      {/* 最低保証は「あるかどうか」だけを出す（額は詳細ページ）。
+          一覧は290件を1回で読むので、カードに額まで並べると
+          平日と土日祝で2種類・形態ごとにも別、と長くなって表が崩れる */}
+      {minNote && <span className='nowrap-unit'>（最低保証あり）</span>}
+      {/* 形態によって金額が違う案件は、ここに出した額が全形態に当てはまらない。
+          詳細ページと同じ注記を出す */}
+      {fmts.length > 1 && <span className='nowrap-unit'>（形態により異なります）</span>}
     </>
   )
 }
