@@ -283,6 +283,7 @@ export default function EventVendorPage() {
               </div>
               <p className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.9, margin: 0 }}>
                 ご自身で募集を出し、応募のあった出店者とやり取りしていただく形であれば、掲載料・登録料・成約手数料はかかりません。
+                掲載は<strong>承認制</strong>で、出店料などの条件を確認したうえで公開します。
                 出店者への声かけから当日の運営、書類の申請までお任せいただく場合のみ、上記とは別に費用を申し受けます。
                 金額は<strong>応相談</strong>です。台数や開催日数、会場の条件によって変わるため、内容をうかがったうえでお見積りします。
               </p>

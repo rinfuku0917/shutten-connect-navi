@@ -194,7 +194,9 @@ export default async function VendorPage() {
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
           <h2 className='jp-head sec-head' style={H2}>掲載は無料です<Image src='/ic-v-free.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
-            募集の掲載に費用はかかりません。
+            募集の掲載に費用はかかりません。掲載は<strong>承認制</strong>です。
+            <br />
+            出店料などの条件を確認したうえで公開しますので、ご登録後に担当者からご連絡いたします。
             <br />
             どこまでを弊社にお任せいただくかで、2つの形からお選びいただけます。
           </p>

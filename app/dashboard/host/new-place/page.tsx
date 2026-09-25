@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { Suspense, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { isWeekendOrHoliday } from '../../../lib/jpHoliday'
 import FormatFeesEditor, { type FormatFeesValue } from '../../../components/FormatFeesEditor'
@@ -210,12 +210,14 @@ function NewPlacePageInner() {
   const prefs = ['選択してください','北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県']
   const inputStyle = {width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',marginTop:'8px',boxSizing:'border-box' as const,color:'#1a1a1a',background:'#fff'}
 
-  const router = useRouter()
   // 写真は最大4枚。1枚目が一覧に出るサムネイルになる。
   const [imageFiles, setImageFiles] = useState<File[]>([])
   // 募集者が手動で「急募」にできる（自動判定は開催7日前から）
   const [urgent, setUrgent] = useState(false)
   const [saving, setSaving] = useState(false)
+  // 登録し終えたか。承認制にしたので、元の画面へ戻すのではなく
+  // 「運営の確認後に公開されます」を伝える画面を出す
+  const [submitted, setSubmitted] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
   const handleSubmit = async () => {
@@ -281,7 +283,18 @@ function NewPlacePageInner() {
       urgent: urgent,
       latitude: geo?.lat ?? null,
       longitude: geo?.lon ?? null,
-      status: 'published',
+      // 募集者が作った案件は下書きで入れる（2026-09-25 から承認制）。
+      //
+      // なぜ承認制にしたか:
+      //   出店料の歩合は、募集者が入れた値が「弊社の取り分」として保存される作り
+      //   （上の buildFeeColumns のコメント）。募集者はそれを知らずに数字を入れるため、
+      //   そのまま公開すると、出店者に約束した条件をあとから直せなくなる
+      //   （出店者から見ると値上げになる）。公開前に運営が条件を確認する。
+      //   「掲載は無料・ただし承認制」は /vendor と /vendor/event にも明記した。
+      //
+      // 公開は運営が管理画面から行う（app/admin の案件一覧の「公開する」）。
+      // 下書きのまま埋もれないよう、登録のあとで運営へ通知する（下の notify）
+      status: 'draft',
       details: pickDetails(form),
     }
     // min_guarantee は移行SQLを流すまで列が無い。
@@ -293,8 +306,21 @@ function NewPlacePageInner() {
       if (!insErr && minGuarantee) setErrMsg('最低保証はまだ保存できません（データベースの列が未作成です）。ほかの内容は登録しました。')
     }
     if(insErr) { setErrMsg('登録失敗: ' + insErr.message); setSaving(false); return }
+    // 運営へ知らせる。下書きのまま気づかれないと、掲載の機会をそのまま逃す。
+    // 失敗しても登録は成立させる（通知が1通落ちるだけ）
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      await fetch('/api/notify/new-place', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + (sess.session?.access_token || ''),
+        },
+        body: JSON.stringify({ title: form.title, prefecture: form.prefecture, days: schedule.filter(d => d.date).length }),
+      })
+    } catch { /* 通知の失敗で登録を止めない */ }
     await refreshPublicPages()
-    router.push(backTo)
+    setSubmitted(true)
   }
 
 // 保存した内容を公開ページにすぐ反映させる（キャッシュを作り直す）
@@ -317,6 +343,33 @@ async function refreshPublicPages(placeId?: string) {
       {label}
     </label>
   )
+
+  // 登録し終えたあとの画面。承認制なので、この場では公開されない
+  if (submitted) {
+    return (
+      <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
+        <div style={{maxWidth:'640px',margin:'0 auto',padding:'60px 24px'}}>
+          <div style={{background:'#fff',border:'1px solid #E7DCC8',borderRadius:'14px',padding:'32px 28px',textAlign:'center'}}>
+            <div style={{fontSize:'40px',marginBottom:'10px'}}>📝</div>
+            <h1 className='jp-head' style={{fontSize:'20px',fontWeight:900,color:'#1a1a1a',marginBottom:'12px'}}>募集内容をお預かりしました</h1>
+            <p className='jp-text' style={{fontSize:'14px',color:'#475569',lineHeight:1.95,marginBottom:'18px'}}>
+              掲載は<strong>承認制</strong>です。担当者が出店料などの条件を確認したうえで公開いたします。
+              <br />
+              内容についてご相談がある場合は、こちらからご連絡いたします。
+            </p>
+            <div style={{background:'#FFF9E6',border:'1px solid #FFE0A0',borderRadius:'10px',padding:'14px 16px',textAlign:'left',marginBottom:'20px'}}>
+              <div style={{fontSize:'12.5px',fontWeight:900,color:'#B45309',marginBottom:'6px'}}>出店料について</div>
+              <div className='jp-text' style={{fontSize:'12.5px',color:'#7F1D1D',lineHeight:1.9}}>
+                ご入力いただいた金額は、出店者が支払う総額です。
+                内訳（施設の受取分・弊社の手数料）は、担当者との打ち合わせで決定します。
+              </div>
+            </div>
+            <Link href={backTo} style={{display:'block',background:'#F5A623',color:'#fff',textAlign:'center',padding:'13px',borderRadius:'8px',fontWeight:900,fontSize:'14px',textDecoration:'none'}}>マイページへ戻る</Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{minHeight:'100vh',background:'#FFF9E6'}}>
