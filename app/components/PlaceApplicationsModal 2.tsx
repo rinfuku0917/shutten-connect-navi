@@ -1,0 +1,1384 @@
+'use client'
+import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { supabase } from '../lib/supabase'
+import ConfirmDialog from './ConfirmDialog'
+import NotifyChoice from './NotifyChoice'
+import SubmissionPanel from './SubmissionPanel'
+import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionXlsx'
+import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
+import { fetchAdminSellerNames } from '../lib/adminSellerNames'
+import { cancelResultMessage } from '../lib/purgeLog'
+import { dayFeeOf, perEventFeeOf, perEventConflict, type FeeSource } from '../lib/placeFee'
+import { selectWithOptionalColumn } from '../lib/optionalColumn'
+
+// 案件ごとの応募者一覧。
+//
+// これまで応募者を見られるのは「出店承認」タブだけで、そこには
+// 承認待ちのものしか出ていなかった。承認・不採用を済ませると一覧から
+// 消えてしまい、「この案件に誰が応募したか」を後から確認できなかった。
+// ここでは状態を問わず、その案件のすべての応募を出す。
+//
+// 申込は「出店希望日ごとに1行」で作られる。1社が3日申し込むと3件に
+// なるため、そのまま並べると何社いるのか分からない。出店者ごとに
+// まとめて、日付を中に並べる。
+
+type Row = {
+  id: string
+  apply_date: string | null
+  format: string | null
+  status: string
+  seller_id: string
+  created_at: string | null
+  // 取り消したとき。経緯を追えるように残す
+  cancelled_at?: string | null
+  cancel_reason?: string | null
+}
+
+type Seller = {
+  id: string
+  shopName: string
+  repName: string
+  email: string
+  phone: string
+  address: string
+  genre: string
+  areas: string
+  salesType: string
+  vehicleType: string
+  size: string
+  equipment: string
+  menu: string
+  bio: string
+  docsOk: number
+  docsTotal: number
+  rows: Row[]
+  /** この案件のために出店者が入力したかどうか。提出用Excelはその内容で作られる */
+  hasSubmission: boolean
+  /** 出店者がこの案件あてに書いた連絡事項。提出用Excelには載せない */
+  siteNote: string
+}
+
+const LABEL: Record<string, { text: string; bg: string; fg: string }> = {
+  pending: { text: '承認待ち', bg: '#FFF7ED', fg: '#C2410C' },
+  approved: { text: '承認済み', bg: '#ECFDF5', fg: '#047857' },
+  rejected: { text: '不採用', bg: '#FEF2F2', fg: '#B91C1C' },
+  cancelled: { text: '取消し', bg: '#F1F5F9', fg: '#475569' },
+}
+
+function badge(status: string) {
+  return LABEL[status] ?? { text: status || '不明', bg: '#F1F5F9', fg: '#475569' }
+}
+
+function size(l?: number | null, w?: number | null, h?: number | null) {
+  const v = [l, w, h].filter(x => x !== null && x !== undefined && x !== 0)
+  if (v.length === 0) return ''
+  return `${l ?? '-'} × ${w ?? '-'} × ${h ?? '-'} cm`
+}
+
+function fmtDate(s: string | null) {
+  if (!s) return '日程の指定なし'
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return s
+  const w = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
+  return `${d.getMonth() + 1}月${d.getDate()}日（${w}）`
+}
+
+export default function PlaceApplicationsModal({
+  placeId,
+  placeTitle,
+  onClose,
+  onOpenDocs,
+  onOpenMessages,
+}: {
+  placeId: string
+  placeTitle: string
+  onClose: () => void
+  /** 書類の件数を押したときに、その出店者の書類審査へ移動する */
+  onOpenDocs?: (sellerId: string, sellerName: string) => void
+  /**
+   * 申込ごとのやり取りを開く。
+   * 出店承認の画面にしか無かった動線を、いつも見るこの一覧にも置くため
+   * （2026-09-20 に運営から要望）。申込（日付）ごとにやり取りが分かれるので、
+   * 渡すのは申込のID
+   */
+  onOpenMessages?: (applicationId: string, sellerName: string) => void
+}) {
+  const [loading, setLoading] = useState(true)
+  const [sellers, setSellers] = useState<Seller[]>([])
+  const [err, setErr] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
+  // 「現場ごとの入力あり」を押して中身を開いている出店者
+  const [openSub, setOpenSub] = useState<string | null>(null)
+
+  // 承認・不採用は出店者にメールが飛ぶので、必ず確認をはさむ
+  const [ask, setAsk] = useState<{ id: string; status: 'approved' | 'rejected'; who: string; when: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [askErr, setAskErr] = useState<string | null>(null)
+  // 承認・不採用のときにメールを送るかどうか。既定は送る
+  const [notify, setNotify] = useState(true)
+
+  // 承認済みの出店の取消し。
+  // この一覧は管理画面からしか開かれないため、ここに置いている。
+  // 出店者・募集者の画面には取消しの入口を作らない方針
+  // （「連絡すれば消せる」と分かるとキャンセルが増えるため、
+  //   運営が連絡を受けて処理する形を守る）。
+  // 念のためAPI側でも role='admin' を確かめている。
+  const [cxAsk, setCxAsk] = useState<{ id: string; who: string; when: string } | null>(null)
+  const [cxBusy, setCxBusy] = useState(false)
+  const [cxErr, setCxErr] = useState<string | null>(null)
+  const [cxReason, setCxReason] = useState('')
+  // サーバに「お金の記録があるため取り消せない」と弾かれた状態。
+  // 理由を見せたまま、それでも赤いボタンが押せる、という見た目を防ぐ
+  const [cxBlocked, setCxBlocked] = useState(false)
+
+  const REASONS = ['体調不良', '車両の故障', '日程の重複', '天候', '出店者の都合', 'その他']
+
+  // 事前請求。大きなイベントでは出店料を先に払ってもらい、
+  // 当日の売上の◯％はそのあと別に請求する。ここは前者を作る。
+  // 売上が無くても発行できる（まだ出店していないので当然無い）。
+  const [advAsk, setAdvAsk] = useState<{
+    id: string; sellerId: string; who: string; when: string; date: string | null
+    /** 申込で選んだ形態。形態ごとに額が違う案件があるため、初期額の計算に使う */
+    format?: string | null
+    // この出店者の、同じ案件・同じ月の承認済みの出店日。2日間の催しなどを1枚にまとめるため。
+    // 月をまたぐ日は別の請求書になる（月ごとの締めのため）ので、ここには入れない
+    dates: { id: string; date: string | null; label: string }[]
+    // 別の月にある承認済みの出店日の数。あれば「別の請求書になります」と伝える
+    otherMonths: number
+  } | null>(null)
+  // まとめて請求する出店日（申込ID）。押した日は最初から入っている
+  const [advSel, setAdvSel] = useState<Set<string>>(new Set())
+  // 409 で返ってきた「すでに請求済みの日」。外して出し直す導線に使う
+  const [advOverlap, setAdvOverlap] = useState<{ applicationId: string; label: string }[] | null>(null)
+  const [advBusy, setAdvBusy] = useState(false)
+  const [advErr, setAdvErr] = useState<string | null>(null)
+  const [advAmount, setAdvAmount] = useState('')
+  const [advDue, setAdvDue] = useState('')
+  // 案件に固定額の設定があれば、金額の初期値に使う
+  const [placeFixed, setPlaceFixed] = useState(0)
+  // 事前請求の初期額を出すための、案件の料金設定。
+  //
+  // 以前は price_fixed + company_fixed_amount だけを見ていたため、
+  // 平日/土日祝で額を分けている案件・形態ごとに額を入れている案件・
+  // 歩合と最低保証だけの案件（イオンモール与野など）では初期値が0になり、
+  // 手入力のまま0円で通ってしまう状態だった。
+  // 額の出し方は計算と同じ dayFeeOf に任せる（売上0円の日＝下限の額）
+  const [feeSrc, setFeeSrc] = useState<FeeSource | null>(null)
+  // その出店日・その形態で、売上が無くてもいただく額（固定額または最低保証）
+  const advanceBaseFor = (date: string | null | undefined, format: string | null | undefined) => {
+    if (!feeSrc) return placeFixed
+    const t = dayFeeOf(feeSrc, format ?? null, date ?? null, 0).total
+    return t > 0 ? t : placeFixed
+  }
+  // いま選んでいる出店日と、その日の設定額。
+  // 請求は「1日あたり×日数」なので、日によって額が違うとそのままでは合わない。
+  // 画面の案内も合計の警告も、この一覧から作る（1日目だけを見ないため）
+  // 「期間で1回のみ」の案件かどうか。判定は app/api/admin/invoice/route.ts の once と同じ条件で、
+  // 案件の額がまるごと期間ぶんのときだけ true にする。
+  // 混ざっている案件（施設分だけ期間で1回など）を1回にすると少なく請求してしまう
+  const advPeriodFee = feeSrc ? perEventFeeOf(feeSrc) : 0
+  const advOnce = advPeriodFee > 0
+    && advPeriodFee === ((feeSrc?.price_fixed || 0) + (feeSrc?.company_fixed_amount || 0))
+    && feeSrc != null && perEventConflict(feeSrc) === null
+  // いま選んでいる出店日と、その日の設定額。
+  const advSelDays = advAsk
+    ? advAsk.dates.filter(d => advSel.has(d.id))
+      .map(d => ({ label: d.label, yen: advanceBaseFor(d.date, advAsk.format) }))
+    : []
+
+  // 同じ出店に事前請求が既にある場合、その番号を受け取ってここに入れる。
+  // 「発行済みを開く」か「それでも出し直す」かを選べるようにするため
+  const [advDup, setAdvDup] = useState<{ invoiceNo: string; total: number; dueOn: string | null; dates?: string[] }[] | null>(null)
+  // 発行できたときの番号。PDFを開く導線を出すのに使う
+  const [advDone, setAdvDone] = useState<string | null>(null)
+
+  // sel を渡すと、その選択で送る（「重なった日を外して発行」で使う。
+  // setAdvSel の反映を待たずに送れるように）
+  const runAdvance = async (force = false, sel?: Set<string>) => {
+    if (!advAsk) return
+    const use = sel ?? advSel
+    const yen = parseInt(advAmount.replace(/[^0-9]/g, ''), 10)
+    if (!yen || yen <= 0) { setAdvErr('金額を1円以上で入力してください。'); return }
+    setAdvBusy(true)
+    setAdvErr(null)
+    // 409 の表示（既存の番号・重なった日）は対で扱う。出し直しのときだけ消し、
+    // 通常の発行では応答で置き換える（通信失敗のときに導線が消えないように）
+    if (force) { setAdvDup(null); setAdvOverlap(null) }
+    try {
+      // サーバーは body の id を信じない。アクセストークンで本人確認する
+      const { data: sess } = await supabase.auth.getSession()
+      const token = sess.session?.access_token
+      if (!token) { setAdvErr('ログインしなおしてからお試しください。'); return }
+      const res = await fetch('/api/admin/invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({
+          action: 'advance',
+          sellerId: advAsk.sellerId,
+          applicationId: advAsk.id,
+          // 複数日をまとめるとき。1件だけでも同じ形で送る
+          applicationIds: Array.from(use.size > 0 ? use : new Set([advAsk.id])),
+          // 対象月は出店日の月。日付が入っていない申込のときだけ今月にする。
+          // 画面用に整えた文字列（「9月4日（金）」）からは年が取れないので、
+          // 生の apply_date（2026-10-05 の形）を使う
+          period: (advAsk.date && /^\d{4}-\d{2}/.test(advAsk.date))
+            ? advAsk.date.slice(0, 7)
+            : new Date().toISOString().slice(0, 7),
+          amount: yen,
+          dueOn: advDue || undefined,
+          force: force || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setAdvErr(json?.error || '発行できませんでした。')
+        // 既に出ている請求書の番号が返ってきたら、開く導線と出し直しを出す
+        if (json?.existing?.length) setAdvDup(json.existing)
+        if (json?.overlap?.length) setAdvOverlap(json.overlap)
+        return
+      }
+      setAdvAsk(null)
+      setAdvDup(null)
+      setAdvDone(json.invoiceNo)
+      const days = json.itemCount > 1 ? '・' + json.itemCount + '日分' : ''
+      setXlsxMsg('事前請求（' + json.invoiceNo + '／¥' + (json.total ?? 0).toLocaleString() + days + '）を発行しました。')
+    } catch {
+      setAdvErr('通信に失敗しました。')
+    } finally {
+      setAdvBusy(false)
+    }
+  }
+
+  const runCancel = async () => {
+    if (!cxAsk) return
+    setCxBusy(true)
+    setCxErr(null)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const token = sess.session?.access_token
+      if (!token) { setCxErr('ログインしなおしてからお試しください。'); return }
+      const res = await fetch('/api/applications/cancel-approved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ applicationId: cxAsk.id, reason: cxReason }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        // お金の記録で止まった場合は、何が引っかかったのかを並べて出す
+        const blockers: string[] = Array.isArray(json?.blockers) ? json.blockers : []
+        // 当日の記録だけで止まったときは、出店管理の画面から記録ごと取り消せる。
+        // ここには force の入口が無いので、どこへ行けばよいかを書き添える
+        const hint = json?.canForce === true
+          ? '\n\nテストで作った出店なら、「出店管理」のスケジュールからこの出店を開くと、当日の記録ごと取り消せます。'
+          : ''
+        setCxErr((json?.error || '取り消せませんでした。') +
+          (blockers.length ? '\n\n・' + blockers.join('\n・') : '') + hint)
+        // お金の記録で止まった場合は、何度押しても結果は同じ。ボタンを押せなくする
+        if (blockers.length > 0) setCxBlocked(true)
+        return
+      }
+      setCxAsk(null)
+      setCxReason('')
+      // 消せなかった／控えを残せなかったときは、そのまま閉じずに伝える。
+      // 一覧には取消し済みとして残るので、気づかないと片づけ漏れになる
+      if (json?.purged === false || json?.purgeLogged === false || json?.messagesPurged === false) {
+        setErr(cancelResultMessage(json))
+      }
+      await load()
+    } catch {
+      setCxErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setCxBusy(false)
+    }
+  }
+
+  // 提出用Excelの書き出し。
+  // 出す資料は2種類あり、必要になる場面が違うので選べるようにしている。
+  //   出店者情報 … 出店の前に施設・企業へ出す（誰が何をいくらで売るか）
+  //   売上報告   … 出店が終わったあとに企業から求められることがある
+  const [xlsxKind, setXlsxKind] = useState<'submission' | 'sales'>('submission')
+  const [xlsxBusy, setXlsxBusy] = useState<SubmissionFormat | null>(null)
+  const [salesBusy, setSalesBusy] = useState(false)
+  const [xlsxMsg, setXlsxMsg] = useState<string | null>(null)
+  const [withPending, setWithPending] = useState(false)
+
+  const downloadSalesReport = async () => {
+    setSalesBusy(true)
+    setXlsxMsg(null)
+    try {
+      // この画面は運営しか開かない（app/admin/page.tsx からのみ）。
+      // 屋号が未登録の人は本名で埋める
+      const n = await exportPlaceSalesReport(supabase, placeId, placeTitle, fetchAdminSellerNames)
+      setXlsxMsg(n === 0
+        ? '売上の報告がまだ届いていません。出店者が報告すると、ここから書き出せます。'
+        : `${n}日分のシートで保存しました。`)
+    } catch (e) {
+      setXlsxMsg('作成できませんでした：' + (e instanceof Error ? e.message : '不明なエラー'))
+    } finally {
+      setSalesBusy(false)
+    }
+  }
+
+  const downloadXlsx = async (format: SubmissionFormat) => {
+    setXlsxBusy(format)
+    setXlsxMsg(null)
+    try {
+      const n = await exportPlaceSubmission(supabase, placeId, placeTitle, format, withPending, fetchAdminSellerNames)
+      if (n === 0) {
+        setXlsxMsg(
+          withPending
+            ? '出店日の入った申込がまだありません。日程を選んで応募されるとExcelに載ります。'
+            : '出店日の入った承認済みの申込がまだありません。承認するか、下の「承認待ちも含める」をお使いください。',
+        )
+      } else {
+        const unit = format === 'aeon' ? `${n}か月分` : `${n}日分`
+        setXlsxMsg(withPending ? `${unit}のシートで保存しました。承認待ちの出店者が含まれています。` : `${unit}のシートで保存しました。`)
+      }
+    } catch (e) {
+      setXlsxMsg('作成できませんでした：' + (e instanceof Error ? e.message : '不明なエラー'))
+    } finally {
+      setXlsxBusy(null)
+    }
+  }
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setErr(null)
+    const { data, error } = await supabase
+      .from('applications')
+      .select('id, apply_date, format, status, seller_id, created_at, cancelled_at, cancel_reason, profiles!applications_seller_id_fkey(name, shop_name, email, phone, address, genre, areas, sales_type, vehicle_type, size_length, size_width, size_height, equipment, menu, bio)')
+      .eq('place_id', placeId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      setErr('読み込めませんでした：' + error.message)
+      setLoading(false)
+      return
+    }
+
+    const rows = (data ?? []) as unknown as (Row & { profiles: Record<string, unknown> | null })[]
+
+    // 書類の提出状況をまとめて引く
+    const ids = Array.from(new Set(rows.map(r => r.seller_id).filter(Boolean)))
+    const docs = new Map<string, { ok: number; total: number }>()
+    if (ids.length > 0) {
+      const { data: d } = await supabase.from('seller_documents').select('seller_id, status').in('seller_id', ids)
+      for (const x of d ?? []) {
+        const cur = docs.get(x.seller_id) || { ok: 0, total: 0 }
+        cur.total += 1
+        if (x.status === 'approved') cur.ok += 1
+        docs.set(x.seller_id, cur)
+      }
+    }
+
+    // 事前請求の金額の初期値に使う、案件の出店料の設定。
+    // min_guarantee は移行SQLを流すまで列が無いので、その列だけ落として読み直す
+    const cols = 'price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees'
+    const { data: pl } = await selectWithOptionalColumn<FeeSource>(withMin => supabase
+      .from('places').select(cols + (withMin ? ', min_guarantee' : '')).eq('id', placeId).maybeSingle())
+    setPlaceFixed((pl?.price_fixed || 0) + (pl?.company_fixed_amount || 0))
+    setFeeSrc((pl as FeeSource | null) ?? null)
+    // 出店日の振り替えで選べる日。案件の日程に入っている、これから先の日だけ
+    {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sc: any[] = Array.isArray(pl?.schedule) ? pl.schedule : []
+      const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      setPlaceDays(sc.map(d => String(d?.date || '')).filter(d => d && d >= today).sort())
+    }
+
+    // この案件のために入力された出店者情報。入っていればExcelはその内容で作られる
+    const subs = new Map<string, string>()
+    if (ids.length > 0) {
+      const { data: sb } = await supabase
+        .from('application_submissions').select('seller_id, note')
+        .eq('place_id', placeId).in('seller_id', ids)
+      for (const x of sb ?? []) subs.set(x.seller_id, x.note || '')
+    }
+
+    // 出店者ごとにまとめる
+    const map = new Map<string, Seller>()
+    for (const r of rows) {
+      const p = (r.profiles ?? {}) as Record<string, string | number | null>
+      const s = String(p.shop_name || p.name || '(出店者)')
+      let cur = map.get(r.seller_id)
+      if (!cur) {
+        const dc = docs.get(r.seller_id) || { ok: 0, total: 0 }
+        cur = {
+          id: r.seller_id,
+          shopName: s,
+          repName: String(p.name ?? ''),
+          email: String(p.email ?? ''),
+          phone: String(p.phone ?? ''),
+          address: String(p.address ?? ''),
+          genre: String(p.genre ?? ''),
+          areas: Array.isArray(p.areas) ? (p.areas as unknown as string[]).join('・') : String(p.areas ?? ''),
+          salesType: String(p.sales_type ?? ''),
+          vehicleType: String(p.vehicle_type ?? ''),
+          size: size(p.size_length as number, p.size_width as number, p.size_height as number),
+          equipment: String(p.equipment ?? ''),
+          menu: String(p.menu ?? ''),
+          bio: String(p.bio ?? ''),
+          docsOk: dc.ok,
+          docsTotal: dc.total,
+          rows: [],
+          hasSubmission: subs.has(r.seller_id),
+          siteNote: subs.get(r.seller_id) || '',
+        }
+        map.set(r.seller_id, cur)
+      }
+      // cancelled_at と cancel_reason も詰める。詰めていなかったため、
+      // 下の「{取消し日} 取消し／{理由}」が一度も描画されていなかった。
+      // 削除に失敗して残った行を、運営が理由つきで見られる唯一の場所
+      cur.rows.push({ id: r.id, apply_date: r.apply_date, format: r.format, status: r.status, seller_id: r.seller_id, created_at: r.created_at, cancelled_at: r.cancelled_at, cancel_reason: r.cancel_reason })
+    }
+
+    // 承認待ちがある出店者を先に出す
+    const list = Array.from(map.values())
+    // 取り消した行は最後に回す。生きている申込を先に見られるように
+    list.forEach(s => s.rows.sort((a, b) =>
+      ((a.status === 'cancelled' ? 1 : 0) - (b.status === 'cancelled' ? 1 : 0))
+      || (a.apply_date ?? '').localeCompare(b.apply_date ?? '')))
+    list.sort((a, b) => {
+      const pa = a.rows.some(r => r.status === 'pending') ? 0 : 1
+      const pb = b.rows.some(r => r.status === 'pending') ? 0 : 1
+      return pa - pb
+    })
+    setSellers(list)
+    setLoading(false)
+  }, [placeId])
+
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !ask) onClose() }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [onClose, ask])
+
+  const apply = async () => {
+    if (!ask) return
+    setBusy(true)
+    setAskErr(null)
+    try {
+      const { error } = await supabase.from('applications').update({ status: ask.status }).eq('id', ask.id)
+      if (error) { setAskErr('変更できませんでした：' + error.message); return }
+      // 出店者へのお知らせ。チェックを外した場合は送らない。
+      // 送れなかった場合でも、状態の変更自体は成功として扱う。
+      // 通知の入口には名乗りが要る（申込IDだけで第三者に送らせないため）ので
+      // アクセストークンを付ける。送れなかったときは、確認の画面を閉じずに伝える
+      // （黙って飲み込むと、メールが届いていないことに気づけない）
+      if (notify) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          const res = await fetch('/api/notify/application-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+            body: JSON.stringify({ applicationId: ask.id, status: ask.status }),
+          })
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}))
+            setAskErr('状態は変えましたが、通知メールを送れませんでした：' + (j.error || res.status))
+            await load()
+            return
+          }
+        } catch {
+          setAskErr('状態は変えましたが、通知メールを送れませんでした（通信エラー）')
+          await load()
+          return
+        }
+      }
+      setAsk(null)
+      await load()
+    } catch {
+      setAskErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 件数は取り消した分を除く。案件管理の「◯件」バッジと同じ数え方にそろえる
+  // （バッジは cancelled を除外しているのに、ここは含めていて食い違っていた）
+  const live = (r: Row) => r.status !== 'cancelled'
+  const total = sellers.reduce((n, s) => n + s.rows.filter(live).length, 0)
+  const cxl = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'cancelled').length, 0)
+  // 取り消した行は普段は畳む。経緯を追いたいときだけ開く
+  const [showCancelled, setShowCancelled] = useState(false)
+
+  // 取り消した出店を、記録ごと完全に消す。
+  //
+  // 取り消したら行ごと消す（キャンセル料の根拠は purge_log の控えに残す）。
+  // ただしテストで作った出店が一覧に残り続けると本物が埋もれるので、
+  // 取り消し済みのものだけ消せるようにする。
+  // 出店日の振り替え。取り消して入れ直してもらう必要がないようにする
+  const [placeDays, setPlaceDays] = useState<string[]>([])
+  const [chgAsk, setChgAsk] = useState<{ id: string; who: string; when: string; date: string | null } | null>(null)
+  const [chgDate, setChgDate] = useState('')
+  const [chgReason, setChgReason] = useState('')
+  const [chgNotify, setChgNotify] = useState(true)
+  const [chgBusy, setChgBusy] = useState(false)
+  const [chgErr, setChgErr] = useState<string | null>(null)
+  const runChangeDate = async () => {
+    if (!chgAsk || chgBusy) return
+    if (!chgDate) { setChgErr('新しい出店日を選んでください。'); return }
+    setChgBusy(true); setChgErr(null)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/applications/change-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+        body: JSON.stringify({ applicationId: chgAsk.id, newDate: chgDate, reason: chgReason.trim() || undefined, notify: chgNotify }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const blockers: string[] = Array.isArray(j?.blockers) ? j.blockers : []
+        setChgErr((j.error || '変更できませんでした。') + (blockers.length ? '\n\n・' + blockers.join('\n・') : ''))
+        return
+      }
+      setChgAsk(null); setChgDate(''); setChgReason('')
+      await load()
+    } catch {
+      setChgErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setChgBusy(false)
+    }
+  }
+  // その出店者が、その案件で押さえている日（振り替え先の候補から外す）
+  const takenBySeller = (sellerId: string) =>
+    new Set(sellers.find(x => x.id === sellerId)?.rows.filter(r => r.status !== 'cancelled').map(r => r.apply_date || '') || [])
+
+  // その日に何台入っているか（承認済み＋審査中）。
+  // 定員はこのサイトでは表示だけで申込を止めていないため、
+  // 振り替えも止めない。ただし混んでいる日が分かるように数を出す
+  const countByDate = (() => {
+    const m = new Map<string, number>()
+    for (const sl of sellers) {
+      for (const r of sl.rows) {
+        if (r.status !== 'approved' && r.status !== 'pending') continue
+        const d = r.apply_date || ''
+        if (d) m.set(d, (m.get(d) || 0) + 1)
+      }
+    }
+    return m
+  })()
+
+  const [purgeAsk, setPurgeAsk] = useState<{ id: string; who: string; when: string } | null>(null)
+  const [purgeBusy, setPurgeBusy] = useState(false)
+  const [purgeErr, setPurgeErr] = useState<string | null>(null)
+  const runPurge = async () => {
+    if (!purgeAsk) return
+    setPurgeBusy(true); setPurgeErr(null)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sess.session?.access_token || '') },
+        body: JSON.stringify({ action: 'application', id: purgeAsk.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setPurgeErr(j.error || '削除できませんでした。'); return }
+      setPurgeAsk(null)
+      await load()
+    } catch {
+      setPurgeErr('通信に失敗しました。もう一度お試しください。')
+    } finally {
+      setPurgeBusy(false)
+    }
+  }
+  const pend = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'pending').length, 0)
+  const appr = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'approved').length, 0)
+  const rej = sellers.reduce((n, s) => n + s.rows.filter(r => r.status === 'rejected').length, 0)
+
+  const chip: React.CSSProperties = { fontSize: '11px', fontWeight: 800, padding: '3px 9px', borderRadius: '999px' }
+  const kv: React.CSSProperties = { fontSize: '12px', color: '#475569', lineHeight: 1.9 }
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1500, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '16px', overflowY: 'auto' }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '760px', margin: '24px 0', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}
+        >
+          {/* 見出し */}
+          <div style={{ position: 'sticky', top: 0, background: '#fff', borderRadius: '14px 14px 0 0', borderBottom: '1px solid #EEE', padding: '16px 18px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '15px', fontWeight: 900, color: '#111', lineHeight: 1.6 }}>{placeTitle}</div>
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '3px' }}>この案件への応募</div>
+            </div>
+            <button
+              type='button'
+              onClick={onClose}
+              style={{ flexShrink: 0, background: '#F1F5F9', border: 'none', borderRadius: '8px', width: '40px', height: '40px', fontSize: '18px', color: '#475569', cursor: 'pointer' }}
+              aria-label='閉じる'
+            >
+              ×
+            </button>
+          </div>
+
+          <div style={{ padding: '16px 18px 20px' }}>
+            {loading && <div style={{ padding: '30px', textAlign: 'center', color: '#888', fontSize: '13px' }}>読み込み中…</div>}
+
+            {err && (
+              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', borderRadius: '8px', padding: '12px 14px', fontSize: '13px', lineHeight: 1.8 }}>{err}</div>
+            )}
+
+            {!loading && !err && sellers.length === 0 && (
+              <div style={{ padding: '30px', textAlign: 'center', color: '#888', fontSize: '13px', lineHeight: 1.9 }}>
+                この案件にはまだ応募がありません。
+              </div>
+            )}
+
+            {!loading && !err && sellers.length > 0 && (
+              <>
+                {/* 内訳 */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                  <span style={{ ...chip, background: '#F1F5F9', color: '#334155' }}>出店者 {sellers.filter(s => s.rows.some(live)).length}社</span>
+                  <span style={{ ...chip, background: '#EBF6FD', color: '#1D4ED8' }}>申込 {total}件</span>
+                  {cxl > 0 && (
+                    <button type='button' onClick={() => setShowCancelled(v => !v)}
+                      title={showCancelled ? '取り消した申込を隠す' : '取り消した申込も表示する'}
+                      style={{ ...chip, background: showCancelled ? '#E2E8F0' : '#F8FAFC', color: '#475569', border: '1px solid #CBD5E1', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      取消し {cxl}{showCancelled ? '（表示中）' : ''}
+                    </button>
+                  )}
+                  {pend > 0 && <span style={{ ...chip, background: LABEL.pending.bg, color: LABEL.pending.fg }}>承認待ち {pend}</span>}
+                  {appr > 0 && <span style={{ ...chip, background: LABEL.approved.bg, color: LABEL.approved.fg }}>承認済み {appr}</span>}
+                  {rej > 0 && <span style={{ ...chip, background: LABEL.rejected.bg, color: LABEL.rejected.fg }}>不採用 {rej}</span>}
+                </div>
+                <p style={{ fontSize: '12px', color: '#888', lineHeight: 1.9, margin: '0 0 14px' }}>
+                  申込は出店希望日ごとに1件で数えます。1社が3日申し込むと3件になります。
+                </p>
+
+                {/* 施設・企業へ提出するExcel。出店の前後で必要な資料が違うので選べるようにしている */}
+                <div style={{ background: '#F8FBFE', border: '1px solid #DCE9F5', borderRadius: '10px', padding: '13px 15px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#1D4ED8', marginBottom: '9px' }}>📄 提出用Excelを作る</div>
+
+                  <div role='tablist' aria-label='書き出す資料' style={{ display: 'flex', gap: '6px', marginBottom: '11px', flexWrap: 'wrap' }}>
+                    {([
+                      { key: 'submission' as const, label: '出店者情報', hint: '出店の前に施設へ出す資料' },
+                      { key: 'sales' as const, label: '売上などの報告', hint: '出店が終わったあとに出す資料' },
+                    ]).map(t => {
+                      const on = xlsxKind === t.key
+                      return (
+                        <button
+                          key={t.key} type='button' role='tab' aria-selected={on} title={t.hint}
+                          onClick={() => { setXlsxKind(t.key); setXlsxMsg(null) }}
+                          style={{ background: on ? '#1D4ED8' : '#fff', color: on ? '#fff' : '#475569', border: '1px solid ' + (on ? '#1D4ED8' : '#DCE9F5'), borderRadius: '999px', padding: '7px 16px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                        >
+                          {t.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {xlsxKind === 'submission' ? (
+                    <>
+                      <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '10px' }}>
+                        承認済みの出店者を、普段ご提出いただいている様式で書き出します。施設に合わせて様式を選んでください。出店者が現場ごとに入力していれば、その内容が載ります。
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type='button'
+                          onClick={() => downloadXlsx('daily')}
+                          disabled={xlsxBusy !== null}
+                          title='開催日ごとに1シート。店舗名・Instagram・ジャンル・テイクアウト時／袋・利用可能決済・メニュー'
+                          style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: xlsxBusy ? 'wait' : 'pointer', minHeight: '36px', opacity: xlsxBusy && xlsxBusy !== 'daily' ? 0.5 : 1 }}
+                        >
+                          {xlsxBusy === 'daily' ? '作成中…' : '日付ごとの様式'}
+                        </button>
+                        <button
+                          type='button'
+                          onClick={() => downloadXlsx('aeon')}
+                          disabled={xlsxBusy !== null}
+                          title='月ごとに1シート。施設名と希望日程の欄あり。イオンモール系でご提出いただいている様式'
+                          style={{ background: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: xlsxBusy ? 'wait' : 'pointer', minHeight: '36px', opacity: xlsxBusy && xlsxBusy !== 'aeon' ? 0.5 : 1 }}
+                        >
+                          {xlsxBusy === 'aeon' ? '作成中…' : 'イオン様式（月ごと）'}
+                        </button>
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '11px', cursor: 'pointer', minHeight: '32px' }}>
+                        <input
+                          type='checkbox'
+                          checked={withPending}
+                          onChange={e => { setWithPending(e.target.checked); setXlsxMsg(null) }}
+                          style={{ width: '17px', height: '17px', marginTop: '2px', flexShrink: 0, accentColor: '#B45309', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.8 }}>
+                          <strong style={{ color: '#B45309' }}>承認待ちも含める</strong>
+                          <br />
+                          承認する前に中身を見比べたいときに。含めた出店者は見出しに「（承認待ち）」と入り、ファイル名も「_承認待ち含む」になります。
+                          <strong style={{ color: '#B45309' }}>このファイルはそのまま施設へ提出しないでください。</strong>
+                        </span>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '10px' }}>
+                        出店者から届いた報告（売上金額・販売食数・天候・来客数・所感）を、開催日ごとにまとめます。
+                      </div>
+                      <button
+                        type='button'
+                        onClick={downloadSalesReport}
+                        disabled={salesBusy}
+                        title='開催日ごとに1シート。店舗名・売上金額・販売食数・天候・来客数・品目別の販売実績'
+                        style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '999px', padding: '8px 16px', fontSize: '12px', fontWeight: 800, cursor: salesBusy ? 'wait' : 'pointer', minHeight: '36px' }}
+                      >
+                        {salesBusy ? '作成中…' : '売上報告を書き出す'}
+                      </button>
+                    </>
+                  )}
+
+                  {xlsxMsg && (
+                    <div style={{ marginTop: '10px', fontSize: '12px', color: xlsxMsg.includes('できませんでした') || xlsxMsg.includes('ありません') ? '#B45309' : '#047857', lineHeight: 1.8 }}>
+                      {xlsxMsg}
+                      {/* 発行しただけでは請求書を見られないため、開く導線をここに出す。
+                          この番号はあとからでも /admin/invoice?no=… で何度でも開ける */}
+                      {advDone && (
+                        <a
+                          href={'/admin/invoice?no=' + encodeURIComponent(advDone)}
+                          target='_blank' rel='noopener noreferrer'
+                          style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 700, color: '#fff', background: '#047857', borderRadius: '6px', padding: '5px 12px', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                        >
+                          請求書を開く
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {sellers.map(s => {
+                    const open = openId === s.id
+                    return (
+                      <div key={s.id} style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
+                        <div style={{ padding: '13px 15px', background: '#FBFCFD' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 900, color: '#111' }}>{s.shopName}</span>
+                            {s.docsTotal > 0 && (
+                              onOpenDocs ? (
+                                <button
+                                  type='button'
+                                  onClick={() => onOpenDocs(s.id, s.shopName)}
+                                  title={`${s.shopName} の書類審査を開く`}
+                                  style={{ ...chip, background: s.docsOk === s.docsTotal ? '#ECFDF5' : '#FFF7ED', color: s.docsOk === s.docsTotal ? '#047857' : '#C2410C', border: '1px solid ' + (s.docsOk === s.docsTotal ? '#A7F3D0' : '#FED7AA'), cursor: 'pointer', minHeight: '28px' }}
+                                >
+                                  書類 {s.docsOk}/{s.docsTotal} ›
+                                </button>
+                              ) : (
+                                <span style={{ ...chip, background: s.docsOk === s.docsTotal ? '#ECFDF5' : '#FFF7ED', color: s.docsOk === s.docsTotal ? '#047857' : '#C2410C' }}>
+                                  書類 {s.docsOk}/{s.docsTotal}
+                                </span>
+                              )
+                            )}
+                            {s.docsTotal === 0 && (
+                              onOpenDocs ? (
+                                <button
+                                  type='button'
+                                  onClick={() => onOpenDocs(s.id, s.shopName)}
+                                  title={`${s.shopName} の書類審査を開く`}
+                                  style={{ ...chip, background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', minHeight: '28px' }}
+                                >
+                                  書類 未提出 ›
+                                </button>
+                              ) : (
+                                <span style={{ ...chip, background: '#FEF2F2', color: '#B91C1C' }}>書類 未提出</span>
+                              )
+                            )}
+                            {/* この案件のために入力があれば、Excelはその内容で作られる。
+                                入力が無ければプロフィールが使われるので、そこも見えるようにする */}
+                            {s.hasSubmission ? (
+                              <button
+                                type='button'
+                                onClick={() => setOpenSub(openSub === s.id ? null : s.id)}
+                                title='この案件のための出店者情報が入力されています。押すと中身が見られます'
+                                style={{ ...chip, background: openSub === s.id ? '#1D4ED8' : '#EFF6FF', color: openSub === s.id ? '#fff' : '#1D4ED8', border: '1px solid #BFDBFE', cursor: 'pointer', minHeight: '28px' }}
+                              >
+                                現場ごとの入力あり {openSub === s.id ? '▲' : '›'}
+                              </button>
+                            ) : (
+                              <span
+                                style={{ ...chip, background: '#F8FAFC', color: '#94A3B8' }}
+                                title='この案件のための入力がありません。提出用Excelにはプロフィールの内容が載ります'
+                              >
+                                プロフィールの内容
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 押したら、この案件のために入力した内容をそのまま出す */}
+                          {openSub === s.id && <SubmissionPanel placeId={placeId} sellerId={s.id} />}
+
+                          {s.siteNote && (
+                            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '9px 11px', marginBottom: '8px' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 800, color: '#B45309', marginBottom: '3px' }}>出店者からの連絡事項</div>
+                              <div style={{ fontSize: '12px', color: '#475569', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{s.siteNote}</div>
+                            </div>
+                          )}
+
+                          {/* 申込んだ日と、その状態 */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {s.rows.filter(r => showCancelled || live(r)).map(r => {
+                              const b = badge(r.status)
+                              const cx = r.status === 'cancelled'
+                              return (
+                                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', background: cx ? '#F8FAFC' : '#fff', border: '1px solid #EEF2F6', borderRadius: '8px', padding: '8px 10px', opacity: cx ? 0.75 : 1 }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 700, color: cx ? '#94A3B8' : '#334155', textDecoration: cx ? 'line-through' : 'none' }}>{fmtDate(r.apply_date)}</span>
+                                  {cx && (r.cancelled_at || r.cancel_reason) && (
+                                    <span style={{ fontSize: '11px', color: '#64748B' }}>
+                                      {r.cancelled_at ? fmtDate(r.cancelled_at.slice(0, 10)) + ' 取消し' : '取消し'}{r.cancel_reason ? '／' + r.cancel_reason : ''}
+                                    </span>
+                                  )}
+                                  {r.format && <span style={{ fontSize: '11px', color: '#888' }}>{r.format}</span>}
+                                  <span style={{ ...chip, background: b.bg, color: b.fg }}>{b.text}</span>
+                                  {/* テストで作った出店の片づけ。取り消し済みのものだけ消せる */}
+                                  {cx && (
+                                    <button
+                                      type='button'
+                                      onClick={() => { setPurgeErr(null); setPurgeAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                      title='一覧から完全に消します。元に戻せません'
+                                      style={{ marginLeft: 'auto', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 12px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', minHeight: '32px' }}
+                                    >
+                                      完全に削除
+                                    </button>
+                                  )}
+                                  {/* 審査中の申込も取り消せるようにする。
+                                      「日程を間違えてエントリーした」という連絡に、
+                                      これまでは「不採用」しか手が無かった */}
+                                  {r.status === 'pending' && (
+                                    <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto', flexWrap: 'wrap' }}>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setChgErr(null); setChgReason(''); setChgNotify(true); setChgDate(''); setChgAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date }) }}
+                                        title='出店日だけを別の日に振り替えます（取り消して入れ直す必要はありません）'
+                                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        出店日を変える
+                                      </button>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setCxErr(null); setCxReason(''); setCxBlocked(false); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        title='日程の間違いなど、出店者から連絡を受けてこの申込を取り消します（不採用の通知は送りません）'
+                                        style={{ background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        申込を取り消す
+                                      </button>
+                                      {onOpenMessages && (
+                                        <button
+                                          type='button'
+                                          onClick={() => onOpenMessages(r.id, s.shopName)}
+                                          title='この申込についてのやり取りを開きます'
+                                          style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                        >
+                                          メッセージ
+                                        </button>
+                                      )}
+                                    </span>
+                                  )}
+                                  {r.status === 'approved' && (
+                                    <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setChgErr(null); setChgReason(''); setChgNotify(true); setChgDate(''); setChgAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date }) }}
+                                        title='出店日だけを別の日に振り替えます（取り消して入れ直す必要はありません）'
+                                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        出店日を変える
+                                      </button>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setCxErr(null); setCxReason(''); setCxBlocked(false); setCxAsk({ id: r.id, who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        title='出店者から連絡を受けて、この出店を取り消します'
+                                        style={{ background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        出店取消し
+                                      </button>
+                                      {onOpenMessages && (
+                                        <button
+                                          type='button'
+                                          onClick={() => onOpenMessages(r.id, s.shopName)}
+                                          title='この申込についてのやり取りを開きます'
+                                          style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                        >
+                                          メッセージ
+                                        </button>
+                                      )}
+                                      <button
+                                        type='button'
+                                        onClick={() => {
+                                          setAdvErr(null)
+                                          {
+                                            // その日・その形態で売上が無くてもいただく額を初期値にする
+                                            const init = advanceBaseFor(r.apply_date, r.format)
+                                            setAdvAmount(init > 0 ? String(init) : '')
+                                          }
+                                          setAdvDue('')
+                                          setAdvSel(new Set([r.id]))
+                                          setAdvDup(null); setAdvOverlap(null)
+                                          // 同じ月の承認済みだけを候補にする。月をまたぐ日は別の請求書になる
+                                          const month = String(r.apply_date || '').slice(0, 7)
+                                          const approved = s.rows.filter(x => x.status === 'approved')
+                                          const same = approved.filter(x => String(x.apply_date || '').slice(0, 7) === month)
+                                          setAdvAsk({
+                                            id: r.id, sellerId: s.id, who: s.shopName, when: fmtDate(r.apply_date), date: r.apply_date, format: r.format,
+                                            dates: same.map(x => ({ id: x.id, date: x.apply_date, label: fmtDate(x.apply_date) })),
+                                            otherMonths: approved.length - same.length,
+                                          })
+                                        }}
+                                        title='出店日の前に、出店料の請求書を発行します'
+                                        style={{ background: '#FFF8E1', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        事前請求
+                                      </button>
+                                    </span>
+                                  )}
+                                  {r.status === 'pending' && (
+                                    <span style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setAskErr(null); setNotify(true); setAsk({ id: r.id, status: 'approved', who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        承認
+                                      </button>
+                                      <button
+                                        type='button'
+                                        onClick={() => { setAskErr(null); setNotify(true); setAsk({ id: r.id, status: 'rejected', who: s.shopName, when: fmtDate(r.apply_date) }) }}
+                                        style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 800, cursor: 'pointer', minHeight: '34px' }}
+                                      >
+                                        不採用
+                                      </button>
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                            <button
+                              type='button'
+                              onClick={() => setOpenId(open ? null : s.id)}
+                              style={{ background: '#fff', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, color: '#475569', cursor: 'pointer', minHeight: '34px' }}
+                            >
+                              {open ? '出店者の情報を閉じる' : '出店者の情報を見る'}
+                            </button>
+                            <Link
+                              href={`/sellers/${s.id}`}
+                              target='_blank'
+                              rel='noopener noreferrer'
+                              style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, color: '#1D4ED8', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: '34px' }}
+                            >
+                              公開ページ
+                            </Link>
+                          </div>
+                        </div>
+
+                        {open && (
+                          <div style={{ borderTop: '1px solid #EEF2F6', padding: '13px 15px', background: '#fff' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                              <tbody>
+                                {([
+                                  ['代表者', s.repName],
+                                  ['メール', s.email],
+                                  ['電話', s.phone],
+                                  ['住所', s.address],
+                                  ['ジャンル', s.genre],
+                                  ['対応エリア', s.areas],
+                                  ['販売形態', s.salesType],
+                                  ['車両', s.vehicleType],
+                                  ['サイズ', s.size],
+                                  ['設備', s.equipment],
+                                  ['メニュー', s.menu],
+                                  ['紹介文', s.bio],
+                                ] as [string, string][])
+                                  .filter(([, v]) => v && v.trim())
+                                  .map(([k, v]) => (
+                                    <tr key={k}>
+                                      <th style={{ ...kv, textAlign: 'left', verticalAlign: 'top', width: '84px', padding: '5px 10px 5px 0', color: '#94A3B8', fontWeight: 700, whiteSpace: 'nowrap' }}>{k}</th>
+                                      <td style={{ ...kv, padding: '5px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{v}</td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={!!ask}
+        busy={busy}
+        error={askErr}
+        danger={ask?.status === 'rejected'}
+        title={ask?.status === 'approved' ? 'この申込を承認しますか？' : 'この申込を不採用にしますか？'}
+        body={
+          ask
+            ? `${ask.who}／${ask.when}\n\n` +
+              (ask.status === 'approved'
+                ? '承認するとマッチングが成立します。'
+                : '不採用にすると、この申込は取り消されます。')
+            : ''
+        }
+        extra={
+          ask ? <NotifyChoice checked={notify} onChange={setNotify} disabled={busy} approved={ask.status === 'approved'} /> : null
+        }
+        okLabel={ask?.status === 'approved' ? '承認する' : '不採用にする'}
+        onOk={apply}
+        onCancel={() => { if (!busy) { setAsk(null); setAskErr(null) } }}
+      />
+
+      {/* 出店日の振り替え。取り消して入れ直してもらう必要がないようにする */}
+      <ConfirmDialog
+        open={!!chgAsk}
+        busy={chgBusy}
+        error={chgErr}
+        title='出店日を変えますか？'
+        body={
+          chgAsk
+            ? `${chgAsk.who}／いまの出店日：${chgAsk.when}\n\n` +
+              '取り消して入れ直してもらう必要はありません。日付だけを振り替えます。'
+            : ''
+        }
+        extra={
+          chgAsk ? (() => {
+            // その出店者がすでに押さえている日は候補から外す（重ねての振り替えはできない）
+            const taken = takenBySeller(sellers.find(x => x.rows.some(r => r.id === chgAsk.id))?.id || '')
+            const cand = placeDays.filter(d => !taken.has(d))
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>新しい出店日</div>
+                  {cand.length === 0 ? (
+                    <div style={{ fontSize: '12.5px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', lineHeight: 1.8 }}>
+                      この案件に、振り替えられる空いた日程がありません。<br />
+                      先に案件の編集画面で日程を足してから、もう一度お試しください。
+                    </div>
+                  ) : (
+                    <select value={chgDate} onChange={e => setChgDate(e.target.value)} disabled={chgBusy}
+                      style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '16px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit', background: '#fff' }}>
+                      <option value=''>選んでください</option>
+                      {cand.map(d => {
+                        const n = countByDate.get(d) || 0
+                        return <option key={d} value={d}>{fmtDate(d)}{n > 0 ? '（すでに' + n + '台）' : '（空き）'}</option>
+                      })}
+                    </select>
+                  )}
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '5px', lineHeight: 1.7 }}>
+                    案件の日程に入っている、これから先の空いた日だけを選べます。
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>理由（任意・記録に残ります）</div>
+                  <input value={chgReason} onChange={e => setChgReason(e.target.value)} disabled={chgBusy}
+                    placeholder='例：出店者の申し出（日程の間違い）'
+                    style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '16px', color: '#1a1a1a', boxSizing: 'border-box', minHeight: '44px', fontFamily: 'inherit' }} />
+                </div>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                  <input type='checkbox' checked={chgNotify} onChange={e => setChgNotify(e.target.checked)} disabled={chgBusy}
+                    style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.8 }}>
+                    出店者・募集者・運営へ知らせる<br />
+                    <span style={{ color: '#94A3B8' }}>変更前と変更後の日付を書いたお知らせが届きます。テストの片づけならチェックを外してください。</span>
+                  </span>
+                </label>
+              </div>
+            )
+          })() : null
+        }
+        okLabel='この日に変える'
+        okDisabled={!chgDate}
+        onOk={runChangeDate}
+        onCancel={() => { if (!chgBusy) { setChgAsk(null); setChgErr(null) } }}
+      />
+
+      {/* 取り消した出店を完全に消す。テストデータの片づけ用 */}
+      <ConfirmDialog
+        open={!!purgeAsk}
+        busy={purgeBusy}
+        error={purgeErr}
+        title='この出店を完全に削除しますか？'
+        body={
+          purgeAsk
+            ? `${purgeAsk.who}／${purgeAsk.when}\n\n` +
+              '取り消し済みの出店を、一覧から完全に消します。\n' +
+              '記録が残らないため元に戻せません。テストで作ったものの片づけにお使いください。\n\n' +
+              '売上報告や有効な請求書が残っている場合は削除できません。'
+            : ''
+        }
+        okLabel='完全に削除する'
+        danger
+        onOk={runPurge}
+        onCancel={() => { if (!purgeBusy) { setPurgeAsk(null); setPurgeErr(null) } }}
+      />
+
+      <ConfirmDialog
+        open={!!advAsk}
+        busy={advBusy}
+        error={advErr}
+        title='出店日の前に、出店料を請求しますか？'
+        body={
+          advAsk
+            ? `${advAsk.who}／${
+                // 選んだ日をそのまま見出しに。押した日だけを出すと、選び直したあとに食い違う
+                advAsk.dates.filter(d => advSel.has(d.id)).map(d => d.label).join('・') || advAsk.when
+              }\n\n` +
+              'これは出店料（固定額）の請求です。\n' +
+              '当日の売上の◯％は、出店後に別の請求書で出します。'
+            : ''
+        }
+        extra={
+          advAsk ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* 同じ案件に承認済みの出店日が複数あるとき、1枚にまとめられるようにする。
+                  2日間の催しで「1日ずつしか出せない」と困っていた */}
+              {advAsk.dates.length > 1 && (
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    まとめて請求する出店日
+                    <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>{advSel.size}日分</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {advAsk.dates.map(d => {
+                      const on = advSel.has(d.id)
+                      return (
+                        <label key={d.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: on ? '#1D4ED8' : '#475569', background: on ? '#EFF6FF' : '#fff', border: '1px solid ' + (on ? '#BFDBFE' : '#E2E8F0'), borderRadius: '999px', padding: '6px 12px', cursor: advBusy ? 'default' : 'pointer', minHeight: '34px' }}>
+                          <input
+                            type='checkbox' checked={on} disabled={advBusy}
+                            onChange={e => {
+                              const next = new Set(advSel)
+                              if (e.target.checked) next.add(d.id); else next.delete(d.id)
+                              // 0日にはしない。最低1日は残す
+                              if (next.size === 0) return
+                              setAdvSel(next)
+                            }}
+                            style={{ width: '16px', height: '16px' }}
+                          />
+                          {d.label}
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
+                    選んだ日が請求書の明細に1行ずつ並びます。
+                  </div>
+                </div>
+              )}
+              {advAsk.otherMonths > 0 && (
+                <div style={{ fontSize: '11px', color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', lineHeight: 1.7 }}>
+                  別の月にも承認済みの出店日が{advAsk.otherMonths}日あります。月ごとの締めのため、その分は別の請求書になります（その日の行の「事前請求」から出せます）。
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  {advOnce ? '金額（税抜・期間ぶん）' : advAsk.dates.length > 1 ? '1日あたりの金額（税抜）' : '金額（税抜）'}
+                  {advOnce
+                    ? <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{advPeriodFee.toLocaleString()}円／期間</span>
+                    : (() => {
+                        // いま選んでいる出店日の設定額を出す（平日/土日祝・形態・最低保証まで見る）。
+                        // 1日目だけを見ていたため、選び直しても表示が変わらなかった
+                        const each = advSelDays.map(d => d.yen).filter(y => y > 0)
+                        const uniq = Array.from(new Set(each))
+                        if (uniq.length !== 1) return null
+                        return <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: '8px' }}>案件の設定：{uniq[0].toLocaleString()}円／日</span>
+                      })()}
+                </div>
+                {/* 事前請求は「1日あたり×日数」で計算するため、平日と土日祝で
+                    金額が違う案件（最低保証が平日2,000円・土日祝7,500円など）で
+                    両方を1枚にまとめると、片方の額で全日を請求してしまう */}
+                {advOnce && advSel.size > 1 && (
+                  <div style={{ fontSize: '11.5px', color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px', lineHeight: 1.8 }}>
+                    この案件の出店料は<strong>期間で1回</strong>です。{advSel.size}日を選んでいますが、
+                    <strong>日数は掛けません</strong>。明細は出店日ごとに{advSel.size}行並び、金額は先頭の1行に入ります
+                    （残りの日も請求済みとして記録されるので、あとから二重に請求されません）。
+                  </div>
+                )}
+                {(() => {
+                  if (advOnce) return null
+                  const each = advSelDays.map(d => d.yen).filter(y => y > 0)
+                  if (Array.from(new Set(each)).length < 2) return null
+                  const sum = each.reduce((t, y) => t + y, 0)
+                  return (
+                    <div style={{ fontSize: '11.5px', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px', lineHeight: 1.8 }}>
+                      選んだ日は、案件の設定では日によって金額が違います（
+                      {advSelDays.filter(d => d.yen > 0).map(d => d.label + ' ' + d.yen.toLocaleString() + '円').join('／')}
+                      ＝合計{sum.toLocaleString()}円）。
+                      この欄は「1日あたり×日数」で計算するので、<strong>金額が同じ日ごとに分けて発行してください</strong>。
+                    </div>
+                  )
+                })()}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <input
+                    value={advAmount} disabled={advBusy} inputMode='numeric' aria-label='金額'
+                    onChange={e => setAdvAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder='10000'
+                    style={{ width: '140px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 11px', fontSize: '14px', color: '#1a1a1a', textAlign: 'right' }}
+                  />
+                  <span style={{ fontSize: '13px', color: '#475569' }}>円</span>
+                  {advAmount && (() => {
+                    const per = parseInt(advAmount, 10) || 0
+                    const n = Math.max(1, advSel.size)
+                    // 期間で1回の案件は日数を掛けない（API 側の once と同じ判定）
+                    const sub = advOnce ? per : per * n
+                    return (
+                      <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+                        {n > 1 && (advOnce
+                          ? <>{n}日分まとめて {sub.toLocaleString()}円、</>
+                          : <>{n}日分で {sub.toLocaleString()}円、</>)}
+                        消費税10%を足して <strong style={{ color: '#B45309' }}>
+                          {(sub + Math.floor(sub * 0.1)).toLocaleString()}円
+                        </strong>
+                      </span>
+                    )
+                  })()}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  振込期限（任意）
+                </div>
+                <input
+                  type='date' value={advDue} disabled={advBusy}
+                  onChange={e => setAdvDue(e.target.value)} aria-label='振込期限'
+                  style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 11px', fontSize: '13px', color: '#1a1a1a' }}
+                />
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
+                  出店日より前の日付にしておくと、入金の確認がしやすくなります。
+                </div>
+              </div>
+
+              {/* 既に事前請求が出ている場合。
+                  番号は変わらないので、開き直しても二重請求にはならない。
+                  金額を間違えたときだけ、出し直しを選んでもらう */}
+              {advDup && advDup.length > 0 && (
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#92400E', marginBottom: '8px' }}>
+                    {advOverlap && advOverlap.length > 0
+                      ? advOverlap.map(o => o.label).join('・') + ' には、すでに事前請求が出ています'
+                      : 'この出店には、すでに事前請求が出ています'}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                    {advDup.map(d => (
+                      <div key={d.invoiceNo} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '12px', color: '#78350F', fontWeight: 700 }}>{d.invoiceNo}</span>
+                        <span style={{ fontSize: '12px', color: '#92400E' }}>¥{(d.total ?? 0).toLocaleString()}</span>
+                        {Array.isArray(d.dates) && d.dates.length > 0 && (
+                          <span style={{ fontSize: '11px', color: '#92400E' }}>（{d.dates.join('・')}）</span>
+                        )}
+                        <a
+                          href={'/admin/invoice?no=' + encodeURIComponent(d.invoiceNo)}
+                          target='_blank' rel='noopener noreferrer'
+                          style={{ fontSize: '11px', fontWeight: 700, color: '#fff', background: '#B45309', borderRadius: '6px', padding: '5px 12px', textDecoration: 'none' }}
+                        >
+                          開いてPDFにする
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                  {(() => {
+                    // 重なった日を外した残り。残りがあれば、それだけで出す導線を先に出す
+                    const overlapIds = new Set((advOverlap || []).map(o => o.applicationId))
+                    const rest = new Set(Array.from(advSel).filter(id => !overlapIds.has(id)))
+                    const restLabels = (advAsk?.dates || []).filter(d => rest.has(d.id)).map(d => d.label)
+                    return (
+                      <>
+                        {overlapIds.size > 0 && rest.size > 0 && (
+                          <button
+                            onClick={() => { setAdvSel(rest); setAdvDup(null); setAdvOverlap(null); runAdvance(false, rest) }}
+                            disabled={advBusy}
+                            style={{ marginBottom: '10px', width: '100%', background: advBusy ? '#ccc' : '#B45309', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 14px', fontSize: '12px', fontWeight: 700, cursor: advBusy ? 'not-allowed' : 'pointer' }}
+                          >
+                            {advBusy ? '発行中…' : '重なった日を外して ' + restLabels.join('・') + ' だけ発行する'}
+                          </button>
+                        )}
+                        <div style={{ fontSize: '11px', color: '#92400E', lineHeight: 1.8 }}>
+                          同じものをもう一度PDFにしたいだけなら、上の「開いてPDFにする」から何度でも出せます。
+                          番号は変わらないので、二重請求にはなりません。<br />
+                          金額や条件が変わって<strong>新しい番号で出し直す</strong>場合だけ、下のボタンを押してください。
+                          <strong>古い請求書は自動では取り消されません。</strong>出し直したら、管理画面の売上管理から古い番号を取り消してください。
+                        </div>
+                        <button
+                          onClick={() => runAdvance(true)}
+                          disabled={advBusy}
+                          style={{ marginTop: '10px', background: advBusy ? '#ccc' : '#fff', color: '#B45309', border: '1.5px solid #B45309', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: advBusy ? 'not-allowed' : 'pointer' }}
+                        >
+                          {advBusy ? '発行中…' : '新しい番号で発行し直す（古いものは残ります）'}
+                        </button>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+          ) : null
+        }
+        okLabel='請求書を発行する'
+        onOk={() => runAdvance(false)}
+        onCancel={() => { if (!advBusy) { setAdvAsk(null); setAdvErr(null); setAdvDup(null); setAdvOverlap(null) } }}
+      />
+
+      <ConfirmDialog
+        open={!!cxAsk}
+        busy={cxBusy}
+        okDisabled={cxBlocked}
+        error={cxErr}
+        danger
+        title='この出店を取り消しますか？'
+        body={
+          cxAsk
+            ? `${cxAsk.who}／${cxAsk.when}\n\n` +
+              '出店者・募集者・運営にお知らせのメールが届きます。\n' +
+              '確定後の取消しはキャンセル料の対象です（キャンセルポリシー）。\n' +
+              '売上の報告や請求書がある出店は取り消せません。\n\n' +
+              'この出店の記録を削除します。やり取りと当日の記録も消え、元に戻せません。\n' +
+              '誰がいつ何を消したかの控えだけが、運営側に残ります。'
+            : ''
+        }
+        extra={
+          cxAsk ? (
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                取消しの理由（任意・運営の削除控えに残ります）
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                {REASONS.map(v => {
+                  const on = cxReason === v
+                  return (
+                    <button
+                      key={v} type='button' disabled={cxBusy}
+                      onClick={() => setCxReason(on ? '' : v)}
+                      style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '999px', cursor: cxBusy ? 'not-allowed' : 'pointer', border: '1px solid ' + (on ? '#B45309' : '#E2E8F0'), background: on ? '#FFF8E1' : '#fff', color: on ? '#B45309' : '#64748B', fontWeight: on ? 700 : 400 }}
+                    >
+                      {v}
+                    </button>
+                  )
+                })}
+              </div>
+              <input
+                value={cxReason} disabled={cxBusy}
+                onChange={e => setCxReason(e.target.value)}
+                placeholder='そのまま書くこともできます'
+                aria-label='取消しの理由'
+                style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 11px', fontSize: '13px', color: '#1a1a1a' }}
+              />
+            </div>
+          ) : null
+        }
+        okLabel='出店を取り消す'
+        onOk={runCancel}
+        onCancel={() => { if (!cxBusy) { setCxAsk(null); setCxErr(null) } }}
+      />
+    </>
+  )
+}

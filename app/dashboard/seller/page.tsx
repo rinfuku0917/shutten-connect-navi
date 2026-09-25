@@ -318,13 +318,15 @@ export default function SellerDashboard() {
     setMenuPhotoUploading(false)
   }
 
-  // メニュー追加
-  const addMenu = async () => {
-    const { data: userData } = await supabase.auth.getUser()
-    const uid = userData.user?.id
-    if (!uid) return
-    if (!menuName.trim()) { showNotice('メニュー名を入力してください'); return }
-    setMenuSaving(true)
+  // メニュー欄に打ってある内容を menus 表に入れる。
+  //
+  // なぜ「変更を保存」からも呼ぶか（2026-09-25 の報告「メニュー記入してるのに必須になる」）:
+  //   メニューだけは専用の「＋ メニューを追加」で1品ずつ登録する作りで、
+  //   ほかの項目と同じつもりで「変更を保存」を押した人は、
+  //   打った内容が消えたうえ「未入力：提供メニュー」と出たままになっていた。
+  //   欄に文字が入っているなら登録の意思があるので、保存のときに一緒に入れる。
+  const addTypedMenu = async (uid: string): Promise<{ added: boolean; error?: string }> => {
+    if (!menuName.trim()) return { added: false }
     const priceNum = menuPrice.trim() === '' ? null : parseInt(menuPrice.replace(/[^0-9]/g, ''), 10)
     const nextOrder = menus.length > 0 ? Math.max(...menus.map(m => m.sort_order)) + 1 : 0
     const { error } = await supabase.from('menus').insert({
@@ -335,8 +337,20 @@ export default function SellerDashboard() {
       photo_url: menuPhotoUrl || null,
       sort_order: nextOrder,
     })
-    if (error) { showNotice('メニューの追加に失敗: ' + error.message); setMenuSaving(false); return }
+    if (error) return { added: false, error: error.message }
     setMenuName(''); setMenuDetail(''); setMenuPrice(''); setMenuPhotoUrl('')
+    return { added: true }
+  }
+
+  // メニュー追加
+  const addMenu = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id
+    if (!uid) return
+    if (!menuName.trim()) { showNotice('メニュー名を入力してください'); return }
+    setMenuSaving(true)
+    const r = await addTypedMenu(uid)
+    if (r.error) { showNotice('メニューの追加に失敗: ' + r.error); setMenuSaving(false); return }
     await loadMenus(uid)
     setMenuSaving(false)
   }
@@ -444,10 +458,17 @@ export default function SellerDashboard() {
         if (iErr) { showNotice('SNS保存失敗(' + pf.name + '): ' + iErr.message); setProfileSaving(false); return }
       }
     }
+    // メニュー欄に打ったまま「＋ メニューを追加」を押していない内容も、ここで登録する。
+    // loadProfile（中で loadMenus を呼ぶ）より先に入れないと、一覧に出ない
+    const menuRes = await addTypedMenu(uid)
     setProfileSaving(false)
     setProfileEdit(false)
     await loadProfile()
-    showNotice('プロフィールを保存しました')
+    showNotice(
+      menuRes.error ? 'プロフィールは保存しましたが、メニューの追加に失敗しました：' + menuRes.error
+      : menuRes.added ? 'プロフィールを保存し、メニューを1件追加しました'
+      : 'プロフィールを保存しました',
+    )
   }
 
   // パスワードの変更。
@@ -2346,7 +2367,14 @@ export default function SellerDashboard() {
                         </div>
                         <button onClick={addMenu} disabled={menuSaving} style={{ width: '100%', background: menuSaving ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 700, cursor: menuSaving ? 'not-allowed' : 'pointer' }}>{menuSaving ? '追加中...' : '＋ メニューを追加'}</button>
                       </div>
-                      <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', lineHeight: 1.7 }}>追加したメニューは出店者紹介ページに表示されます。</div>
+                      {/* 打ってあるのに未登録だと、赤い案内が「未入力：提供メニュー」のまま残る。
+                          押すボタンがあることをその場で伝える（2026-09-25 の報告） */}
+                      {menuName.trim() !== '' && (
+                        <div style={{ fontSize: '12px', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', marginTop: '6px', lineHeight: 1.7 }}>
+                          「{menuName.trim()}」はまだ登録されていません。上の<strong>「＋ メニューを追加」</strong>を押すと登録されます（「変更を保存」でも一緒に登録します）。
+                        </div>
+                      )}
+                      <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', lineHeight: 1.7 }}>1品ずつ「＋ メニューを追加」で登録します。追加したメニューは出店者紹介ページに表示されます。</div>
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
