@@ -692,6 +692,45 @@ export default function AdminPage() {
     loadSales()
   }
 
+  // 売上をExcelで書き出す（施設・企業へ提出する売上報告）。
+  //
+  // なぜ要るか（2026-09-26 の運営からの依頼）:
+  //   施設側が売上管理の仕組みを持たない出店先が増えていて、
+  //   売上や食数の提出を求められる。これまでは運営が手で表を作っていた。
+  //   様式と合計の作りは app/lib/salesXlsx.ts に集める（画面では作らない）。
+  const [xlsCompany, setXlsCompany] = useState('')
+  const [xlsBusy, setXlsBusy] = useState('')
+  const salesToXlsxRows = (list: SaleRow[]) => list.map(s => ({
+    date: s.sale_date,
+    placeTitle: s.placeTitle,
+    shopName: s.shopName || s.sellerName,
+    revenue: s.revenue,
+    totalPay: s.total_pay ?? s.fee,
+    placeFee: s.place_fee ?? 0,
+    companyFee: s.company_fee ?? s.fee,
+    qty: s.items.length > 0 ? s.items.reduce((t, it) => t + (it.qty || 0), 0) : null,
+    customers: s.customers,
+    weather: s.weather,
+    note: s.note,
+  }))
+  const exportSalesXlsx = async (key: string, list: SaleRow[], subtitle: string, namePart: string) => {
+    if (xlsBusy) return
+    if (list.length === 0) { showNotice('書き出す売上がありません。'); return }
+    setXlsBusy(key)
+    try {
+      const { downloadSalesXlsx, safeFileName } = await import('../lib/salesXlsx')
+      const [y, m] = saleMonth.split('-')
+      const periodLabel = y + '年' + parseInt(m, 10) + '月分'
+      await downloadSalesXlsx(
+        { facilityName: xlsCompany, periodLabel, subtitle, rows: salesToXlsxRows(list) },
+        safeFileName(namePart) + '_売上報告_' + y + parseInt(m, 10) + '月.xlsx',
+      )
+    } catch (e) {
+      showNotice('書き出しに失敗しました：' + (e instanceof Error ? e.message : '不明なエラー'))
+    }
+    setXlsBusy('')
+  }
+
   // 売上1件をその場で請求書にする（キャンセル料の特急発行）。
   //
   // なぜ要るか（2026-09-26 の運営からの依頼）:
@@ -3428,6 +3467,70 @@ const previewDoc = async (fileUrl: string) => {
                   </div>
                 )}
               </div>
+
+              {/* 施設・企業へ提出する売上報告のExcel（2026-09-26 の運営からの依頼）。
+                  案件（施設）ごとと出店者ごとの2通りで出せるようにする。
+                  施設は「自分の現場の全出店者ぶん」を求めることが多く、
+                  出店者ごとは「この人の分だけ」を聞かれたときに使う */}
+              {sales.length > 0 && (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '20px' }}>
+                  <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '4px', color: '#B45309' }}>売上報告をExcelで書き出す</div>
+                  <div style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '10px' }}>
+                    売上・食数・来客・天候と、出店料／企業お支払い／弊社取り分を1枚にまとめます。合計は自動計算の式で入ります。
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>提出先の企業名</span>
+                    <input value={xlsCompany} onChange={e => setXlsCompany(e.target.value)}
+                      placeholder='例：株式会社ドン・キホーテ'
+                      style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', minWidth: '240px', fontFamily: 'inherit' }} />
+                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>1行目に「○○御中」として入ります（空欄なら入りません）</span>
+                  </div>
+                  {(() => {
+                    const byPlace = new Map<string, { title: string, list: SaleRow[] }>()
+                    for (const r of sales) {
+                      const cur = byPlace.get(r.place_id) || { title: r.placeTitle, list: [] }
+                      cur.list.push(r); byPlace.set(r.place_id, cur)
+                    }
+                    const bySeller = new Map<string, { name: string, list: SaleRow[] }>()
+                    for (const r of sales) {
+                      const cur = bySeller.get(r.seller_id) || { name: r.shopName || r.sellerName, list: [] }
+                      cur.list.push(r); bySeller.set(r.seller_id, cur)
+                    }
+                    const btn = (busy: boolean) => ({
+                      background: busy ? '#ccc' : '#fff', color: '#B45309', border: '1px solid #FDE68A',
+                      borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: 700,
+                      cursor: busy ? 'wait' : 'pointer', whiteSpace: 'nowrap' as const, fontFamily: 'inherit',
+                    })
+                    return (
+                      <>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>案件（施設）ごと</div>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                          {[...byPlace.entries()].map(([pid, v]) => (
+                            <button key={pid} onClick={() => exportSalesXlsx('p' + pid, v.list, v.title, v.title)}
+                              disabled={xlsBusy === 'p' + pid} style={btn(xlsBusy === 'p' + pid)}>
+                              {xlsBusy === 'p' + pid ? '作成中…' : v.title + '（' + v.list.length + '件）'}
+                            </button>
+                          ))}
+                        </div>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>出店者ごと</div>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                          {[...bySeller.entries()].map(([sid, v]) => (
+                            <button key={sid} onClick={() => exportSalesXlsx('s' + sid, v.list, v.name, v.name)}
+                              disabled={xlsBusy === 's' + sid} style={btn(xlsBusy === 's' + sid)}>
+                              {xlsBusy === 's' + sid ? '作成中…' : v.name + '（' + v.list.length + '件）'}
+                            </button>
+                          ))}
+                        </div>
+                        <button onClick={() => exportSalesXlsx('all', sales, '', 'すべて')}
+                          disabled={xlsBusy === 'all'}
+                          style={{ background: xlsBusy === 'all' ? '#ccc' : '#1E2A3B', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: xlsBusy === 'all' ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                          {xlsBusy === 'all' ? '作成中…' : 'この月のすべて（' + sales.length + '件）'}
+                        </button>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
 
               {/* 出店者ごとにまとめて、その月の請求書を作れるようにする */}
               {(() => {
