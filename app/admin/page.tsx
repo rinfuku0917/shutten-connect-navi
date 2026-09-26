@@ -602,7 +602,7 @@ export default function AdminPage() {
     // 列が無い環境では、その列だけ落として読み直す（一覧が空になるのを防ぐ）
     const { data } = await selectWithOptionalColumn(withMin => supabase
       .from('applications')
-      .select('id, place_id, seller_id, format, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees' + (withMin ? ', min_guarantee' : '') + '), profiles!applications_seller_id_fkey(name)')
+      .select('id, place_id, seller_id, format, places(title, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees, day_count_fees' + (withMin ? ', min_guarantee' : '') + '), profiles!applications_seller_id_fkey(name)')
       .eq('status', 'approved')
       .order('created_at', { ascending: false }))
     const mapped: ApprovedApp[] = (data || []).map((a: any) => ({
@@ -891,7 +891,7 @@ export default function AdminPage() {
     // 列が無い環境ではその列だけ落として読み直す（一覧が空になるのを防ぐ）
     const { data } = await selectWithOptionalColumn(withMin => supabase
       .from('places')
-      .select('id, title, prefecture, place_type, status, closed, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, day_type_fees, format_fees, fee, genres, profiles(name), applications(count)'
+      .select('id, title, prefecture, place_type, status, closed, price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, day_type_fees, format_fees, day_count_fees, fee, genres, profiles(name), applications(count)'
         + (withMin ? ', min_guarantee' : ''))
       // 取り消された申込は応募数に入れない
       .neq('applications.status', 'cancelled')

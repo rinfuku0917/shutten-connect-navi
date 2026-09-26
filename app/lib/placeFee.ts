@@ -448,6 +448,12 @@ export type FeeSource = {
   format_fees?: unknown
   /** 案件全体の最低保証（places.min_guarantee）。列が無い環境では undefined */
   min_guarantee?: unknown
+  /**
+   * 日数ごとの額（places.day_count_fees）。
+   * 日ごとの計算には入らない（日数が決まって初めて額が決まるため）。
+   * 入っている案件は、この表にある日数だけが選べる
+   */
+  day_count_fees?: unknown
 }
 
 export type DayFee = {
@@ -641,6 +647,53 @@ export type PerEventConflict = {
   where: string[]
 }
 
+/** 日数ごとの出店料の1行（places.day_count_fees の値） */
+export type DayCountFee = {
+  placeFee?: number | null
+  companyFee?: number | null
+}
+
+/**
+ * 日数ごとの出店料（「2日なら6万円、3日なら8万円」）を読む。
+ *
+ * なぜ要るか（2026-09-26 の運営からの相談）:
+ *   美食EXPO のような催しは1日だけの出店を受け付けず、2日か3日で出る。
+ *   しかも日数で金額が変わる。「1日あたり」だと2日6万→3日9万になり、
+ *   「期間で1回」だと2日も3日も同じ額になる。どちらでも表せなかった。
+ *
+ * この表が入っている案件は、表にある日数だけが選べる（＝申込の決まりにもなる）。
+ * 日ごとの計算（dayFeeOf）はこの表を見ない。日数が決まって初めて額が決まるため。
+ */
+export function dayCountOptions(p: FeeSource): number[] {
+  const o = p.day_count_fees
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return []
+  return Object.keys(o as Record<string, unknown>)
+    .map(k => parseInt(k, 10))
+    .filter(n => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b)
+}
+
+/** その日数の額（施設分＋弊社分の合計）。表に無い日数は null */
+export function dayCountFeeOf(p: FeeSource, days: number): number | null {
+  const o = p.day_count_fees
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null
+  const v = (o as Record<string, DayCountFee>)[String(days)]
+  if (!v || typeof v !== 'object') return null
+  const total = (Number(v.placeFee) || 0) + (Number(v.companyFee) || 0)
+  return total > 0 ? total : null
+}
+
+/** 画面に出す「2日 60,000円／3日 80,000円」の文。表が無ければ空 */
+export function dayCountFeeText(p: FeeSource): string {
+  return dayCountOptions(p)
+    .map(n => {
+      const t = dayCountFeeOf(p, n)
+      return t == null ? '' : `${n}日 ${yen(t)}`
+    })
+    .filter(Boolean)
+    .join('／')
+}
+
 /**
  * 「期間で1回のみ」として入れてある額の合計（施設分＋弊社分）。
  *
@@ -751,11 +804,13 @@ export function dayFeeLabelOn(p: FeeSource, format: string | null | undefined, d
   // 額としては出さず「期間」と出す（合計にも入れない）
   const perEvent = (p.place_fixed_unit === 'per_event' && (p.price_fixed || 0) > 0)
     || (p.company_fixed_unit === 'per_event' && (p.company_fixed_amount || 0) > 0)
+  // 日数ごとの金額の案件は、1日ぶんの額が存在しない（日数が決まって初めて決まる）
+  const byCount = dayCountOptions(p).length > 0
   const amount = day.total > 0 ? day.total : null
   const minApplied = day.placeMinApplied || day.companyMinApplied
   return {
     amount,
-    short: amount != null ? '' : (pct > 0 ? '歩合' : perEvent ? '期間' : '相談'),
+    short: amount != null ? '' : (byCount ? '日数' : pct > 0 ? '歩合' : perEvent ? '期間' : '相談'),
     mark: amount == null ? '' : minApplied ? '最' : pct > 0 ? '＋' : '',
     text,
   }
@@ -819,8 +874,13 @@ export function feeCondition(p: FeeSource, format?: string | null, date?: string
   // ここで 0 を当てると「平日0円/日」と告知してしまい、実際の請求額と食い違う
   const belowFormat = (dtT: number | null) => rangeText || (dtT != null ? perDay(dtT) : colText)
 
-  // 日が決まっている場面（請求書の1行）は、その日の額だけを出す
-  if (date) {
+  // 日数ごとの額を入れてある案件は、それが唯一の額。
+  // 「1日あたり」も「期間で1回」も出さない（日数が決まって初めて額が決まるため）
+  const byCount = dayCountFeeText(p)
+  if (byCount) {
+    parts.push(byCount)
+  } else if (date) {
+    // 日が決まっている場面（請求書の1行）は、その日の額だけを出す
     const fmtD = sideTotal(formatFee(p.format_fees, format, date))
     const dayD = sideTotal(perDayFee(p.schedule, date))
     const dtD = sideTotal(dayTypeFee(p.day_type_fees, date))
@@ -843,8 +903,9 @@ export function feeCondition(p: FeeSource, format?: string | null, date?: string
   }
 
   // 「期間で1回のみ」の額は、上のどの枝を通っても日額とは別に添える。
-  // 形態ごとの日額と併用している案件もあるため、枝の中に入れない
-  if (perEventText) parts.push(perEventText)
+  // 形態ごとの日額と併用している案件もあるため、枝の中に入れない。
+  // 日数ごとの表がある案件は、そちらが唯一の額なので足さない
+  if (perEventText && !byCount) parts.push(perEventText)
 
   // 歩合（計算と同じ読み出し。値域の外は設定ミスとして捨てる）
   const { placePct, companyPct } = sharePctOn(p, format)

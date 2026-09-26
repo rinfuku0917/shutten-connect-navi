@@ -72,6 +72,8 @@ export default function ApplyDateCalendar({
   feeState,
   periodFee = 0,
   minDays = 1,
+  dayCounts = [],
+  countFee,
 }: {
   days: CalendarDay[]
   selected: string[]
@@ -95,6 +97,13 @@ export default function ApplyDateCalendar({
    * 1なら1日から。1日だけの出店を受け付けない案件のために使う。
    */
   minDays?: number
+  /**
+   * 日数ごとの出店料（app/lib/placeFee.ts の dayCountFeeOf）。
+   * 入っていれば、選んだ日数の額をここから引く。日ごとの額も期間ぶんも足さない。
+   * 空の配列なら、これまでどおりの計算（2026-09-26 の運営からの相談）
+   */
+  dayCounts?: number[]
+  countFee?: (days: number) => number | null
   /** 金額を出せるか。
    *   'ok'     … 出す
    *   'login'  … 未ログイン（案件詳細のほかの金額と同じく鍵を出す）
@@ -181,25 +190,34 @@ export default function ApplyDateCalendar({
   // 入れると払う額を多く見せてしまう
   const stuck = chosen.filter(d => d.disabled || d.applied)
   const usable = chosen.filter(d => !d.disabled && !d.applied)
-  // 最低出店日数に足りているか。足りなければ画面に知らせる文をもらう
-  const shortfall = applyDaysShortfall({ min_apply_days: minDays }, usable.length, everyDate.length)
+  // 日数の決まり（日数ごとの金額があればその日数、無ければ最低日数）に合っているか
+  const daysRule = { min_apply_days: minDays, day_count_fees: dayCounts.length > 0 ? Object.fromEntries(dayCounts.map(n => [String(n), {}])) : null }
+  const shortfall = applyDaysShortfall(daysRule, usable.length, everyDate.length)
+  // 日数ごとの金額がある案件の、いま選んでいる日数の額
+  const byCount = dayCounts.length > 0 && countFee ? countFee(usable.length) : null
   // 「期間で1回のみ」の額は、1日でも選んだら1回だけ足す。日数を掛けない
   const period = usable.length > 0 && (periodFee ?? 0) > 0 ? (periodFee as number) : 0
-  // 選んだ日の合計。歩合だけの日は額が決まらないので、件数を添えて別に伝える
-  const sum = usable.reduce((a, d) => a + (d.amount ?? 0), 0) + period
+  // 選んだ日の合計。歩合だけの日は額が決まらないので、件数を添えて別に伝える。
+  // 日数ごとの金額がある案件は、それが唯一の額（日ごとも期間ぶんも足さない）
+  const sum = byCount != null
+    ? byCount
+    : usable.reduce((a, d) => a + (d.amount ?? 0), 0) + period
   // 額が決まらない日は理由が3通りある（歩合・期間で1回・要相談）。
   // まとめて「売上に応じて決まる」と書くと、期間で1回の案件や
   // 金額が未設定の案件に事実と違う説明が出る。
   // 「期間」の日は、期間ぶんの額を合計に入れられたなら理由を出さない
   // （「合計に入れていません」と書きながら合計に入っていることになる）
-  const openByNote = ['歩合', '期間', '相談'].map(n => ({
+  const openByNote = ['歩合', '期間', '日数', '相談'].map(n => ({
     note: n,
-    count: n === '期間' && period > 0 ? 0
+    // 合計を出せているときは理由を出さない
+    // （「合計に入れていません」と書きながら合計に入っていることになる）
+    count: (n === '期間' && period > 0) || (n === '日数' && byCount != null) ? 0
       : usable.filter(d => d.amount == null && d.amountNote === n).length,
   })).filter(x => x.count > 0)
   const OPEN_TEXT: Record<string, string> = {
     '歩合': '売上に応じて決まるため',
     '期間': '期間で1回の出店料のため',
+    '日数': '出店料が選んだ日数で決まるため',
     '相談': '出店料が「要相談」のため',
   }
   // 2日以上選んでいて、時間帯が日によって違うとき。
@@ -259,10 +277,15 @@ export default function ApplyDateCalendar({
 
       {/* 日数に下限がある案件は、カレンダーを触る前に伝える。
           あとから「1日では申し込めません」と出すより、先に言うほうが迷わない */}
-      {minDays > 1 && (
+      {(dayCounts.length > 0 || minDays > 1) && (
         <div style={{ fontSize: '12px', color: BROWN, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', margin: '0 0 8px', lineHeight: 1.8 }}>
-          この案件は<strong>{Math.min(minDays, Math.max(everyDate.length, 1))}日以上</strong>でのお申し込みです。
-          1日だけの出店はできません。日は1日ずつ選べます。
+          {dayCounts.length > 0 ? (
+            <>この案件は<strong>{dayCounts.filter(n => n <= Math.max(everyDate.length, 1)).join('日または')}日</strong>でのお申し込みです。
+            選んだ日数で出店料が変わります。日は1日ずつ選べます。</>
+          ) : (
+            <>この案件は<strong>{Math.min(minDays, Math.max(everyDate.length, 1))}日以上</strong>でのお申し込みです。
+            1日だけの出店はできません。日は1日ずつ選べます。</>
+          )}
         </div>
       )}
 
@@ -355,7 +378,7 @@ export default function ApplyDateCalendar({
 
       {/* 日数に下限がある案件は、日程が月をまたぐこともあるので
           「日程ぜんぶ」の1押しも用意する（当月ぶんだけでは下限に届かないことがある） */}
-      {minDays > 1 && months.length > 0 && (
+      {(dayCounts.length > 0 || minDays > 1) && months.length > 0 && (
         <div style={{ marginTop: '8px' }}>
           <button
             type='button'
@@ -410,7 +433,7 @@ export default function ApplyDateCalendar({
         )}
         {/* 期間ぶんの額は日数を掛けないので、そのことを合計のそばで言う。
             言わないと「3日選んだのに1日分しか足されていない」と読まれる */}
-        {canSeeFee && period > 0 && (
+        {canSeeFee && period > 0 && byCount == null && (
           <div style={{ fontSize: '11.5px', color: BROWN, marginBottom: '6px' }}>
             うち {period.toLocaleString()}円 は期間ぶんの出店料です（何日選んでも1回だけ）
           </div>

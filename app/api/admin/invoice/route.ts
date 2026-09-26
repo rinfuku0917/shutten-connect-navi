@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireCaller, denyNotAdmin, roleCheckFailedResponse } from '../../../lib/apiAuth'
-import { feeCondition, dayFeeOf, minTotalOn, perEventFeeOf, perEventConflict, type FeeSource } from '../../../lib/placeFee'
+import { feeCondition, dayFeeOf, minTotalOn, perEventFeeOf, perEventConflict, dayCountFeeOf, type FeeSource } from '../../../lib/placeFee'
 import { selectWithOptionalColumn } from '../../../lib/optionalColumn'
 import { sendSalesToSheet } from '../../../lib/sheetSend'
 
@@ -389,17 +389,25 @@ export async function POST(req: Request) {
       let once = false
       let perEventOnce = 0
       if (advPlaceId) {
-        const advCols = 'price_fixed, place_fixed_unit, company_fixed_amount, company_fixed_unit, price_share_pct, company_share_pct, schedule, day_type_fees, format_fees'
+        const advCols = 'price_fixed, place_fixed_unit, company_fixed_amount, company_fixed_unit, price_share_pct, company_share_pct, schedule, day_type_fees, format_fees, day_count_fees'
         const { data: advPlace } = await selectWithOptionalColumn<FeeSource>(withMin => admin
           .from('places')
           .select(advCols + (withMin ? ', min_guarantee' : ''))
           .eq('id', advPlaceId).maybeSingle())
         if (advPlace) {
-          perEventOnce = perEventFeeOf(advPlace)
-          const wholeAmount = (advPlace.price_fixed || 0) + (advPlace.company_fixed_amount || 0)
-          once = perEventOnce > 0
-            && perEventOnce === wholeAmount
-            && perEventConflict(advPlace) === null
+          // 日数ごとの金額を入れてある案件は、その日数の額をそのまま1回で請求する。
+          // 「2日なら6万円、3日なら8万円」を日数で掛けると合わない（2026-09-26）
+          const byCount = dayCountFeeOf(advPlace, (apps.length > 0 ? apps : [null]).length)
+          if (byCount != null) {
+            once = true
+            perEventOnce = byCount
+          } else {
+            perEventOnce = perEventFeeOf(advPlace)
+            const wholeAmount = (advPlace.price_fixed || 0) + (advPlace.company_fixed_amount || 0)
+            once = perEventOnce > 0
+              && perEventOnce === wholeAmount
+              && perEventConflict(advPlace) === null
+          }
         }
       }
 

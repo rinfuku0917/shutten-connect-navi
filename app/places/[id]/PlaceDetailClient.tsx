@@ -9,7 +9,7 @@ import SiteHeader from '../../components/SiteHeader'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
-import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, dayFeeLabelOn, perEventFeeOf, type FormatFees } from '../../lib/placeFee'
+import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, dayFeeLabelOn, perEventFeeOf, dayCountOptions, dayCountFeeOf, type FormatFees } from '../../lib/placeFee'
 import { minApplyDays, applyDaysShortfall } from '../../lib/applyRules'
 import ApplyDateCalendar, { type CalendarDay } from '../../components/ApplyDateCalendar'
 import { showsToSeller } from '../../lib/cancelledVisibility'
@@ -33,6 +33,8 @@ export type Place = {
   company_share_pct: number | null
   /** 1回の申込で選ばないといけない最低の日数。空か1なら1日から（app/lib/applyRules.ts） */
   min_apply_days: number | null
+  /** 日数ごとの出店料。入っていればその日数だけ選べる（app/lib/placeFee.ts） */
+  day_count_fees: unknown
   map_url: string | null
   // 出店場所のカテゴリー（複数選択）。この画面では使わないが、
   // サーバー側（page.tsx）がエリア別・カテゴリ別ページへのリンクを組み立てるのに読む
@@ -884,6 +886,8 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                           feeState={!canSeeFee ? 'login' : !format ? 'format' : 'ok'}
                           periodFee={perEventFeeOf(place)}
                           minDays={minApplyDays(place)}
+                          dayCounts={dayCountOptions(place)}
+                          countFee={(n) => dayCountFeeOf(place, n)}
                         />
                         {/* 選んだ形式で出店できない曜日があるときは、理由を文でも出す。
                             マスが灰色になっているだけでは、なぜ選べないのか分からない */}

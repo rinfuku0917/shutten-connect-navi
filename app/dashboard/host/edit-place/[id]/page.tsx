@@ -135,6 +135,8 @@ function EditPlacePageInner() {
 
   // 毎月おなじ条件で翌月の日程を足す設定。
   // 常設の案件では毎月31日ぶんを手で入れ直していて、入れ忘れると募集が止まる
+  // 日数ごとの出店料の入力行。保存するときに day_count_fees（jsonb）へまとめる
+  const [dayCountRows, setDayCountRows] = useState<{ days: string; yen: string }[]>([])
   const [repOn, setRepOn] = useState(false)
   const [repDows, setRepDows] = useState<number[]>([0,1,2,3,4,5,6])
   const [repStart, setRepStart] = useState('選択してください')
@@ -287,6 +289,21 @@ function EditPlacePageInner() {
       if(data.format_fees && typeof data.format_fees === 'object' && !Array.isArray(data.format_fees)){
         setFormatFees(data.format_fees as FormatFeesValue)
       }
+      // 日数ごとの出店料。日数の小さい順に並べて入力欄に戻す
+      {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dc = (data as any).day_count_fees
+        if (dc && typeof dc === 'object' && !Array.isArray(dc)) {
+          setDayCountRows(Object.keys(dc)
+            .map(k => ({ n: parseInt(k, 10), v: dc[k] }))
+            .filter(x => Number.isFinite(x.n) && x.n > 0)
+            .sort((a, b) => a.n - b.n)
+            .map(x => ({
+              days: String(x.n),
+              yen: String((Number(x.v?.placeFee) || 0) + (Number(x.v?.companyFee) || 0)),
+            })))
+        }
+      }
       setRepLastAdded(data.repeat_last_added ?? null)
       // 列がまだ無い環境では undefined。その場合は最低保証なしとして扱う
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -366,6 +383,19 @@ function EditPlacePageInner() {
       min_apply_days: (() => {
         const n = parseInt(form.minApplyDays, 10)
         return Number.isFinite(n) && n > 1 ? Math.min(n, 31) : null
+      })(),
+      // 日数ごとの出店料。内訳（取引先／弊社）はこの画面では分けないので、
+      // 全額を弊社の固定額の側に入れる。分ける必要があれば運営が料金設定で直す
+      day_count_fees: (() => {
+        const o: Record<string, { placeFee: number; companyFee: number }> = {}
+        for (const r of dayCountRows) {
+          const d = parseInt(r.days, 10)
+          const y = parseInt(r.yen, 10)
+          if (Number.isFinite(d) && d > 0 && d <= 31 && Number.isFinite(y) && y > 0) {
+            o[String(d)] = { placeFee: 0, companyFee: y }
+          }
+        }
+        return Object.keys(o).length > 0 ? o : null
       })(),
       reminder_days: parseInt(form.reminderDays, 10) || 7,
       // 運営が開いたときだけ書き込む。募集者の保存でうっかり消えないようにする
@@ -492,6 +522,36 @@ async function refreshPublicPages(placeId?: string) {
                   1日だけの出店を受け付けない催しはここに入れてください。
                   たとえば3日間の日程で「2」と入れると、出店者は2日か3日を選べて、1日だけでは申し込めません。
                 </p>
+              </div>
+              {/* 日数で金額が変わる催しのため（2026-09-26 の運営からの相談）。
+                  「2日なら6万円、3日なら8万円」は、1日あたりでも期間で1回でも表せない */}
+              <div style={{marginTop:'16px'}}>
+                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>日数ごとの出店料（任意）</label>
+                <p style={{fontSize:'12px',color:'#64748B',margin:'4px 0 8px',lineHeight:1.8}}>
+                  日数で金額が変わる催しだけ入れてください（例：2日で60,000円、3日で80,000円）。
+                  <strong>入れた日数だけが選べるようになります。</strong>
+                  空欄なら、上の出店料の設定がそのまま使われます。
+                </p>
+                <div style={{display:'flex',flexDirection:'column',gap:'6px',maxWidth:'420px'}}>
+                  {dayCountRows.map((r, i) => (
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                      <input type='number' min='1' max='31' value={r.days} placeholder='日数'
+                        onChange={e=>setDayCountRows(rows=>rows.map((x,j)=>j===i?{...x,days:e.target.value.replace(/[^0-9]/g,'')}:x))}
+                        style={{...inputStyle,width:'80px'}}/>
+                      <span style={{fontSize:'13px',color:'#555',whiteSpace:'nowrap'}}>日 →</span>
+                      <input type='number' min='0' value={r.yen} placeholder='金額（税抜）'
+                        onChange={e=>setDayCountRows(rows=>rows.map((x,j)=>j===i?{...x,yen:e.target.value.replace(/[^0-9]/g,'')}:x))}
+                        style={{...inputStyle,flex:1}}/>
+                      <span style={{fontSize:'13px',color:'#555',whiteSpace:'nowrap'}}>円</span>
+                      <button type='button' onClick={()=>setDayCountRows(rows=>rows.filter((_,j)=>j!==i))}
+                        style={{border:'1px solid #E5E7EB',background:'#fff',color:'#64748B',borderRadius:'8px',padding:'6px 10px',fontSize:'12px',cursor:'pointer'}}>削除</button>
+                    </div>
+                  ))}
+                  <button type='button' onClick={()=>setDayCountRows(rows=>[...rows,{days:'',yen:''}])}
+                    style={{border:'1px dashed #CBD5E1',background:'#F8FAFC',color:'#64748B',borderRadius:'8px',padding:'8px',fontSize:'13px',cursor:'pointer'}}>
+                    ＋ 日数と金額を足す
+                  </button>
+                </div>
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'10px'}}>
                 {schedule.map((d,i)=>(

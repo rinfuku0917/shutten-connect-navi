@@ -9,7 +9,7 @@ import { exportPlaceSubmission, type SubmissionFormat } from '../lib/submissionX
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { cancelResultMessage } from '../lib/purgeLog'
-import { dayFeeOf, perEventFeeOf, perEventConflict, type FeeSource } from '../lib/placeFee'
+import { dayFeeOf, perEventFeeOf, perEventConflict, dayCountFeeOf, type FeeSource } from '../lib/placeFee'
 import { selectWithOptionalColumn } from '../lib/optionalColumn'
 
 // 案件ごとの応募者一覧。
@@ -177,10 +177,12 @@ export default function PlaceApplicationsModal({
   // 「期間で1回のみ」の案件かどうか。判定は app/api/admin/invoice/route.ts の once と同じ条件で、
   // 案件の額がまるごと期間ぶんのときだけ true にする。
   // 混ざっている案件（施設分だけ期間で1回など）を1回にすると少なく請求してしまう
-  const advPeriodFee = feeSrc ? perEventFeeOf(feeSrc) : 0
-  const advOnce = advPeriodFee > 0
+  // 日数ごとの金額がある案件は、選んだ日数の額をそのまま1回で請求する
+  const advByCount = feeSrc ? dayCountFeeOf(feeSrc, Math.max(advSel.size, 1)) : null
+  const advPeriodFee = advByCount != null ? advByCount : (feeSrc ? perEventFeeOf(feeSrc) : 0)
+  const advOnce = advByCount != null || (advPeriodFee > 0
     && advPeriodFee === ((feeSrc?.price_fixed || 0) + (feeSrc?.company_fixed_amount || 0))
-    && feeSrc != null && perEventConflict(feeSrc) === null
+    && feeSrc != null && perEventConflict(feeSrc) === null)
   // いま選んでいる出店日と、その日の設定額。
   const advSelDays = advAsk
     ? advAsk.dates.filter(d => advSel.has(d.id))
@@ -374,7 +376,7 @@ export default function PlaceApplicationsModal({
 
     // 事前請求の金額の初期値に使う、案件の出店料の設定。
     // min_guarantee は移行SQLを流すまで列が無いので、その列だけ落として読み直す
-    const cols = 'price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees'
+    const cols = 'price_fixed, price_share_pct, place_fixed_unit, company_fixed_amount, company_fixed_unit, company_share_pct, share_tax_basis, share_tax_rate, schedule, day_type_fees, format_fees, day_count_fees'
     const { data: pl } = await selectWithOptionalColumn<FeeSource>(withMin => supabase
       .from('places').select(cols + (withMin ? ', min_guarantee' : '')).eq('id', placeId).maybeSingle())
     setPlaceFixed((pl?.price_fixed || 0) + (pl?.company_fixed_amount || 0))

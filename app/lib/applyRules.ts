@@ -13,6 +13,22 @@
 export type ApplyDaysSource = {
   /** 1回の申込で選ばないといけない最低の日数（places.min_apply_days） */
   min_apply_days?: number | null
+  /**
+   * 日数ごとの出店料（places.day_count_fees）。
+   * 入っていれば、その表にある日数だけが選べる（最低日数より優先する）。
+   * 「2日なら6万円、3日なら8万円」の案件では、2日か3日しか選べない
+   */
+  day_count_fees?: unknown
+}
+
+/** 選べる日数の一覧。日数ごとの金額を入れていない案件は空（＝下限だけで判断する） */
+export function allowedDayCounts(p: ApplyDaysSource | null | undefined): number[] {
+  const o = p?.day_count_fees
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return []
+  return Object.keys(o as Record<string, unknown>)
+    .map(k => parseInt(k, 10))
+    .filter(n => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b)
 }
 
 /** その案件の最低出店日数。空・1・数字でない値は「1日から」として扱う */
@@ -35,6 +51,22 @@ export function applyDaysShortfall(
   picked: number,
   selectable: number,
 ): { need: number; message: string } | null {
+  // 日数ごとの金額がある案件は、その日数ちょうどでないと額が決まらない。
+  // 日程より多い日数（3日の日程に「5日」の行がある）は選びようがないので外す
+  const counts = allowedDayCounts(p).filter(n => n <= Math.max(selectable, 1))
+  if (counts.length > 0) {
+    if (counts.includes(picked)) return null
+    const list = counts.join('日または') + '日'
+    const next = counts.find(n => n > picked)
+    return {
+      need: next != null ? next - picked : 0,
+      message: picked === 0
+        ? `この案件は${list}でのお申し込みです`
+        : next != null
+          ? `あと${next - picked}日選んでください（この案件は${list}でのお申し込みです）`
+          : `選べるのは${list}です。${picked}日では申し込めません`,
+    }
+  }
   const min = Math.min(minApplyDays(p), Math.max(selectable, 1))
   if (min <= 1 || picked >= min) return null
   return {
