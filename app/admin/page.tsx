@@ -98,7 +98,7 @@ async function adminAccessToken(): Promise<AdminToken> {
 export default function AdminPage() {
   const router = useRouter()
   // 管理画面のタブ。URLと履歴の出し入れに使うため、一覧をここに持つ
-  const ADMIN_TABS = ['dashboard','schedule','places','sellers','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings','contacts','mail'] as const
+  const ADMIN_TABS = ['dashboard','schedule','places','sellers','hosts','csv','docs','sales','messages','reviews','imported','publish','blog','applications','meetings','contacts','mail'] as const
 
   // 確認ダイアログ。
   // window.confirm は LINE や Instagram のアプリ内ブラウザで黙って無視され、
@@ -953,8 +953,6 @@ export default function AdminPage() {
 
   // messagesタブを開いたら読み込む
   useEffect(() => { if (tab === 'messages' && authChecked) loadThreads() }, [tab, authChecked])
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (tab === 'hosts' && authChecked) loadHosts() }, [tab, authChecked])
 
   // ===== レビュー審査（管理者）=====
   type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
@@ -2283,6 +2281,10 @@ const previewDoc = async (fileUrl: string) => {
               onClick={() => {
                 const k = item.key as typeof tab
                 setTab(k)
+                // 募集者管理は、押したときに読む。
+                // 効果（useEffect）の中で読み込みを始めると、その場で setState を
+                // 呼ぶことになり lint に止められるため（ほかのタブは既に別の作り）
+                if (k === 'hosts') void loadHosts()
                 try { localStorage.setItem('adminTab', k) } catch { /* 保存できなくても動く */ }
                 // 履歴に積む。これで戻るボタンが一つ前のタブに戻る
                 const url = new URL(window.location.href)
