@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
+import { applyDaysShortfall } from '../lib/applyRules'
 
 // 申込のときに出店希望日を選ぶカレンダー。
 //
@@ -70,6 +71,7 @@ export default function ApplyDateCalendar({
   onClearMonth,
   feeState,
   periodFee = 0,
+  minDays = 1,
 }: {
   days: CalendarDay[]
   selected: string[]
@@ -88,6 +90,11 @@ export default function ApplyDateCalendar({
    *   申し込む人は自分が幾ら払うのか分からない。
    */
   periodFee?: number | null
+  /**
+   * 1回の申込で選ばないといけない最低の日数（app/lib/applyRules.ts の minApplyDays）。
+   * 1なら1日から。1日だけの出店を受け付けない案件のために使う。
+   */
+  minDays?: number
   /** 金額を出せるか。
    *   'ok'     … 出す
    *   'login'  … 未ログイン（案件詳細のほかの金額と同じく鍵を出す）
@@ -157,16 +164,12 @@ export default function ApplyDateCalendar({
   const pickedHere = monthDays.filter(d => selected.includes(d.date)).length
   const allPicked = selectableDates.length > 0 && selectableDates.every(d => selected.includes(d))
 
-  // 「期間で1回のみ」の案件は、全日まとめての申込しかできない。
-  //
-  // なぜ（2026-09-26 の運営からの説明）:
-  //   美食EXPO in三重は3日間で税抜8万円で、1日単位の出店は受け付けていない。
-  //   出店料が期間ぶんの1つの額なので、1日だけ選ばれるとその日の額が出せない。
-  //   月をまたぐ日程もあるので、当月ではなく日程全部をまとめて選ぶ。
-  const allDaysOnly = (periodFee ?? 0) > 0
+  // 最低出店日数（1日だけの申込を受け付けない案件のため）。
+  // 日は1日ずつ選べる。「3日のうち2日」を受け付ける案件があるので、
+  // 全日まとめてに固定しない（2026-09-26 の運営からの説明）
   const everyDate = [...byDate.values()].filter(d => !d.disabled && !d.applied).map(d => d.date)
   const everyPicked = everyDate.length > 0 && everyDate.every(d => selected.includes(d))
-  // まとめて選ぶ／まとめて外す。マスを押したときもこれを使う
+  // 日程全部をまとめて選ぶ／外す（下限のある案件は、これが一番早い）
   const toggleAll = () => {
     if (everyPicked) onClearMonth([...byDate.values()].map(d => d.date))
     else onSelectMany(everyDate)
@@ -178,6 +181,8 @@ export default function ApplyDateCalendar({
   // 入れると払う額を多く見せてしまう
   const stuck = chosen.filter(d => d.disabled || d.applied)
   const usable = chosen.filter(d => !d.disabled && !d.applied)
+  // 最低出店日数に足りているか。足りなければ画面に知らせる文をもらう
+  const shortfall = applyDaysShortfall({ min_apply_days: minDays }, usable.length, everyDate.length)
   // 「期間で1回のみ」の額は、1日でも選んだら1回だけ足す。日数を掛けない
   const period = usable.length > 0 && (periodFee ?? 0) > 0 ? (periodFee as number) : 0
   // 選んだ日の合計。歩合だけの日は額が決まらないので、件数を添えて別に伝える
@@ -252,12 +257,12 @@ export default function ApplyDateCalendar({
         </button>
       </div>
 
-      {/* 全日まとめてしか申し込めない案件は、カレンダーを触る前に伝える。
-          あとから「1日だけは選べません」と出すより、先に言うほうが迷わない */}
-      {allDaysOnly && (
+      {/* 日数に下限がある案件は、カレンダーを触る前に伝える。
+          あとから「1日では申し込めません」と出すより、先に言うほうが迷わない */}
+      {minDays > 1 && (
         <div style={{ fontSize: '12px', color: BROWN, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', margin: '0 0 8px', lineHeight: 1.8 }}>
-          この案件は<strong>全日まとめての出店</strong>です。1日だけの出店はできません。
-          どの日を押しても{everyDate.length}日すべてが選ばれます。
+          この案件は<strong>{Math.min(minDays, Math.max(everyDate.length, 1))}日以上</strong>でのお申し込みです。
+          1日だけの出店はできません。日は1日ずつ選べます。
         </div>
       )}
 
@@ -311,7 +316,7 @@ export default function ApplyDateCalendar({
               key={c.date}
               type='button'
               disabled={off}
-              onClick={() => (allDaysOnly ? toggleAll() : onToggle(c.date))}
+              onClick={() => onToggle(c.date)}
               aria-pressed={on}
               aria-label={title}
               title={title}
@@ -348,8 +353,9 @@ export default function ApplyDateCalendar({
         </div>
       )}
 
-      {/* 全日まとめての案件は、1日ずつ選ぶボタンを出さない */}
-      {allDaysOnly ? (
+      {/* 日数に下限がある案件は、日程が月をまたぐこともあるので
+          「日程ぜんぶ」の1押しも用意する（当月ぶんだけでは下限に届かないことがある） */}
+      {minDays > 1 && months.length > 0 && (
         <div style={{ marginTop: '8px' }}>
           <button
             type='button'
@@ -357,10 +363,11 @@ export default function ApplyDateCalendar({
             disabled={everyDate.length === 0}
             style={{ ...subBtn, width: '100%', opacity: everyDate.length === 0 ? 0.45 : 1 }}
           >
-            {everyPicked ? '選択を解除' : `${everyDate.length}日すべてを選ぶ`}
+            {everyPicked ? '選択をすべて解除' : `日程の${everyDate.length}日すべてを選ぶ`}
           </button>
         </div>
-      ) : (
+      )}
+      {
         /* 当月まとめて選ぶ・外す。日程が20日を超える案件があるため */
         <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
           <button
@@ -380,7 +387,7 @@ export default function ApplyDateCalendar({
             当月の選択を解除
           </button>
         </div>
-      )}
+      }
 
       {/* 選んだ日と合計。カレンダーのマスには時間帯を出せないので、ここで出す */}
       <div style={{ marginTop: '10px', border: '1px solid #FFE0A0', background: '#FFF9E6', borderRadius: '8px', padding: '10px 12px' }}>
@@ -393,6 +400,12 @@ export default function ApplyDateCalendar({
         {feeState === 'format' && (
           <div style={{ fontSize: '11.5px', color: BROWN, marginBottom: '6px' }}>
             上で出店形式を選ぶと、1日ごとの出店料と合計が出ます
+          </div>
+        )}
+        {/* 日数が下限に足りていない。送信で止まる前に、合計のそばで知らせる */}
+        {shortfall && (
+          <div style={{ fontSize: '11.5px', color: '#DC2626', fontWeight: 700, marginBottom: '6px' }}>
+            {shortfall.message}
           </div>
         )}
         {/* 期間ぶんの額は日数を掛けないので、そのことを合計のそばで言う。
@@ -418,7 +431,7 @@ export default function ApplyDateCalendar({
                     <button
                       key={d.date}
                       type='button'
-                      onClick={() => (allDaysOnly ? toggleAll() : onToggle(d.date))}
+                      onClick={() => onToggle(d.date)}
                       title={`${canSeeFee ? d.amountText + ' / ' : ''}押すと選択から外します`}
                       style={{ font: 'inherit', fontSize: '11px', color: bad ? '#DC2626' : '#475569', background: '#fff', border: '1px solid ' + (bad ? '#FECACA' : '#FFE0A0'), borderRadius: '6px', padding: '2px 6px', whiteSpace: 'nowrap', cursor: 'pointer' }}
                     >

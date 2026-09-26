@@ -10,6 +10,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, dayFeeLabelOn, perEventFeeOf, type FormatFees } from '../../lib/placeFee'
+import { minApplyDays, applyDaysShortfall } from '../../lib/applyRules'
 import ApplyDateCalendar, { type CalendarDay } from '../../components/ApplyDateCalendar'
 import { showsToSeller } from '../../lib/cancelledVisibility'
 import { missingSellerFields, SELLER_PROFILE_COLUMNS } from '../../lib/sellerProfile'
@@ -30,6 +31,8 @@ export type Place = {
   company_fixed_amount: number | null
   company_fixed_unit: string | null
   company_share_pct: number | null
+  /** 1回の申込で選ばないといけない最低の日数。空か1なら1日から（app/lib/applyRules.ts） */
+  min_apply_days: number | null
   map_url: string | null
   // 出店場所のカテゴリー（複数選択）。この画面では使わないが、
   // サーバー側（page.tsx）がエリア別・カテゴリ別ページへのリンクを組み立てるのに読む
@@ -371,18 +374,13 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
       const known = new Set((place?.schedule || []).map(d => d.date))
       if (dates.some(d => !known.has(d))) { setEntryErr('この案件の日程にない日は選択できません'); return }
     }
-    // 「期間で1回のみ」の案件は全日まとめての申込しかできない。
-    // 出店料が期間ぶんの1つの額なので、1日だけでは請求する額が出せない
-    // （美食EXPO in三重：3日間で8万円、1日単位の出店は受け付けていない）。
-    // カレンダーは全日まとめて選ぶようにしてあるが、申込済みの日が
-    // あとから届いた場合などに欠けることがあるため、送信前にも見る
-    if (place && perEventFeeOf(place) > 0) {
-      const pickable = calendarDays.filter(d => !d.disabled && !d.applied).map(d => d.date)
-      const missing = pickable.filter(d => !dates.includes(d))
-      if (missing.length > 0) {
-        setEntryErr(`この案件は全日まとめての出店です。${pickable.length}日すべてを選んでください`)
-        return
-      }
+    // 最低出店日数。1日だけの出店を受け付けない案件がある
+    // （美食EXPO：3日間または2日間のみ。2026-09-26 の運営からの説明）。
+    // カレンダーでも足りないことを知らせているが、送信前にも見る
+    if (place && hasSchedule) {
+      const pickable = calendarDays.filter(d => !d.disabled && !d.applied).length
+      const short = applyDaysShortfall(place, dates.length, pickable)
+      if (short) { setEntryErr(short.message); return }
     }
     // すでに申し込んでいる日を送らない。
     // 申込は選んだ日ぜんぶを1回の insert で入れるので、1日でも重複すると
@@ -885,6 +883,7 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                           onClearMonth={dates => setSelectedDates(prev => prev.filter(d => !dates.includes(d)))}
                           feeState={!canSeeFee ? 'login' : !format ? 'format' : 'ok'}
                           periodFee={perEventFeeOf(place)}
+                          minDays={minApplyDays(place)}
                         />
                         {/* 選んだ形式で出店できない曜日があるときは、理由を文でも出す。
                             マスが灰色になっているだけでは、なぜ選べないのか分からない */}

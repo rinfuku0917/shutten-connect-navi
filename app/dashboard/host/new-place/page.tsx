@@ -57,7 +57,7 @@ function NewPlacePageInner() {
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
-    fee:'', feeFixed:'', feePct:'10', feeUnit:'per_day', feeMinWeekday:'', feeMinWeekend:'', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
+    fee:'', feeFixed:'', feePct:'10', feeUnit:'per_day', minApplyDays:'', feeMinWeekday:'', feeMinWeekend:'', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
     menuWant:'', menuNG:'', menuOther:'', power:'yes', gas:'yes', water:'yes',
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
@@ -264,6 +264,11 @@ function NewPlacePageInner() {
       address: form.address,
       place_type: form.type,
       ...buildFeeColumns(form),
+      // 最低出店日数。空・0・1 は「1日から」なので null にそろえる
+      min_apply_days: (() => {
+        const n = parseInt(form.minApplyDays, 10)
+        return Number.isFinite(n) && n > 1 ? Math.min(n, 31) : null
+      })(),
       reminder_days: parseInt(form.reminderDays, 10) || 7,
       map_url: form.mapUrl,
       recruit: form['募集内容'],
@@ -424,6 +429,22 @@ async function refreshPublicPages(placeId?: string) {
             <div style={{marginBottom:'20px'}}>
               <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店日程{req}</label>
               <p style={{fontSize:'12px',color:'#B45309',margin:'4px 0 0'}}>1日ごとに日付と時間を登録できます（最大31日・連続でなくてもOK）</p>
+              {/* 1日だけの出店を受け付けない案件のため。
+                  美食EXPO のように「2日間または3日間のみ」という催しがある
+                  （2026-09-26 の運営からの説明）。空なら1日から申し込める */}
+              <div style={{marginTop:'12px'}}>
+                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>最低出店日数（任意）</label>
+                <div style={{display:'flex',alignItems:'center',gap:'8px',maxWidth:'260px'}}>
+                  <input type='number' min='1' max='31' value={form.minApplyDays}
+                    onChange={e=>set('minApplyDays', e.target.value.replace(/[^0-9]/g,''))}
+                    placeholder='空欄なら1日から' style={inputStyle}/>
+                  <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>日以上</span>
+                </div>
+                <p style={{fontSize:'12px',color:'#64748B',margin:'4px 0 0',lineHeight:1.8}}>
+                  1日だけの出店を受け付けない催しはここに入れてください。
+                  たとえば3日間の日程で「2」と入れると、出店者は2日か3日を選べて、1日だけでは申し込めません。
+                </p>
+              </div>
               <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'10px'}}>
                 {schedule.map((d,i)=>(
                   <div key={i} style={{border:'1px solid #E5C07B',borderRadius:'10px',padding:'12px',background:'#FFFDF7'}}>
