@@ -34,9 +34,13 @@ export async function POST(req: Request) {
     const uid = caller.uid
     const isAdmin = caller.isAdmin
 
-    const { applicationId, body, fileUrl } = await req.json()
+    const { applicationId, body, fileUrl, direct, receiverId } = await req.json()
     const text = String(body ?? '').trim()
-    if (!applicationId) return NextResponse.json({ error: '送り先が指定されていません' }, { status: 400 })
+    // 案件に紐づかない「運営 ↔ 募集者」の直接のやり取り（2026-09-26 の依頼）。
+    //   運営 → 募集者 … direct: true, receiverId: 募集者のID
+    //   募集者 → 運営 … direct: true（宛先は運営なので receiverId は無し）
+    const isDirect = direct === true
+    if (!isDirect && !applicationId) return NextResponse.json({ error: '送り先が指定されていません' }, { status: 400 })
 
     // 添付は「自分がアップロードしたもの」だけを受け付ける。
     // パスは <ユーザーID>/msg-... の形で保存している。ここを確かめないと、
@@ -56,6 +60,33 @@ export async function POST(req: Request) {
         { error: '本文は' + MAX_BODY.toLocaleString() + '文字まででお願いします（現在 ' + text.length.toLocaleString() + '文字）' },
         { status: 400 },
       )
+    }
+
+    // ---- 直接のやり取り（案件に紐づかない） ----
+    if (isDirect) {
+      // 宛先を指定できるのは運営だけ。募集者が別の募集者へ送れてはいけない
+      let to: string | null = null
+      if (receiverId) {
+        if (!isAdmin) return denyNotAdmin(caller, '宛先を指定して送れるのは運営だけです')
+        // 宛先が本当に募集者かを確かめる。出店者へこの経路で送ると、
+        // 相手の画面（案件ごとのやり取り）には出ないまま届いたことになる
+        const { data: rcv, error: rErr } = await db
+          .from('profiles').select('id, role').eq('id', String(receiverId)).maybeSingle()
+        if (rErr) return NextResponse.json({ error: '宛先を読み込めませんでした' }, { status: 500 })
+        if (!rcv) return NextResponse.json({ error: '宛先が見つかりません' }, { status: 404 })
+        if (rcv.role !== 'host') return NextResponse.json({ error: 'この送り方は募集者あてだけです' }, { status: 400 })
+        to = rcv.id
+      } else {
+        // 宛先なし＝運営あて。募集者からの返信に使う。
+        // 運営が宛先なしで送ると誰にも届かないので止める
+        if (isAdmin) return NextResponse.json({ error: '送り先の募集者を指定してください' }, { status: 400 })
+      }
+
+      const { data, error } = await db.from('messages')
+        .insert({ application_id: null, sender_id: uid, receiver_id: to, body: text, file_url: file })
+        .select('id').maybeSingle()
+      if (error) return NextResponse.json({ error: '送信に失敗しました: ' + error.message }, { status: 500 })
+      return NextResponse.json({ success: true, id: data?.id ?? null, direct: true })
     }
 
     // このスレッドに書き込んでよい人かを確かめる

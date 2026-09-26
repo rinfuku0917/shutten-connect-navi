@@ -5,7 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import { NO_SHOP_NAME } from '../../../lib/sellerNames'
 import BackButton from '../../../components/BackButton'
 
-type DbMessage = { id: string, application_id: string, sender_id: string | null, body: string, sent_at: string, file_url?: string | null }
+type DbMessage = { id: string, application_id: string | null, sender_id: string | null, body: string, sent_at: string, file_url?: string | null }
 // 申込1件＝やり取り1スレッド。どの案件・どの出店者かが分かるようにまとめて持つ
 type Thread = { applicationId: string, placeTitle: string, sellerName: string, sellerId: string, applyDate: string | null, status: string, lastBody: string, lastAt: string | null }
 
@@ -20,6 +20,10 @@ export default function HostMessages() {
   const [threads, setThreads] = useState<Thread[]>([])
   const [dbMessages, setDbMessages] = useState<DbMessage[]>([])
   const [myId, setMyId] = useState<string | null>(null)
+  // 運営事務局との直接のやり取り（案件に紐づかない。2026-09-26 に追加）。
+  // スレッドの選択は appId で持っているので、専用の目印を1つ決めて使い回す
+  const ADMIN_THREAD = '__admin__'
+  const [adminLast, setAdminLast] = useState<{ body: string, at: string } | null>(null)
   const [appId, setAppId] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const [msgFile, setMsgFile] = useState<File | null>(null)
@@ -155,7 +159,8 @@ export default function HostMessages() {
       .in('application_id', appIds)
       .order('sent_at', { ascending: true })
     const lastOf = new Map<string, DbMessage>()
-    for (const m of (msgs || []) as DbMessage[]) lastOf.set(m.application_id, m)
+    // 案件ごとの最新。直接のやり取り（application_id が null）はここには来ない
+    for (const m of (msgs || []) as DbMessage[]) { if (m.application_id) lastOf.set(m.application_id, m) }
 
     const built: Thread[] = apps.map(a => {
       const last = lastOf.get(a.id)
@@ -173,11 +178,28 @@ export default function HostMessages() {
     // やり取りがあるスレッドを上に、その中でも新しい順に並べる
     built.sort((x, y) => (y.lastAt || '').localeCompare(x.lastAt || ''))
     setThreads(built)
+    // 運営事務局のスレッドの最新。権限（view_direct_messages）で
+    // 自分が関わる行しか返らないので、絞り込みはこれで足りる
+    {
+      const { data: dm } = await supabase
+        .from('messages').select('body, sent_at')
+        .is('application_id', null).order('sent_at', { ascending: false }).limit(1)
+      const last = (dm || [])[0] as { body: string, sent_at: string } | undefined
+      setAdminLast(last ? { body: last.body || '📎 添付ファイル', at: last.sent_at } : null)
+    }
     setLoading(false)
   }
 
   const openThread = async (id: string) => {
     setAppId(id)
+    if (id === ADMIN_THREAD) {
+      // 自分が送ったものと、自分あてに届いたもの
+      const { data } = await supabase
+        .from('messages').select('id, application_id, sender_id, body, sent_at, file_url')
+        .is('application_id', null).order('sent_at', { ascending: true })
+      setDbMessages((data || []) as DbMessage[])
+      return
+    }
     const { data } = await supabase
       .from('messages').select('id, application_id, sender_id, body, sent_at, file_url')
       .eq('application_id', id).order('sent_at', { ascending: true })
@@ -255,7 +277,9 @@ export default function HostMessages() {
     const res = await fetch('/api/messages/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
-      body: JSON.stringify({ applicationId: appId, body: text, fileUrl }),
+      body: appId === ADMIN_THREAD
+        ? JSON.stringify({ direct: true, body: text, fileUrl })
+        : JSON.stringify({ applicationId: appId, body: text, fileUrl }),
     })
     if (!res.ok) {
       const j = await res.json().catch(() => ({}))
@@ -267,7 +291,9 @@ export default function HostMessages() {
       await fetch('/api/notify/new-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
-        body: JSON.stringify({ applicationId: appId }),
+        body: appId === ADMIN_THREAD
+          ? JSON.stringify({ direct: true })
+          : JSON.stringify({ applicationId: appId }),
       })
     } catch (e) {
       console.error('メッセージ通知に失敗しました', e)
@@ -402,7 +428,22 @@ export default function HostMessages() {
             <div style={{ padding: '24px 14px', textAlign: 'center', color: '#999', fontSize: '12px', lineHeight: 1.8 }}>
               まだ申込がありません。<br />出店者から申込が入ると、ここでやり取りできます。
             </div>
-          ) : threads.map(t => {
+          ) : null}
+          {/* 運営事務局のスレッド。案件に紐づかないので一番上に固定する
+              （2026-09-26 の依頼「運営から募集者へチャットできるように」） */}
+          {!loading && (
+            <div onClick={() => openThread(ADMIN_THREAD)}
+              style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', background: appId === ADMIN_THREAD ? '#FFF8E1' : '#F8FAFC', borderLeft: appId === ADMIN_THREAD ? '3px solid #F5A623' : '3px solid transparent' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                <span style={{ fontSize: '13px', fontWeight: '700', color: '#1a1a1a' }}>運営事務局</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#1D4ED8', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '4px', padding: '1px 6px' }}>運営</span>
+              </div>
+              <div style={{ fontSize: '11.5px', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {adminLast ? adminLast.body : '掲載や条件のご相談はこちらへ'}
+              </div>
+            </div>
+          )}
+          {!loading && threads.map(t => {
             const st = STATUS_LABEL[t.status] || { label: t.status, color: '#64748B', bg: '#F1F5F9' }
             const on = appId === t.applicationId
             return (

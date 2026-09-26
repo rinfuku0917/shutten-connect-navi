@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { requireCaller, serverConfigResponse, denyNotAdmin } from '../../../lib/apiAuth'
 import { renderMail, MAIL_DEF_BY_KEY } from '../../../lib/mailTemplates'
 import { SITE_URL } from '../../../lib/seo'
+import { sendAdminMail, ADMIN_EMAIL } from '../../../lib/notifyRecipients'
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
 
@@ -19,8 +20,9 @@ const recentSends = new Map();
 // 役割が読めなかったときに 403 ではなく 503 を返すのも、そこに揃える）。
 export async function POST(req: Request) {
   try {
-    const { applicationId } = await req.json()
-    if (!applicationId) {
+    const { applicationId, direct, receiverId } = await req.json()
+    const isDirect = direct === true
+    if (!isDirect && !applicationId) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
 
@@ -36,6 +38,52 @@ export async function POST(req: Request) {
     // メールの鍵は、名乗った相手だと分かってから見る
     const apiKey = process.env.RESEND_API_KEY
     if (!apiKey) return serverConfigResponse()
+
+    // ---- 案件に紐づかない直接のやり取り（運営 ↔ 募集者。2026-09-26） ----
+    if (isDirect) {
+      if (receiverId) {
+        // 運営 → 募集者。宛先を指定できるのは運営だけ（送信の入口と同じ決まり）
+        if (!caller.isAdmin) return denyNotAdmin(caller, '宛先を指定できるのは運営だけです')
+        const { data: rcv } = await db
+          .from('profiles').select('name, shop_name, email, role').eq('id', String(receiverId)).maybeSingle()
+        if (!rcv?.email) return NextResponse.json({ error: '宛先のメールアドレスが分かりません' }, { status: 404 })
+        if (rcv.role !== 'host') return NextResponse.json({ error: 'この送り方は募集者あてだけです' }, { status: 400 })
+        const defD = MAIL_DEF_BY_KEY['new-message']
+        const mailD = await renderMail(db, 'new-message', { subject: defD.subject, body: defD.body }, {
+          '宛名': rcv.shop_name || rcv.name || 'ご担当者',
+          // この文面は案件名を差し込む作りなので、直接のやり取りではその代わりを入れる
+          '案件名': '運営事務局からのご連絡',
+          '案内文': 'マイページの「メッセージ」の一番上に「運営事務局」として表示されます。',
+          'メッセージ画面のURL': SITE_URL + '/dashboard/host/messages',
+        })
+        const { error: eD } = await new Resend(apiKey).emails.send({
+          from: '出店コネクトナビ <' + FROM_EMAIL + '>',
+          to: rcv.email, subject: mailD.subject, text: mailD.text,
+        })
+        if (eD) return NextResponse.json({ error: 'メール送信失敗: ' + eD.message }, { status: 500 })
+        return NextResponse.json({ success: true, direct: true })
+      }
+      // 募集者 → 運営。運営の受信箱へ知らせる
+      const { data: me } = await db
+        .from('profiles').select('name, shop_name, email, phone').eq('id', senderId).maybeSingle()
+      const who = me?.shop_name || me?.name || '(名前未登録)'
+      const { error: eA } = await sendAdminMail(new Resend(apiKey), 'contact', {
+        from: '出店コネクトナビ <' + FROM_EMAIL + '>',
+        replyTo: ADMIN_EMAIL,
+        subject: '【メッセージ】募集者から運営あてに届きました：' + who,
+        text: [
+          '募集者から、案件に紐づかないメッセージが届きました。',
+          '',
+          '送り主：' + who + '（' + (me?.email ?? 'メール未登録') + ' / ' + (me?.phone ?? '電話未登録') + '）',
+          '',
+          '管理画面の「募集者管理」から、その募集者の「この募集者にメッセージを送る」で読めます。',
+          '',
+          SITE_URL + '/admin?tab=hosts',
+        ].join('\n'),
+      })
+      if (eA) return NextResponse.json({ error: 'メール送信失敗: ' + eA.message }, { status: 500 })
+      return NextResponse.json({ success: true, direct: true })
+    }
 
     // 申込 → 出店者・案件・ホストを解決
     const { data: app, error: aErr } = await db

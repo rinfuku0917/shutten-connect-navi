@@ -2181,6 +2181,64 @@ const previewDoc = async (fileUrl: string) => {
     setHostsLoading(false)
   }
 
+  // 募集者との直接のやり取り（案件に紐づかない）。
+  //
+  // なぜ要るか（2026-09-26 の依頼「管理者から募集者に対してチャットできるようにしたい」）:
+  //   メッセージは案件ごとにしか持てず、掲載内容の確認や条件の相談など
+  //   申込と関係のない連絡は、運営が個人のメールから送っている状態だった。
+  //   募集者の画面にも「運営事務局」のスレッドとして出る。
+  type DirectMsg = { id: string, sender_id: string | null, receiver_id: string | null, body: string, sent_at: string }
+  const [dmFor, setDmFor] = useState<string | null>(null)
+  const [dmList, setDmList] = useState<DirectMsg[]>([])
+  const [dmDraft, setDmDraft] = useState('')
+  const [dmBusy, setDmBusy] = useState(false)
+  const [dmErr, setDmErr] = useState('')
+
+  const loadDirect = async (hostId: string) => {
+    setDmErr('')
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id, sender_id, receiver_id, body, sent_at')
+      .is('application_id', null)
+      .or('sender_id.eq.' + hostId + ',receiver_id.eq.' + hostId)
+      .order('sent_at', { ascending: true })
+    if (error) { setDmErr('やり取りを読み込めませんでした：' + error.message); setDmList([]); return }
+    setDmList((data || []) as DirectMsg[])
+  }
+
+  const openDirect = async (hostId: string) => {
+    if (dmFor === hostId) { setDmFor(null); return }
+    setDmFor(hostId); setDmDraft(''); setDmList([])
+    await loadDirect(hostId)
+  }
+
+  const sendDirect = async (hostId: string) => {
+    const text = dmDraft.trim()
+    if (dmBusy || !text) return
+    setDmBusy(true); setDmErr('')
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setDmErr('ログインの有効期限が切れています。読み込み直してください。'); setDmBusy(false); return }
+    const res = await fetch('/api/messages/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ direct: true, receiverId: hostId, body: text }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setDmBusy(false)
+    if (!res.ok) { setDmErr('送れませんでした：' + (j.error || '不明なエラー')); return }
+    // 新着のお知らせメールを募集者へ。失敗しても送信は成功扱い
+    // （メッセージは残っていて、募集者の画面には出る）
+    try {
+      await fetch('/api/notify/new-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ direct: true, receiverId: hostId }),
+      })
+    } catch { /* お知らせが落ちても、メッセージは届いている */ }
+    setDmDraft('')
+    await loadDirect(hostId)
+  }
+
   const [recentApps, setRecentApps] = useState<RecentApp[]>([])
   const loadStats = async () => {
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
@@ -3001,6 +3059,53 @@ const previewDoc = async (fileUrl: string) => {
                       <dt style={{ color: '#94A3B8', fontSize: '11.5px' }}>住所</dt>
                       <dd style={{ margin: 0 }}>{h.address || <span style={{ color: '#CBD5E1' }}>未登録</span>}</dd>
                     </dl>
+
+                    {/* 運営とのやり取り。案件に紐づかないので、掲載の相談や
+                        承認待ちの案件の確認をここで送れる（2026-09-26 の依頼） */}
+                    <div style={{ marginBottom: '12px' }}>
+                      <button onClick={() => openDirect(h.id)}
+                        style={{ border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        {dmFor === h.id ? 'やり取りを閉じる' : 'この募集者にメッセージを送る'}
+                      </button>
+                      {dmFor === h.id && (
+                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px', marginTop: '8px', background: '#F8FAFC' }}>
+                          <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '8px' }}>
+                            募集者のマイページの「メッセージ」に<strong>運営事務局</strong>として出ます。案件のやり取りとは別の場所です。
+                          </div>
+                          <div style={{ maxHeight: '260px', overflowY: 'auto', display: 'grid', gap: '6px', marginBottom: '8px' }}>
+                            {dmList.length === 0 ? (
+                              <div style={{ fontSize: '12px', color: '#94A3B8' }}>まだやり取りはありません。</div>
+                            ) : dmList.map(m => {
+                              const mine = m.sender_id !== h.id
+                              return (
+                                <div key={m.id} style={{ justifySelf: mine ? 'end' : 'start', maxWidth: '86%', background: mine ? '#FFFBEB' : '#fff', border: '1px solid ' + (mine ? '#FDE68A' : '#E2E8F0'), borderRadius: '10px', padding: '8px 11px' }}>
+                                  <div style={{ fontSize: '10.5px', color: '#94A3B8', marginBottom: '2px' }}>
+                                    {mine ? '運営' : (h.shopName || h.name || '募集者')}　{String(m.sent_at).slice(0, 16).replace('T', ' ')}
+                                  </div>
+                                  <div style={{ fontSize: '13px', color: '#1a1a1a', whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>{m.body}</div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          {dmErr && (
+                            <div style={{ fontSize: '12px', color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }}>{dmErr}</div>
+                          )}
+                          <textarea value={dmDraft} onChange={e => setDmDraft(e.target.value)} disabled={dmBusy}
+                            placeholder='本文を入力してください'
+                            style={{ width: '100%', minHeight: '76px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '9px 11px', fontSize: '13px', color: '#1a1a1a', fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+                            <button onClick={() => sendDirect(h.id)} disabled={dmBusy || !dmDraft.trim()}
+                              style={{ background: (dmBusy || !dmDraft.trim()) ? '#CBD5E1' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700, cursor: (dmBusy || !dmDraft.trim()) ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                              {dmBusy ? '送信中…' : '送信'}
+                            </button>
+                            <button onClick={() => loadDirect(h.id)} disabled={dmBusy}
+                              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                              読み直す
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
                       出した案件（{h.places.length}件）
