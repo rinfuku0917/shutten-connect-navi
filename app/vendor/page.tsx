@@ -77,8 +77,12 @@ export default async function VendorPage() {
   // スマホでの文字の大きさを 24px → 21px に落とす。
   // 24px だと1行に13文字しか入らず、「出店コネクトナビでできること」が
   // 「出店コネクトナ / ビでできること」と割れていた。21px なら15文字入る。
-  const H2: React.CSSProperties = { fontSize: 'clamp(20px,5.6vw,26px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
-  const LEAD: React.CSSProperties = { fontSize: '14px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '32px' }
+  //
+  // 2026-09-27「基本的に全体的に文字が小さい」との指摘で、
+  // このページの文字をひととおり1割ほど大きくした（本文13px→14.5px など）。
+  // スマホでの折り返しは clamp の下限（22px）で守っている。
+  const H2: React.CSSProperties = { fontSize: 'clamp(22px,6vw,30px)', fontWeight: 900, textAlign: 'center', marginBottom: '10px', color: '#111' }
+  const LEAD: React.CSSProperties = { fontSize: '15.5px', color: '#555', textAlign: 'center', lineHeight: 1.9, marginBottom: '32px' }
   const CARD: React.CSSProperties = { background: '#fff', border: '1px solid #EEE', borderRadius: '14px', padding: '20px 18px' }
 
   return (
@@ -113,22 +117,22 @@ export default async function VendorPage() {
             <br />
             <span className='u'>イベント・施設に呼ぶなら</span>
           </h1>
-          <p className='jp-text' style={{ fontSize: '15px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
+          <p className='jp-text' style={{ fontSize: '16.5px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
             キッチンカーを呼びたい、出店を依頼したい、出張販売を手配したい。
             <br />
             施設運営者・イベント運営会社・企業・自治体のご担当者からのご相談を承ります。
           </p>
-          <p className='jp-text' style={{ fontSize: '14px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
+          <p className='jp-text' style={{ fontSize: '15.5px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
             ご相談は無料、会員登録も不要です。
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href='#soudan' style={{ background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '16px', padding: '14px 36px', borderRadius: '999px', textDecoration: 'none', boxShadow: '0 4px 15px rgba(245,166,35,0.4)' }}>まずは相談する</a>
+          <a href='#soudan' style={{ background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '17.5px', padding: '14px 36px', borderRadius: '999px', textDecoration: 'none', boxShadow: '0 4px 15px rgba(245,166,35,0.4)' }}>まずは相談する</a>
           {/* 呼びたい方がまず知りたいのは「いくらかかるか」。
               費用の節へ送る導線が、上に1本も無かった */}
-          <a href='#cost' style={{ background: '#fff', color: '#111', fontWeight: 900, fontSize: '16px', padding: '14px 36px', borderRadius: '999px', textDecoration: 'none' }}>費用の目安を見る</a>
-          <Link href='/sellers' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '16px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>登録キッチンカーを見る</Link>
-          <Link href='/register?role=host' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '16px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>無料会員登録</Link>
+          <a href='#cost' style={{ background: '#fff', color: '#111', fontWeight: 900, fontSize: '17.5px', padding: '14px 36px', borderRadius: '999px', textDecoration: 'none' }}>費用の目安を見る</a>
+          <Link href='/sellers' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '17.5px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>登録キッチンカーを見る</Link>
+          <Link href='/register?role=host' style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900, fontSize: '17.5px', border: '2px solid #fff', padding: '12px 34px', borderRadius: '999px', textDecoration: 'none' }}>無料会員登録</Link>
         </div>
       </div>
 
@@ -145,62 +149,64 @@ export default async function VendorPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '16px', marginBottom: '18px' }}>
             {/* ご自身で運営する形 */}
-            <div style={{ ...CARD, borderColor: '#CFE3D4' }}>
+            {/* 中身の量が違う2枚なので、縦のflexにしてボタンを下端にそろえる
+                （2026-09-27 の指摘「バランスがずれてるから揃えて」） */}
+            <div style={{ ...CARD, borderColor: '#CFE3D4', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'baseline', flexWrap: 'wrap', marginBottom: '10px' }}>
-                <span style={{ background: '#2E7D32', color: '#fff', fontSize: '12px', fontWeight: 800, padding: '4px 10px', borderRadius: '999px' }}>無料</span>
-                <span className='jp-head' style={{ fontWeight: 900, fontSize: '17px', color: '#111' }}>ご自身で募集する</span>
+                <span style={{ background: '#2E7D32', color: '#fff', fontSize: '13px', fontWeight: 800, padding: '4px 10px', borderRadius: '999px' }}>無料</span>
+                <span className='jp-head' style={{ fontWeight: 900, fontSize: '18.5px', color: '#111' }}>ご自身で募集する</span>
               </div>
               <div style={{ background: '#FAFAFA', borderRadius: '10px', padding: '12px 14px', marginBottom: '12px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#111' }}>0円</div>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
+                <div style={{ fontSize: '22px', fontWeight: 900, color: '#111' }}>0円</div>
               </div>
-              <ul className='jp-text' style={{ fontSize: '13px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
+              <ul className='jp-text' style={{ fontSize: '14.5px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
                 <li>募集情報の掲載</li>
                 <li>出店者からの応募の受付</li>
                 <li>出店者とのやり取り、日程や条件の調整</li>
               </ul>
-              <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: '14px' }}>
+              <p className='jp-text' style={{ fontSize: '13.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: '14px' }}>
                 掲載料・登録料・成約手数料はいただきません。出店者の選定や当日の段取りは、ご担当者さまで進めていただく形です。
               </p>
               {/* 各カードから先へ進めるようにする（2026-09-27 の依頼）。
                   これまでは2つ並べただけで、選んだあとの行き先が無かった */}
-              <Link href='/register?role=host' style={{ display: 'block', textAlign: 'center', background: '#2E7D32', color: '#fff', fontWeight: 900, fontSize: '15px', padding: '13px 20px', borderRadius: '999px', textDecoration: 'none' }}>
+              <Link href='/register?role=host' style={{ display: 'block', textAlign: 'center', background: '#2E7D32', color: '#fff', fontWeight: 900, fontSize: '16.5px', padding: '13px 20px', borderRadius: '999px', textDecoration: 'none', marginTop: 'auto' }}>
                 無料で掲載する（会員登録）
               </Link>
             </div>
 
             {/* 運営におまかせいただく形 */}
-            <div style={{ ...CARD, borderColor: '#FFE0A0', background: '#FFFDF8' }}>
+            <div style={{ ...CARD, borderColor: '#FFE0A0', background: '#FFFDF8', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'baseline', flexWrap: 'wrap', marginBottom: '10px' }}>
-                <span style={{ background: '#B45309', color: '#fff', fontSize: '12px', fontWeight: 800, padding: '4px 10px', borderRadius: '999px' }}>おまかせ</span>
-                <span className='jp-head' style={{ fontWeight: 900, fontSize: '17px', color: '#111' }}>運営をお任せいただく</span>
+                <span style={{ background: '#B45309', color: '#fff', fontSize: '13px', fontWeight: 800, padding: '4px 10px', borderRadius: '999px' }}>おまかせ</span>
+                <span className='jp-head' style={{ fontWeight: 900, fontSize: '18.5px', color: '#111' }}>運営をお任せいただく</span>
               </div>
               <div style={{ background: '#FFF8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '12px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#111' }}>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
+                <div style={{ fontSize: '22px', fontWeight: 900, color: '#111' }}>
                   応相談
-                  <span style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#B45309', marginTop: '2px' }}>【打ち合わせで決める】</span>
+                  <span style={{ display: 'block', fontSize: '13.5px', fontWeight: 800, color: '#B45309', marginTop: '2px' }}>【打ち合わせで決める】</span>
                 </div>
               </div>
-              <ul className='jp-text' style={{ fontSize: '13px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
+              <ul className='jp-text' style={{ fontSize: '14.5px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
                 <li>会場に合う出店者への声かけと、候補のご提案</li>
                 <li>条件のとりまとめと、出店者への周知</li>
                 <li>当日の運営（搬入時間・配置の連絡、当日の対応）</li>
                 <li>必要な書類（営業許可・保険など）の確認と、申請の代行</li>
               </ul>
-              <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: '14px' }}>
+              <p className='jp-text' style={{ fontSize: '13.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: '14px' }}>
                 どの出店者に決めるかは、ご担当者さまで選んでいただくこともできます。
                 現地での立ち会いも、イベントの規模や内容に応じてご相談いただけます。
                 金額は台数・開催日数・会場の条件によって変わりますので、内容をうかがったうえでお見積りします。
               </p>
-              <a href='#soudan' style={{ display: 'block', textAlign: 'center', background: '#B45309', color: '#fff', fontWeight: 900, fontSize: '15px', padding: '13px 20px', borderRadius: '999px', textDecoration: 'none' }}>
+              <a href='#soudan' style={{ display: 'block', textAlign: 'center', background: '#B45309', color: '#fff', fontWeight: 900, fontSize: '16.5px', padding: '13px 20px', borderRadius: '999px', textDecoration: 'none', marginTop: 'auto' }}>
                 打ち合わせを申し込む
               </a>
             </div>
           </div>
 
-          <div style={{ ...CARD, fontSize: '14px', color: '#333', lineHeight: 2 }}>
-            <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '10px' }}>出店料の決まり方</div>
+          <div style={{ ...CARD, fontSize: '15.5px', color: '#333', lineHeight: 2 }}>
+            <div className='jp-head' style={{ fontWeight: 900, fontSize: '16.5px', color: '#111', marginBottom: '10px' }}>出店料の決まり方</div>
             <p className='jp-text' style={{ marginBottom: '14px' }}>
               出店者がお支払いする出店料は、次の2つを合わせた金額です。
             </p>
@@ -212,14 +218,14 @@ export default async function VendorPage() {
               固定額での設定のほか、売上に対する割合（歩合）での設定もできます。
               平日と土日祝で金額を分けることも可能です。
             </p>
-            <p className='jp-text' style={{ color: '#666', fontSize: '13px', marginBottom: '16px' }}>
+            <p className='jp-text' style={{ color: '#666', fontSize: '14.5px', marginBottom: '16px' }}>
               ご相談・お見積りは無料です。会員登録をされる場合も、初期費用や登録料はいただきません。
             </p>
             {/* 「キッチンカー 派遣 料金」で来た方に、このページで答える節。
                 docs/seo-keywords.md は D-22d をこのページの担当と決めているが、
                 「派遣」と「料金」を並べた見出しがどこにも無かった。
                 金額の内訳は /vendor/cost に書いてあるので、そちらへ送る */}
-            <h3 className='jp-head' style={{ fontSize: '17px', fontWeight: 900, color: '#111', margin: '22px 0 8px' }}>
+            <h3 className='jp-head' style={{ fontSize: '18.5px', fontWeight: 900, color: '#111', margin: '22px 0 8px' }}>
               派遣料金はいくらですか
             </h3>
             <p className='jp-text' style={{ marginBottom: '10px' }}>
@@ -234,7 +240,7 @@ export default async function VendorPage() {
             </p>
             <Link
               href='/vendor/cost#forms'
-              style={{ display: 'inline-block', background: '#FFF8EC', border: '1px solid #F5D9A8', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}
+              style={{ display: 'inline-block', background: '#FFF8EC', border: '1px solid #F5D9A8', borderRadius: '10px', padding: '12px 18px', fontSize: '15.5px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}
             >
               キッチンカーを呼ぶ費用の相場とケース別の見積り例を見る →
             </Link>
@@ -260,12 +266,12 @@ export default async function VendorPage() {
           <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
             {SETSUBI.map(([k, v], i) => (
               <div key={k} className='setsubi-row' style={{ display: 'flex', gap: '16px', padding: '14px 18px', borderTop: i === 0 ? 'none' : '1px solid #F0F0F0', flexWrap: 'wrap' }}>
-                <div className='setsubi-label' style={{ fontWeight: 800, fontSize: '14px', color: '#111', minWidth: '170px' }}>{k}</div>
-                <div className='jp-text setsubi-desc' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8, flex: 1 }}>{v}</div>
+                <div className='setsubi-label' style={{ fontWeight: 800, fontSize: '15.5px', color: '#111', minWidth: '170px' }}>{k}</div>
+                <div className='jp-text setsubi-desc' style={{ fontSize: '14.5px', color: '#555', lineHeight: 1.8, flex: 1 }}>{v}</div>
               </div>
             ))}
           </div>
-          <p style={{ fontSize: '13px', color: '#666', lineHeight: 1.9, marginTop: '16px' }}>
+          <p style={{ fontSize: '14.5px', color: '#666', lineHeight: 1.9, marginTop: '16px' }}>
             電源や水道がない会場でも、発電機や給排水タンクを備えたキッチンカーであれば出店できる場合があります。
             設備が揃っていないことを理由に諦めず、まずは会場の状況をお知らせください。
           </p>
@@ -280,10 +286,10 @@ export default async function VendorPage() {
           <div className='grid-3' style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {CASES.map(c => (
               <div key={c.t} style={CARD}>
-                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
-                <div className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '16.5px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
+                <div className='jp-text' style={{ fontSize: '14.5px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
                 {c.href && (
-                  <Link href={c.href} style={{ display: 'inline-block', marginTop: '10px', fontSize: '13px', fontWeight: 700, color: '#B45309', textDecoration: 'none' }}>
+                  <Link href={c.href} style={{ display: 'inline-block', marginTop: '10px', fontSize: '14.5px', fontWeight: 700, color: '#B45309', textDecoration: 'none' }}>
                     イベントの手配について詳しく →
                   </Link>
                 )}
@@ -304,8 +310,8 @@ export default async function VendorPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px' }}>
             {CAN_DO.map(c => (
               <div key={c.t} style={CARD}>
-                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
-                <div className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '16.5px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
+                <div className='jp-text' style={{ fontSize: '14.5px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
               </div>
             ))}
           </div>
@@ -320,9 +326,9 @@ export default async function VendorPage() {
           <div className='grid-4' style={{ gap: '20px' }}>
             {STEPS.map((s, i) => (
               <div key={s.t} style={{ textAlign: 'center', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>{i + 1}</div>
-                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', marginBottom: '8px', color: '#111' }}>{s.t}</div>
-                <div style={{ fontSize: '12px', color: '#111', lineHeight: 1.7 }}>{s.d}</div>
+                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>{i + 1}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '16.5px', marginBottom: '8px', color: '#111' }}>{s.t}</div>
+                <div style={{ fontSize: '13px', color: '#111', lineHeight: 1.7 }}>{s.d}</div>
               </div>
             ))}
           </div>
@@ -338,8 +344,8 @@ export default async function VendorPage() {
             現在掲載中の募集案件は「出店場所を探す」からご覧いただけます。
           </p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link href='/places' style={{ background: '#111', color: '#fff', fontWeight: 800, fontSize: '14px', padding: '12px 28px', borderRadius: '999px', textDecoration: 'none' }}>掲載中の募集案件を見る</Link>
-            <Link href='/sellers' style={{ background: '#fff', color: '#111', fontWeight: 800, fontSize: '14px', border: '2px solid #111', padding: '10px 26px', borderRadius: '999px', textDecoration: 'none' }}>登録キッチンカーを見る</Link>
+            <Link href='/places' style={{ background: '#111', color: '#fff', fontWeight: 800, fontSize: '15.5px', padding: '12px 28px', borderRadius: '999px', textDecoration: 'none' }}>掲載中の募集案件を見る</Link>
+            <Link href='/sellers' style={{ background: '#fff', color: '#111', fontWeight: 800, fontSize: '15.5px', border: '2px solid #111', padding: '10px 26px', borderRadius: '999px', textDecoration: 'none' }}>登録キッチンカーを見る</Link>
           </div>
         </div>
       </div>
@@ -364,14 +370,14 @@ export default async function VendorPage() {
       <div style={{ background: '#FFFBF0', padding: '46px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <h2 className='jp-head' style={H2}>エリアごとの費用と会場の例</h2>
-          <p className='jp-text' style={{ fontSize: '14px', color: '#555', lineHeight: 1.9, margin: '14px 0 18px' }}>
+          <p className='jp-text' style={{ fontSize: '15.5px', color: '#555', lineHeight: 1.9, margin: '14px 0 18px' }}>
             お探しの地域のページに、費用の相場、その土地で相談の多い会場、
             対応している出店者の数、募集中の案件をまとめています。
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
             {AREAS.map(a => (
               <Link key={a.slug} href={'/vendor/area/' + a.slug}
-                style={{ display: 'inline-block', border: '1.5px solid #F5A623', background: '#fff', color: '#B45309', borderRadius: '999px', padding: '10px 18px', fontSize: '14px', fontWeight: 700, textDecoration: 'none', minHeight: '44px', lineHeight: '24px' }}>
+                style={{ display: 'inline-block', border: '1.5px solid #F5A623', background: '#fff', color: '#B45309', borderRadius: '999px', padding: '10px 18px', fontSize: '15.5px', fontWeight: 700, textDecoration: 'none', minHeight: '44px', lineHeight: '24px' }}>
                 {a.name}のキッチンカー手配
               </Link>
             ))}
@@ -388,26 +394,26 @@ export default async function VendorPage() {
           <h2 className='jp-head' style={H2}>手配について、もっと詳しく</h2>
           <ul style={{ listStyle: 'none', padding: 0, margin: '18px 0 0' }}>
                 <li style={{ marginBottom: '10px' }}>
-                  <Link href='/blog/how-to-call-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの呼び方は？決めることは4つ</Link>
-                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>初めて呼ぶ方へ。何をどの順番で決めればよいかをまとめています。</div>
+                  <Link href='/blog/how-to-call-food-truck' style={{ fontSize: '15.5px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの呼び方は？決めることは4つ</Link>
+                  <div className='jp-text' style={{ fontSize: '14.5px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>初めて呼ぶ方へ。何をどの順番で決めればよいかをまとめています。</div>
                 </li>
                 <li style={{ marginBottom: '10px' }}>
-                  <Link href='/blog/request-food-truck' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの出店依頼はどう出す？3,521店舗が見ている条件</Link>
-                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>依頼のときに伝える7項目と、依頼が止まりやすい条件。</div>
+                  <Link href='/blog/request-food-truck' style={{ fontSize: '15.5px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーの出店依頼はどう出す？3,521店舗が見ている条件</Link>
+                  <div className='jp-text' style={{ fontSize: '14.5px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>依頼のときに伝える7項目と、依頼が止まりやすい条件。</div>
                 </li>
                 <li style={{ marginBottom: '10px' }}>
-                  <Link href='/blog/invite-food-truck-free' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーを無料で呼ぶには？歩合のみ43件の仕組み</Link>
-                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>主催者の持ち出しが0円になる条件を、実際の募集から説明しています。</div>
+                  <Link href='/blog/invite-food-truck-free' style={{ fontSize: '15.5px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>キッチンカーを無料で呼ぶには？歩合のみ43件の仕組み</Link>
+                  <div className='jp-text' style={{ fontSize: '14.5px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>主催者の持ち出しが0円になる条件を、実際の募集から説明しています。</div>
                 </li>
                 {/* イベント主催者向けの記事が、この枠から漏れていた */}
                 <li style={{ marginBottom: '10px' }}>
-                  <Link href='/blog/how-to-invite-kitchen-car' style={{ fontSize: '14px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>イベントにキッチンカーを呼ぶには？依頼の方法と費用・手順</Link>
-                  <div className='jp-text' style={{ fontSize: '13px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>お祭り・マルシェの主催者向け。台数の決め方と当日の進め方まで。</div>
+                  <Link href='/blog/how-to-invite-kitchen-car' style={{ fontSize: '15.5px', fontWeight: 700, color: '#B45309', textDecoration: 'none', lineHeight: 1.8 }}>イベントにキッチンカーを呼ぶには？依頼の方法と費用・手順</Link>
+                  <div className='jp-text' style={{ fontSize: '14.5px', color: '#666', lineHeight: 1.85, marginTop: '2px' }}>お祭り・マルシェの主催者向け。台数の決め方と当日の進め方まで。</div>
                 </li>
           </ul>
           {/* 呼びたい方向けの記事をまとめた入口へ。
               ここに4本しか出していないので、続きへ送る */}
-          <Link href='/blog/category/host' style={{ display: 'inline-block', marginTop: '6px', fontSize: '13.5px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}>
+          <Link href='/blog/category/host' style={{ display: 'inline-block', marginTop: '6px', fontSize: '15px', fontWeight: 800, color: '#B45309', textDecoration: 'none' }}>
             呼びたい方向けの記事をすべて見る →
           </Link>
         </div>
