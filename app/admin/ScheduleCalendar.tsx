@@ -222,6 +222,59 @@ export default function ScheduleCalendar({
     await load()
   }
 
+  // キャンセル料の請求。
+  //
+  // なぜ要るか（2026-09-26 の運営からの依頼）:
+  //   当日キャンセル（体調不良など）が出ると、キャンセルポリシーの
+  //   キャンセル料をその日のうちに請求したい。
+  //   これまでは事前請求が応募者一覧からしか出せず、しかも
+  //   「出店料」の件名になるため、キャンセル料として出す手段が無かった。
+  //   出店が並んでいるこの画面から、1枚だけすぐ出せるようにする。
+  //
+  //   発行は既存の事前請求（/api/admin/invoice の action='advance'）を使う。
+  //   請求書の番号・取り消しの記録・出店者の「お支払い」画面は同じ仕組みに乗る。
+  const [cfFor, setCfFor] = useState<Slot | null>(null)
+  const [cfAmount, setCfAmount] = useState('')
+  const [cfDue, setCfDue] = useState('')
+  const [cfBusy, setCfBusy] = useState(false)
+  const [cfErr, setCfErr] = useState('')
+  const [cfDone, setCfDone] = useState<{ invoiceNo: string; total: number } | null>(null)
+  const [cfDup, setCfDup] = useState<string | null>(null)
+
+  const openCancelFee = (s: Slot) => {
+    setCfFor(s); setCfAmount(''); setCfDue(''); setCfErr(''); setCfDone(null); setCfDup(null)
+  }
+
+  // force を付けずにまず出す。同じ出店に事前請求が既にあるときは
+  // 409 で番号が返るので、それを見せて「それでも発行する」を押してもらう。
+  // 請求書は番号を採番したら取り消ししか戻せないので、黙って2枚目を作らない
+  const issueCancelFee = async (force = false) => {
+    if (cfBusy || !cfFor) return
+    const yen = parseInt(cfAmount.replace(/[^0-9]/g, ''), 10)
+    if (!Number.isFinite(yen) || yen <= 0) { setCfErr('金額を入れてください'); return }
+    setCfBusy(true); setCfErr(''); if (force) setCfDup(null)
+    const t = await token()
+    if (!t) { setCfErr('ログインの有効期限が切れています。読み込み直してください。'); setCfBusy(false); return }
+    const res = await fetch('/api/admin/invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify({
+        action: 'advance',
+        sellerId: cfFor.sellerId,
+        applicationIds: [cfFor.applicationId],
+        amount: yen,
+        dueOn: cfDue || null,
+        label: cfFor.placeTitle + ' キャンセル料',
+        ...(force ? { force: true } : {}),
+      }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setCfBusy(false)
+    if (res.status === 409 && j.canReissue) { setCfDup(j.error || 'この出店には、すでに請求書を発行しています'); return }
+    if (!res.ok) { setCfErr(j.error || '請求書を発行できませんでした'); return }
+    setCfDone({ invoiceNo: j.invoiceNo, total: j.total })
+  }
+
   // この出店枠へ督促を送る
   const sendRemind = async (s: Slot) => {
     if (actBusy) return
@@ -616,6 +669,96 @@ export default function ScheduleCalendar({
                               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
                               文面を編集
                             </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* キャンセル料の請求。当日キャンセル・無連絡の不出店のときに、
+                          この場から1枚だけ出せるようにする（2026-09-26 の運営からの依頼）。
+                          出店日を過ぎていて売上の報告が無い枠にだけ出す */}
+                      {rep.list.length === 0 && s.date <= today && (
+                        <div style={{ marginBottom: '16px' }}>
+                          {cfFor?.applicationId !== s.applicationId ? (
+                            <button type='button' onClick={() => openCancelFee(s)}
+                              style={{ background: '#fff', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                              キャンセル料を請求する
+                            </button>
+                          ) : (
+                            <div style={{ border: '1px solid #FECACA', background: '#FFFBFB', borderRadius: '10px', padding: '12px 14px' }}>
+                              <div style={{ fontSize: '12.5px', fontWeight: 900, color: '#B91C1C', marginBottom: '8px' }}>
+                                キャンセル料を請求する
+                              </div>
+                              {cfDone ? (
+                                <div style={{ fontSize: '12.5px', color: '#166534', lineHeight: 1.9 }}>
+                                  請求書 <strong>{cfDone.invoiceNo}</strong>（税込 {(cfDone.total || 0).toLocaleString()}円）を発行しました。
+                                  <br />
+                                  <a href={'/admin/invoice?no=' + encodeURIComponent(cfDone.invoiceNo)} target='_blank' rel='noreferrer'
+                                    style={{ color: '#B45309', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                                    請求書を開いてPDFにする
+                                  </a>
+                                  <br />
+                                  <span style={{ color: '#64748B' }}>発行しても出店者へメールは飛びません。これまでどおり手でお送りください。</span>
+                                  <div style={{ marginTop: '8px' }}>
+                                    <button type='button' onClick={() => setCfFor(null)}
+                                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                                      閉じる
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '8px' }}>
+                                    <label style={{ fontSize: '11.5px', color: '#64748B' }}>
+                                      金額（税抜）<br />
+                                      <input value={cfAmount} inputMode='numeric' disabled={cfBusy}
+                                        onChange={e => setCfAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                                        placeholder='10000'
+                                        style={{ width: '120px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', textAlign: 'right', fontFamily: 'inherit' }} />
+                                    </label>
+                                    <label style={{ fontSize: '11.5px', color: '#64748B' }}>
+                                      振込期限（任意）<br />
+                                      <input type='date' value={cfDue} disabled={cfBusy}
+                                        onChange={e => setCfDue(e.target.value)}
+                                        style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', fontFamily: 'inherit' }} />
+                                    </label>
+                                    {cfAmount && (
+                                      <span style={{ fontSize: '12px', color: '#64748B', paddingBottom: '9px' }}>
+                                        消費税10%を足して <strong style={{ color: '#B45309' }}>
+                                          {(() => { const n = parseInt(cfAmount, 10) || 0; return (n + Math.floor(n * 0.1)).toLocaleString() })()}円
+                                        </strong>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '8px' }}>
+                                    請求件名は「{s.placeTitle} キャンセル料」になります。{s.date.replaceAll('-', '/')} の出店ぶんとして記録されます。
+                                  </div>
+                                  {cfErr && (
+                                    <div style={{ fontSize: '12px', color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }}>{cfErr}</div>
+                                  )}
+                                  {cfDup && (
+                                    <div style={{ fontSize: '12px', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px', lineHeight: 1.8 }}>
+                                      {cfDup}
+                                      <div style={{ marginTop: '6px' }}>
+                                        <button type='button' onClick={() => issueCancelFee(true)} disabled={cfBusy}
+                                          style={{ background: '#B45309', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: cfBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                                          それでも発行する
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <button type='button' onClick={() => issueCancelFee()} disabled={cfBusy}
+                                      style={{ background: cfBusy ? '#ccc' : '#B91C1C', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: cfBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                                      {cfBusy ? '発行中…' : '請求書を発行する'}
+                                    </button>
+                                    <button type='button' onClick={() => setCfFor(null)} disabled={cfBusy}
+                                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                                      やめる
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
