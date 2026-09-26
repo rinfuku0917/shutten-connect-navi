@@ -157,6 +157,21 @@ export default function ApplyDateCalendar({
   const pickedHere = monthDays.filter(d => selected.includes(d.date)).length
   const allPicked = selectableDates.length > 0 && selectableDates.every(d => selected.includes(d))
 
+  // 「期間で1回のみ」の案件は、全日まとめての申込しかできない。
+  //
+  // なぜ（2026-09-26 の運営からの説明）:
+  //   美食EXPO in三重は3日間で税抜8万円で、1日単位の出店は受け付けていない。
+  //   出店料が期間ぶんの1つの額なので、1日だけ選ばれるとその日の額が出せない。
+  //   月をまたぐ日程もあるので、当月ではなく日程全部をまとめて選ぶ。
+  const allDaysOnly = (periodFee ?? 0) > 0
+  const everyDate = [...byDate.values()].filter(d => !d.disabled && !d.applied).map(d => d.date)
+  const everyPicked = everyDate.length > 0 && everyDate.every(d => selected.includes(d))
+  // まとめて選ぶ／まとめて外す。マスを押したときもこれを使う
+  const toggleAll = () => {
+    if (everyPicked) onClearMonth([...byDate.values()].map(d => d.date))
+    else onSelectMany(everyDate)
+  }
+
   const chosen = selected.map(d => byDate.get(d)).filter((d): d is CalendarDay => !!d)
   // 選んだあとに選べなくなった日（日付が過ぎた・申込済み）。札から外せるように印を付ける。
   // 日数にも合計にも入れない。この日は送られない（submitEntry が止める）ので、
@@ -237,6 +252,15 @@ export default function ApplyDateCalendar({
         </button>
       </div>
 
+      {/* 全日まとめてしか申し込めない案件は、カレンダーを触る前に伝える。
+          あとから「1日だけは選べません」と出すより、先に言うほうが迷わない */}
+      {allDaysOnly && (
+        <div style={{ fontSize: '12px', color: BROWN, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', margin: '0 0 8px', lineHeight: 1.8 }}>
+          この案件は<strong>全日まとめての出店</strong>です。1日だけの出店はできません。
+          どの日を押しても{everyDate.length}日すべてが選ばれます。
+        </div>
+      )}
+
       {/* 曜日の行。読み上げから隠さない。
           この画面は「選んだ形式で出店できない曜日がある」ことが選択可否を決めるので、
           曜日が読まれないと、なぜ選べないのかが音声だけでは分からなくなる */}
@@ -287,7 +311,7 @@ export default function ApplyDateCalendar({
               key={c.date}
               type='button'
               disabled={off}
-              onClick={() => onToggle(c.date)}
+              onClick={() => (allDaysOnly ? toggleAll() : onToggle(c.date))}
               aria-pressed={on}
               aria-label={title}
               title={title}
@@ -324,25 +348,39 @@ export default function ApplyDateCalendar({
         </div>
       )}
 
-      {/* 当月まとめて選ぶ・外す。日程が20日を超える案件があるため */}
-      <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-        <button
-          type='button'
-          onClick={() => onSelectMany(selectableDates)}
-          disabled={selectableDates.length === 0 || allPicked}
-          style={{ ...subBtn, opacity: selectableDates.length === 0 || allPicked ? 0.45 : 1 }}
-        >
-          当月を全選択
-        </button>
-        <button
-          type='button'
-          onClick={() => onClearMonth(monthDays.map(d => d.date))}
-          disabled={pickedHere === 0}
-          style={{ ...subBtn, border: '1px solid #E5E7EB', background: '#fff', color: '#64748B', opacity: pickedHere === 0 ? 0.45 : 1 }}
-        >
-          当月の選択を解除
-        </button>
-      </div>
+      {/* 全日まとめての案件は、1日ずつ選ぶボタンを出さない */}
+      {allDaysOnly ? (
+        <div style={{ marginTop: '8px' }}>
+          <button
+            type='button'
+            onClick={toggleAll}
+            disabled={everyDate.length === 0}
+            style={{ ...subBtn, width: '100%', opacity: everyDate.length === 0 ? 0.45 : 1 }}
+          >
+            {everyPicked ? '選択を解除' : `${everyDate.length}日すべてを選ぶ`}
+          </button>
+        </div>
+      ) : (
+        /* 当月まとめて選ぶ・外す。日程が20日を超える案件があるため */
+        <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+          <button
+            type='button'
+            onClick={() => onSelectMany(selectableDates)}
+            disabled={selectableDates.length === 0 || allPicked}
+            style={{ ...subBtn, opacity: selectableDates.length === 0 || allPicked ? 0.45 : 1 }}
+          >
+            当月を全選択
+          </button>
+          <button
+            type='button'
+            onClick={() => onClearMonth(monthDays.map(d => d.date))}
+            disabled={pickedHere === 0}
+            style={{ ...subBtn, border: '1px solid #E5E7EB', background: '#fff', color: '#64748B', opacity: pickedHere === 0 ? 0.45 : 1 }}
+          >
+            当月の選択を解除
+          </button>
+        </div>
+      )}
 
       {/* 選んだ日と合計。カレンダーのマスには時間帯を出せないので、ここで出す */}
       <div style={{ marginTop: '10px', border: '1px solid #FFE0A0', background: '#FFF9E6', borderRadius: '8px', padding: '10px 12px' }}>
@@ -380,7 +418,7 @@ export default function ApplyDateCalendar({
                     <button
                       key={d.date}
                       type='button'
-                      onClick={() => onToggle(d.date)}
+                      onClick={() => (allDaysOnly ? toggleAll() : onToggle(d.date))}
                       title={`${canSeeFee ? d.amountText + ' / ' : ''}押すと選択から外します`}
                       style={{ font: 'inherit', fontSize: '11px', color: bad ? '#DC2626' : '#475569', background: '#fff', border: '1px solid ' + (bad ? '#FECACA' : '#FFE0A0'), borderRadius: '6px', padding: '2px 6px', whiteSpace: 'nowrap', cursor: 'pointer' }}
                     >

@@ -371,6 +371,19 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
       const known = new Set((place?.schedule || []).map(d => d.date))
       if (dates.some(d => !known.has(d))) { setEntryErr('この案件の日程にない日は選択できません'); return }
     }
+    // 「期間で1回のみ」の案件は全日まとめての申込しかできない。
+    // 出店料が期間ぶんの1つの額なので、1日だけでは請求する額が出せない
+    // （美食EXPO in三重：3日間で8万円、1日単位の出店は受け付けていない）。
+    // カレンダーは全日まとめて選ぶようにしてあるが、申込済みの日が
+    // あとから届いた場合などに欠けることがあるため、送信前にも見る
+    if (place && perEventFeeOf(place) > 0) {
+      const pickable = calendarDays.filter(d => !d.disabled && !d.applied).map(d => d.date)
+      const missing = pickable.filter(d => !dates.includes(d))
+      if (missing.length > 0) {
+        setEntryErr(`この案件は全日まとめての出店です。${pickable.length}日すべてを選んでください`)
+        return
+      }
+    }
     // すでに申し込んでいる日を送らない。
     // 申込は選んだ日ぜんぶを1回の insert で入れるので、1日でも重複すると
     // その回の全部が落ちる（applications_active_unique_idx）。
