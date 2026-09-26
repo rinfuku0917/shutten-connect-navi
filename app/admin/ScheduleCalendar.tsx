@@ -291,26 +291,31 @@ export default function ScheduleCalendar({
   const [ccBusy, setCcBusy] = useState(false)
   const [ccErr, setCcErr] = useState('')
 
+  /** その出店に入っているキャンセルの記録（あれば）。金額を直すのに使う */
+  const cancelSaleOf = (s: Slot) =>
+    (salesByApp.get(s.applicationId) || []).find(x => String(x.note || '').startsWith('キャンセル料')) || null
+
   const recordCancel = async () => {
     if (ccBusy || !ccFor) return
     const yen = parseInt(ccAmount.replace(/[^0-9]/g, ''), 10) || 0
     if (yen < 0) { setCcErr('金額を確かめてください'); return }
     setCcBusy(true); setCcErr('')
     const note = 'キャンセル料' + (ccReason.trim() ? '（' + ccReason.trim() + '）' : '')
-    const { error } = await supabase.from('sales').insert({
-      application_id: ccFor.applicationId,
-      place_id: ccFor.placeId,
-      seller_id: ccFor.sellerId,
-      sale_date: ccFor.date,
-      revenue: 0,
-      fee: yen,
-      place_fee: 0,
-      company_fee: yen,
-      total_pay: yen,
-      note,
-    })
+    const fields = { revenue: 0, fee: yen, place_fee: 0, company_fee: yen, total_pay: yen, note }
+    // すでにキャンセルの記録が入っているときは、行を増やさず金額と理由を直す。
+    // 「0円で記録してしまい、あとで金額を入れたい」がそのまま起きたため（2026-09-26）
+    const exist = cancelSaleOf(ccFor)
+    const { error } = exist
+      ? await supabase.from('sales').update(fields).eq('id', exist.id)
+      : await supabase.from('sales').insert({
+          application_id: ccFor.applicationId,
+          place_id: ccFor.placeId,
+          seller_id: ccFor.sellerId,
+          sale_date: ccFor.date,
+          ...fields,
+        })
     setCcBusy(false)
-    if (error) { setCcErr('記録できませんでした：' + error.message); return }
+    if (error) { setCcErr((exist ? '直せませんでした：' : '記録できませんでした：') + error.message); return }
     setCcFor(null); setCcAmount(''); setCcReason('')
     await load()
   }
@@ -689,7 +694,10 @@ export default function ScheduleCalendar({
 
                       {/* 督促。報告が無く、出店日を過ぎているときだけ出す。
                           何度でも送れるので、前回いつ送ったかを添えて連打を防ぐ */}
-                      {rep.list.length === 0 && s.date <= today && (
+                      {/* キャンセルの記録が入っていても消さない。
+                          0円で記録してから金額を入れたい・請求書を出したい場面が
+                          そのまま起きたため（2026-09-26 の指摘） */}
+                      {(rep.list.length === 0 || cancelSaleOf(s)) && s.date <= today && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
                           {s.date < today && (
                             <button type='button' onClick={() => sendRemind(s)} disabled={actBusy === s.applicationId}
@@ -701,12 +709,22 @@ export default function ScheduleCalendar({
                               出店しなかったときの2つの道：
                               ・出店キャンセル … キャンセル料を売上として残す（売上管理と月次請求に乗る）
                               ・キャンセル料を請求する … いますぐ請求書を1枚出す */}
-                          {ccFor?.applicationId !== s.applicationId && (
-                            <button type='button' onClick={() => { setCcFor(s); setCcAmount(''); setCcReason(''); setCcErr('') }}
-                              style={{ background: '#fff', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
-                              出店キャンセル
-                            </button>
-                          )}
+                          {ccFor?.applicationId !== s.applicationId && (() => {
+                            // すでに記録があるときは、金額と理由を入れ直せるように前の値を入れておく
+                            const ex = cancelSaleOf(s)
+                            const m = ex ? String(ex.note || '').match(/^キャンセル料（(.*)）$/) : null
+                            return (
+                              <button type='button' onClick={() => {
+                                setCcFor(s)
+                                setCcAmount(ex && (ex.totalPay ?? 0) > 0 ? String(ex.totalPay) : '')
+                                setCcReason(m ? m[1] : '')
+                                setCcErr('')
+                              }}
+                                style={{ background: '#fff', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                                {ex ? 'キャンセル料を直す' : '出店キャンセル'}
+                              </button>
+                            )
+                          })()}
                           {cfFor?.applicationId !== s.applicationId && (
                             <button type='button' onClick={() => openCancelFee(s)}
                               style={{ background: '#fff', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
@@ -734,7 +752,7 @@ export default function ScheduleCalendar({
                       {/* キャンセル料の請求。当日キャンセル・無連絡の不出店のときに、
                           この場から1枚だけ出せるようにする（2026-09-26 の運営からの依頼）。
                           出店日を過ぎていて売上の報告が無い枠にだけ出す */}
-                      {rep.list.length === 0 && s.date <= today && (
+                      {(rep.list.length === 0 || cancelSaleOf(s)) && s.date <= today && (
                         <div style={{ marginBottom: '16px' }}>
                           {cfFor?.applicationId === s.applicationId && (
                             <div style={{ border: '1px solid #FECACA', background: '#FFFBFB', borderRadius: '10px', padding: '12px 14px' }}>
@@ -818,11 +836,13 @@ export default function ScheduleCalendar({
                           {ccFor?.applicationId === s.applicationId && (
                             <div style={{ border: '1px solid #FECACA', background: '#FFFBFB', borderRadius: '10px', padding: '12px 14px', marginTop: '8px' }}>
                               <div style={{ fontSize: '12.5px', fontWeight: 900, color: '#B91C1C', marginBottom: '6px' }}>
-                                出店キャンセルとして記録する
+                                {cancelSaleOf(s) ? 'キャンセル料の金額を直す' : '出店キャンセルとして記録する'}
                               </div>
                               <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '8px' }}>
-                                売上0円・出店料はキャンセル料として、{s.date.replaceAll('-', '/')} の売上に残します。
-                                売上管理の一覧に出て、その月の請求にも入ります。
+                                {cancelSaleOf(s)
+                                  ? <>すでに入っているキャンセルの記録を書き直します。行は増えません。</>
+                                  : <>売上0円・出店料はキャンセル料として、{s.date.replaceAll('-', '/')} の売上に残します。
+                                    売上管理の一覧に出て、その月の請求にも入ります。</>}
                               </div>
                               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '8px' }}>
                                 <label style={{ fontSize: '11.5px', color: '#64748B' }}>
@@ -849,7 +869,7 @@ export default function ScheduleCalendar({
                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                 <button type='button' onClick={recordCancel} disabled={ccBusy}
                                   style={{ background: ccBusy ? '#ccc' : '#B91C1C', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: ccBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
-                                  {ccBusy ? '記録中…' : 'キャンセルとして記録する'}
+                                  {ccBusy ? '保存中…' : cancelSaleOf(s) ? '金額を直す' : 'キャンセルとして記録する'}
                                 </button>
                                 <button type='button' onClick={() => setCcFor(null)} disabled={ccBusy}
                                   style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
