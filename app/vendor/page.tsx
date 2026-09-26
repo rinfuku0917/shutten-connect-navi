@@ -165,8 +165,14 @@ export default async function VendorPage() {
                 <li>出店者からの応募の受付</li>
                 <li>出店者とのやり取り、日程や条件の調整</li>
               </ul>
-              <p className='jp-text' style={{ fontSize: '13.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: '14px' }}>
+              <p className='jp-text' style={{ fontSize: '13.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: '10px' }}>
                 掲載料・登録料・成約手数料はいただきません。出店者の選定や当日の段取りは、ご担当者さまで進めていただく形です。
+              </p>
+              {/* 承認制であることは上の導入文にも書いてあるが、
+                  「無料で載せられる」と読んだまま進む方がいるので、
+                  掲載の項目が並ぶこのカードの中にも置く（2026-09-27 の依頼） */}
+              <p className='jp-text' style={{ fontSize: '13.5px', fontWeight: 700, color: '#2E7D32', background: '#F3F9F4', border: '1px solid #CFE3D4', borderRadius: '8px', padding: '9px 11px', lineHeight: 1.8, marginTop: 0, marginBottom: '14px' }}>
+                掲載は審査・承認後に公開されます。ご登録後、内容を確認のうえ担当者よりご連絡いたします。
               </p>
               {/* 各カードから先へ進めるようにする（2026-09-27 の依頼）。
                   これまでは2つ並べただけで、選んだあとの行き先が無かった */}
