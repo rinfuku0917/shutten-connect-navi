@@ -793,7 +793,13 @@ async function refreshPublicPages(placeId?: string) {
 
             <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'8px'}}>
               <div>
-                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店料（1日あたりの固定額）</label>
+                <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>
+                  {/* 下のチェックで意味が変わる欄なので、見出しも一緒に変える。
+                      「1日あたり」のままだと、3日間で8万円の案件に8万円と入れた人が
+                      1日8万円のつもりだったのか期間ぶんなのか、あとから分からない
+                      （2026-09-26 の指摘） */}
+                  {form.feeUnit === 'per_event' ? '出店料（期間ぶんの固定額）' : '出店料（1日あたりの固定額）'}
+                </label>
                 <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                   <input type='number' value={form.feeFixed} onChange={e=>set('feeFixed',e.target.value)} placeholder='例：10000' style={inputStyle}/>
                   <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>円</span>
@@ -810,8 +816,15 @@ async function refreshPublicPages(placeId?: string) {
             <div style={{marginBottom:'8px'}}>
               <label style={{fontSize:'13px',color:'#555',display:'inline-flex',alignItems:'center',gap:'6px',cursor:'pointer'}}>
                 <input type='checkbox' checked={form.feeUnit==='per_event'} onChange={e=>set('feeUnit', e.target.checked ? 'per_event' : 'per_day')} style={{accentColor:'#F5A623'}}/>
-                固定額は1日ごとではなく、期間で1回のみ
+                固定額は1日ごとではなく、期間で1回のみ（日数を掛けません）
               </label>
+              {/* どちらの意味になるかを、その場で例で見せる。
+                  「3日でいくら」は期間で1回のほうに当たる（2026-09-26 の指摘） */}
+              <p style={{fontSize:'12px',color:'#64748B',margin:'4px 0 0',lineHeight:1.8}}>
+                {form.feeUnit === 'per_event'
+                  ? '3日間の催しで「3日通しで80,000円」のとき、こちらです。何日申し込まれても80,000円で、日数は掛けません。この案件は全日まとめての申込になります。'
+                  : '「1日10,000円」のとき、こちらです。3日申し込まれると30,000円になります。'}
+              </p>
             </div>
             {/* 「期間で1回」と「日ごとの金額」の同時入力を知らせる。
                 新規作成の画面（app/dashboard/host/new-place）と同じ判定・同じ文面。
