@@ -160,7 +160,7 @@ export default async function VendorPage() {
                 <div style={{ fontSize: '13px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
                 <div style={{ fontSize: '22px', fontWeight: 900, color: '#111' }}>0円</div>
               </div>
-              <ul className='jp-text' style={{ fontSize: '14.5px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
+              <ul className='jp-text' style={{ fontSize: '14.5px', color: '#333', lineHeight: 2, paddingLeft: '1.35em', margin: 0, listStyleType: 'disc', listStylePosition: 'outside' }}>
                 <li>募集情報の掲載</li>
                 <li>出店者からの応募の受付</li>
                 <li>出店者とのやり取り、日程や条件の調整</li>
@@ -194,7 +194,7 @@ export default async function VendorPage() {
                   <span style={{ display: 'block', fontSize: '13.5px', fontWeight: 800, color: '#B45309', marginTop: '2px' }}>【打ち合わせで決める】</span>
                 </div>
               </div>
-              <ul className='jp-text' style={{ fontSize: '14.5px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
+              <ul className='jp-text' style={{ fontSize: '14.5px', color: '#333', lineHeight: 2, paddingLeft: '1.35em', margin: 0, listStyleType: 'disc', listStylePosition: 'outside' }}>
                 <li>会場に合う出店者への声かけと、候補のご提案</li>
                 <li>条件のとりまとめと、出店者への周知</li>
                 <li>当日の運営（搬入時間・配置の連絡、当日の対応）</li>
@@ -216,7 +216,7 @@ export default async function VendorPage() {
             <p className='jp-text' style={{ marginBottom: '14px' }}>
               出店者がお支払いする出店料は、次の2つを合わせた金額です。
             </p>
-            <ul className='jp-text' style={{ paddingLeft: '20px', marginBottom: '14px' }}>
+            <ul className='jp-text' style={{ paddingLeft: '1.35em', marginBottom: '14px', listStyleType: 'disc', listStylePosition: 'outside' }}>
               <li>会場をご提供いただく施設・主催者へお渡しする分</li>
               <li>募集や調整にかかる弊社の運営分</li>
             </ul>
