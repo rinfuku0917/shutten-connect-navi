@@ -127,7 +127,7 @@ export default function AdminPage() {
   const [notice, setNotice] = useState<{ message: string; kind: 'error' | 'ok' | 'info' } | null>(null)
   const showNotice = (message: string, kind: 'error' | 'ok' | 'info' = 'error') => setNotice({ message, kind })
 
-  const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings' | 'contacts' | 'mail'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'schedule' | 'places' | 'sellers' | 'hosts' | 'csv' | 'place-edit' | 'docs' | 'sales' | 'messages' | 'reviews' | 'imported' | 'publish' | 'blog' | 'applications' | 'meetings' | 'contacts' | 'mail'>('dashboard')
   // 車両の4項目は書き出し（CSV）で使う。CSV取り込みの経路では入らないので任意
   type AdminSeller = { id: string, name: string, shop: string, email: string, phone: string, genre: string, area: string, sns: string, status: string, docs: string, salesType?: string, vehicleType?: string, vehicleSize?: string, equipment?: string }
   const [sellers, setSellers] = useState<AdminSeller[]>([])
@@ -953,6 +953,8 @@ export default function AdminPage() {
 
   // messagesタブを開いたら読み込む
   useEffect(() => { if (tab === 'messages' && authChecked) loadThreads() }, [tab, authChecked])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === 'hosts' && authChecked) loadHosts() }, [tab, authChecked])
 
   // ===== レビュー審査（管理者）=====
   type AdminReview = { id: string, seller_id: string, reviewer_name: string | null, rating: number, comment: string | null, status: string, created_at: string, sellerName: string }
@@ -2130,6 +2132,57 @@ const previewDoc = async (fileUrl: string) => {
     setSourcesErr('')
     setSources(j.items || [])
   }
+  // ===== 募集者管理 =====
+  //
+  // なぜ要るか（2026-09-26 の依頼「管理者側から募集者の情報を見れるようにして」）:
+  //   出店者は「出店者管理」で連絡先まで見られるのに、募集者を見る画面が無かった。
+  //   案件は「案件管理」で見られるが、誰が出しているのかはそこに出ていない。
+  //   承認制にしたので（2026-09-25）、下書きで入ってきた案件の相手を
+  //   すぐ確かめられる必要がある。
+  type HostRow = {
+    id: string, name: string, shopName: string, email: string, phone: string,
+    address: string, createdAt: string,
+    places: { id: string, title: string, prefecture: string, status: string, closed: boolean, apps: number }[],
+  }
+  const [hosts, setHosts] = useState<HostRow[]>([])
+  const [hostsLoading, setHostsLoading] = useState(false)
+  const [hostsErr, setHostsErr] = useState('')
+  const loadHosts = async () => {
+    setHostsLoading(true); setHostsErr('')
+    const { data: prof, error } = await supabase
+      .from('profiles')
+      .select('id, name, shop_name, email, phone, address, created_at')
+      .eq('role', 'host')
+      .order('created_at', { ascending: false })
+    if (error) { setHostsErr('募集者の読み込みに失敗しました：' + error.message); setHostsLoading(false); return }
+    const ids = (prof || []).map((p: { id: string }) => p.id)
+    // その募集者が出した案件と、申込の件数
+    const { data: pls } = ids.length > 0
+      ? await supabase.from('places')
+        .select('id, title, prefecture, status, closed, host_id, applications(count)')
+        .in('host_id', ids)
+      : { data: [] }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const byHost = new Map<string, any[]>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const p of ((pls || []) as any[])) {
+      const arr = byHost.get(p.host_id) || []
+      arr.push({
+        id: p.id, title: p.title || '(案件名なし)', prefecture: p.prefecture || '',
+        status: p.status || '', closed: !!p.closed,
+        apps: Array.isArray(p.applications) ? (p.applications[0]?.count ?? 0) : 0,
+      })
+      byHost.set(p.host_id, arr)
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setHosts(((prof || []) as any[]).map(p => ({
+      id: p.id, name: p.name || '', shopName: p.shop_name || '', email: p.email || '',
+      phone: p.phone || '', address: p.address || '', createdAt: p.created_at || '',
+      places: byHost.get(p.id) || [],
+    })))
+    setHostsLoading(false)
+  }
+
   const [recentApps, setRecentApps] = useState<RecentApp[]>([])
   const loadStats = async () => {
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
@@ -2211,6 +2264,7 @@ const previewDoc = async (fileUrl: string) => {
             { key: 'schedule', label: '出店管理' },
             { key: 'places', label: '案件管理' },
             { key: 'sellers', label: '出店者管理' },
+            { key: 'hosts', label: '募集者管理' },
             { key: 'docs', label: '書類審査' },
             { key: 'sales', label: '売上管理' },
             { key: 'messages', label: 'メッセージ' },
@@ -2276,6 +2330,7 @@ const previewDoc = async (fileUrl: string) => {
             {tab === 'dashboard' && 'ダッシュボード'}
             {tab === 'places' && '案件管理'}
             {tab === 'sellers' && '出店者管理'}
+            {tab === 'hosts' && '募集者管理'}
             {tab === 'csv' && 'CSVインポート'}
             {tab === 'docs' && '書類審査'}
             {tab === 'sales' && '売上管理'}
@@ -2885,6 +2940,98 @@ const previewDoc = async (fileUrl: string) => {
                   </div>
                 </div>
                 ) })()}
+            </>
+          )}
+
+          {/* ===== 募集者管理 ===== */}
+          {tab === 'hosts' && (
+            <>
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: '14px', color: '#B45309' }}>募集者（案件を出す側）</span>
+                  <span style={{ fontSize: '12px', color: '#94A3B8' }}>{hosts.length}人</span>
+                  <button onClick={loadHosts} disabled={hostsLoading}
+                    style={{ marginLeft: 'auto', border: '1px solid #E2E8F0', background: '#fff', color: '#334155', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: hostsLoading ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                    {hostsLoading ? '読み込み中…' : '読み直す'}
+                  </button>
+                </div>
+                <p style={{ fontSize: '11.5px', color: '#94A3B8', lineHeight: 1.8, margin: '6px 0 0' }}>
+                  連絡先は運営だけが見られます。募集者が出した案件は承認制なので、下書きのまま止まっていないかもここで分かります。
+                </p>
+              </div>
+
+              {hostsErr && (
+                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', padding: '12px 14px', fontSize: '13px', color: '#B91C1C', marginBottom: '16px' }}>{hostsErr}</div>
+              )}
+
+              {!hostsLoading && hosts.length === 0 && !hostsErr && (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '32px', textAlign: 'center', color: '#999', fontSize: '13px' }}>
+                  募集者の登録はまだありません。
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {hosts.map(h => (
+                  <div key={h.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 900, color: '#1a1a1a' }}>{h.shopName || h.name || '(名前未登録)'}</span>
+                      {h.shopName && h.name && h.shopName !== h.name && (
+                        <span style={{ fontSize: '12px', color: '#64748B' }}>{h.name}</span>
+                      )}
+                      <span style={{ fontSize: '11px', color: '#94A3B8', marginLeft: 'auto' }}>
+                        登録 {String(h.createdAt).slice(0, 10)}
+                      </span>
+                    </div>
+                    {/* 連絡先。押して電話・メールできるようにする（運営が現場で使うため） */}
+                    <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '2px 14px', fontSize: '13px', margin: '0 0 10px' }}>
+                      <dt style={{ color: '#94A3B8', fontSize: '11.5px' }}>メール</dt>
+                      <dd style={{ margin: 0 }}>
+                        {h.email
+                          ? <a href={'mailto:' + h.email} style={{ color: '#1D4ED8', textDecoration: 'underline', textUnderlineOffset: '2px' }}>{h.email}</a>
+                          : <span style={{ color: '#CBD5E1' }}>未登録</span>}
+                      </dd>
+                      <dt style={{ color: '#94A3B8', fontSize: '11.5px' }}>電話</dt>
+                      <dd style={{ margin: 0 }}>
+                        {h.phone
+                          ? <a href={'tel:' + h.phone.replace(/[^0-9+]/g, '')} style={{ color: '#1D4ED8', textDecoration: 'underline', textUnderlineOffset: '2px' }}>{h.phone}</a>
+                          : <span style={{ color: '#CBD5E1' }}>未登録</span>}
+                      </dd>
+                      <dt style={{ color: '#94A3B8', fontSize: '11.5px' }}>住所</dt>
+                      <dd style={{ margin: 0 }}>{h.address || <span style={{ color: '#CBD5E1' }}>未登録</span>}</dd>
+                    </dl>
+
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                      出した案件（{h.places.length}件）
+                    </div>
+                    {h.places.length === 0 ? (
+                      <div style={{ fontSize: '12px', color: '#94A3B8' }}>まだ案件を出していません。</div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: '6px' }}>
+                        {h.places.map(pl => {
+                          const draft = pl.status !== 'published'
+                          return (
+                            <div key={pl.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', border: '1px solid ' + (draft ? '#FDE68A' : '#E2E8F0'), background: draft ? '#FFFBEB' : '#fff', borderRadius: '8px', padding: '8px 10px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a' }}>{pl.title}</span>
+                              {pl.prefecture && <span style={{ fontSize: '11px', color: '#64748B' }}>{pl.prefecture}</span>}
+                              {draft && <span style={{ fontSize: '11px', fontWeight: 700, color: '#B45309', background: '#fff', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 7px' }}>承認待ち（下書き）</span>}
+                              {pl.closed && <span style={{ fontSize: '11px', color: '#64748B', background: '#F1F5F9', borderRadius: '4px', padding: '1px 7px' }}>募集終了</span>}
+                              <span style={{ fontSize: '11px', color: '#64748B' }}>申込 {pl.apps}件</span>
+                              <a href={'/dashboard/host/edit-place/' + pl.id + '?from=admin'} target='_blank' rel='noreferrer'
+                                style={{ marginLeft: 'auto', fontSize: '11.5px', color: '#1D4ED8', textDecoration: 'underline', textUnderlineOffset: '2px', whiteSpace: 'nowrap' }}>
+                                編集
+                              </a>
+                              <a href={'/places/' + pl.id} target='_blank' rel='noreferrer'
+                                style={{ fontSize: '11.5px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px', whiteSpace: 'nowrap' }}>
+                                公開ページ
+                              </a>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </>
           )}
 
