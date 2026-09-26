@@ -275,6 +275,46 @@ export default function ScheduleCalendar({
     setCfDone({ invoiceNo: j.invoiceNo, total: j.total })
   }
 
+  // 出店キャンセルを記録する。
+  //
+  // なぜ売上として記録するか（2026-09-26 の運営からの依頼）:
+  //   「未報告の状態のときに出店キャンセルのボタンを置き、
+  //     売上管理の売上報告欄へキャンセル料が自動的に反映されるようにしたい」
+  //   売上として残すと、売上管理の一覧にも月次の請求にも同じ額が乗り、
+  //   運営が別の台帳を持たなくて済む。
+  //
+  //   売上（revenue）は0で、出店料だけがキャンセル料。
+  //   内訳は弊社の取り分に入れる（施設へ渡す分があれば売上管理で直せる）。
+  const [ccFor, setCcFor] = useState<Slot | null>(null)
+  const [ccAmount, setCcAmount] = useState('')
+  const [ccReason, setCcReason] = useState('')
+  const [ccBusy, setCcBusy] = useState(false)
+  const [ccErr, setCcErr] = useState('')
+
+  const recordCancel = async () => {
+    if (ccBusy || !ccFor) return
+    const yen = parseInt(ccAmount.replace(/[^0-9]/g, ''), 10) || 0
+    if (yen < 0) { setCcErr('金額を確かめてください'); return }
+    setCcBusy(true); setCcErr('')
+    const note = 'キャンセル料' + (ccReason.trim() ? '（' + ccReason.trim() + '）' : '')
+    const { error } = await supabase.from('sales').insert({
+      application_id: ccFor.applicationId,
+      place_id: ccFor.placeId,
+      seller_id: ccFor.sellerId,
+      sale_date: ccFor.date,
+      revenue: 0,
+      fee: yen,
+      place_fee: 0,
+      company_fee: yen,
+      total_pay: yen,
+      note,
+    })
+    setCcBusy(false)
+    if (error) { setCcErr('記録できませんでした：' + error.message); return }
+    setCcFor(null); setCcAmount(''); setCcReason('')
+    await load()
+  }
+
   // この出店枠へ督促を送る
   const sendRemind = async (s: Slot) => {
     if (actBusy) return
@@ -649,12 +689,30 @@ export default function ScheduleCalendar({
 
                       {/* 督促。報告が無く、出店日を過ぎているときだけ出す。
                           何度でも送れるので、前回いつ送ったかを添えて連打を防ぐ */}
-                      {rep.list.length === 0 && s.date < today && (
+                      {rep.list.length === 0 && s.date <= today && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                          <button type='button' onClick={() => sendRemind(s)} disabled={actBusy === s.applicationId}
-                            style={{ background: actBusy === s.applicationId ? '#ccc' : '#B45309', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: actBusy === s.applicationId ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
-                            {actBusy === s.applicationId ? '送信中…' : '売上報告を督促する'}
-                          </button>
+                          {s.date < today && (
+                            <button type='button' onClick={() => sendRemind(s)} disabled={actBusy === s.applicationId}
+                              style={{ background: actBusy === s.applicationId ? '#ccc' : '#B45309', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: actBusy === s.applicationId ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                              {actBusy === s.applicationId ? '送信中…' : '売上報告を督促する'}
+                            </button>
+                          )}
+                          {/* 督促のすぐ横に置く（2026-09-26 の運営からの依頼）。
+                              出店しなかったときの2つの道：
+                              ・出店キャンセル … キャンセル料を売上として残す（売上管理と月次請求に乗る）
+                              ・キャンセル料を請求する … いますぐ請求書を1枚出す */}
+                          {ccFor?.applicationId !== s.applicationId && (
+                            <button type='button' onClick={() => { setCcFor(s); setCcAmount(''); setCcReason(''); setCcErr('') }}
+                              style={{ background: '#fff', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                              出店キャンセル
+                            </button>
+                          )}
+                          {cfFor?.applicationId !== s.applicationId && (
+                            <button type='button' onClick={() => openCancelFee(s)}
+                              style={{ background: '#fff', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                              キャンセル料を請求する
+                            </button>
+                          )}
                           {remind && remind.count > 0 && remind.lastSentAt && (
                             <span style={{ fontSize: '11.5px', color: '#64748B' }}>
                               前回 {remind.lastSentAt.slice(0, 16).replace('T', ' ')} に送信済み（計{remind.count}回）
@@ -678,12 +736,7 @@ export default function ScheduleCalendar({
                           出店日を過ぎていて売上の報告が無い枠にだけ出す */}
                       {rep.list.length === 0 && s.date <= today && (
                         <div style={{ marginBottom: '16px' }}>
-                          {cfFor?.applicationId !== s.applicationId ? (
-                            <button type='button' onClick={() => openCancelFee(s)}
-                              style={{ background: '#fff', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
-                              キャンセル料を請求する
-                            </button>
-                          ) : (
+                          {cfFor?.applicationId === s.applicationId && (
                             <div style={{ border: '1px solid #FECACA', background: '#FFFBFB', borderRadius: '10px', padding: '12px 14px' }}>
                               <div style={{ fontSize: '12.5px', fontWeight: 900, color: '#B91C1C', marginBottom: '8px' }}>
                                 キャンセル料を請求する
@@ -758,6 +811,51 @@ export default function ScheduleCalendar({
                                   </div>
                                 </>
                               )}
+                            </div>
+                          )}
+                          {/* 出店キャンセルの記録。キャンセル料を売上として残すので、
+                              売上管理の一覧にも月次の請求にも同じ額が乗る */}
+                          {ccFor?.applicationId === s.applicationId && (
+                            <div style={{ border: '1px solid #FECACA', background: '#FFFBFB', borderRadius: '10px', padding: '12px 14px', marginTop: '8px' }}>
+                              <div style={{ fontSize: '12.5px', fontWeight: 900, color: '#B91C1C', marginBottom: '6px' }}>
+                                出店キャンセルとして記録する
+                              </div>
+                              <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '8px' }}>
+                                売上0円・出店料はキャンセル料として、{s.date.replaceAll('-', '/')} の売上に残します。
+                                売上管理の一覧に出て、その月の請求にも入ります。
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '8px' }}>
+                                <label style={{ fontSize: '11.5px', color: '#64748B' }}>
+                                  キャンセル料（税抜）<br />
+                                  <input value={ccAmount} inputMode='numeric' disabled={ccBusy}
+                                    onChange={e => setCcAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                                    placeholder='10000'
+                                    style={{ width: '120px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', textAlign: 'right', fontFamily: 'inherit' }} />
+                                </label>
+                                <label style={{ fontSize: '11.5px', color: '#64748B', flex: 1, minWidth: '160px' }}>
+                                  理由（任意・運営だけが見ます）<br />
+                                  <input value={ccReason} disabled={ccBusy}
+                                    onChange={e => setCcReason(e.target.value)}
+                                    placeholder='当日キャンセル（発熱）'
+                                    style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                                </label>
+                              </div>
+                              <div style={{ fontSize: '11.5px', color: '#64748B', marginBottom: '8px' }}>
+                                キャンセル料が無い（0円）ときも記録できます。売上管理に「出店しなかった」と残ります。
+                              </div>
+                              {ccErr && (
+                                <div style={{ fontSize: '12px', color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }}>{ccErr}</div>
+                              )}
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <button type='button' onClick={recordCancel} disabled={ccBusy}
+                                  style={{ background: ccBusy ? '#ccc' : '#B91C1C', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '12px', fontWeight: 700, cursor: ccBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                                  {ccBusy ? '記録中…' : 'キャンセルとして記録する'}
+                                </button>
+                                <button type='button' onClick={() => setCcFor(null)} disabled={ccBusy}
+                                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', color: '#64748B', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                                  やめる
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>

@@ -564,7 +564,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'docs' && authChecked) loadDocReviews(docSellerId?.id) }, [tab, authChecked, docSellerId])
 
   // ===== 売上管理（管理者） =====
-  type SaleRow = { id: string, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string, shopName: string, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
+  type SaleRow = { id: string, application_id: string | null, place_id: string, seller_id: string, sale_date: string, revenue: number, fee: number, place_fee: number, company_fee: number, total_pay: number, placeTitle: string, sellerName: string, shopName: string, items: { name: string, qty: number, price: number | null }[], weather: string, customers: number | null, note: string }
   const [sales, setSales] = useState<SaleRow[]>([])
   const [salesLoading, setSalesLoading] = useState(false)
   // 売上入力フォーム
@@ -632,11 +632,11 @@ export default function AdminPage() {
     const end = (m === 12 ? (y+1) + '-01' : y + '-' + String(m+1).padStart(2,'0')) + '-01'
     const { data } = await supabase
       .from('sales')
-      .select('id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, items, weather, customers, note, places(title), profiles!sales_seller_id_fkey(name, shop_name)')
+      .select('id, application_id, place_id, seller_id, sale_date, revenue, fee, place_fee, company_fee, total_pay, items, weather, customers, note, places(title), profiles!sales_seller_id_fkey(name, shop_name)')
       .gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: false })
     const mapped: SaleRow[] = (data || []).map((s: any) => ({
-      id: s.id, place_id: s.place_id, seller_id: s.seller_id, sale_date: s.sale_date,
+      id: s.id, application_id: s.application_id ?? null, place_id: s.place_id, seller_id: s.seller_id, sale_date: s.sale_date,
       revenue: s.revenue, fee: s.fee, place_fee: s.place_fee ?? 0, company_fee: s.company_fee ?? s.fee, total_pay: s.total_pay ?? s.fee,
       placeTitle: s.places?.title || '(案件名なし)', sellerName: s.profiles?.name || '(出店者)',
       // 誰が出店したかは屋号のほうが分かりやすい。屋号が未登録の人は代表者名で代用する
@@ -690,6 +690,53 @@ export default function AdminPage() {
     setSaleWeather(''); setSaleCustomers(''); setSaleQty('')
     setSaleSaving(false)
     loadSales()
+  }
+
+  // 売上1件をその場で請求書にする（キャンセル料の特急発行）。
+  //
+  // なぜ要るか（2026-09-26 の運営からの依頼）:
+  //   「売上管理画面からもキャンセル料の請求書を発行できるよう、請求ボタンの追加を」
+  //   月次の請求はその月が終わるまで出せない作りなので、当日キャンセルの
+  //   キャンセル料は月をまたぐまで請求できなかった。
+  //
+  //   発行は事前請求（action='advance'）に乗せ、sale_ids にこの売上を残す。
+  //   月次の請求はそれを見て同じ売上を外すので、二重請求にならない。
+  const [saleBillBusy, setSaleBillBusy] = useState('')
+  const billOneSale = async (s: SaleRow) => {
+    if (saleBillBusy) return
+    if (!s.application_id) { showNotice('この売上には申込が紐づいていないため、この場からは請求できません。'); return }
+    const amount = s.total_pay ?? s.fee
+    if (!(amount > 0)) { showNotice('出店料が0円のため請求できません。'); return }
+    const ok = await ask({
+      title: 'この売上を請求書にしますか？',
+      body: s.sale_date + '　' + (s.shopName || s.sellerName) + '　税抜' + amount.toLocaleString()
+        + '円（税込' + (amount + Math.floor(amount * 0.1)).toLocaleString() + '円）で発行します。'
+        + 'この売上は、その月の請求書からは外れます。',
+      okLabel: '発行する',
+    })
+    if (!ok) return
+    setSaleBillBusy(s.id)
+    const { data: sess } = await supabase.auth.getSession()
+    const t = sess.session?.access_token
+    if (!t) { showNotice('ログインの有効期限が切れています。読み込み直してください。'); setSaleBillBusy(''); return }
+    const isCancel = String(s.note || '').startsWith('キャンセル料')
+    const res = await fetch('/api/admin/invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify({
+        action: 'advance',
+        sellerId: s.seller_id,
+        applicationIds: [s.application_id],
+        saleIds: [s.id],
+        amount,
+        label: s.placeTitle + (isCancel ? ' キャンセル料' : ' 出店料'),
+        force: true,
+      }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setSaleBillBusy('')
+    if (!res.ok) { showNotice('発行できませんでした：' + (j.error || '不明なエラー')); return }
+    showNotice('請求書 ' + j.invoiceNo + '（税込' + (j.total || 0).toLocaleString() + '円）を発行しました。')
   }
 
   const deleteSale = async (id: string) => {
@@ -3606,7 +3653,18 @@ const previewDoc = async (fileUrl: string) => {
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{(s.total_pay ?? s.fee).toLocaleString()}</td>
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#16A34A', fontWeight: '700' }}>¥{Math.round((s.total_pay ?? s.fee) * 1.1).toLocaleString()}</td>
                         <td style={{ padding: '10px 14px' }}>
-                          <button onClick={async () => { if (await ask({ title: '売上記録を削除しますか？', body: '出店者が報告し直せるよう、削除したことを出店者へお伝えください。', okLabel: '削除する', danger: true })) deleteSale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {/* その場で請求書にする。月次を待たずに出せる導線
+                                （2026-09-26 の運営からの依頼）。出店料が0円の行には出さない */}
+                            {(s.total_pay ?? s.fee) > 0 && s.application_id && (
+                              <button onClick={() => billOneSale(s)} disabled={saleBillBusy === s.id}
+                                title='この売上ぶんの請求書をいま発行します（その月の請求書からは外れます）'
+                                style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: saleBillBusy === s.id ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                                {saleBillBusy === s.id ? '…' : '請求書を出す'}
+                              </button>
+                            )}
+                            <button onClick={async () => { if (await ask({ title: '売上記録を削除しますか？', body: '出店者が報告し直せるよう、削除したことを出店者へお伝えください。', okLabel: '削除する', danger: true })) deleteSale(s.id) }} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>削除</button>
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -122,7 +122,7 @@ export async function POST(req: Request) {
     //
     // クライアントを先に作らないのは、鍵の無い環境（手元）で
     // 名乗っていない相手にまで 500 を返さないため。判定の順は requireCaller が持つ
-    const { sellerId, period, action, dueOn, edited, amount, label, applicationId, applicationIds, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
+    const { sellerId, period, action, dueOn, edited, amount, label, applicationId, applicationIds, saleIds, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
 
     const ctx = await requireCaller(req, undefined, 'ログインしなおしてからお試しください')
     if (ctx instanceof NextResponse) return ctx
@@ -370,6 +370,11 @@ export async function POST(req: Request) {
         ? label.trim()
         : `${placeTitle || '出店'} 出店料（事前）`
 
+      // 先に請求する売上（キャンセル料など、売上として記録済みのもの）
+      const advSaleIds: string[] = Array.from(new Set(
+        (Array.isArray(saleIds) ? saleIds : []).map((x: unknown) => String(x || '').trim()).filter(Boolean),
+      ))
+
       // 「期間で1回のみ」の案件は、選んだ日数を掛けない。
       //
       // なぜ（2026-09-25 の運営からの指摘）:
@@ -441,7 +446,10 @@ export async function POST(req: Request) {
         invoice_no: noA, seller_id: sellerId, period: advPeriod, kind: 'advance',
         application_id: appId,
         subtotal: advSubtotal, tax: advTax, total: advSubtotal + advTax, item_count: advItems.length,
-        sale_ids: null, items: advItems, due_on: dueA,
+        // どの売上を先に請求したかを残す。月次の請求はここを見て同じ売上を外す
+        // （キャンセル料を売上として残しつつ、その場で1枚出せるようにしたため）
+        sale_ids: advSaleIds.length > 0 ? advSaleIds : null,
+        items: advItems, due_on: dueA,
         to_name: edited?.toName ?? null,
         to_person: edited?.toPerson ?? null,
         note: edited?.note ?? null,
@@ -474,7 +482,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'この月の売上記録がありません' }, { status: 404 })
     }
 
-    const placeIds = Array.from(new Set(sales.map(s => s.place_id).filter(Boolean)))
+    // 事前請求（kind='advance'）で先に請求した売上は、月次に二重で載せない。
+    // 取り消した請求書は数えない（取り消したなら出し直せるべき）。
+    // 過去の月次請求は見ない。取消→再発行という運用をそのまま残すため
+    const { data: advDone } = await admin
+      .from('invoices')
+      .select('sale_ids')
+      .eq('seller_id', sellerId).eq('kind', 'advance').is('voided_at', null)
+      .not('sale_ids', 'is', null)
+    const paidAhead = new Set<string>()
+    for (const row of (advDone || []) as { sale_ids: string[] | null }[]) {
+      for (const id of (row.sale_ids || [])) paidAhead.add(id)
+    }
+    const alreadyAdvanced = sales.filter(s => paidAhead.has(s.id)).length
+    const monthSales = alreadyAdvanced > 0 ? sales.filter(s => !paidAhead.has(s.id)) : sales
+    if (monthSales.length === 0) {
+      return NextResponse.json({
+        error: 'この月の売上は、すべて事前請求で請求済みです（' + alreadyAdvanced + '件）。',
+      }, { status: 404 })
+    }
+
+    const placeIds = Array.from(new Set(monthSales.map(s => s.place_id).filter(Boolean)))
     // 件名の条件は、出店者の画面と同じ読み出し（app/lib/placeFee.ts）で作る。
     // そのため形態ごとの設定（format_fees）と平日/土日祝の額（day_type_fees）、
     // 最低保証（min_guarantee）も一緒に読む。
@@ -489,7 +517,7 @@ export async function POST(req: Request) {
 
     // 申込で選んだ形態。形態ごとに歩合や最低保証が違う案件があるため、
     // 件名の条件は「その売上がどの形態で出た出店か」まで見ないと合わない
-    const appIds = Array.from(new Set(sales.map(s => s.application_id).filter(Boolean)))
+    const appIds = Array.from(new Set(monthSales.map(s => s.application_id).filter(Boolean)))
     const formatOf = new Map<string, string | null>()
     if (appIds.length > 0) {
       const { data: apps } = await admin.from('applications').select('id, format').in('id', appIds)
@@ -498,8 +526,8 @@ export async function POST(req: Request) {
 
     // 出店料が0円の売上は明細に載せない（案件の料金設定が未入力のケース）。
     // ただし件数は返して、管理画面で気づけるようにする。
-    const zero = sales.filter(s => (s.total_pay ?? s.fee ?? 0) <= 0)
-    const billable = sales.filter(s => (s.total_pay ?? s.fee ?? 0) > 0)
+    const zero = monthSales.filter(s => (s.total_pay ?? s.fee ?? 0) <= 0)
+    const billable = monthSales.filter(s => (s.total_pay ?? s.fee ?? 0) > 0)
     if (billable.length === 0) {
       return NextResponse.json({
         error: 'この月の請求対象がありません。出店料が0円の売上が' + zero.length + '件あります。案件の料金設定をご確認ください。',
