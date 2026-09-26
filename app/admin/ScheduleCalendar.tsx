@@ -305,17 +305,44 @@ export default function ScheduleCalendar({
     // すでにキャンセルの記録が入っているときは、行を増やさず金額と理由を直す。
     // 「0円で記録してしまい、あとで金額を入れたい」がそのまま起きたため（2026-09-26）
     const exist = cancelSaleOf(ccFor)
-    const { error } = exist
-      ? await supabase.from('sales').update(fields).eq('id', exist.id)
+    const { data: saved, error } = exist
+      ? await supabase.from('sales').update(fields).eq('id', exist.id).select('id')
       : await supabase.from('sales').insert({
           application_id: ccFor.applicationId,
           place_id: ccFor.placeId,
           seller_id: ccFor.sellerId,
           sale_date: ccFor.date,
           ...fields,
-        })
+        }).select('id')
     setCcBusy(false)
     if (error) { setCcErr((exist ? '直せませんでした：' : '記録できませんでした：') + error.message); return }
+
+    // 経理用スプレッドシートへ送る。
+    //
+    // なぜ要るか（2026-09-26 の指摘）:
+    //   運営の売上入力（app/admin/page.tsx の saveSale）は送っているのに、
+    //   ここから入れたキャンセルの記録だけ送っていなかった。
+    //   そのため経理シートに行が出ず、「未送信 1件」として残っていた。
+    //   金額を直したときも送り直す必要がある（送信済みの印が付いたままで、
+    //   まとめ送りの対象から外れるため）。
+    //
+    //   送れなくても記録は残っているので、待たないし失敗でも止めない
+    //   （運営の画面から「いま送り直す」で送れる）。
+    const ids = ((saved || []) as { id: string }[]).map(r => r.id)
+    if (ids.length > 0) {
+      void (async () => {
+        try {
+          const t = await token()
+          if (!t) return
+          await fetch('/api/sheets/sales', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+            body: JSON.stringify({ saleIds: ids }),
+          })
+        } catch { /* 経理シートへ送れなくても、売上の記録は残っている */ }
+      })()
+    }
+
     setCcFor(null); setCcAmount(''); setCcReason('')
     await load()
   }
