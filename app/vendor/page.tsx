@@ -132,73 +132,15 @@ export default async function VendorPage() {
         </div>
       </div>
 
-      {/* こんなときに */}
-      <div style={{ background: '#fff', padding: '52px 24px' }}>
-        <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head sec-head' style={H2}>こんなときにご相談ください<Image src='/ic-v-consult.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
-          <p className='jp-text' style={LEAD}>キッチンカーを呼びたい理由は会場ごとに違います。まずは状況をお聞かせください。</p>
-          <div className='grid-3' style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
-            {CASES.map(c => (
-              <div key={c.t} style={CARD}>
-                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
-                <div className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
-                {c.href && (
-                  <Link href={c.href} style={{ display: 'inline-block', marginTop: '10px', fontSize: '13px', fontWeight: 700, color: '#B45309', textDecoration: 'none' }}>
-                    イベントの手配について詳しく →
-                  </Link>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* できること */}
-      <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
-        <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head sec-head' style={H2}>出店コネクトナビでできること<Image src='/ic-v-can.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
-          <p className='jp-text' style={LEAD}>
-            キッチンカー事業者と、出店場所をお持ちの施設・主催者をつなぐサービスです。
-            現在 {stats.sellers.toLocaleString()} 店舗の出店者が登録しています。
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px' }}>
-            {CAN_DO.map(c => (
-              <div key={c.t} style={CARD}>
-                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
-                <div className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 流れ */}
-      <div style={{ background: '#fff', padding: '52px 24px' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <h2 className='jp-head' style={H2}>ご相談から当日までの流れ</h2>
-          <p className='jp-text' style={LEAD}>会員登録の前でもご相談いただけます。</p>
-          <div className='grid-4' style={{ gap: '20px' }}>
-            {STEPS.map((s, i) => (
-              <div key={s.t} style={{ textAlign: 'center', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>{i + 1}</div>
-                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', marginBottom: '8px', color: '#111' }}>{s.t}</div>
-                <div style={{ fontSize: '12px', color: '#111', lineHeight: 1.7 }}>{s.d}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* 費用の考え方 */}
       <div id='cost' style={{ background: '#FAFAFA', padding: '52px 24px', scrollMarginTop: '80px' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <h2 className='jp-head sec-head' style={H2}>掲載は無料です<Image src='/ic-v-free.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}>キッチンカーを呼ぶ2つの方法<Image src='/ic-v-free.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
-            募集の掲載に費用はかかりません。掲載は<strong>承認制</strong>です。
+            <strong>ご自身で募集する</strong>か、<strong>弊社にお任せいただく</strong>か、どちらかをお選びいただけます。
             <br />
-            出店料などの条件を確認したうえで公開しますので、ご登録後に担当者からご連絡いたします。
+            どちらも掲載に費用はかかりません。掲載は<strong>承認制</strong>で、出店料などの条件を確認したうえで公開します。
             <br />
-            どこまでを弊社にお任せいただくかで、2つの形からお選びいただけます。
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '16px', marginBottom: '18px' }}>
@@ -217,9 +159,14 @@ export default async function VendorPage() {
                 <li>出店者からの応募の受付</li>
                 <li>出店者とのやり取り、日程や条件の調整</li>
               </ul>
-              <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: 0 }}>
+              <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: '14px' }}>
                 掲載料・登録料・成約手数料はいただきません。出店者の選定や当日の段取りは、ご担当者さまで進めていただく形です。
               </p>
+              {/* 各カードから先へ進めるようにする（2026-09-27 の依頼）。
+                  これまでは2つ並べただけで、選んだあとの行き先が無かった */}
+              <Link href='/register?role=host' style={{ display: 'block', textAlign: 'center', background: '#2E7D32', color: '#fff', fontWeight: 900, fontSize: '15px', padding: '13px 20px', borderRadius: '999px', textDecoration: 'none' }}>
+                無料で掲載する（会員登録）
+              </Link>
             </div>
 
             {/* 運営におまかせいただく形 */}
@@ -232,6 +179,7 @@ export default async function VendorPage() {
                 <div style={{ fontSize: '12px', fontWeight: 800, color: '#888', marginBottom: '4px' }}>費用</div>
                 <div style={{ fontSize: '20px', fontWeight: 900, color: '#111' }}>
                   応相談
+                  <span style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#B45309', marginTop: '2px' }}>【打ち合わせで決める】</span>
                 </div>
               </div>
               <ul className='jp-text' style={{ fontSize: '13px', color: '#333', lineHeight: 2, paddingLeft: '20px', margin: 0 }}>
@@ -240,11 +188,14 @@ export default async function VendorPage() {
                 <li>当日の運営（搬入時間・配置の連絡、当日の対応）</li>
                 <li>必要な書類（営業許可・保険など）の確認と、申請の代行</li>
               </ul>
-              <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: 0 }}>
+              <p className='jp-text' style={{ fontSize: '12.5px', color: '#666', lineHeight: 1.9, marginTop: '12px', marginBottom: '14px' }}>
                 どの出店者に決めるかは、ご担当者さまで選んでいただくこともできます。
                 現地での立ち会いも、イベントの規模や内容に応じてご相談いただけます。
                 金額は台数・開催日数・会場の条件によって変わりますので、内容をうかがったうえでお見積りします。
               </p>
+              <a href='#soudan' style={{ display: 'block', textAlign: 'center', background: '#B45309', color: '#fff', fontWeight: 900, fontSize: '15px', padding: '13px 20px', borderRadius: '999px', textDecoration: 'none' }}>
+                打ち合わせを申し込む
+              </a>
             </div>
           </div>
 
@@ -318,6 +269,63 @@ export default async function VendorPage() {
             電源や水道がない会場でも、発電機や給排水タンクを備えたキッチンカーであれば出店できる場合があります。
             設備が揃っていないことを理由に諦めず、まずは会場の状況をお知らせください。
           </p>
+        </div>
+      </div>
+
+      {/* こんなときに */}
+      <div style={{ background: '#fff', padding: '52px 24px' }}>
+        <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+          <h2 className='jp-head sec-head' style={H2}>こんなときにご相談ください<Image src='/ic-v-consult.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <p className='jp-text' style={LEAD}>キッチンカーを呼びたい理由は会場ごとに違います。まずは状況をお聞かせください。</p>
+          <div className='grid-3' style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
+            {CASES.map(c => (
+              <div key={c.t} style={CARD}>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
+                <div className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
+                {c.href && (
+                  <Link href={c.href} style={{ display: 'inline-block', marginTop: '10px', fontSize: '13px', fontWeight: 700, color: '#B45309', textDecoration: 'none' }}>
+                    イベントの手配について詳しく →
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* できること */}
+      <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
+        <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+          <h2 className='jp-head sec-head' style={H2}>出店コネクトナビでできること<Image src='/ic-v-can.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <p className='jp-text' style={LEAD}>
+            キッチンカー事業者と、出店場所をお持ちの施設・主催者をつなぐサービスです。
+            現在 {stats.sellers.toLocaleString()} 店舗の出店者が登録しています。
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px' }}>
+            {CAN_DO.map(c => (
+              <div key={c.t} style={CARD}>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', color: '#111', marginBottom: '8px' }}>{c.t}</div>
+                <div className='jp-text' style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>{c.d}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 流れ */}
+      <div style={{ background: '#fff', padding: '52px 24px' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+          <h2 className='jp-head' style={H2}>ご相談から当日までの流れ</h2>
+          <p className='jp-text' style={LEAD}>会員登録の前でもご相談いただけます。</p>
+          <div className='grid-4' style={{ gap: '20px' }}>
+            {STEPS.map((s, i) => (
+              <div key={s.t} style={{ textAlign: 'center', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>{i + 1}</div>
+                <div className='jp-head' style={{ fontWeight: 900, fontSize: '15px', marginBottom: '8px', color: '#111' }}>{s.t}</div>
+                <div style={{ fontSize: '12px', color: '#111', lineHeight: 1.7 }}>{s.d}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
