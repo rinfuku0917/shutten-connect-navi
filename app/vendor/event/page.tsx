@@ -204,7 +204,7 @@ export default function EventVendorPage() {
       {/* お困りごと */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <h2 className='jp-head sec-head' style={H2}><span className='u'>イベントの出店で</span><wbr /><span className='u'>よくあるお困りごと</span><Image src='/ic-e-trouble.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}><span className='t'><span className='u'>イベントの出店で</span><wbr /><span className='u'>よくあるお困りごと</span></span><Image src='/ic-e-trouble.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>ひとつでも当てはまるものがあれば、お力になれます。</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '16px' }}>
             {TROUBLES.map(c => (
@@ -220,7 +220,7 @@ export default function EventVendorPage() {
       {/* いつまでに */}
       <div style={{ background: '#fff', padding: '52px 24px' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h2 className='jp-head sec-head' style={H2}><span className='u'>いつまでに</span><wbr /><span className='u'>ご相談いただくとよいか</span><Image src='/ic-e-when.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}><span className='t'><span className='u'>いつまでに</span><wbr /><span className='u'>ご相談いただくとよいか</span></span><Image src='/ic-e-when.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>開催日の2週間前までを目安にご相談ください。</p>
           <div style={{ ...CARD, fontSize: '14px', color: '#333', lineHeight: 2 }}>
             <p style={{ marginBottom: '14px' }}>

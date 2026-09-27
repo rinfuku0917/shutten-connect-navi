@@ -699,6 +699,15 @@ img[width='1'][height='1'] { display: inline !important; }
   gap: 10px;
   flex-wrap: nowrap;
 }
+/* 見出しの文字ぜんぶを入れる、ひとつのまとまり。
+   <span class="u"> で区切った見出しに必要。
+   u を直接この flex の子にすると、まとまりが横に並んだまま押し潰され、
+   それぞれが内側で折り返してしまう
+   （2026-09-27：「事前にご確認いただ／きたい　設備・／条件」と
+   2列に割れて読めなくなっていた）。
+   文字をこの t でひとまとめにすると、中は普通の行として流れるので、
+   u の区切りで素直に改行する。アイコンは外に残るので横に付いたまま。 */
+.sec-head > .t { min-width: 0; }
 .sec-head > img {
   flex-shrink: 0;
   margin-left: 0 !important;

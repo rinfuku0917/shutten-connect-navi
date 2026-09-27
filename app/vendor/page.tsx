@@ -259,7 +259,7 @@ export default async function VendorPage() {
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           {/* 17文字あり、スマホでは1行に入らない。
               「〜いただ / きたい設備・条件」と割れないよう、切る位置を指定する */}
-          <h2 className='jp-head sec-head' style={H2}><span className='u'>事前にご確認いただきたい</span><wbr /><span className='u'>設備・条件</span><Image src='/ic-v-equip.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <h2 className='jp-head sec-head' style={H2}><span className='t'><span className='u'>事前にご確認いただきたい</span><wbr /><span className='u'>設備・条件</span></span><Image src='/ic-v-equip.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
           <p className='jp-text' style={LEAD}>
             募集を出す前に、次の項目を決めていただきます。分からない項目はご相談の中で一緒に整理します。
           </p>
