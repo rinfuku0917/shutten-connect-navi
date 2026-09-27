@@ -546,7 +546,25 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
             {/* 合計欄も同じ表の中に置く（元のPDFと同じ体裁） */}
             {/* 不課税の行がある請求書だけ、課税と不課税に分けて出す。
                 無い請求書（これまでのもの）は今までと同じ2行のまま */}
-            {taxFree > 0 ? (
+            {taxFree > 0 && taxable === 0 ? (
+              /* 全部が不課税の請求書（キャンセル料＋システム料など）。
+                 「小計(課税) ¥0」を出すと読みにくいので、不課税の小計と
+                 消費税が0であることだけを出す */
+              <>
+                <tr>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={sumLabel}>小計(不課税)</td>
+                  <td style={sumValue}>{yen(taxFree)}</td>
+                </tr>
+                <tr>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={sumLabel}>消費税</td>
+                  <td style={sumValue}>{yen(0)}</td>
+                </tr>
+              </>
+            ) : taxFree > 0 ? (
               <>
                 <tr>
                   <td style={cell}>&nbsp;</td>
