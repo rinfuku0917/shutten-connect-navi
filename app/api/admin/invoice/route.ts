@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireCaller, denyNotAdmin, roleCheckFailedResponse } from '../../../lib/apiAuth'
 import { feeCondition, dayFeeOf, minTotalOn, perEventFeeOf, perEventConflict, dayCountFeeOf, type FeeSource } from '../../../lib/placeFee'
 import { selectWithOptionalColumn } from '../../../lib/optionalColumn'
+import { invoiceTotals } from '../../../lib/invoiceTotals'
 import { sendSalesToSheet } from '../../../lib/sheetSend'
 
 // 出店者への請求書を組み立てる。
@@ -567,8 +568,11 @@ export async function POST(req: Request) {
     if (action === 'save') {
       // 既に発行済みの請求書の内容を修正して保存する
       if (!edited) return NextResponse.json({ error: '保存する内容がありません' }, { status: 400 })
-      const sub = (edited.items || []).reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
-      const tx = Math.floor(sub * 0.1)
+      // 明細ごとの「不課税」を見て、課税対象にだけ消費税を掛ける。
+      // 式は画面と同じ app/lib/invoiceTotals.ts を使う（2か所で違う額にならないように）
+      const t = invoiceTotals(edited.items || [])
+      const sub = t.subtotal
+      const tx = t.tax
       const patch: Record<string, unknown> = {
         items: edited.items || null,
         to_name: edited.toName ?? null,

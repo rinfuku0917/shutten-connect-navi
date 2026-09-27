@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
+import { invoiceTotals } from '../../lib/invoiceTotals'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Notice from '../../components/Notice'
 import { useSearchParams } from 'next/navigation'
@@ -28,7 +29,7 @@ const ISSUER = {
   note: 'お振込手数料は貴社にてご負担をお願いいたします。',
 }
 
-type Item = { no: number; date: string; title: string; amount: number }
+type Item = { no: number; date: string; title: string; amount: number; taxFree?: boolean }
 type Invoice = {
   seller: { shopName: string; personName: string }
   periodLabel: string
@@ -175,9 +176,9 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
     setNote(inv.note || '')
   }, [inv])
 
-  const subtotal = items.reduce((t, i) => t + (Number(i.amount) || 0), 0)
-  const tax = Math.floor(subtotal * 0.1)
-  const total = subtotal + tax
+  // 明細ごとの「不課税」を見て、課税対象にだけ消費税を掛ける。
+  // 計算は app/lib/invoiceTotals.ts に集める（保存側と同じ式を使うため）
+  const { taxable, taxFree, subtotal, tax, total } = invoiceTotals(items)
 
   const setItem = (idx: number, patch: Partial<Item>) =>
     setItems(list => list.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
@@ -518,12 +519,17 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
                 <td style={{ ...cell, ...editBox }}>
                   {editing
                     ? <input value={it.title} onChange={e => setItem(idx, { title: e.target.value })} style={inputStyle} placeholder='請求件名' />
-                    : it.title}
+                    : <>{it.title}{it.taxFree && <span style={{ marginLeft: '4pt', fontSize: '8pt', color: '#555' }}>（不課税）</span>}</>}
                 </td>
                 <td style={{ ...right, ...editBox, position: 'relative' }}>
                   {editing ? (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4pt' }}>
                       <input type='number' value={it.amount} onChange={e => setItem(idx, { amount: parseInt(e.target.value, 10) || 0 })} style={{ ...inputStyle, textAlign: 'right' }} />
+                      {/* キャンセル料など、消費税の対象外の行に印を付ける（2026-09-27） */}
+                      <label className='no-print' title='消費税を掛けない行にする（キャンセル料など）' style={{ display: 'inline-flex', alignItems: 'center', gap: '2pt', fontSize: '8pt', color: '#64748B', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                        <input type='checkbox' checked={!!it.taxFree} onChange={e => setItem(idx, { taxFree: e.target.checked })} style={{ margin: 0 }} />
+                        不課税
+                      </label>
                       <button className='no-print' onClick={() => removeItem(idx)} title='この行を削除' style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontSize: '10pt', padding: 0 }}>✕</button>
                     </span>
                   ) : yen(it.amount)}
@@ -538,18 +544,45 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
               <td style={cell}>&nbsp;</td>
             </tr>
             {/* 合計欄も同じ表の中に置く（元のPDFと同じ体裁） */}
-            <tr>
-              <td style={cell}>&nbsp;</td>
-              <td style={cell}>&nbsp;</td>
-              <td style={sumLabel}>小計(税抜)</td>
-              <td style={sumValue}>{yen(subtotal)}</td>
-            </tr>
-            <tr>
-              <td style={cell}>&nbsp;</td>
-              <td style={cell}>&nbsp;</td>
-              <td style={sumLabel}>消費税(10%)</td>
-              <td style={sumValue}>{yen(tax)}</td>
-            </tr>
+            {/* 不課税の行がある請求書だけ、課税と不課税に分けて出す。
+                無い請求書（これまでのもの）は今までと同じ2行のまま */}
+            {taxFree > 0 ? (
+              <>
+                <tr>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={sumLabel}>小計(課税・税抜)</td>
+                  <td style={sumValue}>{yen(taxable)}</td>
+                </tr>
+                <tr>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={sumLabel}>消費税(10%)</td>
+                  <td style={sumValue}>{yen(tax)}</td>
+                </tr>
+                <tr>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={sumLabel}>小計(不課税)</td>
+                  <td style={sumValue}>{yen(taxFree)}</td>
+                </tr>
+              </>
+            ) : (
+              <>
+                <tr>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={sumLabel}>小計(税抜)</td>
+                  <td style={sumValue}>{yen(subtotal)}</td>
+                </tr>
+                <tr>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={cell}>&nbsp;</td>
+                  <td style={sumLabel}>消費税(10%)</td>
+                  <td style={sumValue}>{yen(tax)}</td>
+                </tr>
+              </>
+            )}
             <tr>
               <td style={cell}>&nbsp;</td>
               <td style={cell}>&nbsp;</td>
