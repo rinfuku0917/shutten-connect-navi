@@ -10,6 +10,7 @@ import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { cancelResultMessage } from '../lib/purgeLog'
 import { dayFeeOf, perEventFeeOf, perEventConflict, dayCountFeeOf, type FeeSource } from '../lib/placeFee'
+import { hasLikeWildcard, hasOrReservedChar, likePattern, LIKE_SEARCH_NG_MESSAGE } from '../lib/likeSearch'
 import { selectWithOptionalColumn } from '../lib/optionalColumn'
 
 // 案件ごとの応募者一覧。
@@ -157,6 +158,9 @@ export default function PlaceApplicationsModal({
   const [advDue, setAdvDue] = useState('')
   // 案件に固定額の設定があれば、金額の初期値に使う
   const [placeFixed, setPlaceFixed] = useState(0)
+  // 案件の日程すべて（過去日を含む）。代理エントリーの日付の候補。
+  // 読み込み処理より前に置く（あとに置くと「宣言より前で使っている」と止められる）
+  const [allDays, setAllDays] = useState<string[]>([])
   // 事前請求の初期額を出すための、案件の料金設定。
   //
   // 以前は price_fixed + company_fixed_amount だけを見ていたため、
@@ -387,6 +391,8 @@ export default function PlaceApplicationsModal({
       const sc: any[] = Array.isArray(pl?.schedule) ? pl.schedule : []
       const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
       setPlaceDays(sc.map(d => String(d?.date || '')).filter(d => d && d >= today).sort())
+      // 代理エントリーでは過去の日も選ぶ（出店した事実をあとから記録するため）
+      setAllDays(sc.map(d => String(d?.date || '')).filter(Boolean).sort())
     }
 
     // この案件のために入力された出店者情報。入っていればExcelはその内容で作られる
@@ -516,6 +522,65 @@ export default function PlaceApplicationsModal({
   // 取り消し済みのものだけ消せるようにする。
   // 出店日の振り替え。取り消して入れ直してもらう必要がないようにする
   const [placeDays, setPlaceDays] = useState<string[]>([])
+
+  // 運営が出店者に代わってエントリーを作る。
+  //
+  // なぜ要るか（2026-09-27 の運営からの相談）:
+  //   旧サイトでエントリー済みだった出店者が、新サイトでエントリーし直さないまま
+  //   出店日を迎えることがある。出店日を過ぎるとカレンダーから選べないので、
+  //   本人はもう申し込めない。申込が無いと売上報告も請求もできない。
+  //   2026-09-25 の東群馬看護専門学校で実際に起きた。
+  const [paOpen, setPaOpen] = useState(false)
+  const [paKw, setPaKw] = useState('')
+  const [paSeller, setPaSeller] = useState<{ id: string, name: string } | null>(null)
+  const [paHits, setPaHits] = useState<{ id: string, name: string }[]>([])
+  const [paDate, setPaDate] = useState('')
+  const [paFormat, setPaFormat] = useState('')
+  const [paBusy, setPaBusy] = useState(false)
+  const [paMsg, setPaMsg] = useState<{ ok: boolean, text: string } | null>(null)
+
+  const paSearch = async (kw: string) => {
+    const q = kw.trim()
+    setPaKw(kw); setPaSeller(null)
+    if (q.length < 2) { setPaHits([]); setPaMsg(null); return }
+    // 記号は先に弾く。.or() の中の ilike なので、パターンとして効く記号も
+    // 項の区切りとして読まれる記号も入れられない（AGENTS.md）
+    if (hasLikeWildcard(q) || hasOrReservedChar(q)) {
+      setPaHits([]); setPaMsg({ ok: false, text: LIKE_SEARCH_NG_MESSAGE }); return
+    }
+    setPaMsg(null)
+    // 名前・屋号・メールのどれかで探す。運営の画面なので本名も見てよい
+    const like = likePattern(q)
+    const { data } = await supabase
+      .from('profiles').select('id, name, shop_name, email')
+      .eq('role', 'seller')
+      .or(`name.ilike.%${like}%,shop_name.ilike.%${like}%,email.ilike.%${like}%`)
+      .limit(12)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setPaHits(((data || []) as any[]).map(p => ({
+      id: p.id,
+      name: (p.shop_name || p.name || '(名前未登録)') + (p.email ? '（' + p.email + '）' : ''),
+    })))
+  }
+
+  const paSubmit = async () => {
+    if (paBusy || !paSeller || !paDate) return
+    setPaBusy(true); setPaMsg(null)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setPaMsg({ ok: false, text: 'ログインの有効期限が切れています。読み込み直してください。' }); setPaBusy(false); return }
+    const res = await fetch('/api/admin/proxy-apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ placeId, sellerId: paSeller.id, applyDate: paDate, format: paFormat || null }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setPaBusy(false)
+    if (!res.ok) { setPaMsg({ ok: false, text: j.error || 'エントリーを作れませんでした' }); return }
+    setPaMsg({ ok: true, text: paSeller.name + ' さんの ' + paDate.replaceAll('-', '/') + ' のエントリーを作りました（承認済み）。売上報告と請求ができるようになります。' })
+    setPaSeller(null); setPaKw(''); setPaHits([]); setPaDate(''); setPaFormat('')
+    await load()
+  }
+
   const [chgAsk, setChgAsk] = useState<{ id: string; who: string; when: string; date: string | null } | null>(null)
   const [chgDate, setChgDate] = useState('')
   const [chgReason, setChgReason] = useState('')
@@ -632,6 +697,80 @@ export default function PlaceApplicationsModal({
             {!loading && !err && sellers.length === 0 && (
               <div style={{ padding: '30px', textAlign: 'center', color: '#888', fontSize: '13px', lineHeight: 1.9 }}>
                 この案件にはまだ応募がありません。
+              </div>
+            )}
+
+            {/* 運営が代わりにエントリーを作る。
+                旧サイトからの移行で、本人が申し込めないまま出店日を過ぎた場合に使う
+                （2026-09-27 の運営からの相談） */}
+            {!loading && !err && (
+              <div style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px', background: '#F8FAFC' }}>
+                <button type='button' onClick={() => { setPaOpen(v => !v); setPaMsg(null) }}
+                  style={{ border: '1px solid #CBD5E1', background: '#fff', color: '#334155', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {paOpen ? '代理でエントリーを閉じる' : '運営が代理でエントリーする'}
+                </button>
+                {!paOpen && (
+                  <p style={{ fontSize: '11.5px', color: '#94A3B8', lineHeight: 1.8, margin: '6px 0 0' }}>
+                    出店日を過ぎていて、出店者ご本人が申し込めないときに使います。作ると売上報告と請求ができるようになります。
+                  </p>
+                )}
+                {paOpen && (
+                  <div style={{ marginTop: '10px', display: 'grid', gap: '8px' }}>
+                    <label style={{ fontSize: '11.5px', color: '#64748B' }}>
+                      出店者（屋号・お名前・メールで検索）<br />
+                      <input value={paKw} onChange={e => paSearch(e.target.value)} disabled={paBusy}
+                        placeholder='2文字以上で検索'
+                        style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                    </label>
+                    {paSeller ? (
+                      <div style={{ fontSize: '12.5px', color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '7px 10px' }}>
+                        {paSeller.name}
+                        <button type='button' onClick={() => setPaSeller(null)}
+                          style={{ marginLeft: '8px', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', color: '#64748B', textDecoration: 'underline' }}>選び直す</button>
+                      </div>
+                    ) : paHits.length > 0 && (
+                      <div style={{ display: 'grid', gap: '4px', maxHeight: '160px', overflowY: 'auto' }}>
+                        {paHits.map(h => (
+                          <button key={h.id} type='button' onClick={() => { setPaSeller(h); setPaHits([]) }}
+                            style={{ textAlign: 'left', border: '1px solid #E2E8F0', background: '#fff', borderRadius: '8px', padding: '7px 10px', fontSize: '12.5px', color: '#1a1a1a', cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {h.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <label style={{ fontSize: '11.5px', color: '#64748B' }}>
+                      出店日（案件の日程から選びます。過ぎた日も選べます）<br />
+                      <select value={paDate} onChange={e => setPaDate(e.target.value)} disabled={paBusy}
+                        style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', fontFamily: 'inherit', boxSizing: 'border-box' }}>
+                        <option value=''>{allDays.length === 0 ? '案件に日程がありません' : '選択してください'}</option>
+                        {allDays.map(d => <option key={d} value={d}>{d.replaceAll('-', '/')}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ fontSize: '11.5px', color: '#64748B' }}>
+                      出店形式（任意）<br />
+                      <input value={paFormat} onChange={e => setPaFormat(e.target.value)} disabled={paBusy}
+                        placeholder='キッチンカー など'
+                        style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                    </label>
+                    {paMsg && (
+                      <div style={{ fontSize: '12.5px', lineHeight: 1.8, borderRadius: '8px', padding: '8px 10px',
+                        color: paMsg.ok ? '#166534' : '#B91C1C',
+                        background: paMsg.ok ? '#F0FDF4' : '#FEF2F2',
+                        border: '1px solid ' + (paMsg.ok ? '#BBF7D0' : '#FECACA') }}>
+                        {paMsg.text}
+                      </div>
+                    )}
+                    <div>
+                      <button type='button' onClick={paSubmit} disabled={paBusy || !paSeller || !paDate}
+                        style={{ background: (paBusy || !paSeller || !paDate) ? '#CBD5E1' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: 700, cursor: (paBusy || !paSeller || !paDate) ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                        {paBusy ? '作成中…' : '承認済みでエントリーを作る'}
+                      </button>
+                    </div>
+                    <p style={{ fontSize: '11.5px', color: '#94A3B8', lineHeight: 1.8, margin: 0 }}>
+                      作ったエントリーは<strong>承認済み</strong>で入ります。出店者へメールは飛びません。
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
