@@ -2009,7 +2009,7 @@ export default function SellerDashboard() {
                           // .msg-bubble で折り返しを許し、スマホでは幅も広げる
                           <div key={m.id} className='msg-bubble' style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
                             <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, width: 'fit-content', marginLeft: 'auto', whiteSpace: 'pre-wrap' }}>
-                              {m.body && <div>{m.body}</div>}
+                              {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, true)}
                             </div>
                             <div style={{ textAlign: 'right', marginTop: '3px' }}>
@@ -2028,7 +2028,7 @@ export default function SellerDashboard() {
                                 {fromHost ? '会場のご担当者' : '運営（出店コネクトナビ）'}
                               </div>
                               <div style={{ background: fromHost ? '#fff' : '#FFF8E1', border: '1px solid ' + (fromHost ? '#E2E8F0' : '#FDE68A'), borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a', width: 'fit-content', whiteSpace: 'pre-wrap' }}>
-                                {m.body && <div>{m.body}</div>}
+                                {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
                                 {m.file_url && renderAttachment(m.file_url, false)}
                               </div>
                             </div>

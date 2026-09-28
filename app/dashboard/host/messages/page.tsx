@@ -485,7 +485,7 @@ export default function HostMessages() {
                         </div>
                       )}
                       <div style={{ background: mine ? '#F5A623' : fromSeller ? '#F1F5F9' : '#FFF8E1', color: mine ? '#fff' : '#1a1a1a', border: !mine && !fromSeller ? '1px solid #FDE68A' : 'none', padding: '9px 14px', borderRadius: '12px', fontSize: '13px', width: 'fit-content', marginLeft: mine ? 'auto' : undefined, whiteSpace: 'pre-wrap' }}>
-                        {m.body && <div>{m.body}</div>}
+                        {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
                         {m.file_url && renderAttachment(m.file_url, mine)}
                       </div>
                       {mine && (

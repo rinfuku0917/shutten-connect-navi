@@ -4085,9 +4085,14 @@ const previewDoc = async (fileUrl: string) => {
                         <div style={{ color: '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>まだメッセージがありません</div>
                       ) : threadMsgs.map(m => (
                         m.sender_id === adminUid ? (
-                          <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
-                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6 }}>
-                              {m.body && <div>{m.body}</div>}
+                          <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '86%' }}>
+                            {/* 誰が・いつ。募集者とのやり取りと同じ出し方にそろえる（2026-09-28 の依頼） */}
+                            <div style={{ fontSize: '10.5px', color: '#94A3B8', marginBottom: '2px', textAlign: 'right' }}>
+                              運営　{String(m.sent_at).slice(0, 16).replace('T', ' ')}
+                            </div>
+                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.8 }}>
+                              {/* 改行をそのまま出す。これが無いと、送った文が1行に潰れる */}
+                              {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, true)}
                             </div>
                             {/* 運営は時間の制限なく取り消せる（app/api/messages/retract/route.ts） */}
@@ -4099,9 +4104,12 @@ const previewDoc = async (fileUrl: string) => {
                             </div>
                           </div>
                         ) : (
-                          <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
-                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a' }}>
-                              {m.body && <div>{m.body}</div>}
+                          <div key={m.id} style={{ alignSelf: 'flex-start', maxWidth: '86%' }}>
+                            <div style={{ fontSize: '10.5px', color: '#94A3B8', marginBottom: '2px' }}>
+                              {threads.find(t => t.application_id === activeThread)?.sellerName || '相手'}　{String(m.sent_at).slice(0, 16).replace('T', ' ')}
+                            </div>
+                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.8, color: '#1a1a1a' }}>
+                              {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
                               {m.file_url && renderAttachment(m.file_url, false)}
                             </div>
                           </div>
@@ -4114,11 +4122,29 @@ const previewDoc = async (fileUrl: string) => {
                         <button onClick={() => setAdminMsgFile(null)} style={{ background: 'none', border: 'none', color: '#9A3412', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>✕</button>
                       </div>
                     ) : null}
-                    <div style={{ padding: '12px 16px', borderTop: adminMsgFile ? 'none' : '1px solid #E2E8F0', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <label htmlFor="admin-msg-file-input" style={{ cursor: adminMsgUploading ? 'not-allowed' : 'pointer', fontSize: '20px', opacity: adminMsgUploading ? 0.4 : 1, userSelect: 'none' }}>📎</label>
-                      <input id="admin-msg-file-input" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={adminMsgUploading} onChange={e => { const file = e.target.files?.[0]; if (file) setAdminMsgFile(file); e.currentTarget.value = '' }} />
-                      <input value={adminMsgInput} onChange={e => setAdminMsgInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendAdminMsg() }} maxLength={2000} placeholder="メッセージを入力..." disabled={adminMsgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
-                      <button onClick={sendAdminMsg} disabled={adminMsgUploading} style={{ background: adminMsgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: adminMsgUploading ? 'not-allowed' : 'pointer' }}>{adminMsgUploading ? '...' : '送信'}</button>
+                    {/* 入力欄。1行の input だと改行できず、長い文が横に伸びて読めなかった
+                        （2026-09-28 の依頼「募集者側と全く同じ仕様に」）。
+                        Enter は改行にして、送信はボタン（⌘/Ctrl+Enter でも送れる）。
+                        Enter で送る作りに戻すと、改行しようとして送ってしまう */}
+                    <div style={{ padding: '12px 16px', borderTop: adminMsgFile ? 'none' : '1px solid #E2E8F0' }}>
+                      <textarea
+                        value={adminMsgInput}
+                        onChange={e => setAdminMsgInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendAdminMsg() } }}
+                        maxLength={2000}
+                        placeholder="本文を入力してください（改行できます）"
+                        disabled={adminMsgUploading}
+                        style={{ width: '100%', minHeight: '84px', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', lineHeight: 1.8, outline: 'none', color: '#1a1a1a', fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }}
+                      />
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '6px' }}>
+                        <button onClick={sendAdminMsg} disabled={adminMsgUploading || (!adminMsgInput.trim() && !adminMsgFile)}
+                          style={{ background: (adminMsgUploading || (!adminMsgInput.trim() && !adminMsgFile)) ? '#CBD5E1' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: (adminMsgUploading || (!adminMsgInput.trim() && !adminMsgFile)) ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                          {adminMsgUploading ? '...' : '送信'}
+                        </button>
+                        <label htmlFor="admin-msg-file-input" title='画像・PDFを添付する' style={{ cursor: adminMsgUploading ? 'not-allowed' : 'pointer', fontSize: '20px', opacity: adminMsgUploading ? 0.4 : 1, userSelect: 'none' }}>📎</label>
+                        <input id="admin-msg-file-input" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={adminMsgUploading} onChange={e => { const file = e.target.files?.[0]; if (file) setAdminMsgFile(file); e.currentTarget.value = '' }} />
+                        <span style={{ fontSize: '11px', color: '#94A3B8', marginLeft: 'auto' }}>{adminMsgInput.length} / 2,000</span>
+                      </div>
                     </div>
                   </>
                 ) : (
