@@ -484,6 +484,18 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
   }
 
   const tag = place.place_type === 'event' ? 'イベント' : '常設'
+  // 受け入れ形態。形態ごとの料金を入れている案件だけ出す。
+  //
+  // details.format（登録画面の「キッチンカー／テント／両方」のラジオ）は使わない。
+  // 誰も読まない欄で、実際に申し込める形態は format_fees だけで決まっていた。
+  // 「両方」の18件のうち11件は format_fees にテント・ブースが入っておらず、
+  // そちらを信じるとテントで申し込めない案件に「テント可」と出してしまう。
+  //
+  // 未設定の案件（全形態を選べる）にも出さない。募集者が形態を決めた案件と、
+  // 何も決めていない案件を見分けられなくなるため（未設定が258件ある）
+  const acceptedFormats: string[] = hasFormatFees(place.format_fees)
+    ? allowedFormats(place.format_fees)
+    : []
   // 募集終了した案件から案内する先。同じ県に募集中の案件があれば、その県で絞った一覧へ。
   // 無ければ全国の一覧へ（0件の絞り込み一覧に送ると、そこでまた行き止まりになる）
   // 固有ページ（/places/area/{県}）がある県はそちらへ。無い県は従来どおり絞り込んだ一覧へ。
@@ -590,8 +602,20 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                     { label: 'アクセス', value: place.address || '要相談' },
                     { label: '出店料', value: canSeeFee ? feeNodes(place) : '🔒 ログイン後に表示' },
                     { label: '出店形態', value: tag },
-                  ].map((row, i) => (
-                    <tr key={row.label} style={{ borderBottom: i < 3 ? '1px solid #F3F4F6' : 'none' }}>
+                    // 受け入れ形態（キッチンカー／テント・ブースなど）。
+                    //
+                    // なぜ足したか（2026-09-29）:
+                    //   これまでログインして「エントリーする」を押すまで見えなかった。
+                    //   テント・ブースで出たい人にも、テント出店者を集めたい募集者にも、
+                    //   この案件が該当するのかどうかがページから分からなかった。
+                    //
+                    // 出どころは format_fees だけ（上の acceptedFormats のコメント参照）。
+                    // 設定の無い案件には出さない。募集者が言っていないことを書かないため
+                    ...(acceptedFormats.length > 0
+                      ? [{ label: '受け入れ形態', value: acceptedFormats.join('／') }]
+                      : []),
+                  ].map((row, i, arr) => (
+                    <tr key={row.label} style={{ borderBottom: i < arr.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
                       <td style={{ padding: '14px 20px', background: '#FFFBEB', fontWeight: '700', fontSize: '13px', color: '#B45309', width: '160px', whiteSpace: 'nowrap' }}>{row.label}</td>
                       <td style={{ padding: '14px 20px', fontSize: '14px', color: '#1a1a1a' }}>{row.label === 'アクセス' && place.address ? (<a href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(place.address)} target='_blank' rel='noopener noreferrer' style={{ color: '#1D4ED8', textDecoration: 'underline', fontWeight: 700 }}>{row.value} 🗺️</a>) : row.value}</td>
                     </tr>

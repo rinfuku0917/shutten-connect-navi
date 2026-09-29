@@ -8,7 +8,7 @@ import FormatFeesEditor, { type FormatFeesValue } from '../../../components/Form
 import DowPresets from '../../../components/DowPresets'
 import { geocodeAddress } from '../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../lib/categories'
-import { toYen, buildMinGuaranteeJson, type FeeSource, perEventConflict } from '../../../lib/placeFee'
+import { toYen, buildMinGuaranteeJson, type FeeSource, perEventConflict, allowedFormats, hasFormatFees } from '../../../lib/placeFee'
 import { isMissingColumn } from '../../../lib/optionalColumn'
 import PlaceImagePicker from '../../../components/PlaceImagePicker'
 
@@ -16,7 +16,12 @@ import PlaceImagePicker from '../../../components/PlaceImagePicker'
 // 案件フォームのうち、専用の列を持たない詳細項目。
 // places.details（JSON）にまとめて保存し、読み込み時に復元する。
 // これが無いと保存のたびに初期値へ戻ってしまう。
-const DETAIL_KEYS = ['deadline', 'format', 'visitors', 'loadIn', 'loadOut', 'menuWant', 'menuNG', 'menuOther', 'power', 'gas', 'water', 'trash', 'eatSpace', 'location', 'heightLimit', 'heightValue', 'rain', 'rainNote', 'history', 'parking', 'brand', 'notes'] as const
+// 'format'（キッチンカー／テント／両方 のラジオ）は 2026-09-29 に外した。
+// 必須で入れさせていたのに、保存したあと誰も読まない欄だった。
+// 「両方」を選んだ18件のうち11件は、形態ごとの料金でテント・ブースに
+// チェックが入っておらず、出店者はテントで申し込めなかった。
+// 実際に効いているのは format_fees（allowedFormats）だけなので、そちらに一本化する
+const DETAIL_KEYS = ['deadline', 'visitors', 'loadIn', 'loadOut', 'menuWant', 'menuNG', 'menuOther', 'power', 'gas', 'water', 'trash', 'eatSpace', 'location', 'heightLimit', 'heightValue', 'rain', 'rainNote', 'history', 'parking', 'brand', 'notes'] as const
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // 募集者が入力した金額を、そのまま計算用の設定として保存する。
@@ -56,7 +61,7 @@ function NewPlacePageInner() {
 
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
-    format:'kitchen', prefecture:'', address:'', mapUrl:'', 募集内容:'',
+    prefecture:'', address:'', mapUrl:'', 募集内容:'',
     fee:'', feeFixed:'', feePct:'10', feeUnit:'per_day', minApplyDays:'', feeMinWeekday:'', feeMinWeekend:'', reminderDays:'7', visitors:'', loadIn:'', loadOut:'',
     menuWant:'', menuNG:'', menuOther:'', power:'yes', gas:'yes', water:'yes',
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
@@ -768,12 +773,22 @@ async function refreshPublicPages(placeId?: string) {
               <PlaceImagePicker files={imageFiles} onChangeFiles={setImageFiles} bandLabel={form.title} />
             </div>
 
+            {/* 受け入れる形態は、上の「形態ごとの出店料と条件」のチェックで決まる。
+                ここは決まった内容を確かめるだけの欄（入力欄ではない）。
+                以前はここにラジオ（キッチンカー／テント／両方）を置いていたが、
+                選んでも効かず、募集者に誤解させるだけだった */}
             <div style={{marginBottom:'20px'}}>
-              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店形式{req}</label>
-              <div style={{display:'flex',gap:'24px',marginTop:'10px'}}>
-                <Radio name='format' val='kitchen' label='キッチンカー'/>
-                <Radio name='format' val='tent' label='テント'/>
-                <Radio name='format' val='both' label='両方'/>
+              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>受け入れる出店形態</label>
+              <div style={{marginTop:'8px',border:'1.5px solid #BFDBFE',borderRadius:'10px',background:'#F8FBFF',padding:'12px 14px'}}>
+                <div style={{fontSize:'14px',fontWeight:800,color:'#1D4ED8',lineHeight:1.7}}>
+                  {hasFormatFees(formatFees) ? allowedFormats(formatFees).join('／') : 'すべての形態（キッチンカー・物販・催事PR・テント・ブース）'}
+                </div>
+                <div style={{fontSize:'11.5px',color:'#64748B',lineHeight:1.8,marginTop:'6px'}}>
+                  上の<strong>「形態ごとの出店料と条件」</strong>でチェックを入れた形態が、そのまま出店者の申込画面に出ます。
+                  {hasFormatFees(formatFees)
+                    ? 'ここに出ていない形態では申し込めません。テントやブースの出店も受け入れるときは、チェックと金額を入れてください。'
+                    : '形態を絞りたいときは、上の欄でチェックを入れてください。'}
+                </div>
               </div>
             </div>
 

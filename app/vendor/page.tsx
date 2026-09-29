@@ -120,6 +120,8 @@ export default async function VendorPage() {
           <p className='jp-text' style={{ fontSize: '16.5px', color: '#fff', marginBottom: '10px', lineHeight: 1.9 }}>
             キッチンカーを呼びたい、出店を依頼したい、出張販売を手配したい。
             <br />
+            テント・ブースでの出店（車を使わない物販・キッチン）もご相談いただけます。
+            <br />
             施設運営者・イベント運営会社・企業・自治体のご担当者からのご相談を承ります。
           </p>
           <p className='jp-text' style={{ fontSize: '15.5px', color: '#FFE0A0', fontWeight: 700, margin: 0 }}>
@@ -280,6 +282,13 @@ export default async function VendorPage() {
           <p style={{ fontSize: '14.5px', color: '#666', lineHeight: 1.9, marginTop: '16px' }}>
             電源や水道がない会場でも、発電機や給排水タンクを備えたキッチンカーであれば出店できる場合があります。
             設備が揃っていないことを理由に諦めず、まずは会場の状況をお知らせください。
+          </p>
+          {/* 車が入らない会場（屋内・ビル内・区画が狭い会場）からのご相談が
+              実際にあるのに、このページにテント・ブースの話が1行も無かった。
+              募集の形態は「キッチンカー・物販・催事PR・テント・ブース」から選べる */}
+          <p style={{ fontSize: '14.5px', color: '#666', lineHeight: 1.9, marginTop: '14px' }}>
+            車が入らない会場でも大丈夫です。屋内・ビル内・区画が狭い会場には、<strong>テント・ブースでの出店</strong>をご相談ください。
+            募集の形態は<strong>キッチンカー・テント・ブース・物販・催事PR</strong>から選べます。会場の広さと搬入経路をお知らせいただければ、形態から一緒に決めます。
           </p>
         </div>
       </div>
