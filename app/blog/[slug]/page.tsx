@@ -248,6 +248,12 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         .post-body blockquote { border-left: 4px solid #F5A623; background: #FFF8F0; margin: 20px 0; padding: 12px 20px; border-radius: 0 8px 8px 0; }
         .post-body hr { border: none; border-top: 1px solid #E2E8F0; margin: 32px 0; }
         .post-body code { background: #F1F5F9; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+        /* 例文をそのまま写して使う枠（\`\`\` で囲んだ部分）。
+           pre の既定は折り返さないので、メールの例文のような長い行が
+           スマホで横にはみ出す。中の code 側で折り返す。
+           code の灰色の下地は1語を囲むためのものなので、枠の中では消す */
+        .post-body pre { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 16px; margin: 20px 0; overflow-x: auto; }
+        .post-body pre code { background: none; padding: 0; font-size: 13.5px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; display: block; }
         @media (max-width: 560px) { .related-places-grid { grid-template-columns: 1fr !important; } }
       `}</style>
     </div>
