@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import MessageAttachment from '../../components/MessageAttachment'
+import ChatComposer, { ChatBubble, chatTime } from '../../components/ChatComposer'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Notice from '../../components/Notice'
 import Link from 'next/link'
@@ -2006,58 +2007,39 @@ export default function SellerDashboard() {
                         <div style={{ color: msgError ? '#DC2626' : '#94A3B8', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>{msgError || 'まだメッセージがありません'}</div>
                       ) : dbMessages.map(m => (
                         m.sender_id === myId ? (
-                          // 会場の地図など長いURLは途中で改行できず、
-                          // そのままでは吹き出しの外へはみ出す。
-                          // .msg-bubble で折り返しを許し、スマホでは幅も広げる
-                          <div key={m.id} className='msg-bubble' style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
-                            <div style={{ background: '#F5A623', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, width: 'fit-content', marginLeft: 'auto', whiteSpace: 'pre-wrap' }}>
-                              {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
-                              {m.file_url && renderAttachment(m.file_url, true)}
-                            </div>
-                            <div style={{ textAlign: 'right', marginTop: '3px' }}>
-                              <button onClick={() => retractMessage(m.id)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline' }}>送信を取り消す</button>
-                            </div>
-                          </div>
+                          // 吹き出しも4つの画面で共通。誰がいつ送ったのかを必ず出す
+                          <ChatBubble key={m.id} tone='mine' who='あなた' at={chatTime(m.sent_at)}
+                            footer={
+                              <button onClick={() => retractMessage(m.id)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline', fontFamily: 'inherit' }}>送信を取り消す</button>
+                            }>
+                            {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
+                            {m.file_url && renderAttachment(m.file_url, true)}
+                          </ChatBubble>
                         ) : (() => {
                           // 募集者（会場のご担当者）と運営の両方がここに書き込む。
                           // どちらが書いたか分からないと、話の相手を取り違える
                           const t = threads.find(x => x.application_id === appId)
                           const fromHost = !!t?.hostId && m.sender_id === t.hostId
                           return (
-                            // 相手からの吹き出しも同じ理由で .msg-bubble を付ける
-                            <div key={m.id} className='msg-bubble' style={{ alignSelf: 'flex-start', maxWidth: '70%' }}>
-                              <div style={{ fontSize: '11px', fontWeight: 700, color: fromHost ? '#1D4ED8' : '#B45309', marginBottom: '3px' }}>
-                                {fromHost ? '会場のご担当者' : '運営（出店コネクトナビ）'}
-                              </div>
-                              <div style={{ background: fromHost ? '#fff' : '#FFF8E1', border: '1px solid ' + (fromHost ? '#E2E8F0' : '#FDE68A'), borderRadius: '12px', padding: '10px 14px', fontSize: '13px', lineHeight: 1.6, color: '#1a1a1a', width: 'fit-content', whiteSpace: 'pre-wrap' }}>
-                                {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
-                                {m.file_url && renderAttachment(m.file_url, false)}
-                              </div>
-                            </div>
+                            <ChatBubble key={m.id} tone={fromHost ? 'other' : 'ops'}
+                              who={fromHost ? '会場のご担当者' : '運営（出店コネクトナビ）'}
+                              at={chatTime(m.sent_at)}>
+                              {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
+                              {m.file_url && renderAttachment(m.file_url, false)}
+                            </ChatBubble>
                           )
                         })()
                       ))}
                     </div>
-                    {msgFile ? (
-                      <div style={{ padding: '8px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', background: '#FFF7ED' }}>
-                        <span style={{ fontSize: '12px', color: '#9A3412', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📎 {msgFile.name}</span>
-                        <button onClick={() => setMsgFile(null)} style={{ background: 'none', border: 'none', color: '#9A3412', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>✕</button>
-                      </div>
-                    ) : null}
-                    <div style={{ padding: '12px 16px', borderTop: msgFile ? 'none' : '1px solid #E2E8F0', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <label htmlFor="msg-file-input" style={{ cursor: msgUploading ? 'not-allowed' : 'pointer', fontSize: '20px', opacity: msgUploading ? 0.4 : 1, userSelect: 'none' }}>📎</label>
-                      <input id="msg-file-input" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={msgUploading} onChange={e => { const file = e.target.files?.[0]; if (file) setMsgFile(file); e.currentTarget.value = '' }} />
-                      <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} onKeyDown={e => {
-                        if (e.key !== 'Enter' || e.shiftKey) return
-                        // 日本語変換の確定Enterでは送信しない（変換中は無視する）
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const ne = e.nativeEvent as any
-                        if (ne?.isComposing || ne?.keyCode === 229) return
-                        // 1回目のEnterは改行。すでに末尾が改行なら2回目とみなして送信する
-                        if (msg.endsWith('\n')) { e.preventDefault(); sendMessage() }
-                      }} maxLength={2000} placeholder="メッセージを入力...（Enterで改行／2回続けて押すと送信）" disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
-                      <button onClick={sendMessage} disabled={msgUploading} style={{ background: msgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: msgUploading ? 'not-allowed' : 'pointer' }}>{msgUploading ? '...' : '送信'}</button>
-                    </div>
+                    {/* 入力欄は4つのやり取りの画面で共通（app/components/ChatComposer.tsx）。
+                        以前は横1行に潰れていて、長い文が横へ伸びて読めなかった
+                        （2026-09-30 の依頼「募集者側と全く同じ仕様に」） */}
+                    <ChatComposer
+                      value={msg} onChange={setMsg} onSend={sendMessage} busy={msgUploading}
+                      file={msgFile} onPickFile={setMsgFile} onClearFile={() => setMsgFile(null)}
+                      fileInputId='msg-file-input'
+                      onReload={loadMessages}
+                    />
                   </>
                 ) : (
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '14px' }}>メッセージを選択してください</div>

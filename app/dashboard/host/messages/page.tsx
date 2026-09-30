@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import MessageAttachment from '../../../components/MessageAttachment'
+import ChatComposer, { ChatBubble, chatTime } from '../../../components/ChatComposer'
 import { supabase } from '../../../lib/supabase'
 import { NO_SHOP_NAME } from '../../../lib/sellerNames'
 import BackButton from '../../../components/BackButton'
@@ -478,45 +479,27 @@ export default function HostMessages() {
                   const fromSeller = m.sender_id === current.sellerId
                   const who = mine ? '' : fromSeller ? current.sellerName : '運営'
                   return (
-                    <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '70%' }}>
-                      {!mine && (
-                        <div style={{ fontSize: '11px', fontWeight: 700, color: fromSeller ? '#64748B' : '#B45309', marginBottom: '3px' }}>
-                          {who}{!fromSeller && <span style={{ fontWeight: 400 }}>（出店コネクトナビ）</span>}
-                        </div>
-                      )}
-                      <div style={{ background: mine ? '#F5A623' : fromSeller ? '#F1F5F9' : '#FFF8E1', color: mine ? '#fff' : '#1a1a1a', border: !mine && !fromSeller ? '1px solid #FDE68A' : 'none', padding: '9px 14px', borderRadius: '12px', fontSize: '13px', width: 'fit-content', marginLeft: mine ? 'auto' : undefined, whiteSpace: 'pre-wrap' }}>
-                        {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
-                        {m.file_url && renderAttachment(m.file_url, mine)}
-                      </div>
-                      {mine && (
-                        <div style={{ textAlign: 'right', marginTop: '3px' }}>
-                          <button onClick={() => retractMessage(m.id)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline' }}>送信を取り消す</button>
-                        </div>
-                      )}
-                    </div>
+                    // 吹き出しは4つのやり取りの画面で共通（app/components/ChatComposer.tsx）
+                    <ChatBubble key={m.id}
+                      tone={mine ? 'mine' : fromSeller ? 'other' : 'ops'}
+                      who={mine ? 'あなた' : fromSeller ? who : '運営（出店コネクトナビ）'}
+                      at={chatTime(m.sent_at)}
+                      footer={mine ? (
+                        <button onClick={() => retractMessage(m.id)} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '11px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline', fontFamily: 'inherit' }}>送信を取り消す</button>
+                      ) : undefined}>
+                      {m.body && <div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div>}
+                      {m.file_url && renderAttachment(m.file_url, mine)}
+                    </ChatBubble>
                   )
                 })}
               </div>
-              {msgFile ? (
-                <div style={{ padding: '8px 16px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', background: '#FFF7ED' }}>
-                  <span style={{ fontSize: '12px', color: '#9A3412', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📎 {msgFile.name}</span>
-                  <button onClick={() => setMsgFile(null)} style={{ background: 'none', border: 'none', color: '#9A3412', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>✕</button>
-                </div>
-              ) : null}
-              <div style={{ padding: '12px 16px', borderTop: msgFile ? 'none' : '1px solid #E2E8F0', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <label htmlFor="host-msg-file-input" style={{ cursor: msgUploading ? 'not-allowed' : 'pointer', fontSize: '20px', opacity: msgUploading ? 0.4 : 1, userSelect: 'none' }}>📎</label>
-                <input id="host-msg-file-input" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={msgUploading} onChange={e => { const file = e.target.files?.[0]; if (file) setMsgFile(file); e.currentTarget.value = '' }} />
-                <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} onKeyDown={e => {
-                        if (e.key !== 'Enter' || e.shiftKey) return
-                        // 日本語変換の確定Enterでは送信しない（変換中は無視する）
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const ne = e.nativeEvent as any
-                        if (ne?.isComposing || ne?.keyCode === 229) return
-                        // 1回目のEnterは改行。すでに末尾が改行なら2回目とみなして送信する
-                        if (msg.endsWith('\n')) { e.preventDefault(); sendMessage() }
-                      }} maxLength={2000} placeholder='メッセージを入力...（Enterで改行／2回続けて押すと送信）' disabled={msgUploading} style={{ flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', color: '#1a1a1a', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
-                <button onClick={sendMessage} disabled={msgUploading} style={{ background: msgUploading ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: msgUploading ? 'not-allowed' : 'pointer' }}>{msgUploading ? '...' : '送信'}</button>
-              </div>
+              {/* 入力欄も共通。以前は横1行に潰れていた（2026-09-30 の依頼） */}
+              <ChatComposer
+                value={msg} onChange={setMsg} onSend={sendMessage} busy={msgUploading}
+                file={msgFile} onPickFile={setMsgFile} onClearFile={() => setMsgFile(null)}
+                fileInputId='host-msg-file-input'
+                onReload={loadThreads}
+              />
             </>
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: '13px', padding: '24px', textAlign: 'center' }}>
