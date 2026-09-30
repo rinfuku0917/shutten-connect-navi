@@ -39,6 +39,29 @@ export type SellerProfileCheck = {
   menuCount?: number | null
 }
 
+/**
+ * 飲食を売る出店者か（ジャンルで見る）。
+ *
+ * なぜ要るか（2026-09-30 の運営の決め）:
+ *   ハンドメイド作家・雑貨・フリーマーケットの出店者も受け入れることにした。
+ *   ところが必須項目と提出書類が飲食を前提に作られていて、
+ *     ・「テイクアウトの袋」… 雑貨には無い
+ *     ・「食品衛生責任者証」「営業許可証」「検体」… 雑貨の人は持ちようがない
+ *   のまま「必須」と出ていた。持てない書類を必須と出されると、
+ *   登録できないものと受け取って帰ってしまう。
+ *
+ *   ジャンル（何を売るか）で見る。販売形態（どう売るか）では決めない。
+ *   テント・ブースで唐揚げを売る人もいれば、キッチンカーで雑貨を売る人もいる。
+ *   ジャンル未選択のうちは飲食として扱う（選ぶのが先。
+ *   未選択で緩めると、飲食の人が書類を出さないまま進めてしまう）。
+ */
+export const FOOD_GENRES = ['食事', 'スイーツ', 'ドリンク']
+export function sellsFood(genre: unknown): boolean {
+  const gs = parseSellerGenres(genre)
+  if (gs.length === 0) return true
+  return gs.some(g => FOOD_GENRES.includes(g))
+}
+
 /** 車両を使う販売形態か（車種・車両サイズを必須にするかの判定） */
 export const VEHICLE_SALES_TYPES = ['キッチンカー', '移動販売車']
 export function usesVehicle(salesType: unknown): boolean {
@@ -77,7 +100,9 @@ export const SELLER_REQUIRED: { key: string, label: string, ok: (p: SellerProfil
   { key: 'email', label: 'メール', ok: p => filled(p.email) },
   { key: 'phone', label: '電話番号', ok: p => filled(p.phone) },
   { key: 'photos', label: '店舗・商品写真（1枚以上）', ok: p => filled(p.photos) },
-  { key: 'menus', label: '提供メニュー（1件以上）', ok: p => filled(p.menuCount) },
+  // 雑貨・ハンドメイドの人にも1件は入れてもらう（何を売るのかが分からないと
+  // 施設へ出す資料が作れない）。呼び方だけ売るものに合わせる
+  { key: 'menus', label: '提供メニュー・商品（1件以上）', ok: p => filled(p.menuCount) },
   { key: 'bio', label: '紹介文・特徴', ok: p => filled(p.bio) },
   { key: 'sales_type', label: '販売形態', ok: p => filled(p.sales_type) },
   // 車両を使う形態のときだけ必須（テント・店頭出店の人は空でよい）
@@ -87,7 +112,10 @@ export const SELLER_REQUIRED: { key: string, label: string, ok: (p: SellerProfil
   { key: 'equipment', label: '設備', ok: p => filled(p.equipment) },
   // 「有料」を選んで金額が空のままだと、公開ページに「有料」とだけ出て
   // いくらなのか分からない。編集中の '有料：円' も未入力として扱う
+  // 飲食のときだけ必須。雑貨・ハンドメイド・体験には無い欄なので、
+  // 必須のままだと永久に保存も申込もできなくなる
   { key: 'takeout_bag', label: 'テイクアウトの袋（有料なら金額も）', ok: p => {
+    if (!sellsFood(p.genre)) return true
     const t = (p.takeout_bag == null ? '' : String(p.takeout_bag)).trim()
     if (!t) return false
     if (t.startsWith('有料')) return /[0-9]/.test(t)

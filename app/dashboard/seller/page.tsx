@@ -13,7 +13,7 @@ import { formatVehicleSize, toMm } from '../../lib/vehicleSize'
 import { dayFeeOf, hasMinGuarantee, hasFormatMin } from '../../lib/placeFee'
 import { selectWithOptionalColumn } from '../../lib/optionalColumn'
 import { showsToSeller } from '../../lib/cancelledVisibility'
-import { missingSellerFields, usesVehicle, PROFILE_REQUIRED_NOTE, PROFILE_PRIVACY_NOTE } from '../../lib/sellerProfile'
+import { missingSellerFields, usesVehicle, sellsFood, PROFILE_REQUIRED_NOTE, PROFILE_PRIVACY_NOTE } from '../../lib/sellerProfile'
 import { syncSalesToSheet } from '../../lib/sheetSync'
 import OnsiteSteps from './OnsiteSteps'
 import SiteSubmissionForm from './SiteSubmissionForm'
@@ -56,14 +56,25 @@ const messages = [
   { id: '3', from: 'イオンモール富谷', msg: '今回はご応募いただきありがとうございました。', time: '2日前', unread: false },
 ]
 
-const docTypes = [
+// 提出書類。foodOnly を付けた3つは、飲食を売る出店者にだけ「必須」と出す。
+//
+// なぜ（2026-09-30 の運営の決め）:
+//   ハンドメイド作家・雑貨・フリーマーケットの出店者も受け入れることにした。
+//   食品衛生責任者証・営業許可証・検体は、雑貨の人には取りようがない書類で、
+//   それを「必須」と赤く出していた。持てない書類を必須と出されると、
+//   登録できないものと受け取って帰ってしまう。
+//   欄そのものは残す（あとで飲食を足す人が出せるように）。
+//
+//   PL保険・損害賠償保険は飲食に限らない（作った物が原因の事故が対象）ので
+//   全員に必須のまま。運転免許証は本人確認に使っているので、これも変えない。
+const docTypes: { key: string; name: string; required: boolean; foodOnly?: boolean }[] = [
   { key: 'license_front', name: '運転免許証（表面）', required: true },
   { key: 'license_back', name: '運転免許証（裏面）', required: true },
-  { key: 'food_hygiene', name: '食品衛生責任者証', required: true },
+  { key: 'food_hygiene', name: '食品衛生責任者証', required: true, foodOnly: true },
   { key: 'liability_insurance', name: '損害賠償保険証書', required: true },
-  { key: 'business_permit', name: '営業許可証', required: true },
+  { key: 'business_permit', name: '営業許可証', required: true, foodOnly: true },
   { key: 'pl_insurance', name: 'PL保険証券', required: true },
-  { key: 'inspection_sample', name: '検体（検査結果）', required: false },
+  { key: 'inspection_sample', name: '検体（検査結果）', required: false, foodOnly: true },
   { key: 'other_permit', name: 'その他許可証', required: false },
 ]
 
@@ -2097,7 +2108,8 @@ export default function SellerDashboard() {
                         <div style={{ flex: 1, minWidth: '150px' }}>
                           <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>
                             {doc.name}
-                            {doc.required && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}
+                            {doc.required && (!doc.foodOnly || sellsFood(profile?.genre)) && <span style={{ fontSize: '10px', color: '#DC2626', background: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>必須</span>}
+                            {doc.foodOnly && !sellsFood(profile?.genre) && <span style={{ fontSize: '10px', color: '#64748B', background: '#F1F5F9', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>飲食の方のみ</span>}
                             {/* 期限が近い・過ぎている書類は、名前のすぐ横で知らせる */}
                             {exp && exp.level === 'over' && (
                               <span style={{ fontSize: '10px', color: '#fff', background: '#DC2626', padding: '2px 7px', borderRadius: '3px', marginLeft: '6px', fontWeight: 900 }}>
@@ -2299,7 +2311,7 @@ export default function SellerDashboard() {
 
                     {/* 提供メニュー */}
                     <div style={{ marginBottom: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>提供メニュー{reqMark('menus')}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>{sellsFood(profileForm.genre) ? '提供メニュー' : '取扱商品'}{reqMark('menus')}</div>
 
                       {/* 登録済みメニュー一覧 */}
                       {menus.length > 0 && (
@@ -2427,7 +2439,7 @@ export default function SellerDashboard() {
                       </div>
 
                       <div style={{ marginBottom: '10px' }}>
-                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>テイクアウトの袋{reqMark('takeout_bag')}</div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>テイクアウトの袋{reqMark('takeout_bag')}{!sellsFood(profileForm.genre) && <span style={{ color: '#94A3B8' }}>（飲食の方のみ）</span>}</div>
                         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                           {(['無料', '有料'] as const).map(v => {
                             const isPaid = profileForm.takeout_bag.startsWith('有料')
