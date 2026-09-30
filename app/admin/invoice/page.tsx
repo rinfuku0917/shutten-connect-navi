@@ -180,6 +180,20 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
   // 計算は app/lib/invoiceTotals.ts に集める（保存側と同じ式を使うため）
   const { taxable, taxFree, subtotal, tax, total } = invoiceTotals(items)
 
+  // 合計に添える言葉。全額が不課税の請求書に「(税込)」と書かない。
+  //
+  // なぜ（2026-09-30 の運営からの報告）:
+  //   キャンセル料だけの請求書で「¥10,000(税込)」と出てしまい、
+  //   「税込」を消す手立てが画面に無かった。
+  //   消費税が1円も乗っていない請求書を「税込」と書くのは事実と違う。
+  //   手で直せるようにするのではなく、明細の中身から決める
+  //   （直し忘れた請求書が出回らないようにするため）。
+  //
+  //   課税と不課税が混ざっている請求書は「(税込)」のまま。
+  //   合計に消費税が入っているのは本当なので
+  const allTaxFree = taxable === 0 && taxFree > 0
+  const totalSuffix = allTaxFree ? '(不課税)' : '(税込)'
+
   const setItem = (idx: number, patch: Partial<Item>) =>
     setItems(list => list.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
   const addItem = () =>
@@ -486,7 +500,7 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '13.3pt', fontSize: '18pt',
         }}>
           <span>ご請求金額({inv.periodLabel})</span>
-          <span>{yen(total)}(税込)</span>
+          <span>{yen(total)}{totalSuffix}</span>
         </div>
 
         {/* ここから下は明細の件数で高さが変わるので、流し込みのまま置く */}
@@ -504,7 +518,7 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
               <th style={head}>No.</th>
               <th style={head}>実施日</th>
               <th style={head}>請求件名</th>
-              <th style={head}>金額(税抜)</th>
+              <th style={head}>{allTaxFree ? '金額' : '金額(税抜)'}</th>
             </tr>
           </thead>
           <tbody>
@@ -604,7 +618,7 @@ function InvoiceInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
             <tr>
               <td style={cell}>&nbsp;</td>
               <td style={cell}>&nbsp;</td>
-              <td style={{ ...sumLabel, height: '20pt', fontSize: '11.5pt', fontWeight: 700 }}>税込合計</td>
+              <td style={{ ...sumLabel, height: '20pt', fontSize: '11.5pt', fontWeight: 700 }}>{allTaxFree ? '合計' : '税込合計'}</td>
               <td style={{ ...sumValue, height: '20pt', fontSize: '11.5pt', fontWeight: 700 }}>{yen(total)}</td>
             </tr>
           </tbody>

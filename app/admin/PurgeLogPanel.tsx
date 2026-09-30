@@ -75,6 +75,9 @@ export default function PurgeLogPanel() {
   const [billLabel, setBillLabel] = useState('キャンセル料')
   const [billPeriod, setBillPeriod] = useState('')
   const [billDue, setBillDue] = useState('')
+  // 不課税（消費税の対象外）。この欄はキャンセル料の請求のために置いてあるので
+  // 最初から入れておく（2026-09-27 の決め）。出店料を請求するときだけ外す
+  const [billTaxFree, setBillTaxFree] = useState(true)
   const [billBusy, setBillBusy] = useState(false)
   const [billErr, setBillErr] = useState<string | null>(null)
   const [billOk, setBillOk] = useState<string | null>(null)
@@ -125,7 +128,7 @@ export default function PurgeLogPanel() {
 
   const startBill = (r: LogRow) => {
     setBillFor(r)
-    setBillAmount(''); setBillLabel('キャンセル料'); setBillDue('')
+    setBillAmount(''); setBillLabel('キャンセル料'); setBillDue(''); setBillTaxFree(true)
     setBillErr(null); setBillOk(null)
     // 対象月は出店日の月。日付が無い控えは今月にする
     setBillPeriod(r.apply_date && /^\d{4}-\d{2}/.test(r.apply_date)
@@ -156,6 +159,7 @@ export default function PurgeLogPanel() {
           period: billPeriod,
           amount: yen,
           label: billLabel.trim() || 'キャンセル料',
+          ...(billTaxFree ? { taxFree: true } : {}),
           dueOn: billDue || undefined,
         }),
       })
@@ -355,10 +359,24 @@ export default function PurgeLogPanel() {
               <>
                 <div style={{ display: 'grid', gap: '10px', marginBottom: '12px' }}>
                   <div>
-                    <label style={label}>金額（円・税抜）</label>
+                    <label style={label}>金額（円・{billTaxFree ? '不課税' : '税抜'}）</label>
                     <input inputMode='numeric' value={billAmount} disabled={billBusy}
                       onChange={e => setBillAmount(e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder='例：5000' style={{ ...input, width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: billBusy ? 'not-allowed' : 'pointer' }}>
+                      <input type='checkbox' checked={billTaxFree} disabled={billBusy}
+                        onChange={e => setBillTaxFree(e.target.checked)}
+                        style={{ marginTop: '3px', width: '17px', height: '17px', flexShrink: 0 }} />
+                      <span style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.7 }}>
+                        不課税にする（消費税を足さない）<br />
+                        <span style={{ fontSize: '11.5px', color: '#64748B' }}>
+                          キャンセル料は出店しなかったことへの賠償なので、消費税の対象外です。
+                          出店料を請求するときは外してください。
+                        </span>
+                      </span>
+                    </label>
                   </div>
                   <div>
                     <label style={label}>摘要（請求書に出ます）</label>

@@ -235,14 +235,22 @@ export default function ScheduleCalendar({
   //   請求書の番号・取り消しの記録・出店者の「お支払い」画面は同じ仕組みに乗る。
   const [cfFor, setCfFor] = useState<Slot | null>(null)
   const [cfAmount, setCfAmount] = useState('')
+  // システム利用料。キャンセル料とは別の行で、同じ請求書に足す。
+  // どちらも不課税なので、合計は足し算そのまま（消費税は付かない）
+  const [cfSystem, setCfSystem] = useState('')
   const [cfDue, setCfDue] = useState('')
   const [cfBusy, setCfBusy] = useState(false)
   const [cfErr, setCfErr] = useState('')
   const [cfDone, setCfDone] = useState<{ invoiceNo: string; total: number } | null>(null)
   const [cfDup, setCfDup] = useState<string | null>(null)
 
+  /** その出店に入っているキャンセルの記録（あれば）。
+      金額を直すのと、請求書に「この売上は先に請求した」と控えるのに使う */
+  const cancelSaleOf = (s: Slot) =>
+    (salesByApp.get(s.applicationId) || []).find(x => String(x.note || '').startsWith('キャンセル料')) || null
+
   const openCancelFee = (s: Slot) => {
-    setCfFor(s); setCfAmount(''); setCfDue(''); setCfErr(''); setCfDone(null); setCfDup(null)
+    setCfFor(s); setCfAmount(''); setCfSystem(''); setCfDue(''); setCfErr(''); setCfDone(null); setCfDup(null)
   }
 
   // force を付けずにまず出す。同じ出店に事前請求が既にあるときは
@@ -252,6 +260,9 @@ export default function ScheduleCalendar({
     if (cfBusy || !cfFor) return
     const yen = parseInt(cfAmount.replace(/[^0-9]/g, ''), 10)
     if (!Number.isFinite(yen) || yen <= 0) { setCfErr('金額を入れてください'); return }
+    const sys = parseInt(cfSystem.replace(/[^0-9]/g, ''), 10)
+    // キャンセル料を売上として記録してあるときは、その売上のIDを控える
+    const cancelSale = cancelSaleOf(cfFor)
     setCfBusy(true); setCfErr(''); if (force) setCfDup(null)
     const t = await token()
     if (!t) { setCfErr('ログインの有効期限が切れています。読み込み直してください。'); setCfBusy(false); return }
@@ -262,7 +273,16 @@ export default function ScheduleCalendar({
         action: 'advance',
         sellerId: cfFor.sellerId,
         applicationIds: [cfFor.applicationId],
+        // 対象月。送らないと「パラメータ不足」で発行できなかった（2026-09-30）
+        period: /^\d{4}-\d{2}/.test(cfFor.date) ? cfFor.date.slice(0, 7) : undefined,
+        // この売上は先に請求した、という控え。
+        // 送らないと、同じキャンセル料が月次の請求書にもう一度乗る（2026-09-30）
+        ...(cancelSale ? { saleIds: [cancelSale.id] } : {}),
         amount: yen,
+        // キャンセル料は消費税の対象外（不課税）。出店しなかったことへの
+        // 賠償で、何かを売ったわけではないため
+        taxFree: true,
+        ...(Number.isFinite(sys) && sys > 0 ? { systemFee: sys } : {}),
         dueOn: cfDue || null,
         label: cfFor.placeTitle + ' キャンセル料',
         ...(force ? { force: true } : {}),
@@ -290,10 +310,6 @@ export default function ScheduleCalendar({
   const [ccReason, setCcReason] = useState('')
   const [ccBusy, setCcBusy] = useState(false)
   const [ccErr, setCcErr] = useState('')
-
-  /** その出店に入っているキャンセルの記録（あれば）。金額を直すのに使う */
-  const cancelSaleOf = (s: Slot) =>
-    (salesByApp.get(s.applicationId) || []).find(x => String(x.note || '').startsWith('キャンセル料')) || null
 
   const recordCancel = async () => {
     if (ccBusy || !ccFor) return
@@ -788,7 +804,7 @@ export default function ScheduleCalendar({
                               </div>
                               {cfDone ? (
                                 <div style={{ fontSize: '12.5px', color: '#166534', lineHeight: 1.9 }}>
-                                  請求書 <strong>{cfDone.invoiceNo}</strong>（税込 {(cfDone.total || 0).toLocaleString()}円）を発行しました。
+                                  請求書 <strong>{cfDone.invoiceNo}</strong>（合計 {(cfDone.total || 0).toLocaleString()}円・不課税）を発行しました。
                                   <br />
                                   <a href={'/admin/invoice?no=' + encodeURIComponent(cfDone.invoiceNo)} target='_blank' rel='noreferrer'
                                     style={{ color: '#B45309', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
@@ -807,10 +823,19 @@ export default function ScheduleCalendar({
                                 <>
                                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '8px' }}>
                                     <label style={{ fontSize: '11.5px', color: '#64748B' }}>
-                                      金額（税抜）<br />
+                                      キャンセル料（不課税）<br />
                                       <input value={cfAmount} inputMode='numeric' disabled={cfBusy}
                                         onChange={e => setCfAmount(e.target.value.replace(/[^0-9]/g, ''))}
                                         placeholder='10000'
+                                        style={{ width: '120px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', textAlign: 'right', fontFamily: 'inherit' }} />
+                                    </label>
+                                    {/* システム利用料。不課税のキャンセル料に消費税は掛けられないので、
+                                        いただく分はこの行で足す（2026-09-28 の運営の決め） */}
+                                    <label style={{ fontSize: '11.5px', color: '#64748B' }}>
+                                      システム利用料（任意・不課税）<br />
+                                      <input value={cfSystem} inputMode='numeric' disabled={cfBusy}
+                                        onChange={e => setCfSystem(e.target.value.replace(/[^0-9]/g, ''))}
+                                        placeholder='1000'
                                         style={{ width: '120px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1a1a1a', textAlign: 'right', fontFamily: 'inherit' }} />
                                     </label>
                                     <label style={{ fontSize: '11.5px', color: '#64748B' }}>
@@ -821,14 +846,16 @@ export default function ScheduleCalendar({
                                     </label>
                                     {cfAmount && (
                                       <span style={{ fontSize: '12px', color: '#64748B', paddingBottom: '9px' }}>
-                                        消費税10%を足して <strong style={{ color: '#B45309' }}>
-                                          {(() => { const n = parseInt(cfAmount, 10) || 0; return (n + Math.floor(n * 0.1)).toLocaleString() })()}円
-                                        </strong>
+                                        合計 <strong style={{ color: '#B45309' }}>
+                                          {((parseInt(cfAmount, 10) || 0) + (parseInt(cfSystem, 10) || 0)).toLocaleString()}円
+                                        </strong>（不課税・消費税はかかりません）
                                       </span>
                                     )}
                                   </div>
                                   <div style={{ fontSize: '11.5px', color: '#64748B', lineHeight: 1.8, marginBottom: '8px' }}>
                                     請求件名は「{s.placeTitle} キャンセル料」になります。{s.date.replaceAll('-', '/')} の出店ぶんとして記録されます。
+                                    <br />
+                                    キャンセル料は出店しなかったことへの賠償なので、消費税の対象外（不課税）として出します。
                                   </div>
                                   {cfErr && (
                                     <div style={{ fontSize: '12px', color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }}>{cfErr}</div>

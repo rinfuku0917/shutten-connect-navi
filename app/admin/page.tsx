@@ -746,11 +746,19 @@ export default function AdminPage() {
     if (!s.application_id) { showNotice('この売上には申込が紐づいていないため、この場からは請求できません。'); return }
     const amount = s.total_pay ?? s.fee
     if (!(amount > 0)) { showNotice('出店料が0円のため請求できません。'); return }
+    // キャンセル料は消費税の対象外（不課税）。出店しなかったことへの賠償で、
+    // 何かを売ったわけではないため（2026-09-27 の決め）。
+    // 判定は売上の所感の頭（「キャンセル料」）で見る。下の isCancel と同じ
+    const isCancelFee = String(s.note || '').startsWith('キャンセル料')
     const ok = await ask({
       title: 'この売上を請求書にしますか？',
-      body: s.sale_date + '　' + (s.shopName || s.sellerName) + '　税抜' + amount.toLocaleString()
-        + '円（税込' + (amount + Math.floor(amount * 0.1)).toLocaleString() + '円）で発行します。'
-        + 'この売上は、その月の請求書からは外れます。',
+      body: s.sale_date + '　' + (s.shopName || s.sellerName) + '　'
+        + (isCancelFee
+          ? '不課税' + amount.toLocaleString() + '円（消費税はかかりません）で発行します。'
+          : '税抜' + amount.toLocaleString() + '円（税込' + (amount + Math.floor(amount * 0.1)).toLocaleString() + '円）で発行します。')
+        + 'この売上は、その月の請求書からは外れます。'
+        // システム利用料はこの場では足せない。足すなら出店管理の欄から出す
+        + (isCancelFee ? 'システム利用料も一緒に請求するときは、「出店管理」の「キャンセル料を請求する」からお願いします。' : ''),
       okLabel: '発行する',
     })
     if (!ok) return
@@ -758,7 +766,7 @@ export default function AdminPage() {
     const { data: sess } = await supabase.auth.getSession()
     const t = sess.session?.access_token
     if (!t) { showNotice('ログインの有効期限が切れています。読み込み直してください。'); setSaleBillBusy(''); return }
-    const isCancel = String(s.note || '').startsWith('キャンセル料')
+    const isCancel = isCancelFee
     const res = await fetch('/api/admin/invoice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
@@ -767,7 +775,11 @@ export default function AdminPage() {
         sellerId: s.seller_id,
         applicationIds: [s.application_id],
         saleIds: [s.id],
+        // 対象月。送らないと「パラメータ不足」で発行できなかった（2026-09-30）
+        period: /^\d{4}-\d{2}/.test(String(s.sale_date || '')) ? String(s.sale_date).slice(0, 7) : undefined,
         amount,
+        // キャンセル料だけ不課税。通常の出店料はこれまでどおり課税
+        ...(isCancel ? { taxFree: true } : {}),
         label: s.placeTitle + (isCancel ? ' キャンセル料' : ' 出店料'),
         force: true,
       }),
@@ -775,7 +787,8 @@ export default function AdminPage() {
     const j = await res.json().catch(() => ({}))
     setSaleBillBusy('')
     if (!res.ok) { showNotice('発行できませんでした：' + (j.error || '不明なエラー')); return }
-    showNotice('請求書 ' + j.invoiceNo + '（税込' + (j.total || 0).toLocaleString() + '円）を発行しました。')
+    showNotice('請求書 ' + j.invoiceNo + '（合計' + (j.total || 0).toLocaleString() + '円'
+      + (isCancel ? '・不課税' : '・税込') + '）を発行しました。')
   }
 
   const deleteSale = async (id: string) => {
@@ -1190,6 +1203,8 @@ export default function AdminPage() {
   type PayRow = {
     id: string, invoice_no: string, seller_id: string, sellerName: string, period: string,
     issued_on: string, due_on: string | null, total: number, paid_status: string,
+    // 消費税。0円のときは「（税込）」と書かない（キャンセル料など不課税の請求書）
+    tax?: number | null,
     paid_on: string | null, paid_name: string | null,
     paid_reported_at: string | null, paid_confirmed_at: string | null, paid_memo: string | null,
     // 実際に受け取った額。請求額と違うとき（一部入金・振込手数料の差引き・過入金）だけ入る
@@ -3637,7 +3652,7 @@ const previewDoc = async (fileUrl: string) => {
                           </div>
                           <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginBottom: '8px' }}>
                             <div>
-                              <div style={{ fontSize: '10px', color: '#64748B' }}>請求額（税込）</div>
+                              <div style={{ fontSize: '10px', color: '#64748B' }}>請求額{(r.tax ?? 0) > 0 ? '（税込）' : ''}</div>
                               <div style={{ fontSize: '16px', fontWeight: 900, color: '#1a1a1a' }}>¥{r.total.toLocaleString()}</div>
                               {/* 請求額と違う額が入金されたときだけ、実額と差を出す。
                                   請求額だけ出していると、足りない入金に気づけない */}

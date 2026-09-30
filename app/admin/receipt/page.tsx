@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
+import { invoiceTotals } from '../../lib/invoiceTotals'
 
 // 領収書。/admin/receipt?no=2026-0042 で開く。
 // 出店者側は /dashboard/seller/receipt?no=... から同じものを開く。
@@ -28,7 +29,9 @@ const ISSUER = {
   taxId: 'インボイス登録番号:T-6010601064156',
 }
 
-type Item = { no: number; date: string; title: string; amount: number }
+// taxFree … 消費税の対象外（不課税）。キャンセル料など。
+// 請求書と同じ印を見て、領収書の内訳と「（税込）」の書き方を合わせる
+type Item = { no: number; date: string; title: string; amount: number; taxFree?: boolean | null }
 type Data = {
   seller: { shopName: string; personName: string }
   periodLabel: string
@@ -145,6 +148,12 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
   // 何の代金かが一目で分かる形に固定する。
   // 事前請求も売上からの請求も、受け取っているのは出店料である点は変わらない
   const forWhat = data.kind === 'advance' ? '出店料（事前）として' : '出店料として'
+  // 全額が不課税の請求書に対する領収書は「（税込）」と書かない。
+  // 判定は明細の印から出す（請求書の画面と同じ式）。
+  // 保存済みの data.tax が0かどうかでは決めない。少額で消費税が0円に
+  // 切り捨てられた課税の請求書まで不課税と書いてしまうため
+  const rcT = invoiceTotals(Array.isArray(data.items) ? data.items : [])
+  const allTaxFree = rcT.taxable === 0 && rcT.taxFree > 0
   // 実際に振り込まれた日。紙面の下に添える
   const paidDate = data.paidOn || (data.paidConfirmedAt ? String(data.paidConfirmedAt).slice(0, 10) : '')
   // 紙面に出す領収日。年・月・日を別に置くため、分けておく
@@ -209,7 +218,7 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
             <div style={{ flex: 1, fontSize: '23pt', fontWeight: 700, letterSpacing: '1pt', whiteSpace: 'nowrap' }}>
               ¥ {data.total.toLocaleString()} —
             </div>
-            <div style={{ fontSize: '9.5pt', whiteSpace: 'nowrap' }}>（税込）</div>
+            <div style={{ fontSize: '9.5pt', whiteSpace: 'nowrap' }}>{allTaxFree ? '（不課税）' : '（税込）'}</div>
           </div>
 
           {/* 3段目　但し書きと領収日 */}
@@ -233,10 +242,10 @@ function ReceiptInner({ viewer = 'admin' }: { viewer?: Viewer } = {}) {
             <div style={{ width: '236pt', borderRight: `0.8pt solid ${INK}`, padding: '8pt 14pt', fontSize: '9.5pt', lineHeight: '17pt' }}>
               <div style={{ fontSize: '8.5pt', color: '#333', marginBottom: '2pt' }}>内訳</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `0.5pt solid ${INK}` }}>
-                <span>税抜金額</span><span>¥{data.subtotal.toLocaleString()}</span>
+                <span>{allTaxFree ? '不課税金額' : '税抜金額'}</span><span>¥{data.subtotal.toLocaleString()}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `0.5pt solid ${INK}` }}>
-                <span>消費税額等（10%）</span><span>¥{data.tax.toLocaleString()}</span>
+                <span>消費税額等{allTaxFree ? '' : '（10%）'}</span><span>¥{data.tax.toLocaleString()}</span>
               </div>
             </div>
 

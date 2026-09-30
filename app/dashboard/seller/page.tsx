@@ -638,6 +638,8 @@ export default function SellerDashboard() {
   type MyInvoice = {
     id: string, invoice_no: string, period: string, issued_on: string, due_on: string | null,
     total: number, paid_status: string, paid_on: string | null, paid_name: string | null,
+    // 消費税。0円のときは「（税込）」と書かない（キャンセル料など不課税の請求書）
+    tax?: number | null,
     // 運営が確認した実際の入金額。請求額と違うときだけ入る
     paid_amount?: number | null,
     paid_reported_at: string | null, paid_confirmed_at: string | null,
@@ -1881,7 +1883,7 @@ export default function SellerDashboard() {
                         </div>
                         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '10px' }}>
                           <div>
-                            <div style={{ fontSize: '10px', color: '#64748B' }}>ご請求額（税込）</div>
+                            <div style={{ fontSize: '10px', color: '#64748B' }}>ご請求額{(iv.tax ?? 0) > 0 ? '（税込）' : ''}</div>
                             <div style={{ fontSize: '20px', fontWeight: 900, color: '#1a1a1a' }}>¥{iv.total.toLocaleString()}</div>
                           </div>
                           <div>
@@ -2953,7 +2955,7 @@ export default function SellerDashboard() {
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '420px', overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
             <div style={{ background: '#F5A623', color: '#fff', padding: '16px 20px' }}>
               <div style={{ fontSize: '16px', fontWeight: 900 }}>お振込のご報告</div>
-              <div style={{ fontSize: '12px', opacity: 0.95, marginTop: '2px' }}>{payFor.period} 分／¥{payFor.total.toLocaleString()}（税込）</div>
+              <div style={{ fontSize: '12px', opacity: 0.95, marginTop: '2px' }}>{payFor.period} 分／¥{payFor.total.toLocaleString()}{(payFor.tax ?? 0) > 0 ? '（税込）' : ''}</div>
             </div>
             <div style={{ padding: '18px 20px' }}>
               <div style={{ marginBottom: '14px' }}>

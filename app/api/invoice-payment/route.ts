@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     if (action === 'mine') {
       const { data, error } = await db
         .from('invoices')
-        .select('id, invoice_no, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_amount, kind')
+        .select('id, invoice_no, period, issued_on, due_on, total, tax, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_amount, kind')
         .eq('seller_id', uid)
         // 取り消した請求書は出店者には見せない
         .is('voided_at', null)
@@ -138,7 +138,7 @@ export async function POST(req: Request) {
     if (action === 'list') {
       const { data, error } = await db
         .from('invoices')
-        .select('id, invoice_no, seller_id, period, issued_on, due_on, total, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_memo, paid_amount, kind, voided_at, void_reason')
+        .select('id, invoice_no, seller_id, period, issued_on, due_on, total, tax, paid_status, paid_on, paid_name, paid_reported_at, paid_confirmed_at, paid_memo, paid_amount, kind, voided_at, void_reason')
         .order('issued_on', { ascending: false })
         .limit(300)
       if (error) return NextResponse.json({ error: '取得に失敗しました' }, { status: 500 })

@@ -123,7 +123,7 @@ export async function POST(req: Request) {
     //
     // クライアントを先に作らないのは、鍵の無い環境（手元）で
     // 名乗っていない相手にまで 500 を返さないため。判定の順は requireCaller が持つ
-    const { sellerId, period, action, dueOn, edited, amount, label, applicationId, applicationIds, saleIds, invoiceNo: invoiceNoParam, force, forReceipt } = await req.json()
+    const { sellerId, period, action, dueOn, edited, amount, label, applicationId, applicationIds, saleIds, invoiceNo: invoiceNoParam, force, forReceipt, taxFree, systemFee, systemFeeLabel } = await req.json()
 
     const ctx = await requireCaller(req, undefined, 'ログインしなおしてからお試しください')
     if (ctx instanceof NextResponse) return ctx
@@ -233,20 +233,21 @@ export async function POST(req: Request) {
       return denyNotAdmin(caller)
     }
 
-    if (!sellerId || !period) {
+    // 事前請求（advance）は対象月を申込の出店日から決められる（下の advPeriod）。
+    // それなのに period が無いだけで弾いていたため、出店管理の
+    // 「キャンセル料を請求する」と売上管理の「請求する」が、どちらも
+    // 「パラメータ不足」で発行できなかった（2026-09-30 の運営からの報告）。
+    // 呼び出し側でも period を送るようにしたが、送り忘れで黙って止まる作りは直しておく
+    const needPeriod = action !== 'advance'
+    if (!sellerId || (needPeriod && !period)) {
       return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
     }
-    if (!/^\d{4}-\d{2}$/.test(period)) {
+    if (period !== undefined && period !== null && period !== '' && !/^\d{4}-\d{2}$/.test(String(period))) {
       return NextResponse.json({ error: '対象月の形式が不正です' }, { status: 400 })
     }
 
     // 以降で使うクライアントは、上で作ったサービスロールのものと同じでよい
     const admin = adminO
-
-    // 対象月の範囲
-    const [y, m] = period.split('-').map(Number)
-    const start = `${period}-01`
-    const end = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
 
     const { data: seller } = await admin
       .from('profiles').select('id, shop_name, name').eq('id', sellerId).maybeSingle()
@@ -421,18 +422,58 @@ export async function POST(req: Request) {
       // 期間で1回の案件も日ごとに行を残す。どの出店日が請求済みかは
       // items[].applicationId で見ているので（上の重複の警告）、行を1本にまとめると
       // 残りの日があとから二重に請求できてしまう
-      const advItems = (apps.length > 0 ? apps : [null]).map((a, i) => ({
+      // 不課税（消費税の対象外）。キャンセル料は、出店しなかったことへの
+      // 賠償であって何かを売ったわけではないので、消費税を掛けない（2026-09-27 の決め）。
+      // 画面から明示されたときだけ立てる。通常の出店料の事前請求は課税のまま
+      const advTaxFree = taxFree === true
+      const advItems: Array<{
+        no: number; saleId: string | null; applicationId: string | null
+        date: string; title: string; amount: number; taxFree?: boolean
+      }> = (apps.length > 0 ? apps : [null]).map((a, i) => ({
         no: i + 1, saleId: null, applicationId: a?.id ?? null,
         date: mdLabel(a?.apply_date),
         title: once && i > 0 ? `${title}（期間ぶんに含む）` : title,
         amount: once && i > 0 ? 0 : yen,
+        ...(advTaxFree ? { taxFree: true } : {}),
       }))
-      const advSubtotal = once ? yen : yen * advItems.length
-      const advTax = Math.floor(advSubtotal * 0.1)
+
+      // システム利用料。キャンセル料と同じ請求書に、別の行として足す。
+      //
+      // なぜ（2026-09-28 の運営の決め、B案）:
+      //   「キャンセル料1万円＋システム利用料1,000円＝11,000円」で運用したい。
+      //   どちらも不課税なので、消費税を足して11,000円にするのとは中身が違う
+      //   （税額0円で、合計がちょうど11,000円になる）。
+      //   出店日には紐づけない（applicationId は null）。請求済みの印は
+      //   出店料の行だけで見るため、ここに付けると日数の数え方が狂う
+      const sysYen = Math.floor(Number(systemFee))
+      if (Number.isFinite(sysYen) && sysYen > 0) {
+        advItems.push({
+          no: advItems.length + 1, saleId: null, applicationId: null,
+          date: '',
+          title: String(systemFeeLabel || '').trim() || 'システム利用料',
+          amount: sysYen,
+          ...(advTaxFree ? { taxFree: true } : {}),
+        })
+      }
+
+      // 小計・消費税・合計は invoiceTotals が唯一の正（画面・保存と同じ式）。
+      // 不課税の行が無い請求書では、これまでの Math.floor(小計 * 0.1) と同じ額になる
+      const advT = invoiceTotals(advItems)
+      const advSubtotal = advT.subtotal
+      const advTax = advT.tax
+      const advTotal = advT.total
       // 対象月は出店日の月（同じ月しか混ざらないことは上で確かめている）。
       // 日付の無い申込だけのときは、画面から来た period を使う
       const firstDated = apps.map(a => String(a.apply_date || '')).find(d => /^\d{4}-\d{2}/.test(d)) || ''
-      const advPeriod = firstDated ? firstDated.slice(0, 7) : period
+      const advPeriod = firstDated ? firstDated.slice(0, 7) : String(period ?? '')
+      // 出店日が無く、対象月も渡っていないときだけ、ここで止まる。
+      // 対象月は請求書の締め・二重請求の判定に使うので、空では入れられない
+      if (!/^\d{4}-\d{2}$/.test(advPeriod)) {
+        return NextResponse.json(
+          { error: '対象月が決まりません。出店日の入っていない申込のときは、対象月を指定してください' },
+          { status: 400 },
+        )
+      }
 
       const yearA = String(new Date().getFullYear())
       const { data: lastA } = await admin
@@ -446,7 +487,7 @@ export async function POST(req: Request) {
       const rowA: Record<string, unknown> = {
         invoice_no: noA, seller_id: sellerId, period: advPeriod, kind: 'advance',
         application_id: appId,
-        subtotal: advSubtotal, tax: advTax, total: advSubtotal + advTax, item_count: advItems.length,
+        subtotal: advSubtotal, tax: advTax, total: advTotal, item_count: advItems.length,
         // どの売上を先に請求したかを残す。月次の請求はここを見て同じ売上を外す
         // （キャンセル料を売上として残しつつ、その場で1枚出せるようにしたため）
         sale_ids: advSaleIds.length > 0 ? advSaleIds : null,
@@ -468,13 +509,62 @@ export async function POST(req: Request) {
         success: true, kind: 'advance', invoiceNo: noA, dueOn: dueA,
         seller: { shopName: seller.shop_name || '', personName: seller.name || '' },
         period: advPeriod, periodLabel: `${advPeriod.slice(0, 4)}年${parseInt(advPeriod.slice(5, 7), 10)}月分`,
-        items: advItems, subtotal: advSubtotal, tax: advTax, total: advSubtotal + advTax, itemCount: advItems.length,
+        items: advItems, subtotal: advSubtotal, tax: advTax, total: advTotal, itemCount: advItems.length,
       })
     }
 
+    // ===== 発行済みの請求書の修正を保存する =====
+    //
+    // 月次の売上の取得より前に置く。事前請求（キャンセル料など）は売上に
+    // 紐づかないので、下の「この月の売上記録がありません」(404) に先に当たって
+    // 保存できなかった。宛名・振込期限・明細を直せない状態だった（2026-09-30）
+    if (action === 'save') {
+      // 既に発行済みの請求書の内容を修正して保存する
+      if (!edited) return NextResponse.json({ error: '保存する内容がありません' }, { status: 400 })
+      // 明細ごとの「不課税」を見て、課税対象にだけ消費税を掛ける。
+      // 式は画面と同じ app/lib/invoiceTotals.ts を使う（2か所で違う額にならないように）
+      const t = invoiceTotals(edited.items || [])
+      const sub = t.subtotal
+      const tx = t.tax
+      const patch: Record<string, unknown> = {
+        items: edited.items || null,
+        to_name: edited.toName ?? null,
+        to_person: edited.toPerson ?? null,
+        note: edited.note ?? null,
+        due_on: asDate(edited.dueOn),
+        subtotal: sub, tax: tx, total: sub + tx, item_count: (edited.items || []).length,
+      }
+      // 発行日は、送られてきたときだけ書き換える。
+      // 常に書くと、日付を送らない古い画面から保存されたときに
+      // 発行日が消えてしまう
+      const issuedS = asDate(edited.issuedOn)
+      if (issuedS) patch.issued_on = issuedS
+      // 番号で開いている場合はその1枚だけを直す。
+      // 事前請求は同じ出店者・同じ月に複数あり得るため、番号で特定しないと
+      // 関係のない請求書まで書き換えてしまう
+      const byNo = typeof invoiceNoParam === 'string' && invoiceNoParam.trim()
+      if (!byNo && !period) {
+        return NextResponse.json({ error: '請求書番号か対象月のどちらかが要ります' }, { status: 400 })
+      }
+      const q = byNo
+        ? admin.from('invoices').update(patch).eq('invoice_no', String(invoiceNoParam).trim())
+        : admin.from('invoices').update(patch).eq('seller_id', sellerId).eq('period', period).eq('kind', 'sales')
+      const { data: upd, error: uErr } = await q.select('invoice_no')
+      if (uErr) return NextResponse.json({ error: '保存に失敗しました: ' + uErr.message }, { status: 500 })
+      if (!upd || upd.length === 0) return NextResponse.json({ error: '対象の請求書が見つかりませんでした' }, { status: 404 })
+      return NextResponse.json({ success: true })
+    }
+
+
+    // ここから下は月次（売上からの請求）。対象月は必ず渡ってきている（上の needPeriod）。
+    // 事前請求より下に置いているのは、事前請求は period 無しでも通るため
+    const [y, m] = String(period).split('-').map(Number)
+    const start = `${period}-01`
+    const end = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+
     const { data: sales, error: sErr } = await admin
       .from('sales')
-      .select('id, sale_date, revenue, total_pay, fee, place_id, application_id, tax_basis, tax_rate')
+      .select('id, sale_date, revenue, total_pay, fee, place_id, application_id, tax_basis, tax_rate, note')
       .eq('seller_id', sellerId)
       .gte('sale_date', start).lt('sale_date', end)
       .order('sale_date', { ascending: true })
@@ -541,19 +631,33 @@ export async function POST(req: Request) {
       const cond = feeLabel(p, s.sale_date, s.application_id ? formatOf.get(s.application_id) ?? null : null, s, amount)
       // 「9/5（金）」の形にする（曜日まで出す）
       const md = mdLabel(s.sale_date)
+      // キャンセル料として記録された売上は、出店料ではないので不課税にする。
+      //
+      // なぜ（2026-09-30）:
+      //   キャンセル料は出店しなかったことへの賠償で、消費税の対象外（2026-09-27 の決め）。
+      //   事前請求（出店管理の「キャンセル料を請求する」）からは不課税で出せていたが、
+      //   そこを通さずに月次の請求に流れると、10%を掛けて請求してしまっていた。
+      //   件名も「出店料」になり、何の請求か分からなくなる。
+      //   判定は売上の所感の頭で見る（記録するときに「キャンセル料（理由）」の形で入る）
+      const isCancel = String((s as { note?: string | null }).note || '').startsWith('キャンセル料')
       return {
         no: i + 1,
         saleId: s.id,
         date: md,
         // 例: 「7月 中央医療技術専門学校 出店料 10%」
-        title: `${m}月 ${p?.title || '(案件名なし)'} 出店料${cond ? ' ' + cond : ''}`,
+        title: isCancel
+          ? `${m}月 ${p?.title || '(案件名なし)'} キャンセル料`
+          : `${m}月 ${p?.title || '(案件名なし)'} 出店料${cond ? ' ' + cond : ''}`,
         amount,
+        ...(isCancel ? { taxFree: true } : {}),
       }
     })
 
-    const subtotal = items.reduce((t, i) => t + i.amount, 0)
-    const tax = Math.floor(subtotal * 0.1)
-    const total = subtotal + tax
+    // 明細ごとの「不課税」を見て、課税対象にだけ消費税を掛ける
+    const tMonth = invoiceTotals(items)
+    const subtotal = tMonth.subtotal
+    const tax = tMonth.tax
+    const total = tMonth.total
 
     const payload = {
       seller: { shopName: seller.shop_name || '', personName: seller.name || '' },
@@ -565,39 +669,6 @@ export async function POST(req: Request) {
       zeroCount: zero.length,
     }
 
-    if (action === 'save') {
-      // 既に発行済みの請求書の内容を修正して保存する
-      if (!edited) return NextResponse.json({ error: '保存する内容がありません' }, { status: 400 })
-      // 明細ごとの「不課税」を見て、課税対象にだけ消費税を掛ける。
-      // 式は画面と同じ app/lib/invoiceTotals.ts を使う（2か所で違う額にならないように）
-      const t = invoiceTotals(edited.items || [])
-      const sub = t.subtotal
-      const tx = t.tax
-      const patch: Record<string, unknown> = {
-        items: edited.items || null,
-        to_name: edited.toName ?? null,
-        to_person: edited.toPerson ?? null,
-        note: edited.note ?? null,
-        due_on: asDate(edited.dueOn),
-        subtotal: sub, tax: tx, total: sub + tx, item_count: (edited.items || []).length,
-      }
-      // 発行日は、送られてきたときだけ書き換える。
-      // 常に書くと、日付を送らない古い画面から保存されたときに
-      // 発行日が消えてしまう
-      const issuedS = asDate(edited.issuedOn)
-      if (issuedS) patch.issued_on = issuedS
-      // 番号で開いている場合はその1枚だけを直す。
-      // 事前請求は同じ出店者・同じ月に複数あり得るため、番号で特定しないと
-      // 関係のない請求書まで書き換えてしまう
-      const q = typeof invoiceNoParam === 'string' && invoiceNoParam.trim()
-        ? admin.from('invoices').update(patch).eq('invoice_no', invoiceNoParam.trim())
-        : admin.from('invoices').update(patch).eq('seller_id', sellerId).eq('period', period).eq('kind', 'sales')
-      const { data: upd, error: uErr } = await q.select('invoice_no')
-      if (uErr) return NextResponse.json({ error: '保存に失敗しました: ' + uErr.message }, { status: 500 })
-      if (!upd || upd.length === 0) return NextResponse.json({ error: '対象の請求書が見つかりませんでした' }, { status: 404 })
-      return NextResponse.json({ success: true })
-    }
-
     if (action !== 'issue') {
       // 既に発行済みなら、その番号もあわせて返す
       const { data: exist } = await admin
@@ -607,12 +678,15 @@ export async function POST(req: Request) {
       const saved = exist && exist.length > 0 ? exist[0] : null
       // 一度修正して保存してある場合は、その内容を優先して返す
       if (saved?.items) {
-        const sub = saved.items.reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
-        const tx = Math.floor(sub * 0.1)
+        // 明細ごとの「不課税」を見る。一律10%を掛けていたため、
+        // キャンセル料だけの請求書を開き直すと画面の合計と食い違っていた（2026-09-30）
+        const tSaved = invoiceTotals(saved.items)
+        const sub = tSaved.subtotal
+        const tx = tSaved.tax
         return NextResponse.json({
           ...payload,
           seller: { shopName: saved.to_name ?? payload.seller.shopName, personName: saved.to_person ?? payload.seller.personName },
-          items: saved.items, subtotal: sub, tax: tx, total: sub + tx, itemCount: saved.items.length,
+          items: saved.items, subtotal: sub, tax: tx, total: tSaved.total, itemCount: saved.items.length,
           note: saved.note ?? null,
           invoiceNo: saved.invoice_no, dueOn: saved.due_on,
           issuedOn: saved.issued_on ?? null,
@@ -643,11 +717,17 @@ export async function POST(req: Request) {
     const due = asDate(dueOn)
     // 画面で修正されていれば、その内容で発行する
     const useItems = edited?.items?.length ? edited.items : items
-    const sub2 = useItems.reduce((t: number, i: { amount?: number }) => t + (Number(i.amount) || 0), 0)
-    const tax2 = Math.floor(sub2 * 0.1)
+    // 明細ごとの「不課税」を見て、課税対象にだけ消費税を掛ける。
+    //
+    // ここが一律10%だったため、画面でキャンセル料に「不課税」を付けて
+    // 合計¥10,000を確認して発行しても、記録される請求額は¥11,000（消費税¥1,000）
+    // になっていた。紙面と、出店者のお支払い画面・領収書の額が食い違う（2026-09-30）
+    const t2 = invoiceTotals(useItems)
+    const sub2 = t2.subtotal
+    const tax2 = t2.tax
     const row: Record<string, unknown> = {
       invoice_no: invoiceNo, seller_id: sellerId, period, kind: 'sales',
-      subtotal: sub2, tax: tax2, total: sub2 + tax2, item_count: useItems.length,
+      subtotal: sub2, tax: tax2, total: t2.total, item_count: useItems.length,
       sale_ids: items.map(i => i.saleId),
       due_on: due,
       items: edited?.items?.length ? edited.items : null,
