@@ -314,6 +314,51 @@ export default async function VendorPage() {
         </div>
       </div>
 
+      {/* 「誘致」「手配」「派遣」の言い分け。
+          呼びたい側は会社によって違う言葉で探している（2026-09-30 の調査）。
+            ・誘致 … 施設・自治体・地主。自分の場所へ続けて来てほしい
+            ・手配／派遣 … イベント主催者・企業。その日だけ来てほしい
+          このページは title で「手配・派遣」を受けているが、h1・h2 に
+          「誘致」「呼びたい」「会社」が1語も無く、施設・地主の言葉で探した人が
+          たどり着けなかった。言葉が違うだけで欲しいものが違うので、
+          ここで分けて、それぞれの入口へ送る */}
+      <div style={{ background: '#fff', padding: '52px 24px' }}>
+        <div style={{ maxWidth: '860px', margin: '0 auto' }}>
+          <h2 className='jp-head sec-head' style={H2}><span className='t'><span className='u'>キッチンカーの誘致</span><wbr /><span className='u'>・手配をお考えの方へ</span></span><Image src='/ic-v-consult.webp' alt='' width={44} height={44} style={{ display: 'inline-block', verticalAlign: '-0.3em', marginLeft: '10px', width: 'clamp(26px,6.4vw,40px)', height: 'auto' }} /></h2>
+          <p className='jp-text' style={LEAD}>
+            「誘致」「手配」「派遣」はどれもキッチンカーを呼ぶことですが、<strong>続けて来てほしいのか、その日だけなのか</strong>で進め方が変わります。
+            どちらか決まっていなくても構いません。会場の状況をうかがって、合うほうをご提案します。
+          </p>
+          <div className='grid-3' style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '16px' }}>
+            <div style={CARD}>
+              <h3 className='jp-head' style={{ fontWeight: 900, fontSize: '16.5px', color: '#111', margin: '0 0 8px' }}>誘致（続けて来てほしい）</h3>
+              <p className='jp-text' style={{ fontSize: '14.5px', color: '#555', lineHeight: 1.8, margin: 0 }}>
+                商業施設・スーパー・オフィスビル・マンション・ゴルフ場・道の駅など、<strong>お持ちの場所へ定期的に来てほしい</strong>場合。
+                曜日と時間を決めて募集を出し、同じ出店者に通ってもらう形にできます。区画の条件と出店料の決め方からご相談いただけます。
+              </p>
+            </div>
+            <div style={CARD}>
+              <h3 className='jp-head' style={{ fontWeight: 900, fontSize: '16.5px', color: '#111', margin: '0 0 8px' }}>手配・派遣（その日だけ）</h3>
+              <p className='jp-text' style={{ fontSize: '14.5px', color: '#555', lineHeight: 1.8, margin: 0 }}>
+                お祭り・マルシェ・スポーツ大会・学園祭・周年イベント・社内行事など、<strong>開催日が決まっている</strong>場合。
+                台数と業態を組んで、当日の搬入・配置の連絡までこちらで行えます。1台からご相談いただけます。
+              </p>
+            </div>
+            <div style={CARD}>
+              <h3 className='jp-head' style={{ fontWeight: 900, fontSize: '16.5px', color: '#111', margin: '0 0 8px' }}>手配会社をお探しの方へ</h3>
+              <p className='jp-text' style={{ fontSize: '14.5px', color: '#555', lineHeight: 1.8, margin: 0 }}>
+                ご自身で募集を出して直接やり取りすることも、<strong>募集から当日の運営までお任せいただく</strong>こともできます。
+                掲載に費用はかかりません。お任せいただく場合の費用は、会場の条件と台数をうかがってからお見積りします。
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '22px' }}>
+            <a href='#soudan' style={{ background: '#F5A623', color: '#fff', fontWeight: 900, fontSize: '16px', padding: '12px 30px', borderRadius: '999px', textDecoration: 'none' }}>会場の状況を相談する</a>
+            <a href='#cost' style={{ background: '#fff', color: '#111', fontWeight: 900, fontSize: '16px', border: '2px solid #111', padding: '10px 28px', borderRadius: '999px', textDecoration: 'none' }}>費用の目安を見る</a>
+          </div>
+        </div>
+      </div>
+
       {/* できること */}
       <div style={{ background: '#FAFAFA', padding: '52px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
