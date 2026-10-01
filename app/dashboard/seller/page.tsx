@@ -1034,8 +1034,11 @@ export default function SellerDashboard() {
       ? ['license_front', 'license_back']
       : [docType]
     for (const t of targets) {
+      // 期限を入れ直したら、お知らせの送信済みの印も外す。
+      // 外さないと、新しい期限が近づいてもお知らせが届かない
+      // （/api/cron/document-expiry は expiry_reminded_at が null の書類だけ見る）
       await supabase.from('seller_documents')
-        .update({ expiry_date: expiry })
+        .update({ expiry_date: expiry, expiry_reminded_at: null })
         .eq('seller_id', uid)
         .eq('doc_type', t)
     }
