@@ -8,7 +8,7 @@ import FormatFeesEditor, { type FormatFeesValue } from '../../../components/Form
 import DowPresets from '../../../components/DowPresets'
 import { geocodeAddress } from '../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../lib/categories'
-import { toYen, buildMinGuaranteeJson, type FeeSource, perEventConflict, allowedFormats, hasFormatFees } from '../../../lib/placeFee'
+import { toYen, buildMinGuaranteeJson, type FeeSource, perEventConflict, allowedFormats, hasFormatFees, dowMismatch, DOW_LABELS, sortedDows } from '../../../lib/placeFee'
 import { isMissingColumn } from '../../../lib/optionalColumn'
 import PlaceImagePicker from '../../../components/PlaceImagePicker'
 
@@ -152,6 +152,23 @@ function NewPlacePageInner() {
   // これを渡さないと例示だけが別の計算になる（歩合を案件全体にだけ入れた案件で、
   // 売上が増えても最低保証のままの額が出ていた）。
   // 取引先へ渡す分（price_*）は運営が /admin で入れるので、ここには無い
+  // 形態の「出られる曜日」で選ばれている曜日をまとめたもの。
+  // まとめて日程追加の「合わせる」ボタンに使う。
+  // 形態が複数あって曜日が違うときは、どの形態も出られる日を作れるように足し合わせる
+  const formatDows = (() => {
+    const set = new Set<number>()
+    for (const f of allowedFormats(formatFees)) {
+      for (const d of sortedDows((formatFees as Record<string, { dows?: number[] | null }>)[f]?.dows)) set.add(d)
+    }
+    return Array.from(set).sort((a, b) => a - b)
+  })()
+  const sameDows = (a: number[], b: number[]) =>
+    a.length === b.length && [...a].sort((x, y) => x - y).every((v, i) => v === [...b].sort((x, y) => x - y)[i])
+
+  // 日程の曜日と、形態ごとの「出られる曜日」の食い違い。
+  // 画面に出すだけで、保存は止めない（app/lib/placeFee.ts の dowMismatch）
+  const dowWarnings = dowMismatch(schedule, formatFees)
+
   const placeFeeSrc: FeeSource = (() => {
     const fee = buildFeeColumns(form)
     return {
@@ -586,6 +603,17 @@ async function refreshPublicPages(placeId?: string) {
                       {/* 曜日のまとめ選び。形態ごとの「出られる曜日」でも
                           同じものを使っている（app/components/DowPresets.tsx） */}
                       <DowPresets current={bulkDows} onPick={setted => setBulkDows(setted)} />
+                      {/* 形態の「出られる曜日」に合わせる。
+                          ここの曜日は既定が「毎日」で、形態側だけ曜日を選んだ募集者が
+                          申し込めない日を日程に並べてしまう事故があった（2026-10-01 茨城女子短期大学）。
+                          自動では変えない（日程を広く作って形態で絞る使い方もあるため）。
+                          押すと合わせられるようにして、ずれていることが目に入るようにする */}
+                      {formatDows.length > 0 && !sameDows(bulkDows, formatDows) && (
+                        <button type='button' onClick={() => setBulkDows([...formatDows])}
+                          style={{marginTop:'8px',background:'#FFFBEB',border:'1.5px solid #FDE68A',color:'#B45309',borderRadius:'8px',padding:'8px 14px',fontSize:'12px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                          形態で選んだ曜日に合わせる（{formatDows.map(d=>DOW_LABELS[d]).join('・')}）
+                        </button>
+                      )}
                     </div>
 
                     <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'12px'}}>
@@ -672,6 +700,7 @@ async function refreshPublicPages(placeId?: string) {
                 )}
               </div>
 
+              {/* 日程の曜日と形態の「出られる曜日」の食い違い（app/lib/placeFee.ts） */}
               {/* 形態ごとの出店料と条件。
                   以前はキッチンカーの金額しか入れられず、物販・催事PRは
                   概要欄に文章で書いていた。文章だと出店者が見落とし、
@@ -679,6 +708,37 @@ async function refreshPublicPages(placeId?: string) {
               <div style={{marginTop:'10px'}}>
                 <FormatFeesEditor value={formatFees} onChange={setFormatFees} place={placeFeeSrc} />
               </div>
+              {/* 日程の曜日と、形態の「出られる曜日」の食い違いを知らせる。
+                  曜日を選ぶ欄が2つあり（まとめて日程追加＝どの日を入れるか／
+                  ここ＝入っている日のうち申し込める日を絞る）、後者だけ選んで
+                  前者を既定の「毎日」のままにすると、申し込めない日が日程に並ぶ。
+                  2026-10-01 に茨城女子短期大学で実際に起きた。
+                  どちらが正しいかは募集者しか知らないので、直さずに知らせるだけ。
+                  保存は止めない（日程を先に作ってから曜日を決める人が進めなくなる） */}
+              {dowWarnings.length > 0 && (
+                <div style={{marginTop:'10px',border:'1.5px solid #FDE68A',background:'#FFFBEB',borderRadius:'10px',padding:'12px 14px'}}>
+                  <div style={{fontSize:'13px',fontWeight:800,color:'#B45309',marginBottom:'6px'}}>
+                    日程と「出られる曜日」が合っていません
+                  </div>
+                  {dowWarnings.map(w => (
+                    <div key={w.format} style={{fontSize:'12px',color:'#78350F',lineHeight:1.9,marginBottom:'6px'}}>
+                      <strong>{w.format}</strong>：出られる曜日は{w.dows.map(d=>DOW_LABELS[d]).join('・')}です。
+                      {w.extraCount > 0 && <>
+                        日程には<strong>{w.extraDows.map(d=>DOW_LABELS[d]).join('・')}の{w.extraCount}日</strong>が入っていて、この形態では申し込めません。
+                      </>}
+                      {w.missingDows.length > 0 && <>
+                        {w.extraCount > 0 && ' '}
+                        選んだ{w.missingDows.map(d=>DOW_LABELS[d]).join('・')}の日は、日程に1日も入っていません。
+                      </>}
+                    </div>
+                  ))}
+                  <div style={{fontSize:'11.5px',color:'#92400E',lineHeight:1.8}}>
+                    上の「まとめて日程追加」の曜日は<strong>はじめ「毎日」</strong>になっています。
+                    日程そのものを曜日で絞るときは、そちらの曜日も合わせてください。
+                    このままでも保存できます（日程を先に作る進め方もあるため）。
+                  </div>
+                </div>
+              )}
 
               {/* 毎月おなじ条件で翌月の日程を足す。
                   常設の案件では毎月31日ぶんを手で入れ直していた */}

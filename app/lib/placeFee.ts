@@ -225,6 +225,77 @@ export function sortedDows(dows: unknown): number[] {
   return uniq.sort((a, b) => a - b)
 }
 
+/** 曜日の文字（0=日 … 6=土） */
+export const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
+
+/** 日付（YYYY-MM-DD）の曜日。0=日 … 6=土。読めない日付は null */
+export function dowOfDate(date: unknown): number | null {
+  const [y, m, d] = String(date ?? '').slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return null
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+}
+
+export type DowMismatch = {
+  format: string
+  /** その形態で出られる曜日 */
+  dows: number[]
+  /** 日程に入っているのに、その形態では申し込めない曜日 */
+  extraDows: number[]
+  /** 申し込めない日の数（同じ日が2枠あっても1日と数える） */
+  extraCount: number
+  /** 出られる曜日に選んだのに、日程に1日も無い曜日 */
+  missingDows: number[]
+}
+
+/**
+ * 日程の曜日と、形態ごとの「出られる曜日」の食い違いを出す。
+ *
+ * なぜ要るか（2026-10-01 の運営からの報告：茨城女子短期大学）:
+ *   募集者が形態の「出られる曜日」に火・木・金を選んだのに、
+ *   日程には全部の曜日が入っていた。
+ *
+ *   曜日を選ぶ欄が2つあるのが原因。
+ *     ・まとめて日程追加の曜日 … どの日を日程に入れるかを決める。既定は「毎日」
+ *     ・形態ごとの「出られる曜日」 … 入っている日のうち、その形態で申し込める日を絞る
+ *   見た目が同じ（どちらも DowPresets）なので、後者だけ選んで
+ *   前者を既定の「毎日」のまま日程を作ると、申し込めない日が並ぶ。
+ *
+ *   どちらが正しいかは募集者しか知らないので、直さずに知らせるだけにする。
+ *   保存は止めない（止めると、日程を先に作ってから曜日を決める人が進めなくなる）。
+ */
+export function dowMismatch(
+  schedule: { date?: string | null }[] | null | undefined,
+  ff: unknown,
+): DowMismatch[] {
+  const dates = Array.from(new Set(
+    (Array.isArray(schedule) ? schedule : [])
+      .map(d => String(d?.date ?? '').slice(0, 10))
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)),
+  ))
+  if (dates.length === 0) return []
+  const inSchedule = new Set<number>()
+  const byDow = new Map<number, number>()
+  for (const d of dates) {
+    const w = dowOfDate(d)
+    if (w == null) continue
+    inSchedule.add(w)
+    byDow.set(w, (byDow.get(w) ?? 0) + 1)
+  }
+
+  const out: DowMismatch[] = []
+  for (const f of allowedFormats(ff)) {
+    const dows = sortedDows(formatFeeOf(ff, f)?.dows)
+    // 未設定（全曜日）の形態は食い違いようがない
+    if (dows.length === 0) continue
+    const extraDows = Array.from(inSchedule).filter(w => !dows.includes(w)).sort((a, b) => a - b)
+    const extraCount = extraDows.reduce((t, w) => t + (byDow.get(w) ?? 0), 0)
+    const missingDows = dows.filter(w => !inSchedule.has(w))
+    if (extraDows.length === 0 && missingDows.length === 0) continue
+    out.push({ format: f, dows, extraDows, extraCount, missingDows })
+  }
+  return out
+}
+
 // その形態の歩合（%）。入っていなければ null
 export function formatShare(ff: unknown, format: string | null | undefined): { sharePct: number | null; companySharePct: number | null } {
   const v = formatFeeOf(ff, format)
