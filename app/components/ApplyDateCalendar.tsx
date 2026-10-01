@@ -1,6 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { applyDaysShortfall } from '../lib/applyRules'
+import { applyDaysShortfall, dowGroups, biweeklyDrop, canMakeBiweekly } from '../lib/applyRules'
 
 // 申込のときに出店希望日を選ぶカレンダー。
 //
@@ -182,6 +182,45 @@ export default function ApplyDateCalendar({
   const toggleAll = () => {
     if (everyPicked) onClearMonth([...byDate.values()].map(d => d.date))
     else onSelectMany(everyDate)
+  }
+
+  // ===== 曜日でまとめて選ぶ・1週おきにする =====
+  //
+  // なぜ要るか（2026-10-01 の運営からの相談）:
+  //   「火・木・金の枠で毎週出る」という出店者が、申し込むたびに
+  //   24日ぶんの日付を1つずつ押していた。
+  //   これまでは「当月を全選択」と「日程ぜんぶ」しか無く、
+  //   曜日で絞って選ぶ手立てが画面に無かった。
+  //
+  // 日付の集合に対する操作として作る（案件側に新しい設定は足さない）。
+  // 同じ曜日の日が2日以上ある案件にだけ出す。1日しか無い曜日に
+  // 「火曜 1日」と出しても、カレンダーを押すのと手間が変わらない。
+  // 計算は app/lib/applyRules.ts が唯一の正（画面と送信前の確認で同じ式を使う）
+  // useMemo は使わない。この位置は早期 return より後ろで、
+  // フックを呼ぶと描画ごとに順番が変わってしまう。
+  // 日程は多くても31日なので、毎回数えても重くない
+  const dowChips = dowGroups(everyDate)
+  const toggleDow = (w: number, ds: string[]) => {
+    if (ds.length === 0) return
+    if (ds.every(d => selected.includes(d))) onClearMonth(ds)
+    else onSelectMany(ds)
+  }
+
+  // 1週おき。いま選んでいる日のうち、1週おきの週だけを残す。
+  //
+  //   いちばん早い日の週を0週として、7日ずつで週を数える。
+  //   火木金を選んでから押すと、1週目の火木金・3週目の火木金…が残る。
+  //   「隔週で同じ曜日に出る」という申し込み方がこれで1押しになる。
+  //
+  //   週の区切りを日曜始まりにしないのは、火曜始まりの案件で
+  //   最初の週だけ日数が変わってしまうため（選んだ日を基準にする）。
+  /** いま選んでいる日のうち、まだ送れる日 */
+  const pickedUsable = selected
+    .filter(d => { const c = byDate.get(d); return !!c && !c.disabled && !c.applied })
+  const thinnable = canMakeBiweekly(pickedUsable)
+  const makeBiweekly = () => {
+    const drop = biweeklyDrop(pickedUsable)
+    if (drop.length > 0) onClearMonth(drop)
   }
 
   const chosen = selected.map(d => byDate.get(d)).filter((d): d is CalendarDay => !!d)
@@ -390,6 +429,46 @@ export default function ApplyDateCalendar({
           </button>
         </div>
       )}
+      {/* 曜日でまとめて選ぶ。
+          「火・木・金の枠で毎週出る」出店者が、24日ぶんを1つずつ押していた
+          （2026-10-01 の運営からの相談）。同じ曜日が2日以上ある案件にだけ出す。
+          押すとその曜日の日を日程ぜんぶから選ぶ（当月だけに閉じない。
+          毎週出る人は月をまたいで申し込むため） */}
+      {dowChips.length > 0 && (
+        <div style={{ marginTop: '10px', border: '1px solid #E5C07B', background: '#FFFDF5', borderRadius: '8px', padding: '9px 10px' }}>
+          <div style={{ fontSize: '11.5px', fontWeight: 700, color: BROWN, marginBottom: '6px' }}>
+            曜日でまとめて選ぶ
+          </div>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {dowChips.map(({ dow: w, dates: ds }) => {
+              const on = ds.every(d => selected.includes(d))
+              return (
+                <button key={w} type='button' onClick={() => toggleDow(w, ds)}
+                  style={{
+                    font: 'inherit', fontSize: '12px', fontWeight: 700, borderRadius: '999px',
+                    padding: '7px 13px', cursor: 'pointer',
+                    border: '1px solid ' + (on ? BROWN : '#E5C07B'),
+                    background: on ? BROWN : '#fff',
+                    color: on ? '#fff' : BROWN,
+                  }}>
+                  {DOW[w]}曜 {ds.length}日{on ? ' ✓' : ''}
+                </button>
+              )
+            })}
+          </div>
+          {/* 1週おき。選んだ日を間引く操作なので、何か選んでいるときだけ出す */}
+          {thinnable && (
+            <button type='button' onClick={makeBiweekly}
+              style={{ ...subBtn, flex: 'none', width: '100%', marginTop: '7px' }}>
+              選んだ{pickedUsable.length}日を1週おきにする（隔週で出る方）
+            </button>
+          )}
+          <div style={{ fontSize: '11px', color: '#94A3B8', lineHeight: 1.8, marginTop: '6px' }}>
+            曜日を押すと、その曜日の日を日程ぜんぶから選びます。1日ずつ押して外すこともできます。
+          </div>
+        </div>
+      )}
+
       {
         /* 当月まとめて選ぶ・外す。日程が20日を超える案件があるため */
         <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>

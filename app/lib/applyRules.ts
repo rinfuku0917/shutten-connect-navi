@@ -76,3 +76,72 @@ export function applyDaysShortfall(
       : `あと${min - picked}日選んでください（この案件は${min}日以上でのお申し込みです）`,
   }
 }
+
+// ===== 曜日でまとめて選ぶ・1週おきにする =====
+//
+// なぜ要るか（2026-10-01 の運営からの相談）:
+//   「火・木・金の枠で毎週出る」という出店者が、申し込むたびに
+//   24日ぶんの日付を1つずつ押していた。
+//   それまで画面にあったのは「当月を全選択」と「日程ぜんぶ」だけで、
+//   曜日で絞ってまとめて選ぶ手立てが無かった。
+//
+// 案件側に新しい設定は足さない。選べる日付の集合に対する操作として作る。
+// 使っている場所: app/components/ApplyDateCalendar.tsx
+
+/** 日付（YYYY-MM-DD）を通し日数に直す。週の計算に使う */
+export function dayNumber(date: string): number {
+  const [y, m, d] = String(date).slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return NaN
+  return Math.floor(Date.UTC(y, m - 1, d) / 86400000)
+}
+
+/** 日付の曜日。0=日 … 6=土 */
+export function dowOf(date: string): number {
+  const [y, m, d] = String(date).slice(0, 10).split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+}
+
+/**
+ * 選べる日を曜日ごとにまとめる。
+ *
+ * 2日以上ある曜日だけ返す。1日しか無い曜日に「火曜 1日」と出しても、
+ * カレンダーのマスを押すのと手間が変わらない。
+ * 並びは日曜→土曜。各曜日の日付は古い順。
+ */
+export function dowGroups(dates: string[]): { dow: number; dates: string[] }[] {
+  const map = new Map<number, string[]>()
+  for (const d of [...dates].sort()) {
+    const w = dowOf(d)
+    if (!Number.isInteger(w)) continue
+    const cur = map.get(w)
+    if (cur) cur.push(d)
+    else map.set(w, [d])
+  }
+  return [...map.entries()]
+    .filter(([, ds]) => ds.length >= 2)
+    .sort((a, b) => a[0] - b[0])
+    .map(([dow, ds]) => ({ dow, dates: ds }))
+}
+
+/**
+ * 選んでいる日を1週おきに間引くとき、外す日を返す。
+ *
+ * いちばん早い日を0週として7日ずつで週を数え、奇数週の日を外す。
+ * 火木金を選んでから押すと、1週目の火木金・3週目の火木金…が残る。
+ *
+ * 週の区切りを日曜始まりにしないのは、火曜始まりの案件で
+ * 最初の週だけ日数が変わってしまうため（選んだ日を基準にする）。
+ */
+export function biweeklyDrop(picked: string[]): string[] {
+  const ds = [...picked].filter(d => Number.isFinite(dayNumber(d))).sort()
+  if (ds.length === 0) return []
+  const first = dayNumber(ds[0])
+  return ds.filter(d => Math.floor((dayNumber(d) - first) / 7) % 2 === 1)
+}
+
+/** 1週おきにする意味があるか（2週以上にまたがって選んでいるか） */
+export function canMakeBiweekly(picked: string[]): boolean {
+  const ds = [...picked].filter(d => Number.isFinite(dayNumber(d))).sort()
+  if (ds.length < 2) return false
+  return Math.floor((dayNumber(ds[ds.length - 1]) - dayNumber(ds[0])) / 7) >= 1
+}
