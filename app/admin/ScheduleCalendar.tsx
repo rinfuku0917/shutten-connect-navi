@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import MonthGrid from '../components/MonthGrid'
 import { supabase } from '../lib/supabase'
 import { snsHref } from '../lib/sns'
 import { cancelResultMessage } from '../lib/purgeLog'
@@ -554,10 +555,7 @@ export default function ScheduleCalendar({
     setNoteBusy(false)
   }
 
-  const { y, m } = month
-  const shift = (n: number) => { const d = new Date(y, m + n, 1); setMonth({ y: d.getFullYear(), m: d.getMonth() }); setPicked(null); setOpenSlot(null) }
-  const firstDow = new Date(y, m, 1).getDay()
-  const daysInMonth = new Date(y, m + 1, 0).getDate()
+  // 月の送り・1日の曜日・月末の日数は MonthGrid が持つので、ここには置かない
   const today = todayJst()
 
   // 日付ごとにまとめる
@@ -601,73 +599,53 @@ export default function ScheduleCalendar({
   return (
     <>
       <div style={{ ...CARD, marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-          <button onClick={() => shift(-1)} aria-label='前の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>‹</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ fontWeight: 700, fontSize: '16px' }}>{y}年{m + 1}月</div>
-            <button onClick={() => { const d = new Date(); setMonth({ y: d.getFullYear(), m: d.getMonth() }); setPicked(null); setOpenSlot(null) }}
-              style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '3px 10px', background: '#fff', cursor: 'pointer', fontSize: '11px', color: '#64748B' }}>今月</button>
-          </div>
-          <button onClick={() => shift(1)} aria-label='次の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>›</button>
-        </div>
-
-        <div style={{ textAlign: 'center', fontSize: '11px', color: '#64748B', marginBottom: '12px' }}>
-          {loading ? '読み込み中…' : slots.length > 0 ? `この月の出店 ${slots.length}件（日付を押すと内容が出ます）` : 'この月に確定した出店はありません'}
-        </div>
-        {err && <div style={{ textAlign: 'center', fontSize: '12px', color: '#DC2626', marginBottom: '10px' }}>{err}</div>}
-
-        {/* 1fr のままだと、長い屋号がマスを押し広げて列幅がバラバラになる。
-            1fr は minmax(auto,1fr) と同じで、auto の下限が中身の最小幅になるため。
-            minmax(0,1fr) にすると下限が0になり、7列が必ず等幅で並ぶ。
-            フッターの列（globals.css）でも同じ理由でこの書き方にしている */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,minmax(0,1fr))', gap: '6px' }}>
-          {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
-            <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: i === 0 ? '#DC2626' : i === 6 ? '#1D4ED8' : '#64748B', padding: '6px 0' }}>{d}</div>
-          ))}
-          {Array.from({ length: firstDow }).map((_, i) => <div key={'pad' + i} style={{ minHeight: '64px' }} />)}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const d = i + 1
-            const ds = `${y}-${pad(m + 1)}-${pad(d)}`
+        {/* 月の見出し・月送り・曜日の行・マスの枠は共通部品に任せる
+            （app/components/MonthGrid.tsx）。出店者の申込画面・出店者マイページと
+            同じ見た目・同じ操作にするため（2026-10-02 の運営からの依頼）。
+            マスの中身（屋号と件数）だけ、ここで描く */}
+        <MonthGrid
+          month={month}
+          onMonthChange={ym => { setMonth(ym); setPicked(null); setOpenSlot(null) }}
+          today={today}
+          // 日付の数字は曜日で色分けしない（これまでどおり。今日だけ色を変える）
+          dowColors={false}
+          note={loading ? '読み込み中…'
+            : slots.length > 0 ? `この月の出店 ${slots.length}件（日付を押すと内容が出ます）`
+              : 'この月に確定した出店はありません'}
+          cellOf={ds => {
             const items = byDate.get(ds) || []
-            const isToday = ds === today
-            const isPicked = ds === picked
+            return {
+              selected: ds === picked,
+              filled: items.length > 0,
+              label: items.length > 0 ? items.map(s => s.shopName).join('\n') : undefined,
+            }
+          }}
+          renderCell={ds => {
+            const items = byDate.get(ds) || []
+            if (items.length === 0) return null
             return (
-              <button
-                key={ds}
-                type='button'
-                onClick={() => { setPicked(isPicked ? null : ds); setOpenSlot(null) }}
-                style={{
-                  minHeight: '64px', textAlign: 'left', padding: '5px 6px', cursor: 'pointer',
-                  border: isPicked ? '2px solid #F5A623' : isToday ? '1.5px solid #3A9BD5' : '1px solid #E2E8F0',
-                  borderRadius: '8px',
-                  background: items.length > 0 ? '#F8FDF9' : '#fff',
-                  font: 'inherit', color: '#1a1a1a',
-                }}
-              >
-                <div style={{ fontSize: '12px', fontWeight: 700, color: isToday ? '#1D4ED8' : '#334155' }}>{d}</div>
+              <>
                 {/* マスの中の屋号。7列を等幅で割るため、スマホでは1マスの文字が入る幅が
                     16px程度しかなく、9.5pxの屋号は「ベ…」としか出せず読めない。
                     そこでスマホ（640px以下）では .cal-cell-shop を隠し、代わりに
                     下の .cal-cell-count で「●3」のような点と件数だけを出す。
-                    屋号は日付を押すと下に出る一覧（14px）で読めるので、情報は失われない。
-                    パソコンでは今までどおり屋号を出したいので、出し分けはクラス側で行う */}
+                    屋号は日付を押すと下に出る一覧（14px）で読めるので、情報は失われない */}
                 {items.slice(0, 2).map(s => (
-                  <div key={s.applicationId} className='cal-cell-shop' style={{ fontSize: '9.5px', color: '#166534', background: '#DCFCE7', borderRadius: '4px', padding: '1px 4px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span key={s.applicationId} className='cal-cell-shop' style={{ fontSize: '9.5px', color: '#166534', background: '#DCFCE7', borderRadius: '4px', padding: '1px 4px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {s.shopName}
-                  </div>
+                  </span>
                 ))}
                 {items.length > 2 && (
-                  <div className='cal-cell-shop' style={{ fontSize: '9.5px', color: '#64748B', marginTop: '2px' }}>ほか{items.length - 2}件</div>
+                  <span className='cal-cell-shop' style={{ fontSize: '9.5px', color: '#64748B' }}>ほか{items.length - 2}件</span>
                 )}
-                {/* スマホでだけ出る件数の印。パソコンでは屋号と二重になるため隠す。
-                    見た目の指定はすべてクラス側に置き、パソコン表示を変えないようにしている */}
-                {items.length > 0 && (
-                  <div className='cal-cell-count'>●{items.length}</div>
-                )}
-              </button>
+                {/* スマホでだけ出る件数の印。パソコンでは屋号と二重になるため隠す */}
+                <span className='cal-cell-count'>●{items.length}</span>
+              </>
             )
-          })}
-        </div>
+          }}
+          onPickDate={ds => { setPicked(ds === picked ? null : ds); setOpenSlot(null) }}
+        />
+        {err && <div style={{ textAlign: 'center', fontSize: '12px', color: '#DC2626', marginTop: '10px' }}>{err}</div>}
       </div>
 
       {/* 選んだ日の出店一覧 */}

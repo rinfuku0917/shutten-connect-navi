@@ -625,6 +625,44 @@ img[width='1'][height='1'] { display: inline !important; }
   }
 }
 
+/* 月のカレンダー（app/components/MonthGrid.tsx）。
+   出店者の申込・出店者マイページ・運営の出店管理・募集者の画面が同じものを使う。
+
+   1fr ではなく minmax(0, 1fr) にするのは、マスの中身（屋号など）が
+   長いときに列幅が揃わなくなるのを防ぐため。
+   中身は呼び出し側が描くので、長さをこちらで決められない。 */
+.mg-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.mg-dow {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 0;
+}
+.mg-cell {
+  font: inherit;
+  border-radius: 8px;
+  padding: 4px 2px 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
+  text-align: center;
+  box-sizing: border-box;
+}
+.mg-num { font-size: 13px; line-height: 1.2; }
+/* 申込の画面は幅300pxほどの右カラムに入るので、1マスが狭い */
+.mg-cell-compact { padding: 3px 1px 4px; }
+.mg-cell-compact .mg-num { font-size: 12.5px; }
+@media (max-width: 380px) {
+  .mg-grid { gap: 3px; }
+  .mg-num { font-size: 12px; }
+}
+
 /* 案件の「日程」1日ぶんの枠。日付欄・時刻欄が枠からはみ出すのを防ぐ。
    
    なぜ起きるか（2026-10-02 の運営からの報告。iPhoneのみ）:
