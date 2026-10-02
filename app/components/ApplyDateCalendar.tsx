@@ -1,6 +1,8 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { applyDaysShortfall, dowGroups, biweeklyDrop, canMakeBiweekly } from '../lib/applyRules'
+import MonthGrid from './MonthGrid'
+import { monthsOfDates, monthOfDate, monthKey, compareMonth, type YearMonth } from '../lib/monthGrid'
 
 // 申込のときに出店希望日を選ぶカレンダー。
 //
@@ -9,10 +11,10 @@ import { applyDaysShortfall, dowGroups, biweeklyDrop, canMakeBiweekly } from '..
 //   （最長31日ある）では申込枠が極端に縦長になり、
 //   出店者がスクロールの途中で選ぶのをやめてしまっていた（2026-09-23 の依頼）。
 //
-// 運営の出店管理（app/admin/ScheduleCalendar.tsx）と出店者マイページにも
-// 月のカレンダーがあるが、あちらは「決まった出店を見る」もので、扱うデータも
-// 用途も違うため作りは分けている（共通化すると動いている画面を触ることになる）。
-// 月の組み立て方・曜日の色・選択の枠線は、その2つと同じにそろえている。
+// 月の見出し・月送り・曜日の行・マスの枠は app/components/MonthGrid.tsx が持つ
+// （2026-10-02 の「4つのカレンダーを同じ見た目・同じ操作に」という依頼で1本化した。
+// 運営の出店管理・出店者マイページ・募集者の出店カレンダーも同じ部品を読む）。
+// この画面に固有なのは「マスの中身（金額・済・×・鍵）」と「押すと選ぶ／外す」だけ。
 //
 // この部品は「どの日が選べて、その日はいくらか」を受け取って並べるだけ。
 // 料金の決まり（形態ごと → 日程のその日 → 平日/土日祝 → 案件全体、最低保証）は
@@ -40,28 +42,16 @@ export type CalendarDay = {
   applied: boolean
 }
 
-// 曜日の色は運営の出店管理・出店者マイページのカレンダーと同じ（日=赤、土=青）
+// 曜日の文字。札と吹き出しの説明に使う（カレンダーの曜日の行は MonthGrid が出す）
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
-const DOW_COLOR = ['#DC2626', '#64748B', '#64748B', '#64748B', '#64748B', '#64748B', '#1D4ED8']
 
-// このサイトの色。オレンジは選択、茶色は金額（案件詳細と同じ使い分け）
-const ORANGE = '#F5A623'
+// このサイトの色。茶色は金額（案件詳細と同じ使い分け）。
+// 選択のオレンジは MonthGrid の既定（accent）に任せる
 const INK = '#1a1a1a'
 const BROWN = '#B45309'
 
 /** 'YYYY-MM-DD' → その月の 'YYYY-MM' */
 const monthOf = (date: string) => date.slice(0, 7)
-
-/** 'YYYY-MM' → 「2026年9月」 */
-const monthLabel = (m: string) => `${Number(m.slice(0, 4))}年${Number(m.slice(5, 7))}月`
-
-/** その月の日数。new Date の月末繰り上がりを使う（月は0起点） */
-const daysInMonth = (m: string) => new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate()
-
-/** その月の1日が何曜日か（0=日） */
-const firstDow = (m: string) => new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1).getDay()
-
-const pad2 = (n: number) => String(n).padStart(2, '0')
 
 export default function ApplyDateCalendar({
   days,
@@ -118,28 +108,35 @@ export default function ApplyDateCalendar({
   // 日程のある月だけを行き先にする。
   // 前後に無限に進めると、空の月を何度も送ることになるため
   // （案件の日程は1〜2か月に収まるが、年をまたぐものもある）
-  const months = useMemo(
-    () => Array.from(new Set(days.map(d => monthOf(d.date)))).sort(),
-    [days],
-  )
+  const monthList = useMemo(() => monthsOfDates(days.map(d => d.date)), [days])
   // 最初に出す月は「選べる日がいちばん早い月」。
   // 選べる日が1日も無い案件（日程が全部過ぎている、申込の上限より先しか無い）は、
   // いちばん新しい月を出す。先頭の月にすると、何年も前の月が開いたままになる
-  const startIndex = useMemo(() => {
+  const startMonth = useMemo(() => {
     // 日付順に見る。days の並びは募集者が日程を入れた順なので、
     // 配列の先頭から探すと「いちばん早い日」とは限らない
     const first = days.filter(d => !d.disabled && !d.applied)
       .reduce<string | null>((a, d) => (a == null || d.date < a ? d.date : a), null)
-    const i = first ? months.indexOf(monthOf(first)) : -1
-    return i >= 0 ? i : Math.max(0, months.length - 1)
-  }, [days, months])
-  // 出す月。利用者が月を送るまでは startIndex に従う（null のあいだ）。
-  // useState(startIndex) にすると、あとから days が変わっても初期値は変わらないため、
+    const ym = first ? monthOfDate(first) : null
+    if (ym && monthList.some(m => compareMonth(m, ym) === 0)) return ym
+    return monthList.length > 0 ? monthList[monthList.length - 1] : null
+  }, [days, monthList])
+  // 出す月。利用者が月を送るまでは startMonth に従う（picked が null のあいだ）。
+  // useState(startMonth) にすると、あとから days が変わっても初期値は変わらないため、
   // 申込済みの読み込み（myEntries）や形式の選び直しで選べる日がずれたときに、
   // 選べる日が1つも無い月を出したままになる
-  const [index, setIndex] = useState<number | null>(null)
-  const idx = Math.max(0, Math.min(index ?? startIndex, months.length - 1))
-  const month = months[idx] ?? ''
+  const [picked, setPicked] = useState<YearMonth | null>(null)
+  // 送られた月が日程の範囲から外れていたら、近い端に寄せる。
+  // MonthGrid の前後ボタンは minMonth / maxMonth で止めてあるが、
+  // 日程が入れ替わって今見ている月が範囲外になることがある
+  const month: YearMonth | null = (() => {
+    if (monthList.length === 0) return null
+    if (!picked) return startMonth
+    if (compareMonth(picked, monthList[0]) < 0) return monthList[0]
+    const last = monthList[monthList.length - 1]
+    if (compareMonth(picked, last) > 0) return last
+    return picked
+  })()
 
   const byDate = useMemo(() => {
     const m = new Map<string, CalendarDay>()
@@ -154,17 +151,9 @@ export default function ApplyDateCalendar({
   }, [days])
 
   if (!month) return null
+  const monthStr = monthKey(month)
 
-  const total = daysInMonth(month)
-  const lead = firstDow(month)
-  const cells: (CalendarDay | string | null)[] = []
-  for (let i = 0; i < lead; i++) cells.push(null)
-  for (let n = 1; n <= total; n++) {
-    const date = `${month}-${pad2(n)}`
-    cells.push(byDate.get(date) ?? date)
-  }
-
-  const monthDays = [...byDate.values()].filter(d => monthOf(d.date) === month)
+  const monthDays = [...byDate.values()].filter(d => monthOf(d.date) === monthStr)
   const selectableDates = monthDays.filter(d => !d.disabled && !d.applied).map(d => d.date)
   // 「当月の選択を解除」は、選べなくなった日も数に入れる。
   // 選べる日だけで数えると、選んだあとに選べなくなった日（日付が変わって過去日になった、
@@ -274,15 +263,23 @@ export default function ApplyDateCalendar({
     ? Array.from(new Set(days.map(d => d.applied ? 'すべて申込済み' : d.disabledReason).filter(Boolean)))
     : []
 
+  /**
+   * マスの吹き出しと読み上げに出す説明。曜日も入れる
+   * （形式によって出店できない曜日があるので、曜日が分からないと理由が伝わらない）
+   */
+  const labelOf = (c: CalendarDay) => {
+    const times = c.times.filter(Boolean).join('・')
+    const dow = DOW[new Date(Number(c.date.slice(0, 4)), Number(c.date.slice(5, 7)) - 1, Number(c.date.slice(8))).getDay()]
+    return [
+      `${c.date.replaceAll('-', '/')}（${dow}）${times ? '（' + times + '）' : ''}`,
+      canSeeFee ? c.amountText : '出店料はログイン後に表示',
+      c.applied ? '申込済み' : c.disabledReason,
+    ].filter(Boolean).join(' / ')
+  }
+
   // font: 'inherit' は必ず fontSize / fontWeight より前に置く。
   // CSS の font は一括指定なので、あとに書くと文字の大きさと太さを上書きしてしまう
   // （ボタンは既定でブラウザの書体になるため、書体だけは継承させたい）
-  const navBtn = (on: boolean) => ({
-    font: 'inherit', fontSize: '12px', fontWeight: 700, lineHeight: 1.4,
-    border: '1px solid #E5E7EB', background: on ? '#fff' : '#F8FAFC', color: on ? INK : '#CBD5E1',
-    borderRadius: '8px', padding: '6px 10px',
-    cursor: on ? 'pointer' : 'default',
-  })
   const subBtn = {
     font: 'inherit', fontSize: '12px', fontWeight: 700,
     border: '1px solid #E5C07B', background: '#FFFBEB', color: BROWN, borderRadius: '8px',
@@ -291,29 +288,6 @@ export default function ApplyDateCalendar({
 
   return (
     <div style={{ marginBottom: '14px' }}>
-      {/* 月送り。日程のある月だけを行き来する */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '6px' }}>
-        <button
-          type='button'
-          onClick={() => setIndex(Math.max(0, idx - 1))}
-          disabled={idx <= 0}
-          aria-label='前の月'
-          style={navBtn(idx > 0)}
-        >
-          ◀ 前の月
-        </button>
-        <div style={{ fontSize: '13.5px', fontWeight: 900, color: INK }}>{monthLabel(month)}</div>
-        <button
-          type='button'
-          onClick={() => setIndex(Math.min(months.length - 1, idx + 1))}
-          disabled={idx >= months.length - 1}
-          aria-label='次の月'
-          style={navBtn(idx < months.length - 1)}
-        >
-          次の月 ▶
-        </button>
-      </div>
-
       {/* 日数に下限がある案件は、カレンダーを触る前に伝える。
           あとから「1日では申し込めません」と出すより、先に言うほうが迷わない */}
       {(dayCounts.length > 0 || minDays > 1) && (
@@ -328,39 +302,33 @@ export default function ApplyDateCalendar({
         </div>
       )}
 
-      {/* 曜日の行。読み上げから隠さない。
-          この画面は「選んだ形式で出店できない曜日がある」ことが選択可否を決めるので、
-          曜日が読まれないと、なぜ選べないのかが音声だけでは分からなくなる */}
-      <div className='cal-grid'>
-        {DOW.map((d, i) => <div key={d} className='cal-dow' style={{ color: DOW_COLOR[i] }}>{d}</div>)}
-      </div>
-
-      <div className='cal-grid' role='group' aria-label={`${monthLabel(month)}の出店希望日`}>
-        {cells.map((c, i) => {
-          if (c === null) return <div key={'b' + i} />
+      {/* 月の見出し・月送り・曜日の行・マスの枠は共通部品。
+          「今月」は出さない。この画面の行き先は案件の日程がある月だけで、
+          今月に日程が無い案件では押しても何も起きないボタンになる */}
+      <MonthGrid
+        month={month}
+        onMonthChange={setPicked}
+        minMonth={monthList[0]}
+        maxMonth={monthList[monthList.length - 1]}
+        size='compact'
+        showThisMonth={false}
+        cellOf={date => {
+          const c = byDate.get(date)
           // 日程に入っていない日＝募集対象外。斜線を引いて、押せないことを示す
-          if (typeof c === 'string') {
-            return (
-              <div
-                key={c}
-                className='cal-cell'
-                style={{
-                  color: '#CBD5E1', background: '#F8FAFC',
-                  backgroundImage: 'linear-gradient(to top right, transparent 47%, #E2E8F0 47%, #E2E8F0 53%, transparent 53%)',
-                }}
-                title='この日は募集していません'
-              >
-                <span className='cal-num' style={{ fontWeight: 400 }}>{Number(c.slice(8))}</span>
-              </div>
-            )
+          if (!c) return { disabled: true, slashed: true, label: 'この日は募集していません' }
+          return {
+            selected: selected.includes(date),
+            disabled: c.disabled || c.applied,
+            label: labelOf(c),
           }
-          const day = Number(c.date.slice(8))
-          const on = selected.includes(c.date)
-          const off = c.disabled || c.applied
-          const times = c.times.filter(Boolean).join('・')
-          // 読み上げと吹き出しに出す説明。曜日も入れる
-          // （形式によって出店できない曜日があるので、曜日が分からないと理由が伝わらない）
-          const dow = DOW[new Date(Number(c.date.slice(0, 4)), Number(c.date.slice(5, 7)) - 1, day).getDay()]
+        }}
+        onPickDate={date => {
+          const c = byDate.get(date)
+          if (c && !c.disabled && !c.applied) onToggle(date)
+        }}
+        renderCell={date => {
+          const c = byDate.get(date)
+          if (!c) return null
           // マスに出す額。マスは幅34〜45pxしかないので、長いときは
           //   1) まず印（最・＋）を落とす（意味は下の札と凡例に出る）
           //   2) それでも長ければ文字を一段小さくする（.cal-amt-sm）
@@ -368,43 +336,14 @@ export default function ApplyDateCalendar({
           const yen = c.amount != null ? c.amount.toLocaleString() : c.amountNote
           const withMark = c.amount != null ? yen + c.amountMark : yen
           const amt = withMark.length >= 7 ? yen : withMark
-          const title = [
-            `${c.date.replaceAll('-', '/')}（${dow}）${times ? '（' + times + '）' : ''}`,
-            canSeeFee ? c.amountText : '出店料はログイン後に表示',
-            c.applied ? '申込済み' : c.disabledReason,
-          ].filter(Boolean).join(' / ')
-          return (
-            <button
-              key={c.date}
-              type='button'
-              disabled={off}
-              onClick={() => onToggle(c.date)}
-              aria-pressed={on}
-              aria-label={title}
-              title={title}
-              className='cal-cell'
-              style={{
-                border: on ? `2px solid ${ORANGE}` : '1px solid #E5E7EB',
-                background: off ? '#FAFAFA' : (on ? '#FFFBEB' : '#fff'),
-                color: off ? '#AAA' : '#1a1a1a',
-                cursor: off ? 'default' : 'pointer',
-              }}
-            >
-              <span className='cal-num'>{day}</span>
-              {/* 金額はログイン後だけ。未ログインには鍵を出す（一覧・詳細と同じ扱い） */}
-              {c.applied
-                ? <span className='cal-mark' style={{ color: '#16A34A', fontWeight: 700 }}>済</span>
-                : c.disabled
-                  ? <span className='cal-mark'>×</span>
-                  : canSeeFee
-                    ? <span className={'cal-amt' + (amt.length >= 7 ? ' cal-amt-sm' : '')} style={{ color: BROWN }}>{amt}</span>
-                    : feeState === 'login'
-                      ? <span className='cal-mark' style={{ color: '#CBD5E1' }}>🔒</span>
-                      : null}
-            </button>
-          )
-        })}
-      </div>
+          // 金額はログイン後だけ。未ログインには鍵を出す（一覧・詳細と同じ扱い）
+          if (c.applied) return <span className='cal-mark' style={{ color: '#16A34A', fontWeight: 700 }}>済</span>
+          if (c.disabled) return <span className='cal-mark'>×</span>
+          if (canSeeFee) return <span className={'cal-amt' + (amt.length >= 7 ? ' cal-amt-sm' : '')} style={{ color: BROWN }}>{amt}</span>
+          if (feeState === 'login') return <span className='cal-mark' style={{ color: '#CBD5E1' }}>🔒</span>
+          return null
+        }}
+      />
 
       {/* 選べる日が1日も無いとき、なぜ選べないのかを書く。
           × と斜線だけのカレンダーが出ていると、画面の不具合に見える */}
@@ -417,7 +356,7 @@ export default function ApplyDateCalendar({
 
       {/* 日数に下限がある案件は、日程が月をまたぐこともあるので
           「日程ぜんぶ」の1押しも用意する（当月ぶんだけでは下限に届かないことがある） */}
-      {(dayCounts.length > 0 || minDays > 1) && months.length > 0 && (
+      {(dayCounts.length > 0 || minDays > 1) && monthList.length > 0 && (
         <div style={{ marginTop: '8px' }}>
           <button
             type='button'

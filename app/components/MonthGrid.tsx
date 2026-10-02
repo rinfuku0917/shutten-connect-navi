@@ -37,6 +37,13 @@ export type MonthGridCell = {
   disabled?: boolean
   /** 中身がある日。背景をわずかに敷く */
   filled?: boolean
+  /**
+   * 斜線を引く（「この日はそもそも対象外」を押せないのと区別して示す）。
+   * 申込の画面で、案件の日程に入っていない日に使う。
+   * disabled だけだと「選べない日」と見分けが付かず、凡例
+   * 「斜線の日は募集対象外／× は選べない日」が成り立たなくなる
+   */
+  slashed?: boolean
   /** 読み上げと長押しに出す説明 */
   label?: string
 }
@@ -147,7 +154,7 @@ export default function MonthGrid({
               key={c.date}
               type='button'
               disabled={off || !onPickDate}
-              aria-pressed={st.selected ? true : undefined}
+              aria-pressed={typeof st.selected === 'boolean' ? st.selected : undefined}
               aria-label={st.label || `${month.m + 1}月${c.day}日`}
               title={st.label}
               onClick={() => onPickDate?.(c.date)}
@@ -155,15 +162,21 @@ export default function MonthGrid({
               style={{
                 minHeight: minH + 'px',
                 border,
-                background: off ? '#F8FAFC' : st.filled ? '#F8FDF9' : '#fff',
+                // 選択中はうすく色を敷く。枠線だけだと、スマホで押した日が分かりにくい
+                background: st.selected && !off ? '#FFFBEB'
+                  : off ? '#F8FAFC' : st.filled ? '#F8FDF9' : '#fff',
+                backgroundImage: st.slashed
+                  ? 'linear-gradient(to top right, transparent 47%, #E2E8F0 47%, #E2E8F0 53%, transparent 53%)'
+                  : undefined,
                 cursor: off || !onPickDate ? 'default' : 'pointer',
                 opacity: off ? 0.55 : 1,
               }}
             >
               <span className='mg-num' style={{
-                color: isToday ? todayColor
-                  : dowColors ? DOW_COLORS[c.dow] : '#334155',
-                fontWeight: isToday ? 900 : 700,
+                color: st.slashed ? '#CBD5E1'
+                  : isToday ? todayColor
+                    : dowColors ? DOW_COLORS[c.dow] : '#334155',
+                fontWeight: st.slashed ? 400 : isToday ? 900 : 700,
               }}>{c.day}</span>
               {renderCell?.(c.date)}
             </button>
