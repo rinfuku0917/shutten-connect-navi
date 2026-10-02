@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import MessageAttachment from '../../components/MessageAttachment'
 import ChatComposer, { ChatBubble, chatTime } from '../../components/ChatComposer'
+import MonthGrid from '../../components/MonthGrid'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Notice from '../../components/Notice'
 import Link from 'next/link'
@@ -1637,11 +1638,7 @@ export default function SellerDashboard() {
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '16px' }}>
                 {(() => {
                   const { y, m } = calMonth
-                  const shift = (n: number) => { const d = new Date(y, m + n, 1); setCalMonth({ y: d.getFullYear(), m: d.getMonth() }) }
-                  const firstDow = new Date(y, m, 1).getDay()
-                  const daysInMonth = new Date(y, m + 1, 0).getDate()
                   const pad = (n: number) => String(n).padStart(2, '0')
-                  const keyOf = (d: number) => `${y}-${pad(m + 1)}-${pad(d)}`
                   const today = todayStr()
 
                   // 申込を日付ごとにまとめる。同じ日に複数件あればすべて表示する
@@ -1653,65 +1650,61 @@ export default function SellerDashboard() {
                   }
                   const monthCount = myApplies.filter(a => a.rawDate && a.rawDate.startsWith(`${y}-${pad(m + 1)}`)).length
 
+                  // 表示中の月に無くても他の月にあるなら、その月へ移動できるようにする
+                  const others = myApplies.map(a => a.rawDate).filter(Boolean).sort() as string[]
+                  const jump = (() => {
+                    if (monthCount > 0 || others.length === 0) return null
+                    const cur = `${y}-${pad(m + 1)}`
+                    const next = others.find(d => d.slice(0, 7) > cur) || others[others.length - 1]
+                    const [ny, nm] = next.split('-')
+                    return { y: parseInt(ny, 10), m: parseInt(nm, 10) - 1, count: others.length }
+                  })()
+
                   return (
                     <>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <button onClick={() => shift(-1)} aria-label='前の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>‹</button>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{ fontWeight: '700', fontSize: '16px' }}>{y}年{m + 1}月</div>
-                          <button onClick={() => { const d = new Date(); setCalMonth({ y: d.getFullYear(), m: d.getMonth() }) }} style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '3px 10px', background: '#fff', cursor: 'pointer', fontSize: '11px', color: '#64748B' }}>今月</button>
-                        </div>
-                        <button onClick={() => shift(1)} aria-label='次の月' style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 12px', background: '#fff', cursor: 'pointer', fontSize: '14px' }}>›</button>
-                      </div>
-                      <div style={{ textAlign: 'center', fontSize: '11px', color: '#64748B', marginBottom: '12px' }}>
-                        {monthCount > 0 ? `この月の申込 ${monthCount}件（日付をクリックすると内容を確認できます）` : 'この月の申込はありません'}
-                      </div>
-                      {monthCount === 0 && (() => {
-                        // 表示中の月に無くても他の月にあるなら、その月へ移動できるようにする
-                        const others = myApplies.map(a => a.rawDate).filter(Boolean).sort() as string[]
-                        if (others.length === 0) {
-                          return appliesError ? null : (
-                            <div style={{ textAlign: 'center', fontSize: '11px', color: '#94A3B8', marginBottom: '12px' }}>
-                              このアカウントにはまだ申込がありません。
-                            </div>
-                          )
-                        }
-                        const cur = `${y}-${pad(m + 1)}`
-                        const next = others.find(d => d.slice(0, 7) > cur) || others[others.length - 1]
-                        const [ny, nm] = next.split('-')
-                        return (
-                          <div style={{ textAlign: 'center', marginBottom: '12px' }}>
-                            <button onClick={() => setCalMonth({ y: parseInt(ny, 10), m: parseInt(nm, 10) - 1 })}
-                              style={{ border: '1px solid #FDE68A', background: '#FFFBEB', color: '#B45309', borderRadius: '999px', padding: '5px 14px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
-                              他の月に{others.length}件の申込があります（{parseInt(ny, 10)}年{parseInt(nm, 10)}月へ移動）
-                            </button>
-                          </div>
-                        )
-                      })()}
-                      {appliesError && (
-                        <div style={{ textAlign: 'center', fontSize: '11px', color: '#DC2626', marginBottom: '12px' }}>{appliesError}</div>
-                      )}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '6px' }}>
-                        {['日','月','火','水','木','金','土'].map((d, i) => (
-                          <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: '700', color: i === 0 ? '#DC2626' : i === 6 ? '#1D4ED8' : '#64748B', padding: '6px 0' }}>{d}</div>
-                        ))}
-                        {Array.from({ length: firstDow }).map((_, i) => <div key={'pad' + i} style={{ minHeight: '60px' }}></div>)}
-                        {Array.from({ length: daysInMonth }).map((_, i) => {
-                          const d = i + 1
-                          const ds = keyOf(d)
+                      {/* 月の見出し・月送り・曜日の行・マスの枠は共通部品に任せる
+                          （app/components/MonthGrid.tsx）。運営の出店管理・
+                          申込の画面と同じ見た目・同じ操作にするため
+                          （2026-10-02 の運営からの依頼）。
+                          マスの中身（状態・案件名・売上）だけ、ここで描く */}
+                      <MonthGrid
+                        month={calMonth}
+                        onMonthChange={setCalMonth}
+                        today={today}
+                        note={<>
+                          {monthCount > 0 ? `この月の申込 ${monthCount}件（日付を押すと内容が出ます）` : 'この月の申込はありません'}
+                          {jump && (
+                            <><br />
+                              <button onClick={() => setCalMonth({ y: jump.y, m: jump.m })}
+                                style={{ border: '1px solid #FDE68A', background: '#FFFBEB', color: '#B45309', borderRadius: '999px', padding: '5px 14px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', marginTop: '6px', fontFamily: 'inherit' }}>
+                                他の月に{jump.count}件の申込があります（{jump.y}年{jump.m + 1}月へ移動）
+                              </button>
+                            </>
+                          )}
+                          {monthCount === 0 && others.length === 0 && !appliesError && (
+                            <><br /><span style={{ color: '#94A3B8' }}>このアカウントにはまだ申込がありません。</span></>
+                          )}
+                          {appliesError && <><br /><span style={{ color: '#DC2626' }}>{appliesError}</span></>}
+                        </>}
+                        cellOf={ds => {
+                          const items = byDate.get(ds) || []
+                          const hasSale = calSales.some(x => x.sale_date === ds)
+                          return {
+                            selected: ds === calPicked,
+                            // 申込も売上も無い日は押せない（開くものが無いため）
+                            disabled: items.length === 0 && !hasSale,
+                            filled: items.length > 0 || hasSale,
+                            label: items.length ? items.map(a => `${a.status}：${a.place}`).join('\n') : undefined,
+                          }
+                        }}
+                        renderCell={ds => {
                           const items = byDate.get(ds) || []
                           const main = items.find(a => a.status === '承認済') || items[0]
-                          const dow = (firstDow + i) % 7
-                          const isToday = ds === today
-                          // その日に報告済みの売上があれば、マスにも金額を出す
                           const dayRev = calSales.filter(x => x.sale_date === ds).reduce((t, x) => t + x.revenue, 0)
                           const hasSale = calSales.some(x => x.sale_date === ds)
-                          const tappable = items.length > 0 || hasSale
+                          if (items.length === 0 && !hasSale) return null
                           return (
-                            <div key={d} title={items.length ? items.map(a => `${a.status}：${a.place}`).join('\n') : undefined}
-                              onClick={() => { if (tappable) setCalPicked(calPicked === ds ? null : ds) }}
-                              style={{ minHeight: '60px', borderRadius: '8px', border: calPicked === ds ? '2px solid #1D4ED8' : (isToday ? '2px solid #F5A623' : `1px solid ${main ? main.statusColor : '#E2E8F0'}`), background: main ? main.statusBg : '#fff', padding: '5px', overflow: 'hidden', cursor: tappable ? 'pointer' : 'default' }}>
-                              <div style={{ fontSize: '12px', fontWeight: isToday ? '800' : '600', color: dow === 0 ? '#DC2626' : dow === 6 ? '#1D4ED8' : '#333', marginBottom: '3px' }}>{d}</div>
+                            <>
                               {/* マスの中の文字は9px。パソコンでは読めるが、
                                   スマホでは7列を等幅で割るため1マスに文字が入る幅が
                                   26px程度しかなく、2〜3文字で切れて読めない。
@@ -1719,24 +1712,23 @@ export default function SellerDashboard() {
                                   下の .cal-cell-count で件数と売上の有無だけを出す。
                                   中身は日付を押すと下に開く一覧（14px）で読める */}
                               {items.slice(0, 2).map(a => (
-                                <div key={a.id} className='cal-cell-shop' style={{ fontSize: '9px', fontWeight: '700', color: a.statusColor, lineHeight: 1.3, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <span key={a.id} className='cal-cell-shop' style={{ fontSize: '9px', fontWeight: '700', color: a.statusColor, lineHeight: 1.3, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {a.status}<br />{a.place}
-                                </div>
+                                </span>
                               ))}
-                              {items.length > 2 && <div className='cal-cell-shop' style={{ fontSize: '9px', color: '#64748B' }}>ほか{items.length - 2}件</div>}
+                              {items.length > 2 && <span className='cal-cell-shop' style={{ fontSize: '9px', color: '#64748B' }}>ほか{items.length - 2}件</span>}
                               {hasSale && (
-                                <div className='cal-cell-shop' style={{ fontSize: '9px', fontWeight: 800, color: '#16A34A', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>¥{dayRev.toLocaleString()}</div>
+                                <span className='cal-cell-shop' style={{ fontSize: '9px', fontWeight: 800, color: '#16A34A', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>¥{dayRev.toLocaleString()}</span>
                               )}
-                              {tappable && (
-                                <div className='cal-cell-count' aria-hidden='true'>
-                                  {items.length > 0 && <span style={{ color: main ? main.statusColor : '#64748B' }}>●{items.length}</span>}
-                                  {hasSale && <span style={{ color: '#16A34A', marginLeft: items.length > 0 ? '3px' : 0 }}>¥</span>}
-                                </div>
-                              )}
-                            </div>
+                              <span className='cal-cell-count' aria-hidden='true'>
+                                {items.length > 0 && <span style={{ color: main ? main.statusColor : '#64748B' }}>●{items.length}</span>}
+                                {hasSale && <span style={{ color: '#16A34A', marginLeft: items.length > 0 ? '3px' : 0 }}>¥</span>}
+                              </span>
+                            </>
                           )
-                        })}
-                      </div>
+                        }}
+                        onPickDate={ds => setCalPicked(calPicked === ds ? null : ds)}
+                      />
                     </>
                   )
                 })()}
