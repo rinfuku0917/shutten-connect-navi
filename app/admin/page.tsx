@@ -24,6 +24,7 @@ import SheetSyncPanel from './SheetSyncPanel'
 import { sourceLabel, historyLabel } from '../lib/signupSource'
 import ScheduleCalendar from './ScheduleCalendar'
 import PasswordNotice from './PasswordNotice'
+import SecurityNotice from './SecurityNotice'
 import MailTemplates from './MailTemplates'
 import NotifyRecipients from './NotifyRecipients'
 import SubmissionPanel from '../components/SubmissionPanel'
@@ -3227,6 +3228,10 @@ const previewDoc = async (fileUrl: string) => {
 
               {/* 旧サイトからの移行組へ、パスワード設定のご案内を送る。
                   本物の会員へメールが飛ぶため、押した回数だけ送る作りにしている */}
+              {/* 弊社を名乗る偽メールへの注意喚起を、会員ぜんぶへ送る。
+                  本物の会員へ1,400通を超えるメールが飛ぶため、
+                  「確かめる」→「400件ずつ送る」の2段にしている（2026-10-02） */}
+              <SecurityNotice onEditMail={openMailTemplate} />
               <PasswordNotice onEditMail={openMailTemplate} />
               </>}
 
