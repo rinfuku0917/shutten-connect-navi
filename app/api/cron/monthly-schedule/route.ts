@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyCronCaller } from '../../../lib/cronAuth'
+import { MAX_SCHEDULE_DAYS } from '../../../lib/scheduleLimits'
 import { sendAdminMail } from '../../../lib/notifyRecipients'
 import { SITE_URL } from '../../../lib/seo'
 
@@ -28,7 +29,8 @@ import { SITE_URL } from '../../../lib/seo'
 export const maxDuration = 300
 
 const FROM_EMAIL = 'noreply@mail.connect-navi.com'
-const MAX_DAYS = 31
+// 上限は app/lib/scheduleLimits.ts が唯一の正（入力画面と同じ数を使う）
+const MAX_DAYS = MAX_SCHEDULE_DAYS
 
 type Day = { date: string; start?: string; end?: string; placeFee?: number; companyFee?: number }
 
@@ -119,7 +121,7 @@ export async function GET(req: Request) {
       if (add.length === 0) {
         report.push({
           title: p.title || '(案件名なし)', added: 0,
-          note: room === 0 ? '日程が上限（31日）に達しているため見送り' : '足す日がありませんでした',
+          note: room === 0 ? `日程が上限（${MAX_DAYS}日）に達しているため見送り` : '足す日がありませんでした',
         })
         continue
       }

@@ -9,6 +9,7 @@ import DowPresets from '../../../../components/DowPresets'
 import { geocodeAddress } from '../../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../../lib/categories'
 import { toYen, hasPerDayFee, buildMinGuaranteeJson, type FeeSource, perEventConflict, allowedFormats, hasFormatFees, dowMismatch, DOW_LABELS, sortedDows } from '../../../../lib/placeFee'
+import { MAX_SCHEDULE_DAYS } from '../../../../lib/scheduleLimits'
 import { isMissingColumn } from '../../../../lib/optionalColumn'
 import PlaceImagePicker from '../../../../components/PlaceImagePicker'
 
@@ -91,7 +92,7 @@ function EditPlacePageInner() {
     }
     return {...d,[k]:v}
   }))
-  const addDay = () => setSchedule(prev=>prev.length<31 ? [...prev,{date:'',start:'選択してください',end:'選択してください'}] : prev)
+  const addDay = () => setSchedule(prev=>prev.length<MAX_SCHEDULE_DAYS ? [...prev,{date:'',start:'選択してください',end:'選択してください'}] : prev)
   const removeDay = (i:number) => setSchedule(prev=>prev.filter((_,idx)=>idx!==i))
 
   // ===== 日程をまとめて入れる =====
@@ -113,7 +114,7 @@ function EditPlacePageInner() {
   // その1日ぶんを、翌日の日付でうしろに差し込む。
   // 連続した日程を作るとき、日付だけ選び直せば済む
   const duplicateDay = (i:number) => setSchedule(prev=>{
-    if(prev.length>=31) return prev
+    if(prev.length>=MAX_SCHEDULE_DAYS) return prev
     const src = prev[i]
     const copy = { ...src, date: src.date ? addDays(src.date, 1) : '' }
     return [...prev.slice(0,i+1), copy, ...prev.slice(i+1)]
@@ -206,8 +207,9 @@ function EditPlacePageInner() {
     // すでに入っている日付は入れ直さない（同じ日が二重に並ぶのを防ぐ）
     const already = new Set(schedule.map(d=>d.date).filter(Boolean))
     let cur = bulkFrom
-    // 上限は31日ぶん。それ以上さかのぼらないよう、回す回数にも上限を置く
-    for(let guard=0; guard<400 && cur <= bulkTo; guard++){
+    // 上限は MAX_SCHEDULE_DAYS 日ぶん（app/lib/scheduleLimits.ts）。
+    // それ以上さかのぼらないよう、回す回数にも上限を置く
+    for(let guard=0; guard<MAX_SCHEDULE_DAYS*5 && cur <= bulkTo; guard++){
       const [y,m,d] = cur.split('-').map(Number)
       const dow = new Date(y, m-1, d).getDay()
       if(bulkDows.includes(dow) && !already.has(cur)) out.push(cur)
@@ -223,7 +225,7 @@ function EditPlacePageInner() {
     if(dates.length===0) return
     setSchedule(prev=>{
       const kept = prev.filter(d=>d.date)
-      const room = 31 - kept.length
+      const room = MAX_SCHEDULE_DAYS - kept.length
       const num = (v:string) => v.trim() === '' ? undefined : Number(v)
       const wdPf = num(bulkPlaceFee), wdCf = num(bulkCompanyFee)
       const wePf = bulkSplit ? num(bulkWePlaceFee) : wdPf
@@ -750,7 +752,7 @@ async function refreshPublicPages(placeId?: string) {
                         : bulkDates.length===0
                           ? '選んだ条件に当てはまる日がありません。曜日か期間をご確認ください。'
                           : <><strong>{bulkDates.length}日ぶん</strong>を追加します（{bulkDates[0].replace(/-/g,'/')} 〜 {bulkDates[bulkDates.length-1].replace(/-/g,'/')}）。
-                              {bulkDates.length > 31 && <span style={{color:'#DC2626'}}><br />上限は31日までです。先頭から31日ぶんだけ入ります。</span>}
+                              {bulkDates.length > MAX_SCHEDULE_DAYS && <span style={{color:'#DC2626'}}><br />上限は{MAX_SCHEDULE_DAYS}日までです。先頭から{MAX_SCHEDULE_DAYS}日ぶんだけ入ります。</span>}
                               <br /><span style={{color:'#94A3B8'}}>すでに入れてある日付は飛ばします。日付が空の行は置き換わります。</span></>}
                     </div>
 
@@ -858,7 +860,7 @@ async function refreshPublicPages(placeId?: string) {
 
                     <div style={{fontSize:'11px',color:'#64748B',marginTop:'8px',lineHeight:1.8}}>
                       ・募集を終了した案件には足しません。<br />
-                      ・日程の上限は31日です。足す前に、終わった日は日程から外れます。<br />
+                      ・日程の上限は{MAX_SCHEDULE_DAYS}日です。足す前に、終わった日は日程から外れます。<br />
                       ・ここの料金は、足す日すべてに同じ額が入ります。上の「形態ごとの出店料と条件」に金額を入れてある形態は、そちらが優先されます（平日と土日祝を分けたい場合は、上で分けて、ここは空欄で構いません）。
                     </div>
 
