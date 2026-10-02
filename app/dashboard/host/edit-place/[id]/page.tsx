@@ -8,6 +8,7 @@ import FormatFeesEditor, { type FormatFeesValue } from '../../../../components/F
 import DowPresets from '../../../../components/DowPresets'
 import { geocodeAddress } from '../../../../lib/geocode'
 import { PLACE_CATEGORIES } from '../../../../lib/categories'
+import { normalizeSlots, slotsText } from '../../../../lib/placeSlots'
 import { toYen, hasPerDayFee, buildMinGuaranteeJson, type FeeSource, perEventConflict, allowedFormats, hasFormatFees, dowMismatch, DOW_LABELS, sortedDows } from '../../../../lib/placeFee'
 import { MAX_SCHEDULE_DAYS } from '../../../../lib/scheduleLimits'
 import { isMissingColumn } from '../../../../lib/optionalColumn'
@@ -67,7 +68,7 @@ function EditPlacePageInner() {
   const [form, setForm] = useState({
     type:'event', title:'', summary:'', deadline:'', image:null,
     prefecture:'', address:'', mapUrl:'', 募集内容:'',
-    fee:'', feeFixed:'', feePct:'', feeUnit:'per_day', minApplyDays:'', feeMinWeekday:'', feeMinWeekend:'', reminderDays:'7', applyWithinMonths:'', visitors:'', loadIn:'', loadOut:'',
+    fee:'', feeFixed:'', feePct:'', feeUnit:'per_day', minApplyDays:'', feeMinWeekday:'', feeMinWeekend:'', reminderDays:'7', slotsMin:'', slotsMax:'', applyWithinMonths:'', visitors:'', loadIn:'', loadOut:'',
     menuWant:'', menuNG:'', menuOther:'', power:'yes', gas:'yes', water:'yes',
     trash:'self', eatSpace:'yes', location:'outdoor', heightLimit:'no', heightValue:'',
     rain:'go', rainNote:'', history:'no', parking:'yes', brand:'', notes:''
@@ -283,6 +284,11 @@ function EditPlacePageInner() {
         feeMinWeekend: (data as any).min_guarantee?.weekend?.companyFee != null ? String((data as any).min_guarantee.weekend.companyFee) : '',
         reminderDays: data.reminder_days != null ? String(data.reminder_days) : '7',
         minApplyDays: data.min_apply_days != null && data.min_apply_days > 1 ? String(data.min_apply_days) : '',
+        // 1日あたりの募集台数。列がまだ無い環境では undefined になるだけで、空欄として出る
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        slotsMin: (data as any).slots_per_day_min != null ? String((data as any).slots_per_day_min) : '',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        slotsMax: (data as any).slots_per_day_max != null ? String((data as any).slots_per_day_max) : '',
         applyWithinMonths: data.apply_within_months != null ? String(data.apply_within_months) : '',
       }))
       // 詳細項目を復元する（未保存の案件は初期値のまま）
@@ -402,6 +408,11 @@ function EditPlacePageInner() {
       longitude: geo?.lon ?? null,
       place_type: form.type,
       ...buildFeeColumns(form),
+      // 1日あたりの募集台数。下限・上限に整えてから保存する（app/lib/placeSlots.ts）
+      ...(() => {
+        const { min, max } = normalizeSlots(form.slotsMin, form.slotsMax)
+        return { slots_per_day_min: min, slots_per_day_max: max }
+      })(),
       // 最低出店日数。空・0・1 は「1日から」なので null にそろえる
       min_apply_days: (() => {
         const n = parseInt(form.minApplyDays, 10)
@@ -1051,6 +1062,29 @@ async function refreshPublicPages(placeId?: string) {
                 return '例：売上30,000円のとき、この設定分は約' + total.toLocaleString() + '円です（税抜換算8%）。施設提供者へお渡しする分がある場合は、運営が別途加算します。'
               })()}
             </div>
+            </div>
+
+            {/* 1日あたりの募集台数（app/lib/placeSlots.ts）。
+                以前は台数を入れる欄がこの画面に無く、案件詳細には列の既定値の「5台」が出ていた。
+                5日間の案件で「1日5台で合計25台ですか」と問い合わせが来たため（2026-10-02）、
+                1日あたりの数として入れてもらい、「1日あたり3〜5台」の形で出す。
+                空欄なら案件詳細に台数を出さない。
+                入力は止めない（大小が逆でも、読む側で入れ替える） */}
+            <div style={{marginBottom:'20px'}}>
+              <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>1日あたりの募集台数</label>
+              <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginTop:'8px'}}>
+                <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>1日あたり</span>
+                <input inputMode='numeric' aria-label='1日あたりの募集台数' value={form.slotsMin} onChange={e=>set('slotsMin',e.target.value)} placeholder='例：1' style={{...inputStyle,width:'88px',marginTop:0}}/>
+                <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>台 〜</span>
+                <input inputMode='numeric' aria-label='1日あたりの募集台数の上限（幅があるときだけ）' value={form.slotsMax} onChange={e=>set('slotsMax',e.target.value)} placeholder='空欄可' style={{...inputStyle,width:'88px',marginTop:0}}/>
+                <span style={{fontSize:'14px',color:'#555',whiteSpace:'nowrap'}}>台</span>
+              </div>
+              <div style={{fontSize:'12px',color:'#64748B',marginTop:'6px',lineHeight:1.8}}>
+                {slotsText(form.slotsMin, form.slotsMax)
+                  ? <>出店者の画面には「<strong style={{color:'#B45309'}}>{slotsText(form.slotsMin, form.slotsMax)}</strong>」と出ます。</>
+                  : <>空欄のときは、出店者の画面に台数を出しません。</>}
+                日によって違うときは「3 〜 5」のように幅で入れてください。1台だけなら左の欄だけで構いません。
+              </div>
             </div>
 
             <div style={{marginBottom:'20px'}}>

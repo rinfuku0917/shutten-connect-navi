@@ -129,3 +129,29 @@ export function monthsOfDates(dates: string[]): YearMonth[] {
     return { y, m: m - 1 }
   })
 }
+
+/**
+ * 月の一覧（古い順）の中で、いまの月から next の向きへ進んだときに止まる月。
+ *
+ * MonthGrid は1か月ずつ送ってくる。申込の画面は日程のある月だけを行き先にするので、
+ * 日程が飛び飛びの案件（10月と12月だけ、など）では、あいだの月を飛ばす。
+ * 進む先に月が無ければ、端の月に留まる。
+ */
+export function stepToListedMonth(list: YearMonth[], current: YearMonth, next: YearMonth): YearMonth {
+  if (list.length === 0) return current
+  const dir = compareMonth(next, current)
+  if (dir > 0) return list.find(m => compareMonth(m, next) >= 0) ?? list[list.length - 1]
+  if (dir < 0) return [...list].reverse().find(m => compareMonth(m, next) <= 0) ?? list[0]
+  return current
+}
+
+/**
+ * 月の一覧に無い月を、一覧にある近い月へ寄せる（後ろ優先。無ければ最後の月）。
+ * 一覧が空なら null。
+ */
+export function snapToListedMonth(list: YearMonth[], ym: YearMonth): YearMonth | null {
+  if (list.length === 0) return null
+  if (list.some(m => compareMonth(m, ym) === 0)) return ym
+  return list.find(m => compareMonth(m, ym) > 0) ?? list[list.length - 1]
+}
+

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { normalizeSlots } from '../../../lib/placeSlots'
 import { getAdminClient, requireAdmin, serverConfigResponse, type AdminClient } from '../../../lib/apiAuth'
 import { verifyCronCaller, looksLikeCronKeyCall } from '../../../lib/cronAuth'
 
@@ -71,7 +72,14 @@ export async function POST(req: Request) {
       open_time: place.open_time || null,
       close_time: place.close_time || null,
       fee: place.fee || null,
-      max_slots: num(place.max_slots),
+      // 1日あたりの募集台数。呼び出し側で整えてあっても、ここでもう一度整える
+      // （この入口は列を1つずつ書き出しているので、足さないと黙って捨てられる）。
+      // max_slots（最大枠数）は書かない。出店者に見せなくなったため
+      // （app/lib/placeSlots.ts）。列の既定値 5 も外してある
+      ...(() => {
+        const { min, max } = normalizeSlots(place.slots_per_day_min, place.slots_per_day_max)
+        return { slots_per_day_min: min, slots_per_day_max: max }
+      })(),
       reminder_days: num(place.reminder_days) ?? 7,
       image_url: place.image_url || null,
       images: Array.isArray(place.images) ? place.images : [],

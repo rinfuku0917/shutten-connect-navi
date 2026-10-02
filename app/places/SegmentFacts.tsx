@@ -6,8 +6,9 @@ import type { SegmentFacts as Facts } from './segmentData'
 //
 // 出さないもの:
 //   ・出店料（金額）。集計値も個別の額も出さない。segmentData.ts が列を読んでいない
-//   ・1回の募集枠の内訳。max_slots は289件中261件が既定値の5台で分布にならないので、
-//     内訳ではなく1文にまとめる（11枚に同じ1行が並ぶのを避ける）
+//   ・募集台数の内訳。1日あたりの台数（slots_per_day_min / max）が入っている案件だけを
+//     数えて1文にする。以前は max_slots を数えていたが、290件中262件が列の既定値の 5 で、
+//     入力されていない値から「複数台を受け入れる会場が中心」と書いていた（2026-10-02 に直した）
 //   ・雨天・ごみ・場所（屋外/屋内）。140件中139〜140件が同じ答えでほぼ定数なので、
 //     内訳の形にしない（placeFacts.mjs の DETAIL_FLAGS で show:false にしてある）
 //
@@ -31,10 +32,13 @@ export default function SegmentFacts({ name, facts }: { name: string; facts: Fac
       <h3 style={H3}>出店形態</h3>
       <p className='jp-text' style={P}>
         掲載{facts.total}件のうち、{join(facts.byType)}です。
+        {/* 母数（台数が入っている件数）を必ず書く。掲載合計とは違うため。
+            「中心」などの評価の語は付けない（数えた事実だけを書く）。
+            「募集しています」とも書かない。掲載には募集を終えた案件も入っている */}
         {facts.slots.counted > 0 && (
           <>
-            {' '}1回の募集で複数台を受け入れる会場が中心で、募集枠が入っている{facts.slots.counted}件のうち
-            {facts.slots.multi}件が2台以上です。
+            {' '}1日あたりの募集台数が入っている{facts.slots.counted}件のうち、
+            {facts.slots.multi}件が1日2台以上の募集です。
           </>
         )}
       </p>

@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { PLACE_CATEGORIES } from '../lib/categories'
+import { normalizeSlots } from '../lib/placeSlots'
 import { cityOf, dowsOf, placeTypeLabel, DOW, WEEKDAY_CHARS, DETAIL_FLAGS } from '../lib/placeFacts.mjs'
 import type { Segment } from './segments'
 
@@ -40,13 +41,15 @@ type Row = {
   open_days: unknown
   schedule: unknown
   details: Record<string, string> | null
-  max_slots: number | null
+  /** 1日あたりの募集台数（app/lib/placeSlots.ts）。運営・募集者が入れた案件にだけ入る */
+  slots_per_day_min: number | null
+  slots_per_day_max: number | null
   posted_at: string | null
   closed_at: string | null
   created_at: string | null
 }
 
-const COLUMNS = 'id, title, prefecture, address, place_type, closed, genres, open_days, schedule, details, max_slots, posted_at, closed_at, created_at, pinned'
+const COLUMNS = 'id, title, prefecture, address, place_type, closed, genres, open_days, schedule, details, slots_per_day_min, slots_per_day_max, posted_at, closed_at, created_at, pinned'
 
 function db() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -115,7 +118,11 @@ export type SegmentFacts = {
   cities: { top: CountEntry[]; shown: number; rest: number; restCities: number; unknown: number }
   /** 設備・条件。母数は details を書いている件数 */
   details: { withDetails: number; flags: { name: string; entries: CountEntry[] }[] }
-  /** 募集枠。289件中261件が既定値の5台で分布にならないので、内訳にはせず1文にする */
+  /**
+   * 1日あたりの募集台数。counted は台数が入っている件数、multi はそのうち
+   * どの日も2台以上（幅がある案件は下限が2台以上）の件数。
+   * 入力された値だけを数える（下の本体の説明）
+   */
   slots: { multi: number; counted: number }
   /** 県ページの「カテゴリー別の内訳」。母数は genres が入っている件数 */
   genresFilled: number
@@ -232,9 +239,19 @@ function countFacts(rows: Row[]): SegmentFacts {
     })
     .filter(f => f.entries.length > 0)
 
-  // 募集枠。内訳にはしない（既定値の5台がほとんどで分布にならない）
-  const counted = rows.filter(r => r.max_slots != null).length
-  const multi = rows.filter(r => (r.max_slots ?? 0) > 1).length
+  // 1日あたりの募集台数。運営・募集者が入れた案件だけを数える。
+  //
+  // 以前は max_slots（最大枠数）を数えていたが、あの列には既定値 5 が付いていて、
+  // 290件のうち262件が入力されないまま 5 だった（2026-10-02 に本番で確認）。
+  // それを数えて「募集枠が入っている◯件のうち◯件が2台以上」と公開ページに
+  // 書いていたので、入力されていない値から事実のような文を作っていたことになる。
+  // 入力された列（slots_per_day_min / max）に切り替える。
+  // 1件も入っていないあいだは counted が 0 になり、文そのものが出ない
+  const slotOf = (r: Row) => normalizeSlots(r.slots_per_day_min, r.slots_per_day_max)
+  const counted = rows.filter(r => slotOf(r).min != null).length
+  // 幅がある案件（1日1〜3台）は下限で見る。上限で数えると、
+  // 1台の日がある案件まで「1日2台以上」と言い切ることになる
+  const multi = rows.filter(r => (slotOf(r).min ?? 0) > 1).length
 
   // カテゴリー別・都道府県別
   const genreMap = new Map<string, number>()

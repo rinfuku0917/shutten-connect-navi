@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { applyDaysShortfall, dowGroups, biweeklyDrop, canMakeBiweekly } from '../lib/applyRules'
 import MonthGrid from './MonthGrid'
-import { monthsOfDates, monthOfDate, monthKey, compareMonth, type YearMonth } from '../lib/monthGrid'
+import { monthsOfDates, monthOfDate, monthKey, compareMonth, stepToListedMonth, snapToListedMonth, type YearMonth } from '../lib/monthGrid'
 
 // 申込のときに出店希望日を選ぶカレンダー。
 //
@@ -126,17 +126,10 @@ export default function ApplyDateCalendar({
   // 申込済みの読み込み（myEntries）や形式の選び直しで選べる日がずれたときに、
   // 選べる日が1つも無い月を出したままになる
   const [picked, setPicked] = useState<YearMonth | null>(null)
-  // 送られた月が日程の範囲から外れていたら、近い端に寄せる。
-  // MonthGrid の前後ボタンは minMonth / maxMonth で止めてあるが、
-  // 日程が入れ替わって今見ている月が範囲外になることがある
-  const month: YearMonth | null = (() => {
-    if (monthList.length === 0) return null
-    if (!picked) return startMonth
-    if (compareMonth(picked, monthList[0]) < 0) return monthList[0]
-    const last = monthList[monthList.length - 1]
-    if (compareMonth(picked, last) > 0) return last
-    return picked
-  })()
+  // 見ている月に日程が無くなったら、日程のある近い月へ寄せる。
+  // 申込済みの読み込みや日程の入れ替えで、選んでいた月から日程が消えることがある。
+  // そのままだと斜線だけの月が出たままになる
+  const month: YearMonth | null = picked ? snapToListedMonth(monthList, picked) : startMonth
 
   const byDate = useMemo(() => {
     const m = new Map<string, CalendarDay>()
@@ -152,6 +145,12 @@ export default function ApplyDateCalendar({
 
   if (!month) return null
   const monthStr = monthKey(month)
+  // 月送り。MonthGrid は1か月ずつ送ってくるので、日程の無い月は飛ばす。
+  //
+  // 日程が飛び飛びの案件（10月と12月だけ、など）で、斜線だけの11月に
+  // 止まらないようにする。共通部品に替える前は「日程のある月の一覧」を
+  // 添字で送っていたので、もともと飛ばしていた（その動きを保つ）
+  const goMonth = (next: YearMonth) => setPicked(stepToListedMonth(monthList, month, next))
 
   const monthDays = [...byDate.values()].filter(d => monthOf(d.date) === monthStr)
   const selectableDates = monthDays.filter(d => !d.disabled && !d.applied).map(d => d.date)
@@ -307,7 +306,7 @@ export default function ApplyDateCalendar({
           今月に日程が無い案件では押しても何も起きないボタンになる */}
       <MonthGrid
         month={month}
-        onMonthChange={setPicked}
+        onMonthChange={goMonth}
         minMonth={monthList[0]}
         maxMonth={monthList[monthList.length - 1]}
         size='compact'

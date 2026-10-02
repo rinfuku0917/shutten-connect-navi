@@ -79,6 +79,46 @@ export function perDayFeeRange(schedule: unknown): { min: number; max: number } 
   return { min: Math.min(...totals), max: Math.max(...totals) }
 }
 
+/** 案件全体の固定額（1日あたり）。単位が「期間で1回」の側は、日ごとの計算では0 */
+function columnFixed(p: FeeSource): { place: number; company: number } {
+  return {
+    place: p.place_fixed_unit === 'per_event' ? 0 : (p.price_fixed || 0),
+    company: p.company_fixed_unit === 'per_event' ? 0 : (p.company_fixed_amount || 0),
+  }
+}
+
+/**
+ * その日の固定額（取引先＋弊社）。歩合と最低保証は入れない。
+ * 側ごとに 形態 → 日程のその日 → 平日／土日祝 → 案件全体 の順で落ちる（dayFeeOf の固定額と同じ）。
+ */
+function fixedOn(p: FeeSource, format: string | null | undefined, date: string | null | undefined): number {
+  const fmt = formatFee(p.format_fees, format, date)
+  const day = perDayFee(p.schedule, date)
+  const dt = dayTypeFee(p.day_type_fees, date)
+  const col = columnFixed(p)
+  return (fmt.placeFee ?? day.placeFee ?? dt.placeFee ?? col.place)
+    + (fmt.companyFee ?? day.companyFee ?? dt.companyFee ?? col.company)
+}
+
+/**
+ * 日程に1日ごとの金額が入っている案件の、固定額の幅（出店者への表示に使う）。
+ * 金額が入っていない日も数える（その日は平日／土日祝 → 案件全体の額で請求されるため）。
+ * 日程のどの日にも金額が入っていなければ null。
+ */
+function scheduleFixedRange(p: FeeSource): { min: number; max: number } | null {
+  if (!hasPerDayFee(p.schedule) || !Array.isArray(p.schedule)) return null
+  const col = columnFixed(p)
+  const totals: number[] = []
+  for (const d of p.schedule as { date?: unknown }[]) {
+    if (!d || typeof d.date !== 'string' || !d.date) continue
+    const day = perDayFee(p.schedule, d.date)
+    const dt = dayTypeFee(p.day_type_fees, d.date)
+    totals.push((day.placeFee ?? dt.placeFee ?? col.place) + (day.companyFee ?? dt.companyFee ?? col.company))
+  }
+  if (totals.length === 0) return null
+  return { min: Math.min(...totals), max: Math.max(...totals) }
+}
+
 // 入力された文字を金額（円）に直す。空欄は null（未設定）
 export function toYen(raw: string | null | undefined): number | null {
   if (raw == null) return null
@@ -913,7 +953,19 @@ export function feeCondition(p: FeeSource, format?: string | null, date?: string
   const fmtWe = formatFee(p.format_fees, format, SAMPLE_WEEKEND)
   const dtWd = dayTypeFee(p.day_type_fees, SAMPLE_WEEKDAY)
   const dtWe = dayTypeFee(p.day_type_fees, SAMPLE_WEEKEND)
-  const range = perDayFeeRange(p.schedule)
+  // 日程に1日ごとの金額が入っている案件の、固定額の幅。
+  // 計算（dayFeeOf）と同じ落ち方で、日程の全日について求める。
+  //
+  // 以前は perDayFeeRange（金額が入っている日だけ・入っていない側は0円）で作っていて、
+  // 次の入れ方をすると表示が実際の請求より低く出ていた（2026-10-02 の見直しで見つけた。
+  // 本番に該当する案件は無かった）:
+  //   ・片側だけ入れた日（取引先の額だけ入れ、弊社の額は空欄）
+  //       → 計算は空欄の側を案件全体の額で請求するのに、表示は0円として足していた
+  //   ・一部の日だけ入れた案件（ほかの日は空欄で、案件全体の額を使う）
+  //       → 空欄の日の額が幅に入っていなかった
+  // 編集画面は「空欄の日は料金設定の金額がそのまま使われます」と案内しているので、
+  // どちらも想定された入れ方で起きる
+  const range = scheduleFixedRange(p)
   const fmtWdT = sideTotal(fmtWd)
   const fmtWeT = sideTotal(fmtWe)
   const dtWdT = sideTotal(dtWd)
@@ -951,19 +1003,40 @@ export function feeCondition(p: FeeSource, format?: string | null, date?: string
   if (byCount) {
     parts.push(byCount)
   } else if (date) {
-    // 日が決まっている場面（請求書の1行）は、その日の額だけを出す
-    const fmtD = sideTotal(formatFee(p.format_fees, format, date))
-    const dayD = sideTotal(perDayFee(p.schedule, date))
-    const dtD = sideTotal(dayTypeFee(p.day_type_fees, date))
-    const one = fmtD != null ? fmtD : dayD != null ? dayD : dtD != null ? dtD : (placesFixed > 0 ? placesFixed : null)
-    if (one != null && one > 0) parts.push(perDay(one))
+    // 日が決まっている場面（請求書の1行）は、その日の額だけを出す。
+    // 計算（dayFeeOf）と同じく、取引先・弊社の側ごとに
+    // 形態 → 日程のその日 → 平日／土日祝 → 案件全体 の順で落とす。
+    //
+    // 以前は「いちばん上で見つかった設定の合計」を使っていて、片側だけ入っている設定
+    // （平日の額が取引先の分だけ、など）では、空欄の側を0円として扱っていた。
+    // 計算は空欄の側を下の設定で請求するので、請求件名の額が請求額より低く出ていた
+    // （2026-10-02 の見直しで見つけた。総当たりで確かめて、本番の案件では表示が変わらない）
+    const one = fixedOn(p, format, date)
+    if (one > 0) parts.push(perDay(one))
   } else if (fmtWdT != null || fmtWeT != null) {
     const wd = fmtWdT != null ? perDay(fmtWdT) : belowFormat(dtWdT)
     const we = fmtWeT != null ? perDay(fmtWeT) : belowFormat(dtWeT)
     if (wd !== we) parts.push(twoSided(wd || perDay(0), we || perDay(0)))
     else if (wd && wd !== perDay(0)) parts.push(wd)
   } else if (range) {
-    parts.push(rangeText)
+    // 日程のどの日も0円なら、額の項は出さない。
+    //
+    //   ほかの枝（形態ごと・平日土日・案件全体）は `wd !== perDay(0)` で
+    //   「0円/日」を出さないようにしてある。日程ごとの枝だけこの門が抜けていて、
+    //   日程の金額欄に全日0を入れると「0円/日 ＋ 売上の10%」と出る作りだった
+    //   （2026-10-02 に見つけた。本番に該当する案件は無かった）。
+    //   0円は「この日の固定額は無い」という意味で、払う額ではないため、
+    //   並べると歩合だけの案件に無い項を見せることになる。
+    //
+    //   幅があるとき（0円〜4,500円など）は、ほんとうに無料の日があるので出す。
+    //   同じ日に運営から指摘のあった「0円〜10円/日 ＋ 売上の10%」はこの形で、
+    //   日程の1日の金額欄に10、ほかの日に0が入っていると出る（計算も10円を請求する）。
+    //   表示だけ隠すと請求と食い違うので、ここでは隠さない。
+    //
+    //   rangeText そのものは空にしない。belowFormat でも使っていて、
+    //   空にすると「日程で0円」の案件が案件全体の額に落ちてしまう
+    //   （計算は日程の0円を優先して0円を請求するので、表示だけ高く出る）
+    if (range.min > 0 || range.max > 0) parts.push(rangeText)
   } else if (dtWdT != null || dtWeT != null) {
     const wd = dtWdT != null ? perDay(dtWdT) : colText
     const we = dtWeT != null ? perDay(dtWeT) : colText

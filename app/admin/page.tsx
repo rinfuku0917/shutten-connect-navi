@@ -14,6 +14,7 @@ import { exportPlaceSubmission } from '../lib/submissionXlsx'
 import { exportPlaceSalesReport } from '../lib/salesReportXlsx'
 import { fetchAdminSellerNames } from '../lib/adminSellerNames'
 import { compareByTitle } from '../lib/placeSort'
+import { normalizeSlots, slotsText } from '../lib/placeSlots'
 import { hasDayTypeFee, hasMinGuarantee, hasFormatFees, hasFormatMin, dayFeeOf, feeCondition, allowedFormats, buildMinGuaranteeJson, toYen, type FeeSource, perEventConflict } from '../lib/placeFee'
 import { selectWithOptionalColumn, isMissingColumn } from '../lib/optionalColumn'
 import { cancelResultMessage } from '../lib/purgeLog'
@@ -1721,7 +1722,8 @@ export default function AdminPage() {
   const npInput: React.CSSProperties = { width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: '#1a1a1a' }
   const emptyNewPlace = {
     title: '', host_id: '', prefecture: '', address: '', place_type: 'event',
-    open_days: '', open_time: '', close_time: '', fee: '', max_slots: '',
+    // 1日あたりの募集台数（app/lib/placeSlots.ts）。以前はここが max_slots（最大枠数）だった
+    open_days: '', open_time: '', close_time: '', fee: '', slotsMin: '', slotsMax: '',
     description: '', genres: [] as string[],
   }
   const [npForm, setNpForm] = useState(emptyNewPlace)
@@ -1772,7 +1774,9 @@ export default function AdminPage() {
         place: {
           ...npForm,
           host_id: npForm.host_id || null,
-          max_slots: npForm.max_slots,
+          // 下限・上限に整えてから送る（大小が逆でも入れ替える）
+          slots_per_day_min: normalizeSlots(npForm.slotsMin, npForm.slotsMax).min,
+          slots_per_day_max: normalizeSlots(npForm.slotsMin, npForm.slotsMax).max,
           open_days: npForm.open_days.trim() ? [npForm.open_days.trim()] : [],
           image_url: imageUrl, latitude, longitude, status,
         },
@@ -2657,9 +2661,24 @@ const previewDoc = async (fileUrl: string) => {
                       <label style={npLabel}>出店料（表示用の文言）</label>
                       <input value={npForm.fee} onChange={e => setNpForm({ ...npForm, fee: e.target.value })} placeholder='例：3日間で6万円（税込66,000円）' style={npInput} />
                     </div>
+                    {/* 1日あたりの募集台数（app/lib/placeSlots.ts）。
+                        以前は「最大枠数」という1つの数で、出店者の画面に「募集台数 5台」と出ていた。
+                        何に対しての5台かが書かれておらず、5日間の案件で「1日5台で合計25台ですか」と
+                        問い合わせが来た（2026-10-02）。1日あたりの数として入れてもらい、
+                        幅がある会場（1日3〜5台）も入れられるようにする */}
                     <div>
-                      <label style={npLabel}>最大枠数</label>
-                      <input type='number' value={npForm.max_slots} onChange={e => setNpForm({ ...npForm, max_slots: e.target.value })} placeholder='例：5' style={npInput} />
+                      <label style={npLabel}>1日あたりの募集台数</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <input inputMode='numeric' aria-label='1日あたりの募集台数' value={npForm.slotsMin} onChange={e => setNpForm({ ...npForm, slotsMin: e.target.value })} placeholder='例：1' style={{ ...npInput, width: '72px' }} />
+                        <span style={{ fontSize: '12px', color: '#64748B', whiteSpace: 'nowrap' }}>台 〜</span>
+                        <input inputMode='numeric' aria-label='1日あたりの募集台数の上限（幅があるときだけ）' value={npForm.slotsMax} onChange={e => setNpForm({ ...npForm, slotsMax: e.target.value })} placeholder='空欄可' style={{ ...npInput, width: '72px' }} />
+                        <span style={{ fontSize: '12px', color: '#64748B', whiteSpace: 'nowrap' }}>台</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px', lineHeight: 1.7 }}>
+                        {slotsText(npForm.slotsMin, npForm.slotsMax)
+                          ? <>出店者の画面：「{slotsText(npForm.slotsMin, npForm.slotsMax)}」</>
+                          : <>空欄なら台数を出しません</>}
+                      </div>
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={npLabel}>カテゴリー（複数選択できます）</label>

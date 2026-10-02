@@ -9,6 +9,7 @@ import SiteHeader from '../../components/SiteHeader'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
+import { slotsPerDayText } from '../../lib/placeSlots'
 import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, dayFeeLabelOn, perEventFeeOf, dayCountOptions, dayCountFeeOf, type FormatFees } from '../../lib/placeFee'
 import { minApplyDays, applyDaysShortfall } from '../../lib/applyRules'
 import ApplyDateCalendar, { type CalendarDay } from '../../components/ApplyDateCalendar'
@@ -49,6 +50,9 @@ export type Place = {
   open_time: string | null
   close_time: string | null
   max_slots: number | null
+  /** 1日あたりの募集台数（app/lib/placeSlots.ts）。空なら台数の行を出さない */
+  slots_per_day_min?: number | null
+  slots_per_day_max?: number | null
   details: Record<string, string> | null
   // 何ヶ月先まで申し込めるか。null は上限なし
   apply_within_months: number | null
@@ -644,7 +648,12 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                 { label: '搬出時間', value: d.loadOut || '' },
                 { label: '応募締切', value: d.deadline ? d.deadline.replaceAll('-', '/') : '' },
                 { label: '想定来場者数', value: d.visitors || '' },
-                { label: '募集台数', value: place.max_slots != null ? place.max_slots + '台' : '' },
+                // 必ず「1日あたり」を付けて出す（app/lib/placeSlots.ts）。
+                // 以前は max_slots をそのまま「5台」と出していて、5日間の案件で
+                // 「1日5台で合計25台ですか」と問い合わせが来ていた。しかもその 5 は
+                // 列の既定値で、290件中262件が入力されないまま 5 だった（2026-10-02）。
+                // 入っていない案件は行ごと出さない（下の filter が落とす）
+                { label: '募集台数', value: slotsPerDayText(place) },
                 { label: '屋内 / 屋外', value: val('location') },
                 { label: '電源', value: val('power') },
                 { label: 'ガス機器', value: val('gas') },
@@ -665,7 +674,11 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
               // 未ログインのときは、出店条件と備考をまとめて1つの案内にする。
               // 同じ案内が2つ並ぶと、くどく見えてしまうため。
               if (!canSeeFee) {
-                if (rows.length === 0 && !hasNotes) return null
+                // 出店条件も備考も無い案件でも、この案内は出す（出店料はログイン後に見えるため）。
+                // 以前は「何も無ければ出さない」としていたが、実際には列の既定値の
+                // 「募集台数 5台」が必ず1行あったので、ほぼ全件で出ていた。
+                // 台数の行を出さなくした（app/lib/placeSlots.ts）ときに、条件を書いていない
+                // 147件からログイン・会員登録の案内ごと消えてしまうため、条件を外した
                 const items: string[] = []
                 if (rows.length > 0) items.push('出店条件（開催時間・搬入搬出・電源・ガス・水道など' + rows.length + '項目）')
                 if (hasNotes) items.push('備考・ご案内（募集者からの注意事項）')
