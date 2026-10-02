@@ -625,6 +625,44 @@ img[width='1'][height='1'] { display: inline !important; }
   }
 }
 
+/* 案件の「日程」1日ぶんの枠。日付欄・時刻欄が枠からはみ出すのを防ぐ。
+   
+   なぜ起きるか（2026-10-02 の運営からの報告。iPhoneのみ）:
+     上のほう（@media max-width:768px）で、入力欄の文字を 16px に
+     上書きしている。iOSが入力欄を拡大表示するのを止めるための指定。
+     ところが iOS の input[type="date"] は、文字が大きくなると
+     「2026/09/17」を表示できる幅を固有の下限として持ち、
+     width:100% を指定しても、それより狭くならない。
+     枠は padding のぶん狭いので、入力欄だけが右へはみ出す。
+     パソコンのブラウザでは起きない（iOS だけの挙動）。
+   
+   同じ症状は売上入力欄（.sale-field）と書類の有効期限（.doc-expiry）で
+   2回直していて、これが3つめ。直し方もそれらと同じにそろえる。
+   min-width:0 で固有の下限を外し、appearance を外して見た目を揃える。
+   
+   時刻の select も、同じ理由で縮まないことがあるので下限を外す。
+   select は appearance を外さない（ネイティブの矢印を消さないため）。 */
+@media (max-width: 768px) {
+  .sched-day input[type="date"] {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .sched-day select {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  /* 1日ぶんの枠の中で、横に並べている箱も縮めてよいことにする。
+     grid/flex の子は既定で min-content より狭くならないため */
+  .sched-day > div,
+  .sched-day > div > div { min-width: 0; }
+}
+
 /* ラベルと値が横に並ぶ行（プロフィールの基本情報など）。
    メールアドレスやURLは日本語と違って途中で改行できないため、
    何もしないとその長さが下限になって枠からはみ出す。 */

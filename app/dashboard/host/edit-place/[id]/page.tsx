@@ -576,7 +576,7 @@ async function refreshPublicPages(placeId?: string) {
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'10px'}}>
                 {schedule.map((d,i)=>(
-                  <div key={i} style={{border:'1px solid #E5C07B',borderRadius:'10px',padding:'12px',background:'#FFFDF7'}}>
+                  <div key={i} className='sched-day' style={{border:'1px solid #E5C07B',borderRadius:'10px',padding:'12px',background:'#FFFDF7'}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
                       <span style={{fontSize:'13px',fontWeight:'700',color:'#B45309'}}>{i+1}日目</span>
                       <div style={{display:'flex',gap:'6px'}}>
