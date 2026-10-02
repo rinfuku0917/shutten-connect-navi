@@ -6,6 +6,10 @@ import { supabase } from '../lib/supabase'
 
 const navItems = [
   { href: '/dashboard/host', label: '場所・案件管理' },
+  // 出店カレンダー。募集者の画面には月のカレンダーが1つも無く、
+  // 「来週の火曜は誰が来るのか」を見るには案件ごとのリストを目で追う
+  // しかなかった（2026-10-02 の運営からの依頼で新設）
+  { href: '/dashboard/host/calendar', label: '出店カレンダー' },
   { href: '/dashboard/host/new-place', label: '新規登録' },
   { href: '/dashboard/host/messages', label: 'メッセージ' },
 ]
