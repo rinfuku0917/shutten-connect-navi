@@ -100,7 +100,9 @@ function missingReportFields(
   if (!weather) miss.push('・当日の天候をお選びください')
   // 0人だった日もありうるので、「0」は正しい値として通す。空だけを止める
   if (customers.trim() === '') miss.push('・来客数をご入力ください（0でも構いません）')
-  const qty = items.reduce((t, it) => t + (parseInt(it.qty, 10) || 0), 0)
+  // 品目名が空の行は保存のときに捨てるので、食数にも数えない。
+  // 数えると「そろっている」と表示して保存も通るのに、品目が1件も残らない
+  const qty = items.reduce((t, it) => t + (it.name.trim() ? (parseInt(it.qty, 10) || 0) : 0), 0)
   if (qty <= 0) miss.push('・品目ごとの販売食数をご入力ください')
   if (miss.length > 0) miss.unshift('施設へお出しする報告書に必要な項目が未入力です。\n')
   return miss
@@ -856,7 +858,14 @@ export default function SellerDashboard() {
   }
 
   // 自分の売上を保存
+  //
+  // 保存中の印は、最初の通信（重複の確認）より前に立てる（useRef で持つ）。
+  // 以前は通信のあとに立てていたため、そのあいだにもう一度押すと2つの保存が同時に走り、
+  // どちらの重複確認も0件のまま進んで、売上が2件登録された（出店料も2件分の請求になる）。
+  // state だと描き直しの前に次の押下が来ると弾けないので ref にする
+  const saleSavingRef = useRef(false)
   const saveMySale = async () => {
+    if (saleSavingRef.current) return
     if (!saleAppId || !saleDate || (saleSplit ? (!saleRev8 && !saleRev10) : !saleRevenue)) { showNotice('案件・日付・売上金額をすべて入力してください'); return }
     const app = myApprovedApps.find(x => x.application_id === saleAppId)
     if (!app) { showNotice('案件が選択されていません'); return }
@@ -873,11 +882,14 @@ export default function SellerDashboard() {
     if (app.apply_date && td < app.apply_date) { showNotice('この案件の出店日は ' + app.apply_date + ' です。出店日を過ぎてから売上を入力してください。'); return }
     if (app.apply_date && saleDate < app.apply_date) { showNotice('売上日は出店日（' + app.apply_date + '）以降を指定してください。'); return }
     if (saleDate > td) { showNotice('未来の日付では売上を記録できません。'); return }
+    saleSavingRef.current = true
+    setSaleSaving(true)
+    const stop = () => { saleSavingRef.current = false; setSaleSaving(false) }
     // すでに報告済みの出店をもう一度登録すると請求も2件分になるため、
     // 気付かず重ねてしまわないように確認する（意図的な追加登録は通す）
     const { data: dup, error: dupErr } = await supabase
       .from('sales').select('id, sale_date').eq('application_id', app.application_id)
-    if (dupErr) { showNotice('通信に失敗しました。時間をおいてもう一度お試しください。'); return }
+    if (dupErr) { showNotice('通信に失敗しました。時間をおいてもう一度お試しください。'); stop(); return }
     if (dup && dup.length > 0) {
       const dates = dup.map(d => d.sale_date).join('、')
       // 最低保証は sales の1件ごとにかかるので、2件記録すると2日分になる。
@@ -886,9 +898,8 @@ export default function SellerDashboard() {
       const dupBody = '（' + dates + '）\nもう1件追加で登録すると、出店料も2件分の請求になります。'
         + (hasMin ? '\nこの案件は最低保証があるため、最低保証も2件分かかります。' : '')
         + '\n続けますか？'
-      if (!(await ask({ title: 'すでに報告済みの出店です', body: dupBody, okLabel: '追加で登録する' }))) return
+      if (!(await ask({ title: 'すでに報告済みの出店です', body: dupBody, okLabel: '追加で登録する' }))) { stop(); return }
     }
-    setSaleSaving(true)
     const { placeFee, companyFee, total } = calcFee(revenue, app, saleTaxOv, null, saleDate)
     const applied = taxOf(app, saleTaxOv)
     const { data: userData } = await supabase.auth.getUser()
@@ -911,10 +922,13 @@ export default function SellerDashboard() {
     if (!isNaN(cust) && cust > 0) row.customers = cust
     if (saleNote.trim()) row.note = saleNote.trim()
     const { data: ins2, error } = await supabase.from('sales').insert(row).select('id')
-    if (error) { showNotice('保存失敗: ' + error.message); setSaleSaving(false); return }
+    if (error) { showNotice('保存失敗: ' + error.message); stop(); return }
     void syncSalesToSheet(((ins2 || []) as { id: string }[]).map(r => r.id))
-    setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleRev8(''); setSaleRev10(''); setSaleItems([]); setSaleSaving(false)
+    setSaleAppId(''); setSaleDate(''); setSaleRevenue(''); setSaleRev8(''); setSaleRev10(''); setSaleItems([]); stop()
     setSaleWeather(''); setSaleCustomers(''); setSaleNote('')
+    // 保存できたことを知らせる。以前は何も出さずにフォームを空に戻すだけで、
+    // 保存できたのか消えたのか分からなかった（「反映されない」という連絡のもと）
+    showNotice('売上を保存しました。ありがとうございました。下の一覧でご確認いただけます。', 'ok')
     loadMySales()
     loadUnreported()
     loadCalSales()
@@ -2690,7 +2704,7 @@ export default function SellerDashboard() {
                     )}
                   </div>
                   <div className='sale-field' style={{ flex: '0 1 160px' }}>
-                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上日</div>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>売上日（必須）</div>
                     <input type='date' value={saleDate} onChange={e => setSaleDate(e.target.value)} min={myApprovedApps.find(x => x.application_id === saleAppId)?.apply_date || undefined} max={todayStr()} style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: '#1a1a1a' }} />
                   </div>
                   {saleSplit ? (
@@ -2717,7 +2731,6 @@ export default function SellerDashboard() {
                       <option value='as_entered'>入力した金額をそのまま使う</option>
                     </select>
                   </div>
-                  <button onClick={saveMySale} disabled={saleSaving || !saleAppId} title={!saleAppId ? '先に案件を選んでください' : ''} style={{ background: (saleSaving || !saleAppId) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '13px', fontWeight: '700', cursor: (saleSaving || !saleAppId) ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>{saleSaving ? '保存中...' : '記録する'}</button>
                 </div>
                 <label style={{ marginTop: '12px', display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#1a1a1a', cursor: 'pointer' }}>
                   <input type='checkbox' checked={saleSplit} onChange={e => setSaleSplit(e.target.checked)} style={{ accentColor: '#F5A623', cursor: 'pointer' }} />
@@ -2853,6 +2866,44 @@ export default function SellerDashboard() {
                       <div>消費税（10%）：<strong>{Math.floor(fee * 0.1).toLocaleString()}円</strong></div>
                       <div>ご請求額（税込）：<strong>{(fee + Math.floor(fee * 0.1)).toLocaleString()}円</strong></div>
                       <div style={{ borderTop: '1px solid #E2E8F0', marginTop: '6px', paddingTop: '6px' }}>あなたの利益（手取り）：<strong style={{ color: '#16A34A', fontSize: '14px' }}>{(rev - fee).toLocaleString()}円</strong></div>
+                    </div>
+                  )
+                })()}
+
+                {/* 保存のボタンはフォームのいちばん下に置く。
+                    なぜ（2026-10-03 の運営からの連絡）:
+                      以前は「記録する」のボタンが案件・売上金額の行の右端にあり、
+                      スマホではその下に必須の「当日の状況」「品目別の内訳」が続いていた。
+                      下まで入力し終えた所にボタンが無く、Olympic 国立店に出店した方が
+                      「保存するボタンが見当たらない」まま報告できずにいた。
+                    まだ入っていない必須の項目を、ボタンのすぐ上に出す
+                    （押してから知らせるより先に分かるほうが迷わない） */}
+                {(() => {
+                  const r8 = parseInt(saleRev8 || '0', 10) || 0
+                  const r10 = parseInt(saleRev10 || '0', 10) || 0
+                  const hasRevenue = saleSplit ? (saleRev8 !== '' || saleRev10 !== '') && r8 + r10 >= 0 : saleRevenue !== ''
+                  const todo = [
+                    ...(!saleAppId ? ['・案件を選んでください'] : []),
+                    ...(!saleDate ? ['・売上日を選んでください'] : []),
+                    ...(!hasRevenue ? ['・売上金額を入力してください'] : []),
+                    ...missingReportFields(saleWeather, saleCustomers, saleItems).filter(x => x.startsWith('・')),
+                  ]
+                  // 何も入れていないとき（開いた直後・保存した直後）は一覧を出さない。
+                  // 保存した直後に未入力の一覧が並ぶと、保存できなかったように見えるため
+                  const pristine = !saleAppId && !saleDate && !saleRevenue && !saleRev8 && !saleRev10
+                    && !saleWeather && !saleCustomers && saleItems.every(it => !it.name.trim() && !it.qty)
+                  return (
+                    <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #E2E8F0' }}>
+                      {todo.length > 0 && !pristine && (
+                        <div style={{ fontSize: '12px', color: '#B45309', lineHeight: 1.8, marginBottom: '8px' }}>
+                          保存する前に、次の項目を入力してください。<br />{todo.map(t => <span key={t}>{t}<br /></span>)}
+                        </div>
+                      )}
+                      <button onClick={saveMySale} disabled={saleSaving || !saleAppId}
+                        title={!saleAppId ? '先に案件を選んでください' : ''}
+                        style={{ width: '100%', background: (saleSaving || !saleAppId) ? '#ccc' : '#F5A623', color: '#fff', border: 'none', borderRadius: '10px', padding: '14px 20px', fontSize: '15px', fontWeight: 900, cursor: (saleSaving || !saleAppId) ? 'not-allowed' : 'pointer' }}>
+                        {saleSaving ? '保存中...' : 'この内容で売上を保存する'}
+                      </button>
                     </div>
                   )
                 })()}

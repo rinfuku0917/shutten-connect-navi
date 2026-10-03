@@ -792,6 +792,8 @@ export default function AdminPage() {
     if (!res.ok) { showNotice('発行できませんでした：' + (j.error || '不明なエラー')); return }
     showNotice('請求書 ' + j.invoiceNo + '（合計' + (j.total || 0).toLocaleString() + '円'
       + (isCancel ? '・不課税' : '・税込') + '）を発行しました。')
+    // 前月の未請求の件数を、発行した分だけ減らすため
+    loadPayments()
   }
 
   const deleteSale = async (id: string) => {
@@ -1217,8 +1219,13 @@ export default function AdminPage() {
     // 取り消した請求書。行は残したまま印だけ付けている
     voided_at?: string | null,
     void_reason?: string | null,
+    // この請求書に入っている売上（前月の請求漏れを数えるのに使う）
+    sale_ids?: string[] | null,
   }
   const [payRows, setPayRows] = useState<PayRow[]>([])
+  // 請求書の一覧を読み終えたか。読む前・読めなかったときに「前月の未請求」を数えると、
+  // 全部の売上が未請求に見えてしまうため、読み終えるまで数えない
+  const [payLoaded, setPayLoaded] = useState(false)
   // 督促の対象だけを抜き出せるようにする。
   // 「超過」は各行に出るが、件数が増えると目で探すことになる
   const [payFilter, setPayFilter] = useState<'all' | 'unpaid' | 'overdue' | 'reported' | 'paid'>('all')
@@ -1277,8 +1284,10 @@ export default function AdminPage() {
     try {
       const j = await callPayApi({ action: 'list' })
       setPayRows(j.items || [])
+      setPayLoaded(true)
     } catch (e) {
       console.error('入金状況の取得に失敗', e)
+      setPayLoaded(false)
     }
     setPayLoading(false)
   }
@@ -2092,7 +2101,57 @@ export default function AdminPage() {
 
   // salesタブを開いたら読み込む
   useEffect(() => { if (tab === 'sales' && authChecked) { loadApprovedApps(); loadSales(); loadPayments() } }, [tab, authChecked])
-  useEffect(() => { if (tab === 'sales' && authChecked) loadSales() }, [saleMonth])
+  // 月を切り替えたら請求書の一覧も読み直す（前月の未請求の件数が古いまま残らないように）
+  useEffect(() => { if (tab === 'sales' && authChecked) { loadSales(); loadPayments() } }, [saleMonth])
+
+  // ===== 売上タブの月 =====
+  //
+  // なぜ（2026-10-03 の運営からの連絡「9月の請求書が消えた」）:
+  //   売上タブは選んだ月の売上だけを出し、開いたときは今月になる。10月に入ったので
+  //   9月の売上と「請求書を出す」が見えなくなっていた（データも請求書も消えていない）。
+  //   月を変える欄は見出しの右端の小さな年月欄だけで、Mac の Safari では
+  //   ただの文字欄（「2026-10」）に見えるため、切り替えられることに気づけなかった。
+  //   → 月の見出しと「◀ 前の月／次の月 ▶」を上に置き、前月に請求書を出していない
+  //     売上が残っていれば知らせる（毎月1日に同じことが起きるため）
+  const [thisYm] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') })
+  // 「月を指定」の欄の入力中の値。Safari ではこの欄がただの文字欄になるので、
+  // 打っている途中の値（「2026-0」など）を書き戻さないよう、表示の値を分けて持つ
+  const [monthDraft, setMonthDraft] = useState(saleMonth)
+  const [draftFor, setDraftFor] = useState(saleMonth)
+  if (draftFor !== saleMonth) { setDraftFor(saleMonth); setMonthDraft(saleMonth) }
+  const shiftYm = (ym: string, n: number) => {
+    const [y, m] = ym.split('-').map(Number)
+    const t = y * 12 + (m - 1) + n
+    return Math.floor(t / 12) + '-' + String((t % 12) + 1).padStart(2, '0')
+  }
+  const ymLabel = (ym: string) => { const [y, m] = ym.split('-').map(Number); return y + '年' + m + '月' }
+  // 前月の、まだ請求書に入っていない売上（出店者の数と件数）
+  const [prevUnbilled, setPrevUnbilled] = useState<{ month: string, sellers: number, sales: number } | null>(null)
+  useEffect(() => {
+    // 今月を見ているときだけ数える。ほかの月では出さない（下の画面側の条件で隠す）
+    if (tab !== 'sales' || !authChecked || saleMonth !== thisYm || !payLoaded) return
+    const prev = shiftYm(thisYm, -1)
+    let alive = true
+    ;(async () => {
+      const { data, error } = await supabase.from('sales').select('id, seller_id, total_pay, fee')
+        .gte('sale_date', prev + '-01').lt('sale_date', thisYm + '-01')
+      if (!alive || error || !data) return
+      // 請求済みとみなす売上: 取り消していない請求書に入っている売上（事前請求も含む）
+      const billed = new Set<string>()
+      for (const r of payRows) {
+        if (r.voided_at) continue
+        for (const id of (r.sale_ids || [])) billed.add(id)
+      }
+      // 出店料が0円の売上は、月の請求書の明細に入らない（app/api/admin/invoice/route.ts と同じ条件）。
+      // 数えると、請求書を全部出してもこの知らせが消えない
+      const left = (data as { id: string, seller_id: string, total_pay: number | null, fee: number | null }[])
+        .filter(x => (x.total_pay ?? x.fee ?? 0) > 0)
+        .filter(x => !billed.has(x.id))
+      const sellers = new Set(left.map(x => x.seller_id)).size
+      setPrevUnbilled(left.length > 0 ? { month: prev, sellers, sales: left.length } : null)
+    })()
+    return () => { alive = false }
+  }, [tab, authChecked, saleMonth, thisYm, payRows, payLoaded])
   useEffect(() => {
     if (!/^\d{4}-\d{2}$/.test(saleMonth)) return
     const [y, m] = saleMonth.split('-').map(Number)
@@ -3496,13 +3555,46 @@ const previewDoc = async (fileUrl: string) => {
 
           {tab === 'sales' && (
             <div>
+              {/* 表示している月。月を変えられることが一目で分かるように、いちばん上に置く
+                  （カレンダーと同じ「◀ 前の月／次の月 ▶」の並び） */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                <button onClick={() => setSaleMonth(shiftYm(saleMonth, -1))}
+                  style={{ font: 'inherit', fontSize: '13px', fontWeight: 700, border: '1px solid #E5E7EB', background: '#fff', color: '#1a1a1a', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer' }}>◀ 前の月</button>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1a1a' }}>{ymLabel(saleMonth)}の売上</div>
+                <button onClick={() => setSaleMonth(shiftYm(saleMonth, 1))}
+                  style={{ font: 'inherit', fontSize: '13px', fontWeight: 700, border: '1px solid #E5E7EB', background: '#fff', color: '#1a1a1a', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer' }}>次の月 ▶</button>
+                {saleMonth !== thisYm && (
+                  <button onClick={() => setSaleMonth(thisYm)}
+                    style={{ font: 'inherit', fontSize: '12px', fontWeight: 700, color: '#1D4ED8', background: 'none', border: 'none', padding: '6px 4px', cursor: 'pointer', textDecoration: 'underline' }}>今月に戻る</button>
+                )}
+              </div>
+              {/* 前月に請求書を出していない売上の知らせ。月が替わった直後に、前月の請求を見失わないため */}
+              {prevUnbilled && saleMonth === thisYm && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', background: '#FFFBEB', border: '1.5px solid #F5A623', borderRadius: '10px', padding: '12px 16px', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '13px', color: '#92400E', lineHeight: 1.7 }}>
+                    <strong>{ymLabel(prevUnbilled.month)}の売上で、まだ請求書に入っていないものが{prevUnbilled.sales}件（出店者{prevUnbilled.sellers}人）あります。</strong>
+                    <br />{ymLabel(prevUnbilled.month)}を表示すると、下の「請求書の作成」の表で、出店者ごとに「請求書を作成」から発行・ダウンロードできます。
+                  </div>
+                  <button onClick={() => setSaleMonth(prevUnbilled.month)}
+                    style={{ font: 'inherit', fontSize: '13px', fontWeight: 900, background: '#F5A623', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 18px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {ymLabel(prevUnbilled.month)}の売上を表示する
+                  </button>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
                 <p style={{ fontSize: '13px', color: '#64748B', flex: 1, minWidth: 0, margin: 0 }}>出店者の売上を記録すると、出店料（＝弊社の利益／出店コネクトナビへのお支払い額）を自動集計します。出店料は売上×料率（税別）で計算します。</p>
                 <button onClick={runSalesReminder} disabled={reminding} title='出店日を過ぎても売上報告が無い出店者へ催促メールを送ります（毎朝9時に自動送信もされます）'
                   style={{ background: '#fff', color: '#B45309', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: reminding ? 'wait' : 'pointer', flexShrink: 0 }}>
                   {reminding ? '送信中…' : '売上報告を催促する'}
                 </button>
-                <input type='month' value={saleMonth} onChange={e => setSaleMonth(e.target.value)} style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', flexShrink: 0 }} />
+                {/* 遠い月へ飛ぶとき用。Safari では文字欄になるので、何の欄かを書き添える */}
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748B', flexShrink: 0 }}>
+                  月を指定
+                  <input type='month' value={monthDraft}
+                    onChange={e => { const v = e.target.value; setMonthDraft(v); if (/^\d{4}-(0[1-9]|1[0-2])$/.test(v)) setSaleMonth(v) }}
+                    onBlur={() => setMonthDraft(saleMonth)}
+                    placeholder='2026-09' style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', outline: 'none', width: '130px' }} />
+                </label>
               </div>
 
 
