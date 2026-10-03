@@ -638,13 +638,13 @@ img[width='1'][height='1'] { display: inline !important; }
 }
 .mg-dow {
   text-align: center;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 0;
 }
 .mg-cell {
   font: inherit;
-  border-radius: 8px;
+  border-radius: 7px;
   padding: 4px 2px 5px;
   display: flex;
   flex-direction: column;
@@ -656,7 +656,10 @@ img[width='1'][height='1'] { display: inline !important; }
 }
 .mg-num { font-size: 13px; line-height: 1.2; }
 /* 申込の画面は幅300pxほどの右カラムに入るので、1マスが狭い */
-.mg-cell-compact { padding: 3px 1px 4px; }
+/* 数字と中身をマスの中央に置くのは申込画面だけ（手本の作り）。
+   運営・マイページ・募集者・料金設定は、マスの中身の行数が日によって違うので、
+   中央に寄せると同じ週の中で日付の数字の高さがそろわなくなる。上詰めのままにする */
+.mg-cell-compact { padding: 3px 1px 4px; justify-content: center; }
 .mg-cell-compact .mg-num { font-size: 12.5px; }
 @media (max-width: 380px) {
   .mg-grid { gap: 3px; }
@@ -881,3 +884,26 @@ img[width='1'][height='1'] { display: inline !important; }
   .cal-amt { font-size: 9px; }
   .cal-amt-sm { font-size: 8px; }
 }
+
+/* 案件詳細の「日程」の要約と開閉（app/places/[id]/PlaceDetailClient.tsx）。
+   開閉は <details> の open 属性で表示を切り替える（JavaScript を使わない） */
+.sched-sum { display: flex; flex-direction: column; gap: 4px; line-height: 1.8; }
+.sched-sum-label { display: block; color: #64748B; font-size: 12px; font-weight: 700; line-height: 1.6; }
+/* 期間の始まり・終わり・時刻は、それぞれの中では折り返さない（「(水)」だけが次の行に落ちないように） */
+.sched-sum-part { display: inline-block; white-space: nowrap; }
+.sched-sum-note { color: #64748B; font-size: 12.5px; }
+.sched-more { margin-top: 6px; }
+.sched-more > summary {
+  list-style: none; cursor: pointer; display: inline-block;
+  font-size: 13px; font-weight: 700; color: #1D4ED8;
+  border: 1px solid #BFDBFE; background: #F8FBFF; border-radius: 8px;
+  padding: 7px 14px; min-height: 36px; box-sizing: border-box;
+}
+.sched-more > summary::-webkit-details-marker { display: none; }
+.sched-more > summary:focus-visible { outline: 2px solid #1D4ED8; outline-offset: 2px; }
+.sched-more[open] .sched-more-closed,
+.sched-more:not([open]) .sched-more-open { display: none; }
+.sched-more-list { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13.5px; line-height: 1.9; }
+.sched-more-list li { display: flex; gap: 12px; }
+.sched-more-date { min-width: 4.8em; font-variant-numeric: tabular-nums; }
+

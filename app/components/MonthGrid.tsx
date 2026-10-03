@@ -1,7 +1,7 @@
 'use client'
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import {
-  DOW_LABELS, DOW_COLORS, buildMonthCells, monthLabel, shiftMonth, compareMonth,
+  DOW_LABELS, DOW_COLORS, buildMonthCells, monthLabel, shiftMonth, compareMonth, monthOfDate, thisMonthJst,
   type YearMonth,
 } from '../lib/monthGrid'
 
@@ -24,11 +24,19 @@ import {
 //   3画面で中身がまったく違うため（金額／屋号と件数／状態と売上）、
 //   ここで出し分けると分岐だらけになり、結局3つ書くのと同じになる。
 //
+// 【見た目の手本は、出店者が申し込む画面のカレンダー】
+//   依頼（2026-10-02）は「予約画面のカレンダーと全く同じ仕様に」というもの。
+//   最初に共通化したとき、運営・マイページ側の見た目（‹ › の小さな送りボタン、
+//   曜日色の日付、上寄せの数字）を基準にしてしまい、運営とマイページは見た目が
+//   ほとんど変わらず、逆に手本の申込画面のほうが変わってしまった
+//   （2026-10-03 に運営から「変化なし」と指摘）。
+//   申込画面の元の作り（◀ 前の月／次の月 ▶、黒い日付をマスの中央、
+//   押せない日は薄い灰色）に合わせ直した。
+//
 // 【印の色】
-//   もともと画面ごとにばらばらだった（選択がオレンジの画面と青の画面があり、
-//   今日の印も逆になっていた）。依頼が「全部同じに」なので、
-//   申込の画面（手本）に合わせて 選択=オレンジ / 今日=青 で揃える。
-//   変えたいときは accent と todayColor を渡す。
+//   選択=オレンジ / 今日=青。変えたいときは accent と todayColor を渡す。
+//   focused（いま設定を開いている日）は青の太枠。料金設定のカレンダーで、
+//   「日程に入っている日（オレンジ）」と「いま編集している日」を見分けるのに使う。
 
 export type MonthGridCell = {
   /** 選択中の印を出すか */
@@ -46,6 +54,8 @@ export type MonthGridCell = {
   slashed?: boolean
   /** 読み上げと長押しに出す説明 */
   label?: string
+  /** いま設定を開いている日（青の太枠）。料金設定のカレンダーで使う */
+  focused?: boolean
 }
 
 const ACCENT = '#F5A623'
@@ -65,7 +75,7 @@ export default function MonthGrid({
   todayColor = TODAY,
   showThisMonth = true,
   note,
-  dowColors = true,
+  dowColors = false,
   children,
 }: {
   month: YearMonth
@@ -87,7 +97,10 @@ export default function MonthGrid({
   showThisMonth?: boolean
   /** 月の見出しの下に出す1行（「この月の出店 23件」など） */
   note?: ReactNode
-  /** 日付の数字を曜日で色分けするか */
+  /**
+   * 日付の数字を曜日で色分けするか。既定は色分けしない（黒）。
+   * 手本の申込画面は数字が黒で、曜日の色は上の曜日の行だけに付けている
+   */
   dowColors?: boolean
   /** カレンダーの下に続けるもの（凡例など） */
   children?: ReactNode
@@ -97,35 +110,47 @@ export default function MonthGrid({
   const canNext = !maxMonth || compareMonth(month, maxMonth) < 0
   const minH = size === 'compact' ? 46 : 62
 
+  // 送りボタンは申込画面の元の作りと同じ（◀ 前の月／次の月 ▶）。
+  // font: 'inherit' は fontSize / fontWeight より前に置く（一括指定で上書きされるため）
   const navBtn = (on: boolean): React.CSSProperties => ({
-    font: 'inherit', fontSize: '13px', fontWeight: 700,
-    border: '1px solid #E2E8F0', background: '#fff', color: on ? '#334155' : '#CBD5E1',
-    borderRadius: '8px', padding: '7px 13px', minHeight: '38px',
-    cursor: on ? 'pointer' : 'not-allowed',
+    font: 'inherit', fontSize: '12.5px', fontWeight: 700, lineHeight: 1.4,
+    border: '1px solid #E5E7EB', background: on ? '#fff' : '#F8FAFC', color: on ? '#1a1a1a' : '#CBD5E1',
+    borderRadius: '8px', padding: '7px 11px', minHeight: '36px', whiteSpace: 'nowrap',
+    cursor: on ? 'pointer' : 'default',
   })
+  // 今月は today（呼び出し側が渡す日本の今日）から読む。
+  // 描画の中で時計を読まない（描くたびに結果が変わり得るため）。
+  // today を渡さない画面では、「今月に戻る」を押したときに時計を読む
+  const todayMonth = today ? monthOfDate(today) : null
+  // 「今月に戻る」は今月を見ているときは描かないので、押すとボタンごと消える。
+  // キーボードで操作している人のフォーカスが行き場を失わないよう、月の見出しへ移す
+  const headingRef = useRef<HTMLDivElement>(null)
+  const awayFromThisMonth = todayMonth ? compareMonth(month, todayMonth) !== 0 : true
 
   return (
     <div>
-      {/* 月の見出しと送り。3画面で同じ並びにそろえる */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+      {/* 月の見出しと送り。4画面とも同じ並び（申込画面が手本） */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
         <button type='button' aria-label='前の月' disabled={!canBack}
-          onClick={() => onMonthChange(shiftMonth(month, -1))} style={navBtn(canBack)}>‹</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <div style={{ fontSize: '15px', fontWeight: 900, color: '#1a1a1a', whiteSpace: 'nowrap' }}>
-            {monthLabel(month)}
-          </div>
-          {showThisMonth && (
-            <button type='button' onClick={() => {
-              const d = new Date(Date.now() + 9 * 3600 * 1000)
-              onMonthChange({ y: d.getUTCFullYear(), m: d.getUTCMonth() })
-            }} style={{ ...navBtn(true), fontSize: '12px', fontWeight: 700, padding: '6px 11px', minHeight: '32px' }}>
-              今月
-            </button>
-          )}
+          onClick={() => onMonthChange(shiftMonth(month, -1))} style={navBtn(canBack)}>◀ 前の月</button>
+        <div ref={headingRef} tabIndex={-1} aria-live='polite'
+          style={{ fontSize: '14px', fontWeight: 900, color: '#1a1a1a', whiteSpace: 'nowrap', outline: 'none' }}>
+          {monthLabel(month)}
         </div>
         <button type='button' aria-label='次の月' disabled={!canNext}
-          onClick={() => onMonthChange(shiftMonth(month, 1))} style={navBtn(canNext)}>›</button>
+          onClick={() => onMonthChange(shiftMonth(month, 1))} style={navBtn(canNext)}>次の月 ▶</button>
       </div>
+
+      {/* 「今月に戻る」。手本の申込画面には無いので、送りの並びには入れない。
+          今月以外を見ているときだけ、見出しの下に小さく出す */}
+      {showThisMonth && awayFromThisMonth && (
+        <div style={{ textAlign: 'center', marginTop: '4px' }}>
+          <button type='button' onClick={() => { onMonthChange(todayMonth ?? thisMonthJst()); headingRef.current?.focus() }}
+            style={{ font: 'inherit', fontSize: '12px', fontWeight: 700, color: '#1D4ED8', background: 'none', border: 'none', padding: '4px 8px', cursor: 'pointer', textDecoration: 'underline' }}>
+            今月に戻る
+          </button>
+        </div>
+      )}
 
       {note && (
         <div style={{ fontSize: '12px', color: '#64748B', textAlign: 'center', marginTop: '6px', lineHeight: 1.8 }}>
@@ -148,7 +173,7 @@ export default function MonthGrid({
           const off = !!st.disabled
           const border = st.selected ? `2px solid ${accent}`
             : isToday ? `1.5px solid ${todayColor}`
-              : '1px solid #E2E8F0'
+              : '1px solid #E5E7EB'
           return (
             <button
               key={c.date}
@@ -162,20 +187,25 @@ export default function MonthGrid({
               style={{
                 minHeight: minH + 'px',
                 border,
-                // 選択中はうすく色を敷く。枠線だけだと、スマホで押した日が分かりにくい
-                background: st.selected && !off ? '#FFFBEB'
-                  : off ? '#F8FAFC' : st.filled ? '#F8FDF9' : '#fff',
+                // 選択中はうすく色を敷く。枠線だけだと、スマホで押した日が分かりにくい。
+                // 押せない日・斜線の日は申込画面の元の色（薄い灰色の地）
+                // background（一括指定）と backgroundImage を混ぜない。混ぜると、マスの状態が
+                // 変わって描き直すときに一括指定が斜線を消してしまうことがある（React の警告）
+                backgroundColor: st.selected && !off ? '#FFFBEB'
+                  : st.slashed ? '#F8FAFC' : off ? '#FAFAFA' : st.filled ? '#F8FDF9' : '#fff',
                 backgroundImage: st.slashed
                   ? 'linear-gradient(to top right, transparent 47%, #E2E8F0 47%, #E2E8F0 53%, transparent 53%)'
                   : undefined,
+                boxShadow: st.focused ? '0 0 0 2px #1D4ED8' : undefined,
+                color: off ? '#AAA' : '#1a1a1a',
                 cursor: off || !onPickDate ? 'default' : 'pointer',
-                opacity: off ? 0.55 : 1,
               }}
             >
               <span className='mg-num' style={{
                 color: st.slashed ? '#CBD5E1'
-                  : isToday ? todayColor
-                    : dowColors ? DOW_COLORS[c.dow] : '#334155',
+                  : off ? '#AAA'
+                    : isToday ? todayColor
+                      : dowColors ? DOW_COLORS[c.dow] : '#1a1a1a',
                 fontWeight: st.slashed ? 400 : isToday ? 900 : 700,
               }}>{c.day}</span>
               {renderCell?.(c.date)}

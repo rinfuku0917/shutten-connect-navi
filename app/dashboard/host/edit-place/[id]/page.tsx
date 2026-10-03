@@ -11,6 +11,7 @@ import { PLACE_CATEGORIES } from '../../../../lib/categories'
 import { normalizeSlots, slotsText } from '../../../../lib/placeSlots'
 import { toYen, hasPerDayFee, buildMinGuaranteeJson, type FeeSource, perEventConflict, allowedFormats, hasFormatFees, dowMismatch, DOW_LABELS, sortedDows } from '../../../../lib/placeFee'
 import { MAX_SCHEDULE_DAYS } from '../../../../lib/scheduleLimits'
+import ScheduleCalendarEditor from '../../../../components/ScheduleCalendarEditor'
 import { isMissingColumn } from '../../../../lib/optionalColumn'
 import PlaceImagePicker from '../../../../components/PlaceImagePicker'
 
@@ -82,19 +83,6 @@ function EditPlacePageInner() {
   const [existingImages, setExistingImages] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const set = (k:string,v:string) => setForm(p=>({...p,[k]:v}))
-  // 金額（placeFee / companyFee）は数値で持つ。空欄は未設定として消す。
-  const setDay = (i:number,k:'date'|'start'|'end'|'placeFee'|'companyFee',v:string) => setSchedule(prev=>prev.map((d,idx)=>{
-    if(idx!==i) return d
-    if(k==='placeFee'||k==='companyFee'){
-      const n = toYen(v)
-      const next = {...d} as Record<string, unknown>
-      if(n==null) delete next[k]; else next[k]=n
-      return next as typeof d
-    }
-    return {...d,[k]:v}
-  }))
-  const addDay = () => setSchedule(prev=>prev.length<MAX_SCHEDULE_DAYS ? [...prev,{date:'',start:'選択してください',end:'選択してください'}] : prev)
-  const removeDay = (i:number) => setSchedule(prev=>prev.filter((_,idx)=>idx!==i))
 
   // ===== 日程をまとめて入れる =====
   //
@@ -112,14 +100,7 @@ function EditPlacePageInner() {
     return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`
   }
 
-  // その1日ぶんを、翌日の日付でうしろに差し込む。
-  // 連続した日程を作るとき、日付だけ選び直せば済む
-  const duplicateDay = (i:number) => setSchedule(prev=>{
-    if(prev.length>=MAX_SCHEDULE_DAYS) return prev
-    const src = prev[i]
-    const copy = { ...src, date: src.date ? addDays(src.date, 1) : '' }
-    return [...prev.slice(0,i+1), copy, ...prev.slice(i+1)]
-  })
+  // 1日ずつの追加・複製・削除は、カレンダー（app/components/ScheduleCalendarEditor.tsx）が持つ
 
   // 期間と曜日を指定して、まとめて入れる
   const [bulkFrom, setBulkFrom] = useState('')
@@ -540,7 +521,7 @@ async function refreshPublicPages(placeId?: string) {
 
             <div style={{marginBottom:'20px'}}>
               <label style={{fontWeight:'700',fontSize:'14px',color:'#1a1a1a'}}>出店日程{req}</label>
-              <p style={{fontSize:'12px',color:'#B45309',margin:'4px 0 0'}}>1日ごとに日付と時間を登録できます（最大31日・連続でなくてもOK）</p>
+              <p style={{fontSize:'12px',color:'#B45309',margin:'4px 0 0'}}>1日ごとに日付と時間を登録できます（最大{MAX_SCHEDULE_DAYS}日・連続でなくてもOK）</p>
               {/* 1日だけの出店を受け付けない案件のため。
                   美食EXPO のように「2日間または3日間のみ」という催しがある
                   （2026-09-26 の運営からの説明）。空なら1日から申し込める */}
@@ -587,45 +568,18 @@ async function refreshPublicPages(placeId?: string) {
                   </button>
                 </div>
               </div>
-              <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'10px'}}>
-                {schedule.map((d,i)=>(
-                  <div key={i} className='sched-day' style={{border:'1px solid #E5C07B',borderRadius:'10px',padding:'12px',background:'#FFFDF7'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-                      <span style={{fontSize:'13px',fontWeight:'700',color:'#B45309'}}>{i+1}日目</span>
-                      <div style={{display:'flex',gap:'6px'}}>
-                        {/* この1日ぶんを、翌日の日付でうしろに差し込む。
-                            連続した日程は、これを押して日付を直すほうが早い */}
-                        {schedule.length<31 && <button type='button' onClick={()=>duplicateDay(i)} title='この日の内容を、翌日の日付でうしろに増やします' style={{background:'#EFF6FF',color:'#1D4ED8',border:'none',borderRadius:'6px',padding:'4px 10px',fontSize:'12px',fontWeight:'700',cursor:'pointer',fontFamily:'inherit'}}>複製</button>}
-                        {schedule.length>1 && <button type='button' onClick={()=>removeDay(i)} style={{background:'#FEF2F2',color:'#DC2626',border:'none',borderRadius:'6px',padding:'4px 10px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>削除</button>}
-                      </div>
-                    </div>
-                    <input type='date' value={d.date} onChange={e=>setDay(i,'date',e.target.value)} style={{width:'100%',border:'1px solid #E5C07B',borderRadius:'8px',padding:'9px 12px',fontSize:'14px',boxSizing:'border-box',color:'#1a1a1a',background:'#fff'}}/>
-                    <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'8px'}}>
-                      <div>
-                        <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>販売開始</label>
-                        <select value={d.start} onChange={e=>setDay(i,'start',e.target.value)} style={{...inputStyle,marginTop:'4px'}}>{times.map(t=><option key={t}>{t}</option>)}</select>
-                      </div>
-                      <div>
-                        <label style={{fontSize:'12px',fontWeight:'700',color:'#64748B'}}>販売終了</label>
-                        <select value={d.end} onChange={e=>setDay(i,'end',e.target.value)} style={{...inputStyle,marginTop:'4px'}}>{times.map(t=><option key={t}>{t}</option>)}</select>
-                      </div>
-                    </div>
-                    {/* 日によって金額が変わる案件（平日2,000円・週末3,000円など）向け。
-                        入れた日はこの金額を使い、空欄の日は案件全体の設定を使う。 */}
-                    {perDayOn && (
-                      <div className='form-grid-2' style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginTop:'8px'}}>
-                        <div>
-                          <label style={{fontSize:'12px',fontWeight:'700',color:'#B45309'}}>取引先へ渡す額（円）</label>
-                          <input inputMode='numeric' value={d.placeFee ?? ''} onChange={e=>setDay(i,'placeFee',e.target.value.replace(/[^0-9]/g,''))} placeholder='例：2000' style={{...inputStyle,marginTop:'4px'}}/>
-                        </div>
-                        <div>
-                          <label style={{fontSize:'12px',fontWeight:'700',color:'#1D4ED8'}}>弊社の固定額（円）</label>
-                          <input inputMode='numeric' value={d.companyFee ?? ''} onChange={e=>setDay(i,'companyFee',e.target.value.replace(/[^0-9]/g,''))} placeholder='空欄可' style={{...inputStyle,marginTop:'4px'}}/>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+              {/* 日程はカレンダーで入れる（app/components/ScheduleCalendarEditor.tsx）。
+                  以前は1日1枚のカードを縦に並べていて、上限を90日に上げると画面が極端に長くなった。
+                  「日付を押すと設定が出る形に」という運営の依頼（2026-10-02・10-03） */}
+              <div style={{marginTop:'10px'}}>
+                <ScheduleCalendarEditor
+                  rows={schedule}
+                  setRows={setSchedule}
+                  perDayOn={perDayOn}
+                  times={times}
+                  maxDays={MAX_SCHEDULE_DAYS}
+                  inputStyle={inputStyle}
+                />
               </div>
               {/* 日によって金額が違う案件のための切り替え */}
               <label style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'10px',fontSize:'13px',color:'#1a1a1a',cursor:'pointer'}}>
@@ -885,9 +839,6 @@ async function refreshPublicPages(placeId?: string) {
                 )}
               </div>
 
-              {schedule.length<31 && (
-                <button type='button' onClick={addDay} style={{marginTop:'10px',background:'#fff',color:'#B45309',border:'1.5px dashed #F5A623',borderRadius:'8px',padding:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',width:'100%'}}>＋ 日程を追加（{schedule.length}/31）</button>
-              )}
             </div>
 
             {/* 開催日が先でも「今すぐ埋めたい」案件があるため、募集者が自分で急募にできる */}

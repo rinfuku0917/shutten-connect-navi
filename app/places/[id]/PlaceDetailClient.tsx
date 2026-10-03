@@ -10,6 +10,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import BackButton from '../../components/BackButton'
 import SiteFooter from '../../components/SiteFooter'
 import { slotsPerDayText } from '../../lib/placeSlots'
+import { summarizeSchedule, shortDate, slotsOfDay } from '../../lib/scheduleSummary'
 import { allowedFormats, hasFormatFees, formatFeeOf, formatAllowsDate, sortedDows, feeCondition, dayFeeLabelOn, perEventFeeOf, dayCountOptions, dayCountFeeOf, type FormatFees } from '../../lib/placeFee'
 import { minApplyDays, applyDaysShortfall } from '../../lib/applyRules'
 import ApplyDateCalendar, { type CalendarDay } from '../../components/ApplyDateCalendar'
@@ -512,21 +513,63 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
   const photos = (Array.isArray(place.images) ? place.images.filter(Boolean) : [])
   if (photos.length === 0 && place.image_url) photos.push(place.image_url)
   const shownPhoto = photos[photoIndex] || photos[0] || ''
-  // 日程は、日付と時刻をつないだ1本の文字列にすると、スマホで
-  // 「2026-10-」「01 10:00〜」のように日付の数字の途中で割れてしまう
-  // （ハイフンや「〜」の後ろはブラウザが改行してよい場所と見なすため）。
-  // 日付・時刻をそれぞれ .nowrap-unit で包み、折り返るのは日付と時刻のあいだ、
-  // または日と日の区切りだけにしている。
+  // 日程は「開催期間」と「開催時間」の要約だけを出し、日ごとの一覧は開閉式にする。
+  //
+  // なぜ（2026-10-03 の運営からの依頼）:
+  //   常設や長期の案件で、全日程が「2026-09-21 10:00〜19:30 /」の形で縦に30行以上並び、
+  //   スマホではエントリーの欄までのスクロールが長くなっていた。
+  //   日を選ぶのは下の申込のカレンダーで行えるので、ここは概要を短く読めることを優先する。
+  //
+  // 開閉は <details> で作る（JavaScript を使わない）。閉じていても一覧は HTML に入っているので、
+  // 検索エンジンにも読める。1日だけの案件は開閉にせず、その1日をそのまま出す。
+  // 要約の作り方は app/lib/scheduleSummary.ts
+  //
   // 構造化された日程が無い案件は、旧サイトから移行した日程テキストを表示する
   const scheduleDays = (place.schedule || []).filter(d => d.date)
-  const scheduleNode: ReactNode = scheduleDays.length > 0
-    ? scheduleDays.map((d, i) => (
-        <Fragment key={d.date + '-' + i}>
-          {i > 0 ? ' / ' : ''}
-          <span className='nowrap-unit'>{d.date}</span>{' '}
-          <span className='nowrap-unit'>{d.start}〜{d.end}</span>
-        </Fragment>
-      ))
+  const scheduleSum = summarizeSchedule(scheduleDays)
+  const scheduleNode: ReactNode = scheduleSum
+    ? (
+        <div className='sched-sum'>
+          <div>
+            <span className='sched-sum-label'>開催期間</span>
+            <span className='sched-sum-part'>{scheduleSum.from}{scheduleSum.to ? ' 〜' : ''}</span>
+            {scheduleSum.to && <>{' '}<span className='sched-sum-part'>{scheduleSum.to}</span></>}
+            {scheduleSum.periodNote && <span className='sched-sum-part sched-sum-note'>（{scheduleSum.periodNote}）</span>}
+          </div>
+          {scheduleSum.timeSlots.length > 0 && (
+            <div>
+              <span className='sched-sum-label'>開催時間</span>
+              {/* 1日に2枠ある案件は「11:00 〜 14:00・17:00 〜 21:00」。枠ごとに折り返さない */}
+              {scheduleSum.timeSlots.map((t, i) => (
+                <Fragment key={t}>
+                  {i > 0 && '・'}
+                  <span className='sched-sum-part'>{t}</span>
+                </Fragment>
+              ))}
+              {scheduleSum.timeVaries && <span className='sched-sum-part sched-sum-note'>（日によって異なります）</span>}
+            </div>
+          )}
+          {scheduleSum.count > 1 && (
+            <details className='sched-more'>
+              <summary>
+                <span className='sched-more-closed'>∨ 全日程の詳細を表示</span>
+                <span className='sched-more-open'>∧ 閉じる</span>
+              </summary>
+              {/* 1日1行。同じ日に2枠ある日は、その行に2つ並べる。
+                  時刻の読めない行（「選択してください」のまま保存された日）は時刻を空にする
+                  （要約と同じ判定。app/lib/scheduleSummary.ts の slotsOfDay） */}
+              <ul className='sched-more-list'>
+                {Array.from(new Set(scheduleDays.map(d => d.date))).sort().map(date => (
+                  <li key={date}>
+                    <span className='sched-more-date'>{shortDate(date)}</span>
+                    <span>{slotsOfDay(scheduleDays, date).map(t => t.replace(' 〜 ', '〜')).join('・')}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )
     : ((place.open_days || []).map(x => (x || '').trim()).filter(Boolean)[0] || '要相談')
 
   return (
@@ -620,7 +663,9 @@ export default function PlaceDetail({ id, initialPlace, openNearby = null, openN
                       : []),
                   ].map((row, i, arr) => (
                     <tr key={row.label} style={{ borderBottom: i < arr.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
-                      <td style={{ padding: '14px 20px', background: '#FFFBEB', fontWeight: '700', fontSize: '13px', color: '#B45309', width: '160px', whiteSpace: 'nowrap' }}>{row.label}</td>
+                      {/* 見出しは上にそろえる。日程の一覧を開くと右の欄だけが縦に長くなり、
+                          真ん中にそろえると「日程」が一覧の途中に浮いて見えるため */}
+                      <td style={{ padding: '14px 20px', background: '#FFFBEB', fontWeight: '700', fontSize: '13px', color: '#B45309', width: '160px', whiteSpace: 'nowrap', verticalAlign: 'top' }}>{row.label}</td>
                       <td style={{ padding: '14px 20px', fontSize: '14px', color: '#1a1a1a' }}>{row.label === 'アクセス' && place.address ? (<a href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(place.address)} target='_blank' rel='noopener noreferrer' style={{ color: '#1D4ED8', textDecoration: 'underline', fontWeight: 700 }}>{row.value} 🗺️</a>) : row.value}</td>
                     </tr>
                   ))}
